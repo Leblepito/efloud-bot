@@ -127,6 +127,25 @@ class SafeOrchestrator:
         # Time-windowed: 1 saat sonra aynı signal yeniden açılabilir
         self._processed_signals: dict = {}
 
+        # ═══ Task 5: Custom Risk Calculator Integration ═══
+        risk_config = config.get('risk', {})
+        if risk_config.get('position_size_calculation') == 'reverse_from_risk':
+            from .risk.custom_calculator import CustomRiskCalculator  # Lazy import
+            self.risk_calculator = CustomRiskCalculator(
+                max_loss_usdt=risk_config.get('max_loss_per_trade_usdt', 20.0),
+                leverage=config.get('exchange', {}).get('leverage', 3),
+                target_stop_pct=risk_config.get('target_stop_distance_pct', 10.0) / 100.0
+            )
+            self.using_custom_risk = True
+            log.info("✅ Using CustomRiskCalculator for position sizing")
+        else:
+            self.using_custom_risk = False
+            log.info("Using legacy risk calculation")
+
+        # Initialize managers (will be setup with client later)
+        self.permission_manager = None
+        self.notification_manager = None
+
         # Recovery
         self._restore_state()
 
@@ -135,6 +154,70 @@ class SafeOrchestrator:
         if symbol not in self._planners:
             self._planners[symbol] = ScenarioPlanner()
         return self._planners[symbol]
+
+    def _setup_permission_manager(self, client):
+        """Setup permission manager with exchange client"""
+        if not self.permission_manager:
+            from .permissions import PermissionManager  # Lazy import
+            self.permission_manager = PermissionManager(client)
+            symbols = self.config.get('symbols', {}).get('fixed_core', [])
+            self.symbol_permissions = self.permission_manager.detect_all(symbols)
+            tradeable_count = len([p for p in self.symbol_permissions.values() if p.tradeable])
+            readonly_count = len(self.symbol_permissions) - tradeable_count
+            log.info(f"Permission detection complete: {tradeable_count} tradeable, {readonly_count} readonly")
+
+        # Initialize notification manager if not already done
+        if not self.notification_manager:
+            from .notifications import NotificationManager  # Lazy import
+            self.notification_manager = NotificationManager()
+
+    def get_symbol_permissions(self, symbols: list = None) -> dict:
+        """Get current symbol permissions"""
+        if not self.permission_manager:
+            log.warning("Permission manager not initialized")
+            return {}
+
+        stored_permissions = getattr(self, 'symbol_permissions', {})
+        if symbols:
+            # Return subset of existing permissions for requested symbols
+            return {sym: stored_permissions.get(sym) for sym in symbols if sym in stored_permissions}
+        return stored_permissions
+
+    def calculate_position_size(self, symbol: str, available_balance: float) -> float:
+        """Calculate position size using custom risk calculator"""
+        if not self.using_custom_risk:
+            # Fall back to legacy calculation
+            return self._legacy_position_size_calculation(symbol, available_balance)
+
+        return self.risk_calculator.calculate_position_size(available_balance)
+
+    def validate_trade_risk(self, symbol: str, position_size: float, current_price: float, stop_price: float) -> dict:
+        """Validate trade meets risk requirements"""
+        if not self.using_custom_risk:
+            return {'valid': True, 'legacy_mode': True}
+
+        return self.risk_calculator.validate_risk_parameters(position_size, current_price, stop_price)
+
+    def send_readonly_signal(self, symbol: str, signal_data: dict):
+        """Send notification for read-only symbols"""
+        if self.notification_manager:
+            self.notification_manager.signal_readonly(
+                symbol=symbol,
+                direction=signal_data.get('direction', 'N/A'),
+                entry=signal_data.get('entry_price', 0.0),
+                sl=signal_data.get('sl', 0.0),
+                tp1=signal_data.get('tp1', 0.0),
+                tp2=signal_data.get('tp2', 0.0),
+                confluence=signal_data.get('confidence', 0),
+                reasons=signal_data.get('reasons', [])
+            )
+        else:
+            log.warning(f"Notification manager not available for {symbol} signal")
+
+    def _legacy_position_size_calculation(self, symbol: str, available_balance: float) -> float:
+        """Legacy position sizing for backwards compatibility"""
+        risk_pct = self.config.get('risk', {}).get('risk_per_trade_pct', 0.75)
+        return available_balance * (risk_pct / 100.0)
 
     def _restore_state(self):
         """Startup'ta önceki state'i yükle."""
