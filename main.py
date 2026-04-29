@@ -42,6 +42,10 @@ from engine.permissions import PermissionManager
 from engine.notifications import NotificationManager
 from exchange import BinanceClient, OrderManager
 
+# Permission constants
+PERMISSION_TRADEABLE = 'tradeable'
+PERMISSION_READONLY = 'readonly'
+
 
 # ═══════════════════════════════════════════════
 # .ENV LOADER (no external dependency)
@@ -114,6 +118,90 @@ def load_config(path: str = "config.yaml") -> dict:
         raise FileNotFoundError(f"Config not found: {path}")
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def validate_config(cfg: dict) -> bool:
+    """
+    Validate configuration for new risk management system.
+
+    Args:
+        cfg: Configuration dictionary
+
+    Returns:
+        True if valid, raises ValueError if invalid
+    """
+    import os
+    log = logging.getLogger("efloud.main")
+
+    # Validate risk configuration
+    risk_config = cfg.get('risk', {})
+    ex_config = cfg.get('exchange', {})
+    op_config = cfg.get('operation', {})
+
+    if risk_config.get('position_size_calculation') == 'reverse_from_risk':
+        log.info("🔍 Validating reverse risk calculation configuration...")
+
+        # Validate max loss
+        max_loss = risk_config.get('max_loss_per_trade_usdt', 20.0)
+        if max_loss <= 0:
+            raise ValueError(f"max_loss_per_trade_usdt must be positive, got {max_loss}")
+
+        # Validate stop distance
+        stop_distance = risk_config.get('target_stop_distance_pct', 10.0)
+        if stop_distance <= 0 or stop_distance >= 100:
+            raise ValueError(f"target_stop_distance_pct must be between 0 and 100, got {stop_distance}")
+
+        log.info(f"✅ Risk validation passed: {max_loss} USDT max loss, {stop_distance}% stop distance")
+    else:
+        log.info("📊 Using legacy risk calculation - no additional validation needed")
+
+    # Validate exchange configuration
+    leverage = ex_config.get('leverage', 3)
+    if leverage <= 0:
+        raise ValueError(f"leverage must be positive, got {leverage}")
+
+    margin_mode = ex_config.get('margin_mode', 'cross')
+    if margin_mode not in ['isolated', 'cross']:
+        raise ValueError(f"margin_mode must be 'isolated' or 'cross', got {margin_mode}")
+
+    # CRITICAL: Cross-parameter validation for live trading safety
+    testnet = ex_config.get('testnet', True)
+    dry_run = op_config.get('dry_run', True)
+
+    if not testnet and not dry_run:
+        # Live mainnet trading requires explicit permission
+        allow_mainnet = os.environ.get("EFLOUD_ALLOW_MAINNET", "0") == "1"
+        if not allow_mainnet:
+            raise ValueError(
+                "Live mainnet trading requires EFLOUD_ALLOW_MAINNET=1 environment variable. "
+                "This protects against accidental live trading with real money."
+            )
+        log.warning("🚨 LIVE MAINNET TRADING ENABLED - Real money at risk!")
+    elif not testnet and dry_run:
+        log.info("📊 Mainnet dry run mode - real data, no risk")
+    else:
+        log.info("🧪 Testnet mode - safe for testing")
+
+    # Validate position size won't exceed minimum notional requirements
+    if risk_config.get('position_size_calculation') == 'reverse_from_risk':
+        max_loss = risk_config.get('max_loss_per_trade_usdt', 20.0)
+        stop_pct = risk_config.get('target_stop_distance_pct', 10.0) / 100.0
+        position_size = max_loss / (stop_pct * leverage)
+        notional = position_size * leverage
+
+        # Most futures symbols have 10 USDT minimum notional
+        min_notional_required = 10.0
+        if notional < min_notional_required:
+            raise ValueError(
+                f"Calculated position notional ({notional:.2f} USDT) is below minimum "
+                f"required ({min_notional_required} USDT). Increase max_loss_per_trade_usdt "
+                f"or decrease target_stop_distance_pct."
+            )
+
+    log.info(f"✅ Exchange validation passed: {leverage}x leverage, {margin_mode} margin")
+    log.info("✅ Cross-parameter validation passed")
+
+    return True
 
 
 def resolve_credentials(cfg: dict) -> tuple:
@@ -217,12 +305,20 @@ def _scan_one(symbol, orch, client, order_mgr, rate_limiter, cfg):
     # NEW: Check symbol permissions if using new system
     if hasattr(orch, 'permission_manager') and orch.permission_manager:
         permissions = orch.get_symbol_permissions()
-        symbol_permission = permissions.get(symbol, 'readonly')
+        perm_obj = permissions.get(symbol)
 
-        if symbol_permission == 'readonly':
+        # Handle both legacy string format and new SymbolPermission object format
+        if isinstance(perm_obj, str):
+            # Legacy string format: 'tradeable', 'readonly'
+            symbol_permission = perm_obj if perm_obj in [PERMISSION_TRADEABLE, PERMISSION_READONLY] else PERMISSION_READONLY
+        else:
+            # New object format with .tradeable boolean property
+            symbol_permission = PERMISSION_TRADEABLE if (perm_obj and hasattr(perm_obj, 'tradeable') and perm_obj.tradeable) else PERMISSION_READONLY
+
+        if symbol_permission == PERMISSION_READONLY:
             log.debug(f"[{symbol}] Read-only symbol - analysis only")
     else:
-        symbol_permission = 'tradeable'  # Legacy mode
+        symbol_permission = PERMISSION_TRADEABLE  # Legacy mode
 
     tf = cfg["timeframes"]
     limit = tf.get("kline_limit", 500)
@@ -267,14 +363,17 @@ def _scan_one(symbol, orch, client, order_mgr, rate_limiter, cfg):
     )
 
     # NEW: Handle read-only signals
-    if symbol_permission == 'readonly' and hasattr(result, 'signal_data') and result.signal_data:
+    if (symbol_permission == PERMISSION_READONLY and
+        hasattr(result, 'signal_data') and
+        isinstance(result.signal_data, dict) and
+        result.signal_data):
         orch.send_readonly_signal(symbol, result.signal_data)
 
     if result.actions_taken:
         log.info(f"🎬 [{symbol}] Actions: {result.actions_taken}")
 
     # Only sync orders for tradeable symbols
-    if not cfg["operation"]["dry_run"] and symbol_permission == 'tradeable':
+    if not cfg["operation"]["dry_run"] and symbol_permission == PERMISSION_TRADEABLE:
         sync_orders(orch, order_mgr, symbol, log)
 
     save_report(result, cfg.get("operation", {}).get("reports_dir", "./reports"))
@@ -340,9 +439,11 @@ def setup_orchestrator_with_client(cfg: dict, client, state_dir: str) -> SafeOrc
                 log.info(f"✅ Tradeable: {', '.join(tradeable)}")
             if readonly:
                 log.info(f"📖 Read-only: {', '.join(readonly)}")
-        except (TypeError, AttributeError):
-            # Handle case when permission_manager is a Mock or doesn't have expected methods
-            log.info("📊 Permission manager setup completed")
+        except Exception as e:
+            if hasattr(orch.permission_manager, '__class__') and 'Mock' in str(orch.permission_manager.__class__):
+                log.info("📊 Permission manager setup completed (mock)")
+            else:
+                log.warning(f"Permission detection partial failure: {e}")
 
     return orch
 
@@ -369,9 +470,13 @@ def main():
 
     try:
         cfg = load_config(cfg_path)
+        validate_config(cfg)  # NEW: Validate configuration
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         print("Hint: Copy config.yaml from the repo and customize it.", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as e:
+        print(f"CONFIG ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
     setup_logging(

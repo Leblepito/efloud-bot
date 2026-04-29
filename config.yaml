@@ -9,11 +9,11 @@
 exchange:
   name: binance
   market_type: futures
-  api_key: ""              # Prefer env var BINANCE_API_KEY
-  api_secret: ""           # Prefer env var BINANCE_API_SECRET
-  testnet: true            # İlk testlerde true bırak
+  api_key: ""
+  api_secret: ""
+  testnet: false           # CHANGED: Default to mainnet (use Phase 1 config for testing)
   leverage: 3
-  margin_mode: ISOLATED    # ISOLATED zorunlu (cross likidasyon yayılmasını önler)
+  margin_mode: isolated    # NEW: Force isolated margin for safety
 
 # ── Symbol universe ──
 # 20 coin SABIT liste — bot hep aynı coinler üzerinde öğrensin
@@ -81,9 +81,21 @@ fibonacci:
 
 # ── Risk ──
 risk:
-  risk_per_trade_pct: 0.75         # 20 coin için düşürüldü (risk dağılımı)
-  max_open_positions: 7             # Aynı anda max 7 pozisyon (20 coin için)
-  min_rr: 2.0                       # R:R 1:2 minimum (senin kural)
+  # NEW: Risk calculation method
+  position_size_calculation: "reverse_from_risk"  # "reverse_from_risk" | "legacy_percentage"
+
+  # NEW: Reverse calculation parameters
+  max_loss_per_trade_usdt: 20.0        # Max acceptable loss per trade
+  target_stop_distance_pct: 10.0       # Target stop loss distance (10%)
+
+  # Existing parameters (still used)
+  starting_balance: 1000               # Updated to actual balance
+  max_open_positions: 4                # Reduced for smaller portfolio
+  min_rr: 2.0
+
+  # Legacy parameters (for backwards compatibility)
+  risk_per_trade_pct: 0.75            # Only used if position_size_calculation != "reverse_from_risk"
+
   min_confluence: 55                # 55'te: HTF+MTF+OB+OTE gibi 4 konsept bir arada = ~65 puan
                                     # Tek başına HTF+MTF (45 puan) yetmez — multi-concept zorunlu
   recency_bars: 40                   # Sinyal tazelik penceresi (son N bar'daki CHoCH'ları değerlendirir)
@@ -104,31 +116,25 @@ operation:
   state_dir: ./state
   reports_dir: ./reports
 
-# ── Safety (v2.1) ──
+# Enhanced safety thresholds for smaller portfolio
 safety:
-  # Circuit Breaker
-  daily_loss_limit_pct: 3.0
-  weekly_drawdown_limit_pct: 8.0
-  consecutive_loss_limit: 3
-  consecutive_pause_min: 120
-  starting_balance: 10000
+  daily_loss_limit_pct: 2.0           # Tighter for smaller balance
+  weekly_drawdown_limit_pct: 6.0
+  consecutive_loss_limit: 2
+  consecutive_pause_min: 60
+  starting_balance: 1000              # Updated to actual balance
 
-  # Regime Detection
-  adx_trend_threshold: 25
-  adx_range_threshold: 20
-  volatile_atr_mult: 2.5
-
-  # Position Guards — 20 coin için sıkılaştırılmış
-  max_position_notional_pct: 3.0    # Tek trade max %3 (20 coin için)
-  max_total_exposure: 3.0            # Toplam notional < 3x balance (konservatif)
+  # Updated position guards
+  max_position_notional_pct: 20.0     # 6.67% position * 3x = 20% max exposure
+  max_total_exposure: 2.0             # Max 2x balance total exposure
+  min_balance_reserve: 50
   max_holding_hours: 48
   max_pyramid_adds: 2
   min_sl_atr: 0.5
   max_sl_atr: 5.0
 
-  # ── v2.2.0 yeni alanları ──
-  emergency_balance_threshold: null  # null = devre dışı (testnet)
-  reserve_balance: 0                  # testnet: 0
+  # Updated emergency stops
+  emergency_balance_threshold: 950    # 5% total loss emergency stop
+  max_single_loss: 25                 # Stop if any position loses > 25 USDT
 
-  # Per-symbol rate limiting
-  min_seconds_between_symbol_fetches: 0.5   # 20 coin için daha sıkı ritim
+  min_seconds_between_symbol_fetches: 0.5
