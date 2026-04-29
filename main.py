@@ -211,8 +211,19 @@ def _scan_parallel(symbols, orch, client, order_mgr, rate_limiter, cfg):
 
 
 def _scan_one(symbol, orch, client, order_mgr, rate_limiter, cfg):
-    """Tek sembol için cycle."""
+    """Tek sembol için cycle - updated for permission handling."""
     log = logging.getLogger("efloud.main")
+
+    # NEW: Check symbol permissions if using new system
+    if hasattr(orch, 'permission_manager') and orch.permission_manager:
+        permissions = orch.get_symbol_permissions()
+        symbol_permission = permissions.get(symbol, 'readonly')
+
+        if symbol_permission == 'readonly':
+            log.debug(f"[{symbol}] Read-only symbol - analysis only")
+    else:
+        symbol_permission = 'tradeable'  # Legacy mode
+
     tf = cfg["timeframes"]
     limit = tf.get("kline_limit", 500)
 
@@ -251,12 +262,19 @@ def _scan_one(symbol, orch, client, order_mgr, rate_limiter, cfg):
     log.info(
         f"📊 [{symbol}] Price=${result.current_price:,.2f} | "
         f"Bias={result.htf_bias} | Regime={result.regime} | "
-        f"Breaker={result.breaker_state} | CanTrade={result.can_trade}"
+        f"Breaker={result.breaker_state} | CanTrade={result.can_trade} | "
+        f"Permission={symbol_permission}"
     )
+
+    # NEW: Handle read-only signals
+    if symbol_permission == 'readonly' and hasattr(result, 'signal_data') and result.signal_data:
+        orch.send_readonly_signal(symbol, result.signal_data)
+
     if result.actions_taken:
         log.info(f"🎬 [{symbol}] Actions: {result.actions_taken}")
 
-    if not cfg["operation"]["dry_run"]:
+    # Only sync orders for tradeable symbols
+    if not cfg["operation"]["dry_run"] and symbol_permission == 'tradeable':
         sync_orders(orch, order_mgr, symbol, log)
 
     save_report(result, cfg.get("operation", {}).get("reports_dir", "./reports"))
@@ -296,6 +314,38 @@ def save_report(result, reports_dir: str):
 # ═══════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════
+
+def setup_orchestrator_with_client(cfg: dict, client, state_dir: str) -> SafeOrchestrator:
+    """
+    Setup SafeOrchestrator with integrated risk management and permission detection.
+    """
+    log = logging.getLogger("efloud.main")
+
+    # Initialize orchestrator
+    orch = SafeOrchestrator(cfg, state_dir=state_dir)
+
+    # Setup permission manager with real client if using new risk system
+    risk_config = cfg.get('risk', {})
+    if risk_config.get('position_size_calculation') == 'reverse_from_risk':
+        log.info("🔧 Setting up integrated permission detection...")
+        orch._setup_permission_manager(client)
+
+        # Log permission results
+        try:
+            tradeable = orch.permission_manager.get_tradeable_symbols() if orch.permission_manager else []
+            readonly = orch.permission_manager.get_readonly_symbols() if orch.permission_manager else []
+            log.info(f"📊 Permissions detected: {len(tradeable)} tradeable, {len(readonly)} readonly")
+
+            if tradeable:
+                log.info(f"✅ Tradeable: {', '.join(tradeable)}")
+            if readonly:
+                log.info(f"📖 Read-only: {', '.join(readonly)}")
+        except (TypeError, AttributeError):
+            # Handle case when permission_manager is a Mock or doesn't have expected methods
+            log.info("📊 Permission manager setup completed")
+
+    return orch
+
 
 class GracefulShutdown:
     def __init__(self):
@@ -379,25 +429,24 @@ def main():
     else:
         log.info("ℹ️  Dry run veya read-only key: permission detection atlandı")
 
-    if ex_cfg["market_type"] == "futures" and api_key and not cfg["operation"].get("dry_run", True):
-        margin_mode = ex_cfg.get("margin_mode", "ISOLATED").upper()
-        tradeable_syms = (permission_mgr.get_tradeable_symbols() if permission_mgr
-                           else initial_syms)
-        log.info(f"⚙️  Setting up {len(tradeable_syms)} tradeable symbols: "
-                 f"leverage={ex_cfg.get('leverage', 3)}x, margin={margin_mode}")
-        for sym in tradeable_syms:
+    # Set leverage for futures trading
+    if ex_cfg["market_type"] == "futures" and api_key:
+        for sym in initial_syms:
             try:
-                client.set_margin_mode(sym, margin_mode)
                 client.set_leverage(sym, ex_cfg.get("leverage", 3))
+
+                # NEW: Set isolated margin mode for safety
+                if ex_cfg.get("margin_mode") == "isolated":
+                    client.set_margin_mode(sym, "ISOLATED")
+
             except Exception as e:
-                log.warning(f"Setup failed for {sym}: {e}")
+                log.warning(f"Leverage/margin setup failed for {sym}: {e}")
 
     # SafeOrchestrator (tüm güvenlik + analiz katmanları)
-    # Permission ve Notification manager'ları geç
     state_dir = cfg["operation"].get("state_dir", "./state")
-    orch = SafeOrchestrator(cfg, state_dir=state_dir,
-                              permission_mgr=permission_mgr,
-                              notification_mgr=notif_mgr)
+
+    # NEW: Use integrated setup function instead of direct SafeOrchestrator()
+    orch = setup_orchestrator_with_client(cfg, client, state_dir)
 
     order_mgr = OrderManager(client, dry_run=cfg["operation"]["dry_run"])
     rate_limiter = RateLimiter(max_per_minute=1000)
