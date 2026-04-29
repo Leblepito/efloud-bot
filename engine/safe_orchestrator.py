@@ -171,7 +171,7 @@ class SafeOrchestrator:
             from .notifications import NotificationManager  # Lazy import
             self.notification_manager = NotificationManager()
 
-    def get_symbol_permissions(self, symbols: list = None) -> dict:
+    def get_symbol_permissions(self, symbols: list | None = None) -> dict:
         """Get current symbol permissions"""
         if not self.permission_manager:
             log.warning("Permission manager not initialized")

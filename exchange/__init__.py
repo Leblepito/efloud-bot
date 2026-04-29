@@ -80,7 +80,7 @@ class BinanceClient:
             log.warning(f"Margin mode set failed for {symbol}: {e}")
             return False
 
-    def get_open_positions(self, symbol: str = None) -> list:
+    def get_open_positions(self, symbol: str | None = None) -> list:
         """Açık pozisyonları getir."""
         if self.market_type != "futures":
             return []

@@ -31,7 +31,7 @@ class NotificationManager:
 
     def signal_readonly(self, symbol: str, direction: str,
                           entry: float, sl: float, tp1: float, tp2: float,
-                          confluence: int, reasons: list = None):
+                          confluence: int, reasons: list | None = None):
         """
         Read-only sembolde sinyal var — bot trade etmiyor ama kullanıcı bilsin.
         Manuel trader bu sinyali değerlendirip kendisi karar verir.

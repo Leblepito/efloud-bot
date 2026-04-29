@@ -57,7 +57,7 @@ class CircuitBreaker:
                  consecutive_loss_limit: int = 3,
                  consecutive_loss_pause_minutes: int = 120,
                  starting_balance: float = 10000.0,
-                 emergency_balance_threshold: float = None,
+                 emergency_balance_threshold: float | None = None,
                  reserve_balance: float = 0.0):
         """
         emergency_balance_threshold: Mutlak USDT cinsinden — bakiye bunun altına düşerse HALT

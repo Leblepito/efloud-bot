@@ -11,7 +11,7 @@ def calc_position_size(
     entry: float,
     sl: float,
     leverage: int = 1,
-    max_notional_pct: float = None,  # Tek pozisyon max bakiye % (örn 3.0)
+    max_notional_pct: float | None = None,  # Tek pozisyon max bakiye % (örn 3.0)
 ) -> float:
     """
     Risk bazlı pozisyon boyutu + notional cap.

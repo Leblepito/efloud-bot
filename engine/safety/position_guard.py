@@ -23,7 +23,7 @@ log = logging.getLogger("efloud.posguard")
 class PositionCheckResult:
     allowed: bool
     reason: str = ""
-    warnings: list = None
+    warnings: list | None = None
 
     def __post_init__(self):
         if self.warnings is None:

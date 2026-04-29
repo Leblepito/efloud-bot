@@ -212,7 +212,7 @@ def resolve_credentials(cfg: dict) -> tuple:
     return api_key, api_secret
 
 
-def print_banner(cfg: dict, api_key: str, symbols: list = None):
+def print_banner(cfg: dict, api_key: str, symbols: list | None = None):
     dry = "DRY RUN" if cfg["operation"]["dry_run"] else "LIVE"
     net = "TESTNET" if cfg["exchange"]["testnet"] else "MAINNET"
     watch = " (watch only)" if cfg["operation"].get("watch_only") else ""

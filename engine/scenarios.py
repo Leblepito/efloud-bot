@@ -91,7 +91,7 @@ class ScenarioPlanner:
         htf_bias: str,
         nearest_support: float,
         nearest_resistance: float,
-        stacked_zones: list = None,
+        stacked_zones: list | None = None,
         range_low: float = 0,
         range_high: float = 0,
     ) -> List[Scenario]:
