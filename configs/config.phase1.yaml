@@ -1,0 +1,102 @@
+# configs/config.phase1.yaml
+# ══════════════════════════════════════════════════════════════════
+# Efloud SMC Bot — PHASE 1: Mainnet Dry Run Configuration
+# ══════════════════════════════════════════════════════════════════
+# GOAL: Connect to real market data with zero financial risk
+# VALIDATION: API permissions, risk calculations, safety systems
+
+exchange:
+  name: binance
+  market_type: futures
+  api_key: ""              # Prefer env var BINANCE_API_KEY
+  api_secret: ""           # Prefer env var BINANCE_API_SECRET
+  testnet: false           # MAINNET for real data
+  leverage: 3
+  margin_mode: isolated
+
+# Fixed symbol list for consistent learning
+symbols:
+  mode: fixed
+  fixed_core:
+    - BTC/USDT
+    - ETH/USDT
+    - XRP/USDT
+    - BNB/USDT
+    - SOL/USDT
+    - TRX/USDT
+    - DOGE/USDT
+    - ADA/USDT
+    - BCH/USDT
+    - LINK/USDT
+    - ZEC/USDT
+    - LTC/USDT
+    - AVAX/USDT
+    - DOT/USDT
+    - TON/USDT
+    - NEAR/USDT
+    - ATOM/USDT
+    - APT/USDT
+    - UNI/USDT
+    - ICP/USDT
+
+timeframes:
+  htf: 4h
+  mtf: 1h
+  entry: 15m
+  kline_limit: 500
+
+structure:
+  swing_lookback: 5
+  ob_sequential: 5
+  body_mode: true
+  eq_threshold_pct: 0.1
+  range_lookback: 50
+
+fibonacci:
+  ote_lower: 0.618
+  ote_upper: 0.786
+  ext_tp2: 1.618
+
+# PHASE 1 RISK SETTINGS - Dry Run Only
+risk:
+  starting_balance: 1000              # Actual futures balance
+  max_loss_per_trade_usdt: 20         # 2% of balance
+  target_stop_distance_pct: 10        # 10% stop distance for safety
+  max_open_positions: 4               # Conservative limit
+  min_rr: 2.0                        # 1:2 risk/reward minimum
+  position_size_calculation: reverse_from_risk
+
+operation:
+  check_interval_sec: 30
+  dry_run: true                       # CRITICAL: No real orders
+  watch_only: false
+  symbol_scan_mode: sequential
+  parallel_workers: 3
+  log_level: DEBUG                    # Verbose logging for validation
+  log_file: ./logs/phase1_mainnet_dry.log
+  state_dir: ./state/phase1
+  reports_dir: ./reports/phase1
+
+# Enhanced safety for Phase 1
+safety:
+  daily_loss_limit_pct: 2.0           # Conservative limits
+  weekly_drawdown_limit_pct: 6.0
+  consecutive_loss_limit: 2
+  consecutive_pause_min: 60
+  starting_balance: 1000
+
+  # Position guards
+  max_position_notional_pct: 20.0     # 10% pos * 3x = 30% exposure max
+  max_total_exposure: 2.0             # Max 2000 USDT total notional
+  min_balance_reserve: 50
+  max_holding_hours: 24
+  max_pyramid_adds: 2
+  min_sl_atr: 0.5
+  max_sl_atr: 5.0
+
+  # Emergency stops
+  emergency_balance_threshold: 950    # 5% total loss threshold
+  max_single_loss: 25                 # Stop if any position loses > 25 USDT
+
+  # Rate limiting
+  min_seconds_between_symbol_fetches: 0.5

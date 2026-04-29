@@ -1,0 +1,102 @@
+# configs/config.phase3.yaml
+# ══════════════════════════════════════════════════════════════════
+# Efloud SMC Bot — PHASE 3: Full Scale Live Trading Configuration
+# ══════════════════════════════════════════════════════════════════
+# GOAL: Full operation with complete risk management system
+# CONFIDENCE: After successful Phase 1 & 2 validation
+
+exchange:
+  name: binance
+  market_type: futures
+  api_key: ""              # Prefer env var BINANCE_API_KEY
+  api_secret: ""           # Prefer env var BINANCE_API_SECRET
+  testnet: false           # MAINNET
+  leverage: 3
+  margin_mode: isolated
+
+# Full symbol list
+symbols:
+  mode: fixed
+  fixed_core:
+    - BTC/USDT
+    - ETH/USDT
+    - XRP/USDT
+    - BNB/USDT
+    - SOL/USDT
+    - TRX/USDT
+    - DOGE/USDT
+    - ADA/USDT
+    - BCH/USDT
+    - LINK/USDT
+    - ZEC/USDT
+    - LTC/USDT
+    - AVAX/USDT
+    - DOT/USDT
+    - TON/USDT
+    - NEAR/USDT
+    - ATOM/USDT
+    - APT/USDT
+    - UNI/USDT
+    - ICP/USDT
+
+timeframes:
+  htf: 4h
+  mtf: 1h
+  entry: 15m
+  kline_limit: 500
+
+structure:
+  swing_lookback: 5
+  ob_sequential: 5
+  body_mode: true
+  eq_threshold_pct: 0.1
+  range_lookback: 50
+
+fibonacci:
+  ote_lower: 0.618
+  ote_upper: 0.786
+  ext_tp2: 1.618
+
+# PHASE 3 RISK SETTINGS - Full Scale
+risk:
+  starting_balance: 1000
+  max_loss_per_trade_usdt: 20         # FULL: 2% of balance
+  target_stop_distance_pct: 10
+  max_open_positions: 4               # Full capacity (80 USDT max total risk)
+  min_rr: 2.0
+  position_size_calculation: reverse_from_risk
+
+operation:
+  check_interval_sec: 30              # Normal monitoring
+  dry_run: false                      # LIVE TRADING
+  watch_only: false
+  symbol_scan_mode: sequential
+  parallel_workers: 3
+  log_level: INFO
+  log_file: ./logs/phase3_live_full.log
+  state_dir: ./state/phase3
+  reports_dir: ./reports/phase3
+
+# Full safety system
+safety:
+  daily_loss_limit_pct: 2.0
+  weekly_drawdown_limit_pct: 6.0
+  consecutive_loss_limit: 2
+  consecutive_pause_min: 60
+  starting_balance: 1000
+
+  # Full position guards
+  max_position_notional_pct: 20.0     # 6.67% pos * 3x = 20% exposure max
+  max_total_exposure: 2.0             # Max 2000 USDT total notional
+  min_balance_reserve: 50             # Normal reserve
+  max_holding_hours: 48               # Normal holding period
+  max_pyramid_adds: 2                 # Allow pyramiding
+  min_sl_atr: 0.5
+  max_sl_atr: 5.0
+
+  # Emergency stops
+  emergency_balance_threshold: 950    # 5% total loss threshold
+  max_single_loss: 25                 # Standard single loss limit
+
+  # Rate limiting
+  min_seconds_between_symbol_fetches: 0.5
