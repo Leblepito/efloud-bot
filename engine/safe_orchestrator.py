@@ -366,14 +366,26 @@ class SafeOrchestrator:
                     # Tradeable → normal akış: pozisyon aç
                     actual_balance = balance if balance is not None else 10000.0
 
-                    from risk import calc_position_size
-                    max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
-                    size = calc_position_size(
-                        actual_balance, risk_cfg["risk_per_trade_pct"],
-                        latest.entry, latest.sl,
-                        self.config["exchange"].get("leverage", 1),
-                        max_notional_pct=max_notional,
-                    )
+                    # Opt-in: reverse-from-risk position sizing (cherry-picked v2.2.0)
+                    if risk_cfg.get("position_size_calculation") == "reverse_from_risk":
+                        from engine.risk.custom_calculator import CustomRiskCalculator
+                        calc = CustomRiskCalculator(
+                            max_loss_usdt=risk_cfg["max_loss_per_trade_usdt"],
+                            leverage=self.config["exchange"].get("leverage", 1),
+                            target_stop_pct=risk_cfg["target_stop_distance_pct"] / 100.0,
+                        )
+                        notional = calc.calculate_position_size(actual_balance)
+                        # Convert notional (USDT) → contract size (asset units)
+                        size = notional / latest.entry if latest.entry > 0 else 0.0
+                    else:
+                        from risk import calc_position_size
+                        max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
+                        size = calc_position_size(
+                            actual_balance, risk_cfg["risk_per_trade_pct"],
+                            latest.entry, latest.sl,
+                            self.config["exchange"].get("leverage", 1),
+                            max_notional_pct=max_notional,
+                        )
 
                     atr = self.intent._atr(df_entry, 14)
                     guard_check = self.pos_guard.can_open_position(
