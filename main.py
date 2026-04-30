@@ -118,6 +118,75 @@ def load_config(path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
+def validate_config(cfg: dict) -> bool:
+    """Cross-parameter sağlamlık kontrolü.
+
+    Cherry-picked from v2.2.0 (adapted): leverage/margin/dry_run/testnet kombinasyonu
+    + opsiyonel reverse-from-risk doğrulaması. ValueError fırlatır → main() yakalar.
+
+    Returns: True if valid; raises ValueError on invalid combination.
+    """
+    log = logging.getLogger("efloud.main")
+    risk_cfg = cfg.get("risk", {})
+    ex_cfg = cfg.get("exchange", {})
+    op_cfg = cfg.get("operation", {})
+
+    # 1. Leverage sane bounds
+    leverage = ex_cfg.get("leverage", 1)
+    if not isinstance(leverage, int) or leverage <= 0 or leverage > 20:
+        raise ValueError(f"leverage {leverage} outside sane bounds [1,20]")
+
+    # 2. Margin mode (local: UPPERCASE 'ISOLATED'/'CROSSED')
+    margin_mode = str(ex_cfg.get("margin_mode", "ISOLATED")).upper()
+    if margin_mode not in ("ISOLATED", "CROSSED"):
+        raise ValueError(f"margin_mode must be ISOLATED or CROSSED, got {margin_mode}")
+
+    # 3. Live mainnet → EFLOUD_ALLOW_MAINNET=1 zorunlu (Mainnet Guard ile çift koruma)
+    testnet = ex_cfg.get("testnet", True)
+    dry_run = op_cfg.get("dry_run", True)
+    if not testnet and not dry_run:
+        if os.environ.get("EFLOUD_ALLOW_MAINNET", "0") != "1":
+            raise ValueError(
+                "Live mainnet trading requires EFLOUD_ALLOW_MAINNET=1 env var. "
+                "This is a safety lock against accidental live trading."
+            )
+        log.warning("🚨 LIVE MAINNET MODE — real money at risk")
+    elif not testnet and dry_run:
+        log.info("📊 Mainnet dry-run: real data, no orders")
+    else:
+        log.info("🧪 Testnet mode: safe sandbox")
+
+    # 4. risk_per_trade_pct sane bounds (legacy mode)
+    risk_pct = risk_cfg.get("risk_per_trade_pct", 1.0)
+    if not 0 < risk_pct <= 5.0:
+        raise ValueError(f"risk_per_trade_pct {risk_pct}% outside sane bounds (0,5]")
+
+    # 5. Opt-in reverse-from-risk validation
+    if risk_cfg.get("position_size_calculation") == "reverse_from_risk":
+        max_loss = risk_cfg.get("max_loss_per_trade_usdt")
+        stop_pct = risk_cfg.get("target_stop_distance_pct")
+        if max_loss is None or max_loss <= 0:
+            raise ValueError("reverse_from_risk requires max_loss_per_trade_usdt > 0")
+        if stop_pct is None or not 0 < stop_pct < 100:
+            raise ValueError(
+                "reverse_from_risk requires target_stop_distance_pct in (0,100)"
+            )
+        # Min notional ($10) sanity — Binance futures kabul etmez
+        notional = (max_loss / (stop_pct / 100.0))  # = position_size * leverage
+        if notional < 10.0:
+            raise ValueError(
+                f"reverse_from_risk: calculated notional ${notional:.2f} < Binance min $10. "
+                f"Increase max_loss_per_trade_usdt or decrease target_stop_distance_pct."
+            )
+        log.info(
+            f"✅ reverse_from_risk active: max_loss=${max_loss}, "
+            f"stop={stop_pct}%, notional=${notional:.2f}"
+        )
+
+    log.info(f"✅ Config validated: leverage={leverage}x, margin={margin_mode}")
+    return True
+
+
 def resolve_credentials(cfg: dict) -> tuple:
     """Env var > config'deki değer."""
     ex = cfg.get("exchange", {})
@@ -331,6 +400,13 @@ def main():
         log_file=cfg["operation"].get("log_file", "efloud_bot.log"),
     )
     log = logging.getLogger("efloud.main")
+
+    # Cross-parameter validation (cherry-picked from v2.2.0)
+    try:
+        validate_config(cfg)
+    except ValueError as e:
+        log.error(f"⛔ Config validation failed: {e}")
+        sys.exit(1)
 
     api_key, api_secret = resolve_credentials(cfg)
     # Banner'ı önce göster (symbols henüz resolve edilmeden)
