@@ -75,6 +75,13 @@ risk:
   sl_atr_buffer: 0.5
   daily_filter_strict: false
 
+  # ── Opt-in reverse-from-risk (v2.2.0 cherry-pick) ──
+  # Faz 2 micro'da legacy modu öneriliyor (mevcut SMC tabanlı sizing daha temkinli).
+  # Aktif etmek için: position_size_calculation: reverse_from_risk
+  position_size_calculation: legacy
+  max_loss_per_trade_usdt: 10        # $10 hedef max loss/trade (legacy moddayken kullanılmaz)
+  target_stop_distance_pct: 5         # %5 hedef stop (legacy moddayken kullanılmaz)
+
 operation:
   check_interval_sec: 30
   dry_run: false                      # ⚠️ GERÇEK ORDER

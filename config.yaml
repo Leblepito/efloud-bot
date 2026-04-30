@@ -92,6 +92,13 @@ risk:
   daily_filter_strict: false       # 4. TF (1d) filter — false = soft (±5 conf bonus)
                                     #                     true  = strict (ters yön → reddet)
 
+  # ── Opt-in: reverse-from-risk position sizing (cherry-picked from v2.2.0) ──
+  # "legacy"            → mevcut risk.calc_position_size (ATR + risk_pct tabanlı)
+  # "reverse_from_risk" → CustomRiskCalculator: position_size = max_loss / (stop_dist * leverage)
+  position_size_calculation: legacy
+  max_loss_per_trade_usdt: 10        # reverse_from_risk modu için: trade başı max kayıp USDT
+  target_stop_distance_pct: 5         # reverse_from_risk modu için: hedef stop mesafesi (%)
+
 # ── Operation ──
 operation:
   check_interval_sec: 30
