@@ -33,6 +33,7 @@ CONFIG_PATH_DEFAULT = "configs/config.phase2_micro.yaml"
 class BotRunner:
     def __init__(self) -> None:
         self.task: Optional[asyncio.Task] = None
+        self.loop: Optional[asyncio.AbstractEventLoop] = None  # captured at startup for cross-thread DB writes
         self.cfg: dict = {}
         self.client: Optional[BinanceClient] = None
         self.orch: Optional[SafeOrchestrator] = None
@@ -123,6 +124,9 @@ class BotRunner:
             self.client, dry_run=self.cfg["operation"]["dry_run"],
             on_position_change=self._on_position_change,
         )
+
+        # Capture the running loop so executor-thread callbacks can schedule DB writes
+        self.loop = asyncio.get_running_loop()
 
         # Spawn the worker task
         self.task = asyncio.create_task(self._run_loop(), name="bot_runner")
@@ -226,14 +230,14 @@ class BotRunner:
                     df_daily=df_daily, balance=balance,
                 )
 
-                # Periyodik equity snapshot — son sembolde tut
-                if balance is not None and sym == symbols[-1]:
+                # Periyodik equity snapshot — son sembolde tut (cross-thread schedule)
+                if balance is not None and sym == symbols[-1] and self.loop:
                     asyncio.run_coroutine_threadsafe(
                         db.record_equity_snapshot(
                             balance=balance,
                             open_positions_count=len(self.order_mgr.positions),
                         ),
-                        asyncio.get_event_loop(),
+                        self.loop,
                     )
 
             except Exception as e:
@@ -261,9 +265,10 @@ class BotRunner:
         }
         bus.publish(event_type, **payload)
 
-        # Persist to DB (best-effort, fire-and-forget)
+        # Persist to DB (best-effort, fire-and-forget cross-thread)
+        if not self.loop:
+            return  # Test env or pre-startup — skip persistence
         try:
-            loop = asyncio.get_event_loop()
             if event_type == "position_opened":
                 asyncio.run_coroutine_threadsafe(
                     db.record_trade_open(
@@ -271,7 +276,7 @@ class BotRunner:
                         entry=pos.entry, sl=pos.sl, tp1=pos.tp1, tp2=pos.tp2,
                         size=pos.size, binance_order_id=pos.order_id or None,
                     ),
-                    loop,
+                    self.loop,
                 )
             elif event_type == "position_closed":
                 pnl_pct = ((pos.exit_price - pos.entry) / pos.entry * 100) if pos.direction == "LONG" else \
@@ -282,11 +287,10 @@ class BotRunner:
                         pnl_usdt=pos.pnl_usdt, pnl_pct=pnl_pct,
                         reason=pos.exit_reason,
                     ),
-                    loop,
+                    self.loop,
                 )
-        except RuntimeError:
-            # No running loop (test env) — skip
-            pass
+        except Exception as e:
+            log.warning(f"DB persist failed: {e}")
 
     async def _persist_close(self, pos: Position) -> None:
         """Async DB write for reconciled closes (already emitted in OrderManager)."""
