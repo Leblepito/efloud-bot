@@ -18,6 +18,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.api import router as api_router
 from backend.bot_runner import runner
@@ -86,6 +88,29 @@ async def healthz() -> dict:
     }
 
 
-@app.get("/")
-async def root() -> dict:
-    return {"service": "efloud-bot-backend", "version": "2.2.0", "ui": "/docs"}
+# ─────────────────────────────────────────────────────────────────
+# Static frontend (single-service deploy: FastAPI serves Next.js export)
+#
+# Build process: `cd frontend && npm run build` produces `frontend/out/`
+# (Next.js static export — HTML + JS chunks). FastAPI mounts it at /.
+# REST routes (/api/*), WS (/ws), /healthz are registered above and take
+# priority over the static mount because FastAPI matches routes top-down.
+# ─────────────────────────────────────────────────────────────────
+
+FRONTEND_OUT = PROJECT_ROOT / "frontend" / "out"
+
+if FRONTEND_OUT.exists():
+    log.info(f"📂 Mounting static frontend from {FRONTEND_OUT}")
+    # Custom handler so client-side routes like /login resolve to /login.html
+    @app.get("/login")
+    async def _login_page():
+        return FileResponse(FRONTEND_OUT / "login.html")
+
+    # Mount catch-all last; html=True auto-serves index.html for "/"
+    app.mount("/", StaticFiles(directory=str(FRONTEND_OUT), html=True), name="frontend")
+else:
+    log.warning(f"⚠️  Frontend bundle not found at {FRONTEND_OUT} — only API endpoints active")
+
+    @app.get("/")
+    async def _api_only_root() -> dict:
+        return {"service": "efloud-bot-backend", "version": "2.2.0", "ui": "/docs"}

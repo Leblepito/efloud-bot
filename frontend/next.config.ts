@@ -1,18 +1,12 @@
 import type { NextConfig } from "next";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
+// Single-service deploy: backend (FastAPI) Railway'de hem API hem static frontend serve eder.
+// Bu yüzden output: 'export' static HTML üretiyoruz, runtime rewrites/proxy gerekmez.
 const config: NextConfig = {
+  output: "export",
   reactStrictMode: true,
-  // Proxy /api/* to backend so cookies stay on a single origin (Vercel domain).
-  // WebSocket /ws also proxied; Vercel supports WS proxying.
-  async rewrites() {
-    return [
-      { source: "/api/:path*", destination: `${apiUrl}/api/:path*` },
-      { source: "/ws", destination: `${apiUrl}/ws` },
-      { source: "/healthz", destination: `${apiUrl}/healthz` },
-    ];
-  },
+  trailingSlash: false,
+  images: { unoptimized: true },
   experimental: {
     optimizePackageImports: ["recharts"],
   },

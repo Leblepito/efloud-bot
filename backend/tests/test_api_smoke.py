@@ -27,9 +27,15 @@ async def client():
 
 @pytest.mark.asyncio
 async def test_root(client):
+    """Root may return JSON (frontend not built) or HTML (frontend mounted)."""
     r = await client.get("/")
     assert r.status_code == 200
-    assert r.json()["service"] == "efloud-bot-backend"
+    content_type = r.headers.get("content-type", "")
+    if "json" in content_type:
+        assert r.json()["service"] == "efloud-bot-backend"
+    else:
+        # Static frontend mounted — should be HTML
+        assert "html" in content_type
 
 
 @pytest.mark.asyncio
