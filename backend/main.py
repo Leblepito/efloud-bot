@@ -101,12 +101,8 @@ FRONTEND_OUT = PROJECT_ROOT / "frontend" / "out"
 
 if FRONTEND_OUT.exists():
     log.info(f"📂 Mounting static frontend from {FRONTEND_OUT}")
-    # Custom handler so client-side routes like /login resolve to /login.html
-    @app.get("/login")
-    async def _login_page():
-        return FileResponse(FRONTEND_OUT / "login.html")
-
-    # Mount catch-all last; html=True auto-serves index.html for "/"
+    # Next.js exported with trailingSlash:true so /login → out/login/index.html.
+    # StaticFiles(html=True) auto-resolves directory + index.html.
     app.mount("/", StaticFiles(directory=str(FRONTEND_OUT), html=True), name="frontend")
 else:
     log.warning(f"⚠️  Frontend bundle not found at {FRONTEND_OUT} — only API endpoints active")
