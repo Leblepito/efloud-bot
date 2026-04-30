@@ -1,0 +1,134 @@
+# ══════════════════════════════════════════════════════════════════
+# Efloud SMC Bot v2.1 — Configuration
+# ══════════════════════════════════════════════════════════════════
+# Environment variables (env > config, güvenli kullanım):
+#   BINANCE_API_KEY
+#   BINANCE_API_SECRET
+#   EFLOUD_ALLOW_MAINNET=1  (mainnet LIVE için zorunlu)
+
+exchange:
+  name: binance
+  market_type: futures
+  api_key: ""              # Prefer env var BINANCE_API_KEY
+  api_secret: ""           # Prefer env var BINANCE_API_SECRET
+  testnet: true            # İlk testlerde true bırak
+  leverage: 3
+  margin_mode: ISOLATED    # ISOLATED zorunlu (cross likidasyon yayılmasını önler)
+
+# ── Symbol universe ──
+# 20 coin SABIT liste — bot hep aynı coinler üzerinde öğrensin
+# Dinamik refresh kapalı, stabil karakter için.
+symbols:
+  mode: fixed                   # Sabit liste, dinamik değişim yok
+  fixed_core:
+    # ── Majors (market cap top) ──
+    - BTC/USDT
+    - ETH/USDT
+    - XRP/USDT
+    - BNB/USDT
+    - SOL/USDT
+    # ── Established L1 / utility ──
+    - TRX/USDT
+    - DOGE/USDT
+    - ADA/USDT
+    - BCH/USDT
+    - LINK/USDT
+    # ── Top mid-caps ──
+    - ZEC/USDT
+    - LTC/USDT
+    - AVAX/USDT
+    - DOT/USDT
+    - TON/USDT
+    # ── Active L1 / DeFi ──
+    - NEAR/USDT
+    - ATOM/USDT
+    - APT/USDT
+    - UNI/USDT
+    - ICP/USDT
+  # Fixed mode'da gerekli değil ama ileride hybrid'e dönerse kalsın:
+  dynamic_top_n: 0
+  dynamic_exclude:
+    - USDC/USDT
+    - FDUSD/USDT
+    - TUSD/USDT
+    - DAI/USDT
+    - BUSD/USDT
+  refresh_dynamic_hours: 24
+
+# ── Timeframe chain — 4 TF (Daily makro filter dahil) ──
+# 1d makro yön filtresi olarak kullanılır:
+#   - Confluence skoruna ±5 puan etkisi
+#   - daily_filter_strict: true ise ters yön sinyali tamamen reddedilir
+timeframes:
+  htf: 4h                       # High — bias
+  mtf: 1h                       # Mid — confirmation
+  entry: 15m                    # Entry
+  kline_limit: 500
+
+# ── Structure ──
+structure:
+  swing_lookback: 5             # Min 4 (Efloud 4-mum)
+  ob_sequential: 5
+  body_mode: true               # Kripto = body
+  eq_threshold_pct: 0.1
+  range_lookback: 50
+
+# ── Fibonacci ──
+fibonacci:
+  ote_lower: 0.618
+  ote_upper: 0.786
+  ext_tp2: 1.618
+
+# ── Risk ──
+risk:
+  risk_per_trade_pct: 0.75         # 20 coin için düşürüldü (risk dağılımı)
+  max_open_positions: 7             # Aynı anda max 7 pozisyon (20 coin için)
+  min_rr: 1.8                       # R:R 1:1.8 minimum — TP1 mantığı düzeltildi (signals.py)
+  min_confluence: 55                # 55'te: HTF+MTF+OB+OTE gibi 4 konsept bir arada = ~65 puan
+                                    # Tek başına HTF+MTF (45 puan) yetmez — multi-concept zorunlu
+  recency_bars: 40                   # Sinyal tazelik penceresi (son N bar'daki CHoCH'ları değerlendirir)
+                                    # 20 → 40 = daha geniş kapsama, daha çok sinyal yakalar
+  sl_atr_buffer: 0.5
+  daily_filter_strict: false       # 4. TF (1d) filter — false = soft (±5 conf bonus)
+                                    #                     true  = strict (ters yön → reddet)
+
+# ── Operation ──
+operation:
+  check_interval_sec: 30
+  dry_run: true                     # İlk canlıda mutlaka true bırak
+  watch_only: false                  # true = sadece analiz, trade yok
+  symbol_scan_mode: sequential       # "sequential" | "parallel"
+  parallel_workers: 3                # parallel seçilirse max thread
+  log_level: INFO
+  log_file: ./logs/efloud_bot.log
+  state_dir: ./state
+  reports_dir: ./reports
+
+# ── Safety (v2.1) ──
+safety:
+  # Circuit Breaker
+  daily_loss_limit_pct: 3.0
+  weekly_drawdown_limit_pct: 8.0
+  consecutive_loss_limit: 3
+  consecutive_pause_min: 120
+  starting_balance: 10000
+
+  # Regime Detection
+  adx_trend_threshold: 25
+  adx_range_threshold: 20
+  volatile_atr_mult: 2.5
+
+  # Position Guards — 20 coin için sıkılaştırılmış
+  max_position_notional_pct: 3.0    # Tek trade max %3 (20 coin için)
+  max_total_exposure: 3.0            # Toplam notional < 3x balance (konservatif)
+  max_holding_hours: 48
+  max_pyramid_adds: 2
+  min_sl_atr: 0.5
+  max_sl_atr: 5.0
+
+  # ── v2.2.0 yeni alanları ──
+  emergency_balance_threshold: null  # null = devre dışı (testnet)
+  reserve_balance: 0                  # testnet: 0
+
+  # Per-symbol rate limiting
+  min_seconds_between_symbol_fetches: 0.5   # 20 coin için daha sıkı ritim

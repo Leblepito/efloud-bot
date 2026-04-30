@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk -F'Regime: ' '{print $2}')",
+      "Bash(awk '{print $1}')",
+      "Bash(awk '{print $2}')",
+      "Bash(python -X utf8 test_safety.py)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(python *)",
+      "Bash(PYTHONIOENCODING=utf-8 python *)",
+      "Bash(python3 *)",
+      "Bash(.venv/Scripts/python.exe --version)",
+      "Bash(.venv/Scripts/python.exe -m pip install --upgrade pip)",
+      "Bash(.venv/Scripts/python.exe -m pip install -e \".[dev]\")",
+      "Bash(.venv/Scripts/ruff.exe check *)",
+      "Bash(.venv/Scripts/mypy.exe leblep/)",
+      "Bash(.venv/Scripts/pytest.exe --collect-only)",
+      "Bash(.venv/Scripts/pytest.exe tests/unit/test_smoke.py -v)",
+      "Bash(.venv/Scripts/pytest.exe tests/ -v)",
+      "Bash(.venv/Scripts/python.exe -m pip list)",
+      "Bash(git -C \"C:/Users/utkuc/Downloads/leblep\" log --oneline -10)",
+      "Bash(git -C \"C:/Users/utkuc/Downloads/leblep\" branch --show-current)",
+      "Bash(git -C \"C:/Users/utkuc/Downloads/leblep\" status)",
+      "Bash(git -C \"C:/Users/utkuc/Downloads/leblep\" show --stat 9397a03)",
+      "Bash(git -C \"C:/Users/utkuc/Downloads/leblep\" show --stat 52ce513)",
+      "Bash(git -C \"C:/Users/utkuc/Downloads/leblep\" show --stat a152caf)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/test_smoke.py -v)",
+      "Bash(.venv/Scripts/python -m ruff check .)",
+      "Bash(/c/Users/utkuc/Downloads/leblep/.venv/Scripts/python.exe -c ' *)",
+      "Read(//c/Users/utkuc/.leblep/memory/**)"
+    ]
+  }
+}

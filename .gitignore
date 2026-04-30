@@ -1,0 +1,31 @@
+# Secrets — ASLA commit etme
+.env
+.env.local
+*.key
+*.pem
+
+# Runtime
+state/
+logs/
+reports/
+*.log
+efloud_bot.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
