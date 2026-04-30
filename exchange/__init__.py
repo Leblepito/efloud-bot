@@ -100,58 +100,236 @@ class Position:
     sl: float
     tp1: float
     tp2: float
-    size: float             # Kontrat sayısı
+    size: float             # Kontrat sayısı (toplam — TP1 hit'ten sonra yarısı remaining)
     order_id: str = ""
     sl_order_id: str = ""
     tp1_order_id: str = ""
-    tp1_hit: bool = False   # TP1'e ulaştı mı (yarı kapat + SL trail)
+    tp2_order_id: str = ""
+    tp1_hit: bool = False   # TP1 fill oldu mu (server-side detect via reconcile)
     opened_at: str = ""
+    closed_at: str = ""
+    exit_reason: str = ""   # "TP1" | "TP2" | "SL" | "MANUAL" | "RECONCILED"
+    exit_price: float = 0.0
+    pnl_usdt: float = 0.0
 
 
 class OrderManager:
-    """Pozisyon açma, kapatma, SL/TP yönetimi."""
+    """Pozisyon açma + server-side TP/SL + reconciliation.
 
-    def __init__(self, client: BinanceClient, dry_run: bool = True):
+    v2.2 refactor:
+    - TP1/TP2 server-side TAKE_PROFIT_MARKET orders (0ms execution)
+    - reconcile() her cycle başı Binance ↔ local sync
+    - check_positions() → backup polling fallback (network kopukluğu vs.)
+    """
+
+    def __init__(self, client: BinanceClient, dry_run: bool = True,
+                 on_position_change=None):
         self.client = client
         self.dry_run = dry_run
         self.positions: List[Position] = []
+        self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
+        self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
+
+    # ─────────────────────────────────────────────────────────────
+    # Open / Close
+    # ─────────────────────────────────────────────────────────────
 
     def open_position(self, symbol: str, direction: str, size: float,
                       entry: float, sl: float, tp1: float, tp2: float) -> Optional[Position]:
-        """Yeni pozisyon aç."""
+        """Yeni pozisyon aç + server-side SL + TP1 (yarı) + TP2 (yarı) yerleştir."""
         side = "buy" if direction == "LONG" else "sell"
+        reverse_side = "sell" if direction == "LONG" else "buy"
+        half_size = size / 2
 
         if self.dry_run:
-            log.info(f"[DRY] {direction} {symbol} size={size:.4f} @ {entry:.2f} | SL={sl:.2f} TP1={tp1:.2f} TP2={tp2:.2f}")
+            log.info(f"[DRY] {direction} {symbol} size={size:.4f} @ {entry:.2f} | "
+                     f"SL={sl:.2f} TP1={tp1:.2f} TP2={tp2:.2f}")
             pos = Position(symbol, direction, entry, sl, tp1, tp2, size,
                            opened_at=pd.Timestamp.now().isoformat())
             self.positions.append(pos)
+            self._emit("position_opened", pos)
             return pos
 
         try:
-            # Market order
-            order = self.client.exchange.create_order(symbol, "market", side, size)
-            oid = order.get("id", "")
+            # 1) Market entry order
+            entry_order = self.client.exchange.create_order(symbol, "market", side, size)
+            oid = entry_order.get("id", "")
             log.info(f"MARKET {direction} {symbol} size={size} | order_id={oid}")
 
-            # SL order
-            sl_side = "sell" if direction == "LONG" else "buy"
-            sl_params = {"stopPrice": sl, "reduceOnly": True}
+            # 2) Server-side SL — STOP_MARKET reduceOnly
             sl_order = self.client.exchange.create_order(
-                symbol, "STOP", sl_side, size, sl, params=sl_params)
+                symbol, "STOP_MARKET", reverse_side, size,
+                params={"stopPrice": sl, "reduceOnly": True}
+            )
+            sl_oid = sl_order.get("id", "")
+            log.info(f"  ↳ SL @ {sl:.4f} | order_id={sl_oid}")
 
-            pos = Position(symbol, direction, entry, sl, tp1, tp2, size,
-                           oid, sl_order.get("id", ""),
-                           opened_at=pd.Timestamp.now().isoformat())
+            # 3) Server-side TP1 — TAKE_PROFIT_MARKET, yarı boyut, reduceOnly
+            tp1_order = self.client.exchange.create_order(
+                symbol, "TAKE_PROFIT_MARKET", reverse_side, half_size,
+                params={"stopPrice": tp1, "reduceOnly": True}
+            )
+            tp1_oid = tp1_order.get("id", "")
+            log.info(f"  ↳ TP1 @ {tp1:.4f} (size={half_size:.4f}) | order_id={tp1_oid}")
+
+            # 4) Server-side TP2 — kalan yarı
+            tp2_order = self.client.exchange.create_order(
+                symbol, "TAKE_PROFIT_MARKET", reverse_side, size - half_size,
+                params={"stopPrice": tp2, "reduceOnly": True}
+            )
+            tp2_oid = tp2_order.get("id", "")
+            log.info(f"  ↳ TP2 @ {tp2:.4f} (size={size - half_size:.4f}) | order_id={tp2_oid}")
+
+            pos = Position(
+                symbol=symbol, direction=direction, entry=entry,
+                sl=sl, tp1=tp1, tp2=tp2, size=size,
+                order_id=oid, sl_order_id=sl_oid,
+                tp1_order_id=tp1_oid, tp2_order_id=tp2_oid,
+                opened_at=pd.Timestamp.now().isoformat(),
+            )
             self.positions.append(pos)
+            self._emit("position_opened", pos)
             return pos
 
         except Exception as e:
-            log.error(f"Order failed: {e}")
+            log.error(f"Order failed for {symbol}: {e}", exc_info=True)
+            # Best-effort cleanup: market order başarılı olduysa pozisyon açılmış demektir,
+            # ama SL/TP order'ları başarısız olduysa bot pozisyonu izlemez. Manual kapatma gerekir.
             return None
 
+    # ─────────────────────────────────────────────────────────────
+    # Reconciliation — primary source of truth for closes
+    # ─────────────────────────────────────────────────────────────
+
+    def reconcile(self) -> List[Position]:
+        """Her cycle başı: Binance ↔ local pozisyon karşılaştır.
+
+        Returns: Bu cycle'da kapanmış pozisyonlar.
+
+        Algorithm:
+        - Binance positions fetch → "contracts" sayısı 0 olan = kapalı
+        - Binance open orders fetch → TP1 order'ı listede yoksa = filled (TP1 hit)
+        - Filled TP1 → SL'i break-even'a kaydır (eski SL cancel + yeni SL @ entry)
+        """
+        if self.dry_run:
+            return []
+
+        try:
+            bn_positions = self.client.get_open_positions()
+        except Exception as e:
+            log.warning(f"Reconcile: positions fetch failed: {e}")
+            return []
+
+        try:
+            bn_orders_raw = self.client.exchange.fetch_open_orders()
+            bn_order_ids = {str(o.get("id", "")) for o in bn_orders_raw}
+        except Exception as e:
+            log.warning(f"Reconcile: open orders fetch failed: {e}")
+            bn_order_ids = set()
+
+        # Binance'deki açık pozisyon symbol'leri
+        bn_open_symbols = {p["symbol"] for p in bn_positions if float(p.get("contracts", 0)) > 0}
+
+        closed_now: List[Position] = []
+
+        for pos in self.positions[:]:
+            if pos.symbol not in bn_open_symbols:
+                # Pozisyon Binance'de kapanmış — TP2 / SL / manual close
+                exit_price = self._estimate_exit_price(pos, bn_orders_raw)
+                self._record_close(pos, exit_price, reason="RECONCILED")
+                closed_now.append(pos)
+                self.positions.remove(pos)
+                continue
+
+            # Pozisyon hâlâ açık — TP1 fill kontrolü
+            if pos.tp1_order_id and not pos.tp1_hit:
+                if pos.tp1_order_id not in bn_order_ids:
+                    # TP1 order'ı kaybolmuş = filled
+                    pos.tp1_hit = True
+                    log.info(f"RECONCILE: TP1 hit {pos.symbol} → SL → break-even @ {pos.entry}")
+                    self._move_sl_to_breakeven(pos)
+                    self._emit("tp1_hit", pos)
+
+        return closed_now
+
+    def _move_sl_to_breakeven(self, pos: Position) -> None:
+        """TP1 hit sonrası SL'i entry'ye kaydır (server-side cancel + new order)."""
+        if self.dry_run:
+            pos.sl = pos.entry
+            return
+
+        try:
+            if pos.sl_order_id:
+                try:
+                    self.client.exchange.cancel_order(pos.sl_order_id, pos.symbol)
+                except Exception as e:
+                    log.warning(f"SL cancel failed for {pos.symbol}: {e} (continuing)")
+
+            reverse_side = "sell" if pos.direction == "LONG" else "buy"
+            remaining_size = pos.size / 2  # TP1 yarısı kapandı, kalan yarısı için SL
+            new_sl = self.client.exchange.create_order(
+                pos.symbol, "STOP_MARKET", reverse_side, remaining_size,
+                params={"stopPrice": pos.entry, "reduceOnly": True}
+            )
+            pos.sl = pos.entry
+            pos.sl_order_id = new_sl.get("id", "")
+            log.info(f"  ↳ New SL @ break-even {pos.entry:.4f} | order_id={pos.sl_order_id}")
+        except Exception as e:
+            log.error(f"Move-SL-to-breakeven failed for {pos.symbol}: {e}")
+
+    def _estimate_exit_price(self, pos: Position, bn_orders: list) -> float:
+        """Reconcile sırasında exit price tahmin et.
+
+        Hangi order tetiklendi? — bn_orders listesinde olmayan TP/SL order'ı = filled.
+        """
+        # TP2 / TP1 / SL'den hangisi yoksa o tetiklenmiş demektir
+        order_ids = {str(o.get("id", "")) for o in bn_orders}
+
+        if pos.tp2_order_id and pos.tp2_order_id not in order_ids:
+            return pos.tp2  # TP2 hit
+        if pos.sl_order_id and pos.sl_order_id not in order_ids:
+            return pos.sl   # SL hit
+        if pos.tp1_order_id and pos.tp1_order_id not in order_ids and not pos.tp1_hit:
+            return pos.tp1
+        # Fallback: current market price
+        try:
+            return self.client.get_price(pos.symbol)
+        except Exception:
+            return pos.entry
+
+    def _record_close(self, pos: Position, exit_price: float, reason: str) -> None:
+        """Pozisyon kapanış metadata'sını doldur ve event emit et."""
+        is_long = pos.direction == "LONG"
+        pnl_pct = ((exit_price - pos.entry) / pos.entry * 100) if is_long else \
+                  ((pos.entry - exit_price) / pos.entry * 100)
+        pnl_usdt = (exit_price - pos.entry) * pos.size if is_long else \
+                   (pos.entry - exit_price) * pos.size
+
+        pos.closed_at = pd.Timestamp.now().isoformat()
+        pos.exit_reason = reason
+        pos.exit_price = exit_price
+        pos.pnl_usdt = pnl_usdt
+
+        log.info(
+            f"{reason}: {pos.symbol} {pos.direction} | "
+            f"Entry={pos.entry:.4f} Exit={exit_price:.4f} | "
+            f"PnL={pnl_pct:+.2f}% (${pnl_usdt:+.2f})"
+        )
+
+        self.closed_positions.append(pos)
+        self._emit("position_closed", pos)
+
+    # ─────────────────────────────────────────────────────────────
+    # Backup polling (network/order issues fallback)
+    # ─────────────────────────────────────────────────────────────
+
     def check_positions(self):
-        """Açık pozisyonları kontrol — TP1/TP2/SL takibi."""
+        """Backup polling — sadece network/Binance kopukluğunda devreye girer.
+
+        Server-side TP/SL primary path. Bu fonksiyon defensive fallback:
+        eğer reconcile() çalışmadıysa veya order'lar yerleşmediyse polling ile
+        yedek koruma. Production'da nadiren tetiklenir.
+        """
         for pos in self.positions[:]:
             try:
                 price = self.client.get_price(pos.symbol)
@@ -160,42 +338,19 @@ class OrderManager:
 
             is_long = pos.direction == "LONG"
 
-            # SL kontrolü
+            # SL fallback
             if (is_long and price <= pos.sl) or (not is_long and price >= pos.sl):
-                self._close(pos, price, "SL HIT")
+                log.warning(f"Polling SL hit detected for {pos.symbol} (server-side missed?)")
+                self._fallback_close(pos, price, "SL_POLL")
                 continue
 
-            # TP2 kontrolü (tam kapat)
+            # TP2 fallback
             if (is_long and price >= pos.tp2) or (not is_long and price <= pos.tp2):
-                self._close(pos, price, "TP2 HIT")
-                continue
+                log.warning(f"Polling TP2 hit detected for {pos.symbol} (server-side missed?)")
+                self._fallback_close(pos, price, "TP2_POLL")
 
-            # TP1 kontrolü (yarı kapat + SL → entry)
-            if not pos.tp1_hit:
-                if (is_long and price >= pos.tp1) or (not is_long and price <= pos.tp1):
-                    pos.tp1_hit = True
-                    pos.sl = pos.entry  # SL'yi break-even'a çek
-                    log.info(f"TP1 HIT: {pos.symbol} | SL → break-even @ {pos.entry}")
-
-                    if not self.dry_run:
-                        # Yarısını kapat
-                        half = pos.size / 2
-                        close_side = "sell" if is_long else "buy"
-                        try:
-                            self.client.exchange.create_order(
-                                pos.symbol, "market", close_side, half,
-                                params={"reduceOnly": True})
-                            pos.size = pos.size - half
-                        except Exception as e:
-                            log.error(f"TP1 partial close failed: {e}")
-
-    def _close(self, pos: Position, price: float, reason: str):
-        """Pozisyonu kapat."""
-        pnl_pct = ((price - pos.entry) / pos.entry * 100) if pos.direction == "LONG" else \
-                  ((pos.entry - price) / pos.entry * 100)
-
-        log.info(f"{reason}: {pos.symbol} {pos.direction} | Entry={pos.entry:.2f} Exit={price:.2f} | PnL={pnl_pct:+.2f}%")
-
+    def _fallback_close(self, pos: Position, price: float, reason: str):
+        """Polling fallback: market close + cancel pending TP/SL orders."""
         if not self.dry_run:
             close_side = "sell" if pos.direction == "LONG" else "buy"
             try:
@@ -203,9 +358,46 @@ class OrderManager:
                     pos.symbol, "market", close_side, pos.size,
                     params={"reduceOnly": True})
             except Exception as e:
-                log.error(f"Close failed: {e}")
+                log.error(f"Fallback close failed: {e}")
 
+            # Pending order cleanup
+            for oid in [pos.sl_order_id, pos.tp1_order_id, pos.tp2_order_id]:
+                if oid:
+                    try:
+                        self.client.exchange.cancel_order(oid, pos.symbol)
+                    except Exception:
+                        pass
+
+        self._record_close(pos, price, reason)
         self.positions.remove(pos)
+
+    def kill_switch(self) -> int:
+        """Tüm açık pozisyonları piyasa fiyatından kapat + tüm pending order'ları iptal et.
+
+        Frontend kill switch butonunun çağıracağı endpoint. Returns: kapatılan pozisyon sayısı.
+        """
+        count = 0
+        for pos in self.positions[:]:
+            try:
+                price = self.client.get_price(pos.symbol)
+            except Exception:
+                price = pos.entry  # fallback
+            self._fallback_close(pos, price, "KILL_SWITCH")
+            count += 1
+        log.error(f"⛔ KILL SWITCH activated: closed {count} positions")
+        return count
+
+    # ─────────────────────────────────────────────────────────────
+    # Helpers
+    # ─────────────────────────────────────────────────────────────
+
+    def _emit(self, event: str, position: Position) -> None:
+        """Event callback (WebSocket push için)."""
+        if self.on_position_change:
+            try:
+                self.on_position_change(event, position)
+            except Exception as e:
+                log.warning(f"Event callback failed: {e}")
 
     @property
     def open_count(self) -> int:
