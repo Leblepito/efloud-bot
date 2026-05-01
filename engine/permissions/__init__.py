@@ -97,8 +97,8 @@ class PermissionManager:
     def _fetch_exchange_info(self) -> dict:
         """Futures exchange info — tüm semboller, filterları, status'ları."""
         if self.client.market_type == "futures":
-            return self.client.exchange.fapiPublicGetExchangeinfo()
-        return self.client.exchange.publicGetExchangeinfo()
+            return self.client.exchange.fapiPublicGetExchangeInfo()
+        return self.client.exchange.publicGetExchangeInfo()
 
     def _check_symbol(self, symbol: str, estimated_notional: float) -> SymbolPermission:
         """Tek sembol için yetki tespiti."""

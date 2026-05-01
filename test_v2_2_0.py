@@ -36,7 +36,7 @@ def test_permission_manager_mock():
     class MockExchange:
         def fetch_balance(self, params=None): return {"canTrade": True}
         def fapiPrivateV2GetAccount(self): return {"canTrade": True}
-        def fapiPublicGetExchangeinfo(self):
+        def fapiPublicGetExchangeInfo(self):
             return {"symbols": [
                 {"symbol": "BTCUSDT", "status": "TRADING",
                  "filters": [{"filterType": "LOT_SIZE", "minQty": "0.001"},
