@@ -27,7 +27,8 @@
       "Bash(.venv/Scripts/python -m pytest tests/unit/test_smoke.py -v)",
       "Bash(.venv/Scripts/python -m ruff check .)",
       "Bash(/c/Users/utkuc/Downloads/leblep/.venv/Scripts/python.exe -c ' *)",
-      "Read(//c/Users/utkuc/.leblep/memory/**)"
+      "Read(//c/Users/utkuc/.leblep/memory/**)",
+      "Bash(where python *)"
     ]
   }
 }

@@ -44,17 +44,29 @@ class BotRunner:
         self.last_cycle_duration_ms: int = 0
         self.running = False
         self.stopped = False
+        self.last_error: Optional[str] = None
 
     # ─────────────────────────────────────────────────────────────
     # Lifecycle
     # ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
+        # Idempotent: zaten running iken tekrar çağrılırsa hiçbir şey yapma
+        if self.running and not self.stopped:
+            log.info("start() ignored — runner already running")
+            return
+
+        # Yeni başlatma denemesi → stop flag ve eski hatayı temizle
+        self.stopped = False
+        self.last_error = None
+
         cfg_path = os.environ.get("EFLOUD_CONFIG_PATH", CONFIG_PATH_DEFAULT)
         log.info(f"Loading config: {cfg_path}")
 
         if not Path(cfg_path).exists():
-            log.error(f"Config not found: {cfg_path} — bot will not start")
+            msg = f"Config not found: {cfg_path}"
+            log.error(f"{msg} — bot will not start")
+            self.last_error = msg
             return
 
         self.cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))
@@ -63,6 +75,7 @@ class BotRunner:
             validate_config(self.cfg)
         except ValueError as e:
             log.error(f"⛔ Config validation failed: {e}")
+            self.last_error = f"Config validation failed: {e}"
             return
 
         # Mainnet Guard (non-interactive in worker mode)
@@ -72,11 +85,13 @@ class BotRunner:
             interactive=False,
         ):
             log.error("Mainnet guard blocked startup")
+            self.last_error = "Mainnet guard blocked startup (set EFLOUD_ALLOW_MAINNET=1)"
             return
 
         api_key, api_secret = resolve_credentials(self.cfg)
         if not self.cfg["operation"]["dry_run"] and (not api_key or not api_secret):
             log.error("Live mode requires BINANCE_API_KEY and BINANCE_API_SECRET")
+            self.last_error = "Live mode requires BINANCE_API_KEY and BINANCE_API_SECRET"
             return
 
         ex_cfg = self.cfg["exchange"]
@@ -147,6 +162,11 @@ class BotRunner:
         log.info("🛑 Bot runner stopped")
         bus.publish("bot_stopped")
         await db.log_audit("bot_stopped", {})
+
+    async def restart(self) -> None:
+        """Stop + start sequence. Useful when config changes externally."""
+        await self.stop()
+        await self.start()
 
     # ─────────────────────────────────────────────────────────────
     # Main loop
@@ -322,6 +342,7 @@ class BotRunner:
             "config_path": os.environ.get("EFLOUD_CONFIG_PATH", CONFIG_PATH_DEFAULT),
             "testnet": self.cfg.get("exchange", {}).get("testnet", True) if self.cfg else True,
             "dry_run": self.cfg.get("operation", {}).get("dry_run", True) if self.cfg else True,
+            "last_error": self.last_error,
         }
 
     @staticmethod

@@ -82,6 +82,34 @@ async def equity(days: int = 7) -> list[dict]:
     return await db.fetch_equity_history(days=min(max(days, 1), 90))
 
 
+@router.post("/bot/start", dependencies=[Depends(require_auth)])
+async def bot_start() -> dict:
+    if runner.running and not runner.stopped:
+        return {"ok": True, "already_running": True, "running": True}
+    await runner.start()
+    return {
+        "ok": True,
+        "running": runner.running and not runner.stopped,
+        "last_error": runner.last_error,
+    }
+
+
+@router.post("/bot/stop", dependencies=[Depends(require_auth)])
+async def bot_stop() -> dict:
+    await runner.stop()
+    return {"ok": True, "running": False}
+
+
+@router.post("/bot/restart", dependencies=[Depends(require_auth)])
+async def bot_restart() -> dict:
+    await runner.restart()
+    return {
+        "ok": True,
+        "running": runner.running and not runner.stopped,
+        "last_error": runner.last_error,
+    }
+
+
 @router.post("/kill-switch", dependencies=[Depends(require_auth)])
 async def kill_switch() -> dict:
     if not runner.order_mgr:

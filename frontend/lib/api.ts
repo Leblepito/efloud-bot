@@ -10,6 +10,7 @@ export type Status = {
   config_path: string;
   testnet: boolean;
   dry_run: boolean;
+  last_error: string | null;
 };
 
 export type OpenPosition = {

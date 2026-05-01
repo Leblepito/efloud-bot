@@ -1,6 +1,7 @@
 "use client";
 
 import { KillSwitch } from "./KillSwitch";
+import { BotControl } from "./BotControl";
 import { useStatus } from "@/hooks/useStatus";
 
 export function TopBar() {
@@ -16,7 +17,10 @@ export function TopBar() {
             v2.2 ▪ {data?.testnet ? "TESTNET" : "MAINNET"} ▪ {data?.dry_run ? "DRY-RUN" : "LIVE"}
           </span>
         </div>
-        <KillSwitch />
+        <div className="flex items-center gap-3">
+          <BotControl />
+          <KillSwitch />
+        </div>
       </div>
     </header>
   );

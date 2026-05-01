@@ -42,10 +42,24 @@ async def lifespan(app: FastAPI):
     # Startup
     log.info("🟢 App startup")
     await db.connect()
-    try:
-        await runner.start()
-    except Exception as e:
-        log.error(f"Bot runner startup failed: {e}", exc_info=True)
+
+    # Optional auto-migration (run pending SQL migrations against DATABASE_URL)
+    if os.environ.get("EFLOUD_AUTO_MIGRATE", "0") == "1":
+        try:
+            from backend.migrate import run_pending
+            await run_pending()
+        except Exception as e:
+            log.error(f"Auto-migrate failed: {e}", exc_info=True)
+
+    # Autostart bot — opt-out via EFLOUD_AUTOSTART=0 (Railway: manual control)
+    if os.environ.get("EFLOUD_AUTOSTART", "1") == "1":
+        try:
+            await runner.start()
+        except Exception as e:
+            log.error(f"Bot runner startup failed: {e}", exc_info=True)
+    else:
+        log.info("Autostart disabled (EFLOUD_AUTOSTART=0) — start bot via /api/bot/start")
+
     yield
     # Shutdown
     log.info("🔴 App shutdown")
