@@ -4,7 +4,7 @@
 
 {
     # Global options
-    email admin@efloud-bot.local  # used by ACME (LE) for cert expiry warnings
+    email utkucanuysall@gmail.com  # used by ACME (LE) for cert expiry warnings
 }
 
 178-104-122-91.nip.io {
