@@ -1,6 +1,8 @@
 # Caddyfile — auto-HTTPS reverse proxy for efloud-bot
 # nip.io: any subdomain like 178-104-122-91.nip.io → resolves to 178.104.122.91
-# Caddy auto-provisions Let's Encrypt cert via HTTP-01 challenge on port 80.
+# Caddy auto-provisions a Let's Encrypt cert via TLS-ALPN-01 (port 443)
+# and uses port 80 for HTTP→HTTPS redirects + HTTP-01 fallback.
+# Both 80 and 443 must be open in UFW.
 
 {
     # Global options

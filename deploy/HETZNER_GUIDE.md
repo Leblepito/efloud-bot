@@ -126,7 +126,7 @@ nano .env.production
 - `BINANCE_API_KEY`, `BINANCE_API_SECRET` — Mainnet key (mevcut)
 - `DASHBOARD_PASSWORD` — güçlü password (lokal'de kullandığın `efloud-test-12345`'ten farklı, en az 16 karakter)
 - `SESSION_SECRET` — `openssl rand -hex 32` ile üret, kopyala
-- `ALLOWED_ORIGINS=http://<sunucu_ipv4>:8080` — sunucu IP'sini yaz
+- `ALLOWED_ORIGINS=https://<hyphenated_ip>.nip.io` — IP'nin noktalarını tireyle değiştir (örn `178.104.122.91` → `178-104-122-91.nip.io`). Caddy bu hostname için Let's Encrypt cert otomatik alır.
 
 Kaydet: `Ctrl+O`, `Enter`, `Ctrl+X`
 
@@ -173,22 +173,27 @@ Başarılı çıktı:
 
 ## 8. Dashboard'a Bağlan + İlk Cycle
 
-1. Browser'da `http://123.45.67.89:8080` aç
+Caddy reverse-proxy compose'da hazır geldiği için ilk `deploy.sh` çalıştığında HTTPS otomatik kurulur (Let's Encrypt cert ~30s içinde alınır).
+
+1. Browser'da aç: `https://<hyphenated_ip>.nip.io` (örn `https://178-104-122-91.nip.io`)
 2. Login: `.env.production`'daki `DASHBOARD_PASSWORD`
 3. Top bar → **Start** butonu → Bot başlasın
 4. Status grid'de `running: true`, `cycle_count` artmalı
 5. Watchlist'te 10 coin görünmeli (BTC, ETH, XRP, DOGE, SOL, BNB, TRX, LINK, BCH, ADA)
 
+> Bot container'ı `expose: 8080` ile internal-only; dış dünya sadece Caddy üzerinden 443'e bağlanır. Cookie `Secure` flag aktif (HTTPS-only).
+
 ---
 
-## 9. (Opsiyonel) HTTPS + Domain
+## 9. (Opsiyonel) Kendi Domain'in
 
-Şimdilik HTTP `:8080` üzerinde çalışıyor. Production'a alıştıkça:
-- Domain ekle (Cloudflare üzerinden ücretsiz)
-- Caddy veya Nginx + Let's Encrypt ile reverse proxy
-- UFW'de 80/443 aç, 8080'i kapat (sadece localhost'tan erişim)
+`nip.io` ücretsiz ve sınırsız çalışır ama `https://178-104-122-91.nip.io` gibi görünür.
+Kendi domain'in (örn `bot.example.com`) varsa:
 
-İlk hafta düz HTTP yeterli — IP whitelist + güçlü password var.
+1. DNS A kaydı: `bot.example.com` → sunucu IPv4
+2. `deploy/Caddyfile`'da hostname'i değiştir
+3. `.env.production` → `ALLOWED_ORIGINS=https://bot.example.com`
+4. `bash deploy/deploy.sh` ile yeniden başlat — Caddy yeni cert'i otomatik alır
 
 ---
 

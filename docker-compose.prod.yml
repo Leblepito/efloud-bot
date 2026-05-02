@@ -40,7 +40,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - efloud-bot
+      efloud-bot:
+        condition: service_healthy
     logging:
       driver: json-file
       options:

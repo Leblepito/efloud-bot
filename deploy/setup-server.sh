@@ -27,11 +27,13 @@ fi
 docker --version
 docker compose version
 
-echo "==> [4/6] Configure UFW firewall (allow 22 SSH, 8080 dashboard)"
+echo "==> [4/6] Configure UFW firewall (22 SSH, 80/443 for Caddy)"
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp
-ufw allow 8080/tcp
+ufw allow 80/tcp     # ACME HTTP challenge + redirect
+ufw allow 443/tcp    # Caddy HTTPS
+ufw allow 443/udp    # Caddy HTTP/3 (QUIC)
 ufw --force enable
 ufw status
 
