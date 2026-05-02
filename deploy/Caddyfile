@@ -1,0 +1,25 @@
+# Caddyfile — auto-HTTPS reverse proxy for efloud-bot
+# nip.io: any subdomain like 178-104-122-91.nip.io → resolves to 178.104.122.91
+# Caddy auto-provisions Let's Encrypt cert via HTTP-01 challenge on port 80.
+
+{
+    # Global options
+    email admin@efloud-bot.local  # used by ACME (LE) for cert expiry warnings
+}
+
+178-104-122-91.nip.io {
+    encode gzip zstd
+    reverse_proxy efloud-bot:8080 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Security headers (HTTPS-only)
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+}

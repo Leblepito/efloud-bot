@@ -27,8 +27,30 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: efloud-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - efloud-bot
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   efloud_state:
   efloud_state_1k:
   efloud_logs:
   efloud_reports:
+  caddy_data:
+  caddy_config:
