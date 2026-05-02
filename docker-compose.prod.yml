@@ -1,0 +1,34 @@
+services:
+  efloud-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: efloud-bot:latest
+    container_name: efloud-bot
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    ports:
+      - "8080:8080"
+    volumes:
+      - efloud_state:/app/state
+      - efloud_state_1k:/app/state_1k
+      - efloud_logs:/app/logs
+      - efloud_reports:/app/reports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz', timeout=5).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  efloud_state:
+  efloud_state_1k:
+  efloud_logs:
+  efloud_reports:
