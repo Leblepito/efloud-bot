@@ -8,8 +8,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env.production
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"  # internal-only; Caddy reverse-proxies via docker network
     volumes:
       - efloud_state:/app/state
       - efloud_state_1k:/app/state_1k
