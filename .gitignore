@@ -6,8 +6,10 @@
 
 # Runtime
 state/
+state_*/
 logs/
 reports/
+reports_*/
 *.log
 efloud_bot.log*
 

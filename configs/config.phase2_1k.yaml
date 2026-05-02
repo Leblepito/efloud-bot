@@ -41,14 +41,14 @@ symbols:
   fixed_core:
     - BTC/USDT
     - ETH/USDT
-    - BNB/USDT
-    - SOL/USDT
     - XRP/USDT
-    - ADA/USDT
     - DOGE/USDT
+    - SOL/USDT
+    - BNB/USDT
+    - TRX/USDT
     - LINK/USDT
-    - LTC/USDT
-    - DOT/USDT
+    - BCH/USDT
+    - ADA/USDT
   dynamic_top_n: 0
   dynamic_exclude: []
   refresh_dynamic_hours: 24
@@ -71,19 +71,19 @@ fibonacci:
   ote_upper: 0.786
   ext_tp2: 1.618
 
-# ── Risk: $51 notional cap, ~$1.7-5 risk per trade ──
+# ── Risk: $100 notional cap, ~$10 risk per trade, gevşetilmiş filtreler ──
 risk:
-  risk_per_trade_pct: 0.5            # $5 risk budget per trade ($1000 × 0.5%)
+  risk_per_trade_pct: 1.0             # $10 risk budget per trade ($1000 × 1%)
   max_open_positions: 10              # Eşzamanlı max 10 (her sembol için 1)
   min_rr: 1.8                         # Min R:R 1:1.8
-  min_confluence: 60                   # Hafif gevşek (65 → 60)
+  min_confluence: 50                  # ⬇ 60 → 50 (daha gevşek, daha çok sinyal)
   recency_bars: 40
   sl_atr_buffer: 0.5
   daily_filter_strict: false
 
   # Opt-in reverse-from-risk (legacy default, mevcut SMC sizing)
   position_size_calculation: legacy
-  max_loss_per_trade_usdt: 5
+  max_loss_per_trade_usdt: 10
   target_stop_distance_pct: 5
 
 operation:
@@ -97,10 +97,10 @@ operation:
   state_dir: ./state_1k
   reports_dir: ./reports_1k
 
-# ── Safety ──
+# ── Safety: agresif (bütün cüzdan kullanılabilir, %10 daily loss tolerans) ──
 safety:
-  daily_loss_limit_pct: 5.0           # $50 günlük max kayıp
-  weekly_drawdown_limit_pct: 8.0      # $80 haftalık DD → HALT
+  daily_loss_limit_pct: 10.0          # ⬆ 5 → 10 — $100 günlük max kayıp
+  weekly_drawdown_limit_pct: 15.0     # ⬆ 8 → 15 — $150 haftalık DD → HALT
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
   starting_balance: 1000              # $1000 başlangıç (gerçek cüzdan)
@@ -110,15 +110,15 @@ safety:
   volatile_atr_mult: 2.5
 
   # max_position_notional_pct: bakiye × % × leverage = max notional
-  # 1000 × 1.7% × 3 = $51 notional max
-  max_position_notional_pct: 1.7
-  max_total_exposure: 1.0             # Toplam notional max $1000
+  # 1000 × 3.33% × 3 = $100 notional max → 10 sembol × $100 = $1000 (tüm cüzdan)
+  max_position_notional_pct: 3.33     # ⬆ 1.7 → 3.33 — her trade max $100 notional
+  max_total_exposure: 1.0             # Toplam notional max $1000 (cüzdan tamamı)
   max_holding_hours: 24
   max_pyramid_adds: 0                  # Pyramid kapalı (basit tut)
   min_sl_atr: 0.5
   max_sl_atr: 5.0
 
-  emergency_balance_threshold: 950    # Bakiye $950 altı → HALT (5% kayıp)
+  emergency_balance_threshold: 900    # ⬇ 950 → 900 — Bakiye $900 altı → HALT (10% kayıp)
   reserve_balance: 0                   # Tüm bakiye kullanılabilir
 
   min_seconds_between_symbol_fetches: 0.5
