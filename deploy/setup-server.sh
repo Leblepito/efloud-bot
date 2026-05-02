@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Hetzner Cloud — Fresh Ubuntu 24.04 server bootstrap for efloud-bot
 # Usage (as root, on freshly-provisioned server):
-#   curl -fsSL https://raw.githubusercontent.com/<USER>/<REPO>/feature/web-platform/deploy/setup-server.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/<USER>/<REPO>/master/deploy/setup-server.sh | bash
 # Or: scp this file to server, then `bash setup-server.sh`
 
 set -euo pipefail
