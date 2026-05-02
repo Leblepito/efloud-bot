@@ -85,11 +85,13 @@ class PositionGuard:
                 )
 
         max_notional = balance * self.max_size_pct
-        if notional > max_notional:
+        # Float tolerance: 1e-6 USDT (well below any Binance increment).
+        # Without this, notional=33.30000000001 vs max=33.3 falsely rejects.
+        if notional > max_notional + 1e-6:
             return PositionCheckResult(
                 False,
                 f"Size {notional:.2f} exceeds max {max_notional:.2f} "
-                f"({self.max_size_pct*100:.0f}% of balance)"
+                f"({self.max_size_pct*100:.2f}% of balance)"
             )
 
         # 3. Total exposure (tüm pozisyonların notional/balance oranı)

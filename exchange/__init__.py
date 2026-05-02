@@ -201,7 +201,23 @@ class OrderManager:
             # 1) Market entry order
             entry_order = self.client.exchange.create_order(ccxt_sym, "market", side, size)
             oid = entry_order.get("id", "")
-            log.info(f"MARKET {direction} {symbol} size={size} | order_id={oid}")
+            # Capture actual fill price (slippage tracking).
+            # CCXT market orders return `average` (preferred) or `price` after fill.
+            actual_entry = entry
+            raw_avg = entry_order.get("average") or entry_order.get("price") or 0
+            try:
+                fill_price = float(raw_avg) if raw_avg else 0.0
+            except (TypeError, ValueError):
+                fill_price = 0.0
+            if fill_price > 0:
+                actual_entry = fill_price
+                slip_pct = ((actual_entry - entry) / entry * 100) if entry else 0.0
+                log.info(
+                    f"MARKET {direction} {symbol} size={size} fill={actual_entry:.4f} "
+                    f"(signal={entry:.4f}, slip={slip_pct:+.3f}%) | order_id={oid}"
+                )
+            else:
+                log.info(f"MARKET {direction} {symbol} size={size} | order_id={oid}")
 
             # 2) Server-side SL — STOP_MARKET reduceOnly
             sl_order = self.client.exchange.create_order(
@@ -228,7 +244,7 @@ class OrderManager:
             log.info(f"  ↳ TP2 @ {tp2:.4f} (size={size - half_size:.4f}) | order_id={tp2_oid}")
 
             pos = Position(
-                symbol=symbol, direction=direction, entry=entry,
+                symbol=symbol, direction=direction, entry=actual_entry,
                 sl=sl, tp1=tp1, tp2=tp2, size=size,
                 order_id=oid, sl_order_id=sl_oid,
                 tp1_order_id=tp1_oid, tp2_order_id=tp2_oid,
