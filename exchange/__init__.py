@@ -24,6 +24,10 @@ class BinanceClient:
             opts["sandbox"] = True
 
         self.exchange = ccxt.binance(opts)
+        # Suppress CCXT's "warning" about fetching open orders without a symbol
+        # (we intentionally fetch all open orders for reconcile; CCXT raises this
+        # as an exception which would otherwise break the reconcile loop).
+        self.exchange.options["warnOnFetchOpenOrdersWithoutSymbol"] = False
         self.market_type = market_type
         self.testnet = testnet
         log.info(f"Binance {'testnet' if testnet else 'MAINNET'} | {market_type}")
@@ -263,12 +267,14 @@ class OrderManager:
             log.warning(f"Reconcile: positions fetch failed: {e}")
             return []
 
+        bn_orders_raw: list = []
+        bn_order_ids: set = set()
         try:
             bn_orders_raw = self.client.exchange.fetch_open_orders()
             bn_order_ids = {str(o.get("id", "")) for o in bn_orders_raw}
         except Exception as e:
             log.warning(f"Reconcile: open orders fetch failed: {e}")
-            bn_order_ids = set()
+            # bn_orders_raw stays []; bn_order_ids stays empty set
 
         # Binance'deki açık pozisyon symbol'leri
         bn_open_symbols = {p["symbol"] for p in bn_positions if float(p.get("contracts", 0)) > 0}
