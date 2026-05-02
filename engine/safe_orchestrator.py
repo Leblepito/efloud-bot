@@ -67,14 +67,18 @@ class SafeOrchestrator:
     """
 
     def __init__(self, config: dict, state_dir: str = "./state",
-                  permission_mgr=None, notification_mgr=None):
+                  permission_mgr=None, notification_mgr=None,
+                  order_manager=None):
         """
         permission_mgr: PermissionManager instance (opsiyonel)
         notification_mgr: NotificationManager instance (opsiyonel)
+        order_manager: OrderManager instance — borsaya gerçek emir gönderir.
+                       None ise sadece lifecycle (paper-trade / test mode).
         """
         self.config = config
         self.permission_mgr = permission_mgr
         self.notification_mgr = notification_mgr
+        self.order_manager = order_manager
 
         # Core engines
         sc = config["structure"]
@@ -397,21 +401,45 @@ class SafeOrchestrator:
                     )
 
                     if guard_check.allowed:
-                        pos = self.lifecycle.open_position(
-                            symbol, latest.direction, latest.entry, size,
-                            latest.sl, latest.tp1, latest.tp2
-                        )
-                        log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
-                                 f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
-                                 f"TP2={latest.tp2:.4f} Conf={latest.confluence}")
-                        if self.notification_mgr:
-                            self.notification_mgr.position_opened(
-                                symbol, latest.direction, latest.entry,
-                                size, latest.sl, latest.tp1, latest.confluence
+                        # ── 1) Borsaya gerçek emir gönder (varsa) ──
+                        exchange_ok = True
+                        if self.order_manager is not None:
+                            try:
+                                exchange_pos = self.order_manager.open_position(
+                                    symbol, latest.direction, size,
+                                    latest.entry, latest.sl, latest.tp1, latest.tp2,
+                                )
+                            except Exception as e:
+                                log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
+                                exchange_pos = None
+
+                            if exchange_pos is None:
+                                log.warning(
+                                    f"🚫 [{symbol}] Exchange order failed — "
+                                    f"local position NOT opened (no logical state mismatch)"
+                                )
+                                warnings.append(
+                                    f"Order failed for {symbol}: exchange rejected"
+                                )
+                                exchange_ok = False
+
+                        # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──
+                        if exchange_ok:
+                            pos = self.lifecycle.open_position(
+                                symbol, latest.direction, latest.entry, size,
+                                latest.sl, latest.tp1, latest.tp2
                             )
-                        actions.append(f"Opened {latest.direction} @ {latest.entry:.2f} "
-                                       f"(size={size:.4f})")
-                        warnings.extend(guard_check.warnings)
+                            log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
+                                     f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
+                                     f"TP2={latest.tp2:.4f} Conf={latest.confluence}")
+                            if self.notification_mgr:
+                                self.notification_mgr.position_opened(
+                                    symbol, latest.direction, latest.entry,
+                                    size, latest.sl, latest.tp1, latest.confluence
+                                )
+                            actions.append(f"Opened {latest.direction} @ {latest.entry:.2f} "
+                                           f"(size={size:.4f})")
+                            warnings.extend(guard_check.warnings)
                     else:
                         log.warning(f"🚫 Position blocked: {guard_check.reason}")
                         warnings.append(f"Signal rejected: {guard_check.reason}")

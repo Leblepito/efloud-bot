@@ -131,13 +131,16 @@ class BotRunner:
         notif_mgr = NotificationManager(channels=["log"])  # WS push üzerinden ayrıca yapılır
         state_dir = self.cfg["operation"].get("state_dir", "./state")
 
-        self.orch = SafeOrchestrator(
-            self.cfg, state_dir=state_dir,
-            permission_mgr=permission_mgr, notification_mgr=notif_mgr,
-        )
+        # OrderManager FIRST — orchestrator'a inject edilecek
         self.order_mgr = OrderManager(
             self.client, dry_run=self.cfg["operation"]["dry_run"],
             on_position_change=self._on_position_change,
+        )
+
+        self.orch = SafeOrchestrator(
+            self.cfg, state_dir=state_dir,
+            permission_mgr=permission_mgr, notification_mgr=notif_mgr,
+            order_manager=self.order_mgr,  # ← borsaya gerçek emir göndermek için
         )
 
         # Capture the running loop so executor-thread callbacks can schedule DB writes
