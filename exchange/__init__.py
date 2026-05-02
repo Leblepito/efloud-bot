@@ -39,7 +39,18 @@ class BinanceClient:
         return df
 
     def get_balance(self) -> float:
-        """USDT bakiye."""
+        """USDT free balance.
+
+        Futures için: /fapi/v2/account 'availableBalance' field'ı
+        (fetch_balance bazen futures USDT'yi top-level key olarak döndürmez,
+        defaultType=future olsa bile sıfır gelebilir).
+        """
+        if self.market_type == "futures":
+            try:
+                info = self.exchange.fapiPrivateV2GetAccount()
+                return float(info.get("availableBalance", 0))
+            except Exception as e:
+                log.warning(f"futures balance fetch failed: {e} — falling back to fetch_balance")
         b = self.exchange.fetch_balance()
         return float(b.get("USDT", {}).get("free", 0))
 
@@ -49,31 +60,44 @@ class BinanceClient:
         return float(t["last"])
 
     def set_leverage(self, symbol: str, leverage: int):
-        """Futures leverage ayarla."""
-        if self.market_type == "futures":
-            try:
-                self.exchange.set_leverage(leverage, symbol)
-                log.info(f"Leverage set: {symbol} → {leverage}x")
-            except Exception as e:
-                log.warning(f"Leverage set failed: {e}")
+        """Futures leverage ayarla — direct fapi endpoint kullanır.
+
+        ccxt.set_leverage symbol parse'ında hata veriyor ('linear/inverse only').
+        Bu yüzden direct /fapi/v1/leverage çağrısı yapıyoruz.
+        """
+        if self.market_type != "futures":
+            return
+        binance_sym = symbol.replace("/", "")
+        try:
+            self.exchange.fapiPrivatePostLeverage({
+                "symbol": binance_sym,
+                "leverage": int(leverage),
+            })
+            log.info(f"Leverage set: {symbol} → {leverage}x")
+        except Exception as e:
+            log.warning(f"Leverage set failed for {symbol}: {e}")
 
     def set_margin_mode(self, symbol: str, mode: str = "ISOLATED") -> bool:
-        """
-        Futures margin mode ayarla: ISOLATED veya CROSSED.
+        """Futures margin mode — direct /fapi/v1/marginType.
+
         ISOLATED: her pozisyon kendi margin'i ile, biri diğerini etkilemez.
-        CROSSED: tüm bakiye paylaşılır, biri likidasyona giderse diğerleri de etkilenir.
+        CROSSED: tüm bakiye paylaşılır.
 
         Bot için ISOLATED zorunlu — risk izolasyonu kritik.
         """
         if self.market_type != "futures":
             return False
+        binance_sym = symbol.replace("/", "")
         try:
-            self.exchange.set_margin_mode(mode, symbol)
+            self.exchange.fapiPrivatePostMarginType({
+                "symbol": binance_sym,
+                "marginType": mode.upper(),
+            })
             log.info(f"✅ Margin mode set: {symbol} → {mode}")
             return True
         except Exception as e:
             err_str = str(e).lower()
-            # "no need to change" benzeri mesajlar zaten istenen durumda olduğunu gösterir
+            # -4046 = "No need to change margin type" (zaten istenen modda)
             if "no need" in err_str or "already" in err_str or "-4046" in err_str:
                 log.debug(f"Margin mode already {mode} for {symbol}")
                 return True

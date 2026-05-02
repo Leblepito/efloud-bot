@@ -84,14 +84,14 @@ class PermissionManager:
         return self.permissions
 
     def _fetch_account_info(self) -> dict:
-        """Futures account info."""
+        """Futures account info — direct /fapi/v2/account for canTrade flag.
+
+        fetch_balance() Binance'te /fapi/v2/balance çağırır ve canTrade
+        DÖNDÜRMEZ. fapiPrivateV2GetAccount() account endpoint'tir, canTrade
+        dahil tüm permission flagleri içerir (preflight.py de bunu kullanıyor).
+        """
         if self.client.market_type == "futures":
-            # CCXT method
-            try:
-                return self.client.exchange.fetch_balance({"type": "future"})
-            except Exception:
-                # Fallback: privateGetAccount
-                return self.client.exchange.fapiPrivateV2GetAccount()
+            return self.client.exchange.fapiPrivateV2GetAccount()
         return self.client.exchange.fetch_balance()
 
     def _fetch_exchange_info(self) -> dict:
