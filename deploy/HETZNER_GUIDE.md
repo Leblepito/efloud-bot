@@ -78,7 +78,7 @@ Sunucu içinde, repo'daki bootstrap script'i çalıştır:
 # setup-server.sh dosyasını kopyala (3 yöntemden biri):
 
 # Yöntem A — GitHub'dan (repo public ise):
-curl -fsSL https://raw.githubusercontent.com/<USER>/<REPO>/feature/web-platform/deploy/setup-server.sh -o setup.sh
+curl -fsSL https://raw.githubusercontent.com/Leblepito/efloud-bot/feature/web-platform/deploy/setup-server.sh -o setup.sh
 bash setup.sh
 
 # Yöntem B — Lokalden scp ile (PowerShell, ÖNCE local'den):
@@ -87,7 +87,7 @@ bash setup.sh
 
 # Yöntem C — Repo'yu önce klonla, sonra script'i çalıştır:
 apt-get update -y && apt-get install -y git
-git clone https://github.com/<USER>/<REPO>.git -b feature/web-platform /opt/efloud-bot
+git clone https://github.com/Leblepito/efloud-bot.git -b feature/web-platform /opt/efloud-bot
 bash /opt/efloud-bot/deploy/setup-server.sh
 ```
 
@@ -113,7 +113,7 @@ su - efloud
 cd /opt
 
 # Eğer setup.sh "Yöntem C" ile zaten klonlamadıysa:
-git clone https://github.com/<USER>/<REPO>.git efloud-bot
+git clone https://github.com/Leblepito/efloud-bot.git efloud-bot
 cd efloud-bot
 git checkout feature/web-platform
 
