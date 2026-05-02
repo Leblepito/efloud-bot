@@ -106,3 +106,22 @@ def test_set_leverage_skips_for_spot_market():
     client = _make_client_with_mock_exchange("spot")
     client.set_leverage("BTC/USDT", 3)
     client.exchange.fapiPrivatePostLeverage.assert_not_called()
+
+
+def test_to_ccxt_symbol_appends_collateral_for_futures():
+    """Futures'ta 'BTC/USDT' → 'BTC/USDT:USDT' (linear collateral notation)."""
+    client = _make_client_with_mock_exchange("futures")
+    assert client.to_ccxt_symbol("BTC/USDT") == "BTC/USDT:USDT"
+    assert client.to_ccxt_symbol("ETH/USDT") == "ETH/USDT:USDT"
+
+
+def test_to_ccxt_symbol_passthrough_for_spot():
+    """Spot'ta symbol değişmeden geçer."""
+    client = _make_client_with_mock_exchange("spot")
+    assert client.to_ccxt_symbol("BTC/USDT") == "BTC/USDT"
+
+
+def test_to_ccxt_symbol_idempotent_when_already_formatted():
+    """Zaten ':USDT' suffix'i varsa tekrar ekleme."""
+    client = _make_client_with_mock_exchange("futures")
+    assert client.to_ccxt_symbol("BTC/USDT:USDT") == "BTC/USDT:USDT"

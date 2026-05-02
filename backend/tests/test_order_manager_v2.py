@@ -13,6 +13,10 @@ def mock_client():
     client.exchange = MagicMock()
     client.market_type = "futures"
     client.testnet = True
+    # Real BinanceClient.to_ccxt_symbol behavior — futures appends ':USDT'
+    client.to_ccxt_symbol.side_effect = lambda s: (
+        s if ":" in s or client.market_type != "futures" else f"{s}:USDT"
+    )
     return client
 
 
@@ -54,11 +58,11 @@ class TestOpenPositionServerSideTPSL:
         # Inspect each call
         calls = mock_client.exchange.create_order.call_args_list
 
-        # 1st: market buy
-        assert calls[0].args == ("BTC/USDT", "market", "buy", 1.0)
+        # 1st: market buy — futures notation 'BTC/USDT:USDT'
+        assert calls[0].args == ("BTC/USDT:USDT", "market", "buy", 1.0)
 
         # 2nd: STOP_MARKET sell (reverse side, full size, reduceOnly)
-        assert calls[1].args[0] == "BTC/USDT"
+        assert calls[1].args[0] == "BTC/USDT:USDT"
         assert calls[1].args[1] == "STOP_MARKET"
         assert calls[1].args[2] == "sell"
         assert calls[1].args[3] == 1.0
@@ -173,7 +177,7 @@ class TestReconciliation:
         assert pos.sl_order_id == "SL-NEW"
 
         # Eski SL cancel edildi
-        mock_client.exchange.cancel_order.assert_called_once_with("SL-1", "BTC/USDT")
+        mock_client.exchange.cancel_order.assert_called_once_with("SL-1", "BTC/USDT:USDT")
 
         # Yeni SL @ entry yerleştirildi
         mock_client.exchange.create_order.assert_called_once()

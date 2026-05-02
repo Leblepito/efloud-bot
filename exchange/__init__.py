@@ -38,6 +38,22 @@ class BinanceClient:
             df[c] = df[c].astype(float)
         return df
 
+    def to_ccxt_symbol(self, symbol: str) -> str:
+        """CCXT exchange'e gönderilecek symbol formatı.
+
+        Spot:    'BTC/USDT' → 'BTC/USDT'
+        Futures: 'BTC/USDT' → 'BTC/USDT:USDT' (linear/USDM, collateral notation)
+
+        defaultType=future ayarına rağmen CCXT'nin create_order'ı symbol'i
+        spot olarak yorumluyor → /api/v3/order'a gidiyor (spot endpoint).
+        ':USDT' suffix'i futures route'unu zorlar → /fapi/v1/order.
+        """
+        if self.market_type != "futures":
+            return symbol
+        if ":" in symbol:
+            return symbol  # zaten formatted
+        return f"{symbol}:USDT"
+
     def get_balance(self) -> float:
         """USDT free balance.
 
@@ -174,15 +190,18 @@ class OrderManager:
             self._emit("position_opened", pos)
             return pos
 
+        # CCXT'nin futures route'una gitmesi için symbol'i collateral notation ile sar
+        ccxt_sym = self.client.to_ccxt_symbol(symbol)
+
         try:
             # 1) Market entry order
-            entry_order = self.client.exchange.create_order(symbol, "market", side, size)
+            entry_order = self.client.exchange.create_order(ccxt_sym, "market", side, size)
             oid = entry_order.get("id", "")
             log.info(f"MARKET {direction} {symbol} size={size} | order_id={oid}")
 
             # 2) Server-side SL — STOP_MARKET reduceOnly
             sl_order = self.client.exchange.create_order(
-                symbol, "STOP_MARKET", reverse_side, size,
+                ccxt_sym, "STOP_MARKET", reverse_side, size,
                 params={"stopPrice": sl, "reduceOnly": True}
             )
             sl_oid = sl_order.get("id", "")
@@ -190,7 +209,7 @@ class OrderManager:
 
             # 3) Server-side TP1 — TAKE_PROFIT_MARKET, yarı boyut, reduceOnly
             tp1_order = self.client.exchange.create_order(
-                symbol, "TAKE_PROFIT_MARKET", reverse_side, half_size,
+                ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, half_size,
                 params={"stopPrice": tp1, "reduceOnly": True}
             )
             tp1_oid = tp1_order.get("id", "")
@@ -198,7 +217,7 @@ class OrderManager:
 
             # 4) Server-side TP2 — kalan yarı
             tp2_order = self.client.exchange.create_order(
-                symbol, "TAKE_PROFIT_MARKET", reverse_side, size - half_size,
+                ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, size - half_size,
                 params={"stopPrice": tp2, "reduceOnly": True}
             )
             tp2_oid = tp2_order.get("id", "")
@@ -282,17 +301,18 @@ class OrderManager:
             pos.sl = pos.entry
             return
 
+        ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
         try:
             if pos.sl_order_id:
                 try:
-                    self.client.exchange.cancel_order(pos.sl_order_id, pos.symbol)
+                    self.client.exchange.cancel_order(pos.sl_order_id, ccxt_sym)
                 except Exception as e:
                     log.warning(f"SL cancel failed for {pos.symbol}: {e} (continuing)")
 
             reverse_side = "sell" if pos.direction == "LONG" else "buy"
             remaining_size = pos.size / 2  # TP1 yarısı kapandı, kalan yarısı için SL
             new_sl = self.client.exchange.create_order(
-                pos.symbol, "STOP_MARKET", reverse_side, remaining_size,
+                ccxt_sym, "STOP_MARKET", reverse_side, remaining_size,
                 params={"stopPrice": pos.entry, "reduceOnly": True}
             )
             pos.sl = pos.entry
@@ -377,9 +397,10 @@ class OrderManager:
         """Polling fallback: market close + cancel pending TP/SL orders."""
         if not self.dry_run:
             close_side = "sell" if pos.direction == "LONG" else "buy"
+            ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
             try:
                 self.client.exchange.create_order(
-                    pos.symbol, "market", close_side, pos.size,
+                    ccxt_sym, "market", close_side, pos.size,
                     params={"reduceOnly": True})
             except Exception as e:
                 log.error(f"Fallback close failed: {e}")
@@ -388,7 +409,7 @@ class OrderManager:
             for oid in [pos.sl_order_id, pos.tp1_order_id, pos.tp2_order_id]:
                 if oid:
                     try:
-                        self.client.exchange.cancel_order(oid, pos.symbol)
+                        self.client.exchange.cancel_order(oid, ccxt_sym)
                     except Exception:
                         pass
 
