@@ -1,0 +1,9 @@
+# Linux shell scripts must always be LF (CRLF breaks bash on Hetzner/Linux servers)
+*.sh         text eol=lf
+Dockerfile   text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+
+# Windows batch
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
