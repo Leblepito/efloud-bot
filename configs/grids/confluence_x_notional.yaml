@@ -1,0 +1,31 @@
+# Phase C — Confluence × Notional grid optimization
+#
+# 5 × 4 = 20 configs. Run in portfolio mode (all symbols share balance) → 20 backtests.
+# Wall time ~6h on 4 workers (single-portfolio version) or ~17h if run per-symbol × per-config.
+#
+# Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §5 (Phase C)
+# Plan: docs/superpowers/plans/2026-05-04-backtest-implementation.md §Chunk 7 Task 7.2
+#
+# To execute:
+#   python -m scripts.run_phase_c
+#
+# Or directly via CLI (manual symbol selection):
+#   python -m backtest.cli grid \
+#     --grid configs/grids/confluence_x_notional.yaml \
+#     --symbols BTC/USDT,ETH/USDT,XRP/USDT,DOGE/USDT,SOL/USDT,BNB/USDT,TRX/USDT,LINK/USDT,BCH/USDT,ADA/USDT \
+#     --period-days 365 \
+#     --workers 4
+
+base: configs/config.phase2_1k.yaml
+
+overrides:
+  # Risk gating: how strict should the SMC confluence threshold be?
+  # 40 = relaxed (more signals, more noise); 60 = strict (fewer but cleaner)
+  risk.min_confluence: [40, 45, 50, 55, 60]
+
+  # Per-trade margin cap (% of balance). With 5x leverage:
+  # 1.0% = $20 margin / $100 notional = ultra-conservative
+  # 2.0% = $40 margin / $200 notional = current live setting
+  # 3.33% = $66 margin / $333 notional = moderate
+  # 5.0% = $100 margin / $500 notional = aggressive
+  safety.max_position_notional_pct: [1.0, 2.0, 3.33, 5.0]
