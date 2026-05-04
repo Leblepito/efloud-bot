@@ -82,7 +82,8 @@ reports/backtests/{run_id}/        NEW: each run gets a uuid4 short id
 ├── config.yaml                    config snapshot
 └── provenance.json                git_sha, pip_freeze_sha256, data_manifest, host, wall time
 
-backend/tests/                     8 NEW TDD test files
+backend/tests/                     9 NEW TDD test files
+├── test_engine_purity.py          (under pyfakefs + socket-block, see §6.1)
 ├── test_data_fetcher.py
 ├── test_data_cache.py
 ├── test_backtest_engine_single.py
@@ -355,14 +356,15 @@ overrides:
 
 | Test file | Target |
 |-----------|--------|
+| `test_engine_purity.py` | full I/O purity audit (pyfakefs + socket-blocked); §6.1 |
 | `test_data_fetcher.py` | range fetch with mocked CCXT, gap detection, throttle |
-| `test_data_cache.py` | parquet round-trip, manifest update, gap re-fetch |
+| `test_data_cache.py` | parquet round-trip, atomic write-rename, sha256 verify, gap re-fetch |
 | `test_backtest_engine_single.py` | single-symbol walk-forward; deterministic results |
-| `test_backtest_engine_portfolio.py` | shared breaker tripping across symbols halts all 10 |
-| `test_intrabar_fill.py` | SL/TP detection at bar high/low; gap-through fills |
-| `test_funding_fees.py` | 8h boundary application; sign convention (long pays positive) |
-| `test_grid_search.py` | param_grid expansion; multiprocessing safety; ranking |
-| `test_slippage.py` | per-leg slip applied in adverse direction |
+| `test_backtest_engine_portfolio.py` | shared breaker halts all 10 symbols; alphabetical-order determinism |
+| `test_intrabar_fill.py` | SL/TP detection at bar high/low; same-bar collision tie-break; gap-through |
+| `test_funding_fees.py` | 4-case sign table (long/short × +/-); boundary; multi-funding cumulative |
+| `test_grid_search.py` | param_grid expansion; multiprocessing safety; ranking; mid-grid restart resume |
+| `test_slippage.py` | per-leg slip in adverse direction (8 cases); pyramid incremental; partial close |
 
 Existing `backtest/runner.py` deleted with this work. Its 3 known issues (hardcoded 15m, monkey-patch, no slippage) are resolved by the rewrite, not by patching the legacy module.
 
