@@ -120,3 +120,34 @@ def test_engine_uses_intrabar_for_position_close():
         assert not pos.is_open
         assert pos.exits[-1].reason == "SL"
         assert pos.exits[-1].price == pytest.approx(91.908)
+
+
+def test_tp1_level_translates_to_tp_leg_for_slippage():
+    """Regression: resolve_fill returns 'TP1' but adverse_fill wants 'TP'.
+
+    The engine normalizes via `slip_leg = 'SL' if level == 'SL' else 'TP'`. Without
+    the normalization, this raised `ValueError: Unknown leg: 'TP1'` on real data.
+    """
+    from backtest.intrabar import resolve_fill, Bar
+    from backtest.slippage import adverse_fill, SlippageConfig
+    from dataclasses import dataclass as dc
+
+    @dc
+    class _PosView:
+        direction: str
+        entry: float
+        sl: float
+        tp1: float
+
+    view = _PosView(direction="LONG", entry=100.0, sl=95.0, tp1=105.0)
+    # Bar that hits TP1 only
+    bar = Bar(open=104.0, high=106.0, low=103.0, close=105.5)
+    level, raw_price = resolve_fill(view, bar)
+    assert level == "TP1"
+
+    # Engine glue: normalize to slippage leg
+    slip_leg = "SL" if level == "SL" else "TP"
+    cfg = SlippageConfig()
+    slipped = adverse_fill(raw_price, "LONG", slip_leg, cfg)  # must not raise
+    # LONG TP fills at adverse-down: max(open, tp1) × (1 - 0.0005) = 105 × 0.9995
+    assert slipped == pytest.approx(104.9475)

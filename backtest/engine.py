@@ -144,7 +144,9 @@ def run_backtest(
                     level, raw_price = resolve_fill(view, bar)
                     if level is None:
                         continue
-                    slipped = adverse_fill(raw_price, pos.direction, level, slippage_cfg)
+                    # resolve_fill returns "SL" or "TP1"; slippage expects leg in {"entry","SL","TP"}.
+                    slip_leg = "SL" if level == "SL" else "TP"
+                    slipped = adverse_fill(raw_price, pos.direction, slip_leg, slippage_cfg)
                     pnl_before = pos.realized_pnl
                     orch.lifecycle.close_position(pos, slipped, level)
                     pnl_after = pos.realized_pnl
