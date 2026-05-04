@@ -26,7 +26,7 @@ class _PosView:
     tp1: float
 
 
-def _compute_mtm_drawdown(positions, balance, current_prices, peak):
+def compute_mtm_drawdown(positions, balance, current_prices, peak):
     """Return (drawdown_pct_now, new_peak) given current prices.
 
     Args:
@@ -114,11 +114,13 @@ def run_backtest(
                     orch.run_cycle(symbol, h_slice, m_slice, e_slice, d_slice, balance=balance)
                 except Exception as e:
                     skipped_cycles += 1
-                    log.warning("Cycle %s @ %s raised %s: %s", symbol, current_ts, type(e).__name__, e)
+                    log.debug("Cycle %s @ %s raised %s: %s", symbol, current_ts, type(e).__name__, e)
                     continue
                 current_prices[symbol] = float(e_slice["close"].iloc[-1])
 
             # Intrabar fill check on next bar (i+1) for any open positions
+            # TODO(Chunk 5): add run_backtest-level test triggering actual SL fill on synthetic data.
+            # Currently the helper composition is unit-tested but the engine wiring is implicit.
             if i + 1 < n_bars:
                 for pos in list(orch.lifecycle.positions):
                     if not pos.is_open:
@@ -149,12 +151,15 @@ def run_backtest(
                     balance += (pnl_after - pnl_before)
                     peak_balance = max(peak_balance, balance)
 
-            # MTM drawdown tracking
-            dd, peak_balance = _compute_mtm_drawdown(
+            # MTM uses bar-i's close (current cycle); balance was just updated by bar-(i+1) slipped fills.
+            # Intentional 1-bar lag — MTM equity drifts forward on the next iteration.
+            dd, peak_balance = compute_mtm_drawdown(
                 orch.lifecycle.positions, balance, current_prices, peak_balance
             )
             max_drawdown_pct = max(max_drawdown_pct, dd)
 
+        if skipped_cycles > 0:
+            log.warning("Backtest had %d skipped cycles (see DEBUG log for details)", skipped_cycles)
         closed_positions = [p for p in orch.lifecycle.positions if not p.is_open and p.exits]
         trade_dicts = [serialize_trade(p) for p in closed_positions]
         agg = aggregate_metrics(trade_dicts, initial_balance, peak_balance, balance)

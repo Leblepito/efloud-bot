@@ -67,7 +67,7 @@ def test_mtm_dd_isolated_unit(base_config, tmp_path):
     import tempfile
     from engine import SafeOrchestrator
     from engine.notifications import NullNotificationManager
-    from backtest.engine import _compute_mtm_drawdown
+    from backtest.engine import compute_mtm_drawdown
 
     with tempfile.TemporaryDirectory() as state_dir:
         orch = SafeOrchestrator(
@@ -83,7 +83,7 @@ def test_mtm_dd_isolated_unit(base_config, tmp_path):
         # Simulate price going to 90 (unrealized loss = -100)
         balance = 1000.0
         peak = 1000.0
-        new_dd, new_peak = _compute_mtm_drawdown(
+        new_dd, new_peak = compute_mtm_drawdown(
             orch.lifecycle.positions, balance, {"BTC/USDT": 90.0}, peak
         )
         # Equity = 1000 + (90 - 100) * 10 * +1 = 900
