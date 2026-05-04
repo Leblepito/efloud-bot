@@ -25,6 +25,27 @@ class _PosView:
     tp1: float
 
 
+def _compute_mtm_drawdown(positions, balance, current_prices, peak):
+    """Return (drawdown_pct_now, new_peak) given current prices.
+
+    Args:
+        positions: iterable of Position objects (open ones contribute unrealized pnl).
+        balance: realized cash balance.
+        current_prices: {symbol: latest_price} for symbols with open positions.
+        peak: previous peak equity (MTM, not just realized).
+    """
+    unrealized = 0.0
+    for p in positions:
+        if not p.is_open or p.symbol not in current_prices:
+            continue
+        sign = 1 if p.direction == "LONG" else -1
+        unrealized += (current_prices[p.symbol] - p.avg_entry_price) * p.remaining_size * sign
+    mtm = balance + unrealized
+    new_peak = max(peak, mtm)
+    dd_pct = ((new_peak - mtm) / new_peak * 100) if new_peak > 0 else 0.0
+    return dd_pct, new_peak
+
+
 def run_backtest(
     *,
     symbols: list[str],
@@ -62,6 +83,8 @@ def run_backtest(
         peak_balance = balance
         skipped_cycles = 0  # cycles where run_cycle raised — see "skipped_cycles" in return dict
         slippage_cfg = SlippageConfig()
+        max_drawdown_pct = 0.0
+        current_prices: dict[str, float] = {}
 
         # Use the first symbol's entry-TF index as the master clock
         entry_tf_name = config["timeframes"]["entry"]
@@ -92,6 +115,7 @@ def run_backtest(
                     skipped_cycles += 1
                     log.warning("Cycle %s @ %s raised %s: %s", symbol, current_ts, type(e).__name__, e)
                     continue
+                current_prices[symbol] = float(e_slice["close"].iloc[-1])
 
             # Intrabar fill check on next bar (i+1) for any open positions
             if i + 1 < n_bars:
@@ -124,6 +148,12 @@ def run_backtest(
                     balance += (pnl_after - pnl_before)
                     peak_balance = max(peak_balance, balance)
 
+            # MTM drawdown tracking
+            dd, peak_balance = _compute_mtm_drawdown(
+                orch.lifecycle.positions, balance, current_prices, peak_balance
+            )
+            max_drawdown_pct = max(max_drawdown_pct, dd)
+
         closed_positions = [p for p in orch.lifecycle.positions if not p.is_open and p.exits]
 
         return {
@@ -134,6 +164,7 @@ def run_backtest(
             "equity_curve": [],
             "symbols": symbols,
             "skipped_cycles": skipped_cycles,
+            "max_drawdown_pct": round(max_drawdown_pct, 2),
         }
 
 

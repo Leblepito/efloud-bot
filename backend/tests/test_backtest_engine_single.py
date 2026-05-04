@@ -60,3 +60,17 @@ def test_engine_deterministic(base_config, synthetic_data):
     for r in (r1, r2):
         r.pop("_wall_seconds", None)
     assert _strict_dumps(r1) == _strict_dumps(r2)
+
+
+def test_mtm_drawdown_field_present(base_config, synthetic_data):
+    """run_backtest result must include max_drawdown_pct (>= 0)."""
+    data = {"BTC/USDT": {"4h": synthetic_data, "1h": synthetic_data,
+                         "15m": synthetic_data, "1d": synthetic_data}}
+    result = run_backtest(
+        symbols=["BTC/USDT"],
+        data=data,
+        config=base_config,
+        initial_balance=2000.0,
+    )
+    assert "max_drawdown_pct" in result
+    assert result["max_drawdown_pct"] >= 0
