@@ -90,3 +90,52 @@ def test_skips_near_zero_pnl_to_avoid_div_zero():
     assert result["matched_pairs"] == 1
     # The pair is matched but drift is undefined → mean is 0 (no contributing pairs) or NaN-handled
     assert result["per_trade_drift"] == [] or all(p.get("drift_pct") is not None for p in result["per_trade_drift"])
+
+
+def test_zero_pnl_live_trade_still_matches_and_drift_skipped():
+    """Live pnl 0.0 must NOT be dropped — should match, drift skipped if bt also 0 or near-zero.
+
+    Regression: previously _get_pnl used `trade.get('pnl_usdt') or trade.get('pnl')`,
+    which treats 0.0 as falsy and silently dropped the trade.
+    """
+    live = [_live("BTC/USDT", "LONG", "2026-05-01T10:00:00", 0.0)]
+    bt = [_bt("BTC/USDT", "LONG", "2026-05-01T10:00:00", 5.0)]
+    result = reconcile(live, bt)
+    assert result["matched_pairs"] == 1, "Zero-pnl live trade must still match"
+    # Drift = (0 - 5) / abs(5) * 100 = -100%
+    assert result["drift_pct_mean"] == pytest.approx(-100.0)
+
+
+def test_non_utc_timezone_string_parses_correctly():
+    """Live trade with +03:00 offset must convert to UTC, not silently shift.
+
+    Regression: _parse_dt previously did `dt.replace(tzinfo=timezone.utc)` instead
+    of `dt.astimezone(timezone.utc)`, which silently shifted wall-clock by the offset.
+    """
+    # Live trade at 10:00+03:00 = 07:00 UTC. Backtest at 07:00 UTC. Should match within 6-min window.
+    live = [_live("BTC/USDT", "LONG", "2026-05-01T10:00:00+03:00", 5.0)]
+    bt = [_bt("BTC/USDT", "LONG", "2026-05-01T07:00:00", 5.0)]
+    result = reconcile(live, bt, match_window_hours=0.1)  # 6 minutes — only matches if TZ correct
+    assert result["matched_pairs"] == 1, "Same UTC instant must match even when expressed in different TZs"
+
+
+def test_positive_drift_emits_no_calibration_recommendation():
+    """Live BETTER than backtest by > threshold → no calibration (don't increase slippage)."""
+    live = [_live("BTC/USDT", "LONG", f"2026-05-0{i}T10:00:00", 11.0) for i in range(1, 5)]
+    bt = [_bt("BTC/USDT", "LONG", f"2026-05-0{i}T10:00:00", 10.0) for i in range(1, 5)]
+    result = reconcile(live, bt)
+    assert result["drift_pct_mean"] == pytest.approx(10.0)
+    assert result["calibration_recommendation"] is None, (
+        "Positive drift means backtest is over-pessimistic; do not increase slippage"
+    )
+
+
+def test_datetime_object_input_works():
+    """Live trades from asyncpg arrive with datetime objects; reconcile must handle."""
+    from datetime import datetime, timezone
+    live = [{"symbol": "BTC/USDT", "direction": "LONG",
+             "opened_at": datetime(2026, 5, 1, 10, 0, 0, tzinfo=timezone.utc),
+             "pnl_usdt": 5.0}]
+    bt = [_bt("BTC/USDT", "LONG", "2026-05-01T10:00:00", 5.0)]
+    result = reconcile(live, bt)
+    assert result["matched_pairs"] == 1

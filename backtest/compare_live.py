@@ -18,35 +18,41 @@ from typing import Any, Optional
 
 import statistics
 
+from backtest.slippage import SlippageConfig
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _parse_dt(value) -> datetime:
-    """Parse a datetime from either a datetime object or an ISO string."""
+    """Parse ISO string or datetime to UTC-aware datetime.
+
+    Handles 'Z', '+00:00', and arbitrary offsets correctly.
+    Naive inputs are assumed UTC (Supabase TIMESTAMPTZ comes through as tz-aware,
+    but defensive against pre-processing that might strip tz).
+    """
     if isinstance(value, datetime):
-        # Ensure timezone-aware for comparison
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value
-    # String path
-    s = str(value)
-    # Remove trailing 'Z' and parse; handle +00:00 suffix
-    s = s.rstrip("Z").replace("+00:00", "")
-    dt = datetime.fromisoformat(s)
-    return dt.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    # Python 3.11+ fromisoformat handles 'Z' natively; pre-3.11 needs the swap
+    s_norm = str(value).replace("Z", "+00:00")
+    dt = datetime.fromisoformat(s_norm)
+    return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def _get_pnl(trade: dict, *, is_live: bool) -> Optional[float]:
-    """Extract PnL from a trade dict, normalising field names."""
-    if is_live:
-        v = trade.get("pnl_usdt") or trade.get("pnl")
-    else:
-        v = trade.get("pnl") or trade.get("pnl_usdt")
-    if v is None:
-        return None
-    return float(v)
+    """Read pnl with explicit presence check (don't conflate 0.0 with absent).
+
+    Live trades use pnl_usdt (Supabase schema); backtest uses pnl. We try the
+    type-appropriate key first, then fall back to the other for tolerance.
+    """
+    primary = "pnl_usdt" if is_live else "pnl"
+    fallback = "pnl" if is_live else "pnl_usdt"
+    if primary in trade and trade[primary] is not None:
+        return float(trade[primary])
+    if fallback in trade and trade[fallback] is not None:
+        return float(trade[fallback])
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -152,14 +158,17 @@ def reconcile(
 
     # Calibration recommendation
     calibration_recommendation: Optional[dict] = None
-    if abs(drift_pct_mean) > drift_threshold_pct:
-        # Heuristic: if live worse than backtest (drift < 0), increase slippage estimates
+    if abs(drift_pct_mean) > drift_threshold_pct and drift_pct_mean < 0:
+        # Live worse than backtest → increase modeled slippage to match reality.
         factor = 1 + abs(drift_pct_mean) / 100
+        base = SlippageConfig()
         calibration_recommendation = {
-            "entry_slip_pct": 0.05 * factor,
-            "sl_slip_pct": 0.10 * factor,
-            "exit_slip_pct": 0.05 * factor,
+            "entry_slip_pct": base.entry_slip_pct * factor,
+            "sl_slip_pct": base.sl_slip_pct * factor,
+            "exit_slip_pct": base.exit_slip_pct * factor,
         }
+    # (Positive drift means backtest is over-pessimistic — no slippage adjustment;
+    #  consider revisiting strategy assumptions instead.)
 
     return {
         "live_trade_count": len(live_trades),
