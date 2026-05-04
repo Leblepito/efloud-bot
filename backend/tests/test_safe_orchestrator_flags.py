@@ -55,3 +55,21 @@ def test_persist_disabled_writes_no_state(base_config, tmp_path):
 
     files = list(state_dir.iterdir())
     assert files == [], f"Expected empty state_dir, found: {files}"
+
+
+def test_null_notifications_swallow_calls(base_config, tmp_path):
+    """NullNotificationManager.notify() must not raise and must return None."""
+    from engine.notifications import NullNotificationManager
+    nm = NullNotificationManager()
+    assert nm.notify("test_event", {"key": "value"}) is None
+    assert nm.notify_position_opened(None) is None  # Tolerates any signature
+
+    # SafeOrchestrator accepts injected null manager
+    orch = SafeOrchestrator(
+        base_config,
+        state_dir=str(tmp_path),
+        notification_mgr=nm,
+        freshness_check=False,
+        persist=False,
+    )
+    assert orch.notification_mgr is nm

@@ -99,3 +99,6 @@ class NotificationManager:
             print(msg)
         if 'log' in self.channels:
             getattr(log, level.lower(), log.info)(msg)
+
+
+from .null_manager import NullNotificationManager  # noqa: E402
