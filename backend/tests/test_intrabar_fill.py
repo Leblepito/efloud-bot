@@ -70,3 +70,53 @@ def test_long_gap_through_sl():
     level, price = resolve_fill(pos, bar)
     assert level == "SL"
     assert price == 92  # min(92, 95) — gap-through fill at the worse price
+
+
+def test_engine_uses_intrabar_for_position_close():
+    """A position closes at intrabar SL price (with slippage), not next-cycle close."""
+    import tempfile
+    import yaml
+    from engine import SafeOrchestrator
+    from engine.notifications import NullNotificationManager
+    from backtest.intrabar import resolve_fill, Bar
+    from backtest.slippage import adverse_fill, SlippageConfig
+    from dataclasses import dataclass as dc
+
+    with open("configs/config.phase2_1k.yaml", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+
+    with tempfile.TemporaryDirectory() as state_dir:
+        orch = SafeOrchestrator(
+            cfg, state_dir=state_dir,
+            notification_mgr=NullNotificationManager(),
+            freshness_check=False, persist=False,
+        )
+        pos = orch.lifecycle.open_position(
+            symbol="BTC/USDT", direction="LONG",
+            entry_price=100.0, size=1.0,
+            sl=95.0, tp1=105.0, tp2=110.0,
+        )
+
+        @dc
+        class _PosView:
+            direction: str
+            entry: float
+            sl: float
+            tp1: float
+
+        view = _PosView(direction=pos.direction, entry=pos.avg_entry_price,
+                        sl=pos.sl, tp1=pos.tp1)
+        bar = Bar(open=92.0, high=93.0, low=92.0, close=92.5)
+        level, raw_price = resolve_fill(view, bar)
+        assert level == "SL"
+        assert raw_price == 92.0  # gap-through, fill at open
+
+        slip_cfg = SlippageConfig()
+        slipped = adverse_fill(raw_price, pos.direction, level, slip_cfg)
+        # LONG SL is sell, slip is adverse-down: 92 × (1 - 0.001) = 91.908
+        assert slipped == pytest.approx(91.908)
+
+        orch.lifecycle.close_position(pos, slipped, level)
+        assert not pos.is_open
+        assert pos.exits[-1].reason == "SL"
+        assert pos.exits[-1].price == pytest.approx(91.908)

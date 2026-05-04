@@ -3,14 +3,26 @@ from __future__ import annotations
 
 import logging
 import tempfile
+from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
 
+from backtest.intrabar import resolve_fill, Bar
+from backtest.slippage import adverse_fill, SlippageConfig
 from engine import SafeOrchestrator
 from engine.notifications import NullNotificationManager
 
 log = logging.getLogger("efloud.backtest.engine")
+
+
+@dataclass
+class _PosView:
+    """Adapter so resolve_fill (which expects .entry attribute) works with Position objects."""
+    direction: str
+    entry: float
+    sl: float
+    tp1: float
 
 
 def run_backtest(
@@ -49,6 +61,7 @@ def run_backtest(
         balance = float(initial_balance)
         peak_balance = balance
         skipped_cycles = 0  # cycles where run_cycle raised — see "skipped_cycles" in return dict
+        slippage_cfg = SlippageConfig()
 
         # Use the first symbol's entry-TF index as the master clock
         entry_tf_name = config["timeframes"]["entry"]
@@ -80,7 +93,36 @@ def run_backtest(
                     log.warning("Cycle %s @ %s raised %s: %s", symbol, current_ts, type(e).__name__, e)
                     continue
 
-            # PnL update (intrabar fills + MTM) — deferred to Chunk 4
+            # Intrabar fill check on next bar (i+1) for any open positions
+            if i + 1 < n_bars:
+                for pos in list(orch.lifecycle.positions):
+                    if not pos.is_open:
+                        continue
+                    sym_data = data.get(pos.symbol)
+                    if sym_data is None:
+                        continue
+                    next_bar_data = sym_data[entry_tf_name].iloc[i + 1]
+                    bar = Bar(
+                        open=float(next_bar_data["open"]),
+                        high=float(next_bar_data["high"]),
+                        low=float(next_bar_data["low"]),
+                        close=float(next_bar_data["close"]),
+                    )
+                    view = _PosView(
+                        direction=pos.direction,
+                        entry=pos.avg_entry_price,
+                        sl=pos.sl,
+                        tp1=pos.tp1,
+                    )
+                    level, raw_price = resolve_fill(view, bar)
+                    if level is None:
+                        continue
+                    slipped = adverse_fill(raw_price, pos.direction, level, slippage_cfg)
+                    pnl_before = pos.realized_pnl
+                    orch.lifecycle.close_position(pos, slipped, level)
+                    pnl_after = pos.realized_pnl
+                    balance += (pnl_after - pnl_before)
+                    peak_balance = max(peak_balance, balance)
 
         closed_positions = [p for p in orch.lifecycle.positions if not p.is_open and p.exits]
 
