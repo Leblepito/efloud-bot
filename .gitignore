@@ -13,6 +13,9 @@ reports_*/
 *.log
 efloud_bot.log*
 
+# Backtest data cache (prefetched OHLCV parquet, ~150-200 MB)
+cache/
+
 # Python
 __pycache__/
 *.pyc
