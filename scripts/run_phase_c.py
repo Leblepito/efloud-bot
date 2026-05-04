@@ -55,17 +55,23 @@ def main() -> int:
     # Run the grid via the CLI
     print("\nLaunching grid...")
     t0 = time.time()
-    proc = subprocess.run(
-        [
-            sys.executable, "-m", "backtest.cli", "grid",
-            "--grid", GRID_SPEC,
-            "--symbols", SYMBOLS,
-            "--period-days", str(PERIOD_DAYS),
-            "--workers", str(WORKERS),
-            "--balance", str(BALANCE),
-        ],
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable, "-m", "backtest.cli", "grid",
+                "--grid", GRID_SPEC,
+                "--symbols", SYMBOLS,
+                "--period-days", str(PERIOD_DAYS),
+                "--workers", str(WORKERS),
+                "--balance", str(BALANCE),
+            ],
+            check=False,
+        )
+    except KeyboardInterrupt:
+        print("\n\nInterrupted by user (CTRL+C). Workers should be cleaning up.")
+        print("If a partial grid_* dir exists, you can re-run scripts.run_phase_c")
+        print("after committing/stashing any uncommitted state — checkpoints are preserved.")
+        return 130
     elapsed = time.time() - t0
     print(f"\nGrid run finished in {elapsed/60:.1f} min (exit {proc.returncode})")
 
@@ -75,8 +81,10 @@ def main() -> int:
 
     # Find the most recent grid output dir
     backtests_dir = Path("reports/backtests")
+    # Filter: only dirs created AFTER our start time (5s buffer for clock skew)
     grid_dirs = sorted(
-        (d for d in backtests_dir.iterdir() if d.is_dir() and d.name.startswith("grid_")),
+        (d for d in backtests_dir.iterdir()
+         if d.is_dir() and d.name.startswith("grid_") and d.stat().st_mtime >= t0 - 5),
         key=lambda d: d.stat().st_mtime,
         reverse=True,
     )
@@ -136,11 +144,11 @@ def main() -> int:
             f"{r.get('risk.min_confluence', '?')} | "
             f"{r.get('safety.max_position_notional_pct', '?')} | "
             f"{r.get('total_trades', 0)} | "
-            f"{r.get('win_rate', 0)} | "
-            f"{r.get('total_return_pct', 0)} | "
-            f"{r.get('max_drawdown_pct', 0)} | "
-            f"{r.get('profit_factor', 0)} | "
-            f"{r.get('sharpe_like', 0)} |"
+            f"{r.get('win_rate', 0):.1f} | "
+            f"{r.get('total_return_pct', 0):.2f} | "
+            f"{r.get('max_drawdown_pct', 0):.2f} | "
+            f"{r.get('profit_factor', 0):.2f} | "
+            f"{r.get('sharpe_like', 0):.2f} |"
         )
 
     lines.extend([
@@ -156,11 +164,11 @@ def main() -> int:
             f"{r.get('risk.min_confluence', '?')} | "
             f"{r.get('safety.max_position_notional_pct', '?')} | "
             f"{r.get('total_trades', 0)} | "
-            f"{r.get('win_rate', 0)} | "
-            f"{r.get('total_return_pct', 0)} | "
-            f"{r.get('max_drawdown_pct', 0)} | "
-            f"{r.get('profit_factor', 0)} | "
-            f"{r.get('sharpe_like', 0)} |"
+            f"{r.get('win_rate', 0):.1f} | "
+            f"{r.get('total_return_pct', 0):.2f} | "
+            f"{r.get('max_drawdown_pct', 0):.2f} | "
+            f"{r.get('profit_factor', 0):.2f} | "
+            f"{r.get('sharpe_like', 0):.2f} |"
         )
 
     # Stability heuristic: best Sharpe config also in top 5 by return?
@@ -172,10 +180,10 @@ def main() -> int:
         "",
         f"**Best by Sharpe-like:** min_confluence={best_sharpe.get('risk.min_confluence')}, "
         f"max_notional_pct={best_sharpe.get('safety.max_position_notional_pct')}",
-        f"- Total return: {best_sharpe.get('total_return_pct', 0)}%",
-        f"- Max DD (MTM): {best_sharpe.get('max_drawdown_pct', 0)}%",
-        f"- Profit factor: {best_sharpe.get('profit_factor', 0)}",
-        f"- Sharpe-like: {best_sharpe.get('sharpe_like', 0)}",
+        f"- Total return: {best_sharpe.get('total_return_pct', 0):.2f}%",
+        f"- Max DD (MTM): {best_sharpe.get('max_drawdown_pct', 0):.2f}%",
+        f"- Profit factor: {best_sharpe.get('profit_factor', 0):.2f}",
+        f"- Sharpe-like: {best_sharpe.get('sharpe_like', 0):.2f}",
         "",
         f"**Stability check:** best Sharpe config "
         f"{'IS' if best_sharpe_in_top5_return else 'is NOT'} in top 5 by raw return — "
