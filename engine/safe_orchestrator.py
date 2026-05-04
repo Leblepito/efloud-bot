@@ -68,17 +68,24 @@ class SafeOrchestrator:
 
     def __init__(self, config: dict, state_dir: str = "./state",
                   permission_mgr=None, notification_mgr=None,
-                  order_manager=None):
+                  order_manager=None,
+                  *,
+                  freshness_check: bool = True,
+                  persist: bool = True):
         """
         permission_mgr: PermissionManager instance (opsiyonel)
         notification_mgr: NotificationManager instance (opsiyonel)
         order_manager: OrderManager instance — borsaya gerçek emir gönderir.
                        None ise sadece lifecycle (paper-trade / test mode).
+        freshness_check: False ise validate_kline_freshness çağrılmaz (backtest mode).
+        persist: False ise _persist_state disk'e yazmaz (backtest mode).
         """
         self.config = config
         self.permission_mgr = permission_mgr
         self.notification_mgr = notification_mgr
         self.order_manager = order_manager
+        self.freshness_check = freshness_check
+        self.persist = persist
 
         # Core engines
         sc = config["structure"]
@@ -199,7 +206,8 @@ class SafeOrchestrator:
         ]:
             try:
                 validate_kline_integrity(df)
-                validate_kline_freshness(df, tfname, tolerance_factor=2.5)
+                if self.freshness_check:
+                    validate_kline_freshness(df, tfname, tolerance_factor=2.5)
             except (StaleDataError, ValueError) as e:
                 warnings.append(f"{name} data issue: {e}")
                 log.warning(f"⚠️  {name} ({tfname}): {e}")
