@@ -58,11 +58,26 @@ def test_persist_disabled_writes_no_state(base_config, tmp_path):
 
 
 def test_null_notifications_swallow_calls(base_config, tmp_path):
-    """NullNotificationManager.notify() must not raise and must return None."""
+    """NullNotificationManager swallows all calls used by SafeOrchestrator."""
     from engine.notifications import NullNotificationManager
     nm = NullNotificationManager()
-    assert nm.notify("test_event", {"key": "value"}) is None
-    assert nm.notify_position_opened(None) is None  # Tolerates any signature
+    # Cover the actual NotificationManager call surface invoked by SafeOrchestrator
+    assert nm.signal_readonly(
+        symbol="BTC/USDT", direction="LONG",
+        entry=100.0, sl=99.0, tp1=101.0, tp2=102.0,
+        confluence=60, reasons=["test"],
+    ) is None
+    assert nm.position_opened(
+        symbol="BTC/USDT", direction="LONG", entry=100.0,
+        size=1.0, sl=99.0, tp1=101.0, confluence=60,
+    ) is None
+    assert nm.position_closed(
+        symbol="BTC/USDT", direction="LONG", exit_price=101.0,
+        pnl=1.0, reason="TP1",
+    ) is None
+    assert nm.alert("INFO", "test message") is None
+    # Unknown method on real class — still no-op via __getattr__
+    assert nm.future_method_not_yet_added(arbitrary="kwarg") is None
 
     # SafeOrchestrator accepts injected null manager
     orch = SafeOrchestrator(
@@ -73,3 +88,18 @@ def test_null_notifications_swallow_calls(base_config, tmp_path):
         persist=False,
     )
     assert orch.notification_mgr is nm
+
+
+def test_freshness_check_default_calls_validate(base_config, tmp_path):
+    """Default freshness_check=True must still invoke validate_kline_freshness."""
+    with patch("engine.safe_orchestrator.validate_kline_freshness") as mock_validate:
+        orch = SafeOrchestrator(base_config, state_dir=str(tmp_path))
+        import pandas as pd
+        idx = pd.date_range("2026-01-01", periods=300, freq="15min")
+        df = pd.DataFrame(
+            {"open": 100, "high": 101, "low": 99, "close": 100, "volume": 1.0},
+            index=idx,
+        )
+        orch.run_cycle("BTC/USDT", df, df, df, df, balance=1000)
+
+    assert mock_validate.called, "Default freshness_check=True should invoke validate"
