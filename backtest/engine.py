@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 
 from backtest.intrabar import resolve_fill, Bar
+from backtest.metrics import aggregate_metrics, serialize_trade
 from backtest.slippage import adverse_fill, SlippageConfig
 from engine import SafeOrchestrator
 from engine.notifications import NullNotificationManager
@@ -155,27 +156,19 @@ def run_backtest(
             max_drawdown_pct = max(max_drawdown_pct, dd)
 
         closed_positions = [p for p in orch.lifecycle.positions if not p.is_open and p.exits]
+        trade_dicts = [serialize_trade(p) for p in closed_positions]
+        agg = aggregate_metrics(trade_dicts, initial_balance, peak_balance, balance)
 
         return {
             "initial_balance": initial_balance,
             "final_balance": balance,
             "peak_balance": peak_balance,
-            "trades": [_serialize_trade(p) for p in closed_positions],
+            "trades": trade_dicts,
             "equity_curve": [],
             "symbols": symbols,
             "skipped_cycles": skipped_cycles,
             "max_drawdown_pct": round(max_drawdown_pct, 2),
+            **agg,
         }
 
 
-def _serialize_trade(p) -> dict:
-    return {
-        "symbol": p.symbol,
-        "direction": p.direction,
-        "entry": float(p.avg_entry_price),
-        "exit": float(p.exits[-1].price) if p.exits else None,
-        "pnl": float(p.realized_pnl),
-        "exit_reason": p.exits[-1].reason if p.exits else None,
-        "opened_at": str(p.opened_at),
-        "closed_at": str(p.closed_at) if p.closed_at else None,
-    }
