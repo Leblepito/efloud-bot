@@ -170,6 +170,8 @@ class SafeOrchestrator:
 
     def _persist_state(self):
         """State'i diske yaz."""
+        if not self.persist:
+            return
         self.store.save("breaker", self.breaker.to_dict())
         self.store.save("positions",
                          [p.to_dict() for p in self.lifecycle.positions])

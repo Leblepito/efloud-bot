@@ -36,3 +36,22 @@ def test_freshness_check_can_be_disabled(base_config, tmp_path):
         orch.run_cycle("BTC/USDT", df, df, df, df, balance=1000)
 
     mock_validate.assert_not_called()
+
+
+def test_persist_disabled_writes_no_state(base_config, tmp_path):
+    """When persist=False, state_dir must remain empty after a cycle."""
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    orch = SafeOrchestrator(
+        base_config,
+        state_dir=str(state_dir),
+        freshness_check=False,
+        persist=False,
+    )
+    # Force a state save attempt
+    orch.breaker.current_balance = 999.99
+    orch._persist_state()
+
+    files = list(state_dir.iterdir())
+    assert files == [], f"Expected empty state_dir, found: {files}"
