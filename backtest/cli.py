@@ -11,6 +11,7 @@ import pandas as pd
 import yaml
 
 from backtest.engine import run_backtest
+from backtest.grid import GridRunner, expand_grid, config_hash
 from backtest.reproducibility import capture_provenance
 from data.cache import OHLCVCache
 
@@ -64,6 +65,106 @@ def cmd_single(args):
     )
 
 
+def cmd_portfolio(args):
+    with open(args.config, encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
+    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+    data = _load_data_for_period(symbols, tfs, args.period_days)
+
+    run_id = uuid.uuid4().hex[:8]
+    out_dir = Path(
+        f"reports/backtests/{time.strftime('%Y-%m-%d')}_"
+        f"portfolio_{len(symbols)}sym_{args.period_days}d_{run_id}"
+    )
+    capture_provenance(out_dir)
+
+    result = run_backtest(
+        symbols=symbols, data=data, config=cfg, initial_balance=args.balance
+    )
+    (out_dir / "result.json").write_text(json.dumps(result, indent=2, default=str))
+    print(f"OK Portfolio backtest: {out_dir}")
+    print(
+        f"   Symbols: {len(symbols)}  "
+        f"Trades: {result.get('total_trades', 0)}  "
+        f"Return: {result.get('total_return_pct', 0)}%  "
+        f"DD: {result.get('max_drawdown_pct', 0)}%"
+    )
+
+
+def _grid_run_one(cfg_with_meta: dict) -> dict:
+    """Top-level picklable function for grid worker.
+
+    PERF NOTE: Each worker reloads the cache from parquet. For a 200-config grid
+    x 10 symbols x 4 TFs = 8,000 parquet reads. With sha256 verify, each takes
+    50-200ms -> 7-25 min total overhead on a ~17h grid (~2-3%). Acceptable for v1.
+
+    Future optimization: pass `data` as a serialized blob in cfg_with_meta or use
+    multiprocessing.Manager shared dict. Both add complexity; defer until measured
+    overhead becomes a real bottleneck.
+
+    Workers use verify_sha=False (the cache was already verified at fetch time).
+    """
+    cfg = cfg_with_meta["config"]
+    symbols = cfg_with_meta["symbols"]
+    period_days = cfg_with_meta["period_days"]
+    balance = cfg_with_meta["balance"]
+    tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
+    data = _load_data_for_period(symbols, tfs, period_days, verify_sha=False)
+    result = run_backtest(symbols=symbols, data=data, config=cfg, initial_balance=balance)
+    result["config_hash"] = config_hash(cfg)
+    # Flatten the grid-varied fields into top-level for ranking
+    for k in cfg_with_meta.get("grid_keys", []):
+        parts = k.split(".")
+        cur = cfg
+        for p in parts:
+            cur = cur[p]
+        result[k] = cur
+    return result
+
+
+def cmd_grid(args):
+    with open(args.grid, encoding="utf-8") as f:
+        grid_spec = yaml.safe_load(f)
+    with open(grid_spec["base"], encoding="utf-8") as f:
+        base_cfg = yaml.safe_load(f)
+    overrides = grid_spec["overrides"]  # dict[dotted_key, list]
+
+    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+    grid_run_id = uuid.uuid4().hex[:8]
+    out_dir = Path(
+        f"reports/backtests/grid_{time.strftime('%Y-%m-%d')}_{grid_run_id}"
+    )
+    # Refuse dirty git tree for grid runs (spec ss6.8)
+    capture_provenance(out_dir, allow_dirty=False)
+
+    runner = GridRunner(out_dir)
+    cfgs = [
+        {
+            "config": cfg,
+            "symbols": symbols,
+            "period_days": args.period_days,
+            "balance": args.balance,
+            "grid_keys": list(overrides.keys()),
+        }
+        for cfg in expand_grid(base_cfg, overrides)
+    ]
+    print(f"Grid: {len(cfgs)} configs x {len(symbols)} symbols")
+    results = runner.run(cfgs, run_one_fn=_grid_run_one, workers=args.workers)
+
+    # Rank by sharpe-like (descending); skip results with errors
+    ranked = sorted(
+        (r for r in results if "error" not in r),
+        key=lambda r: r.get("sharpe_like", 0),
+        reverse=True,
+    )
+    (out_dir / "ranking.json").write_text(json.dumps(ranked[:20], indent=2, default=str))
+    print(f"OK Grid complete: {out_dir} (top 20 in ranking.json)")
+    error_count = sum(1 for r in results if "error" in r)
+    if error_count:
+        print(f"   WARNING: {error_count} configs failed (see configs/ for details)")
+
+
 def main():
     p = argparse.ArgumentParser(prog="backtest")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -74,6 +175,21 @@ def main():
     s.add_argument("--config", default="configs/config.phase2_1k.yaml")
     s.add_argument("--balance", type=float, default=2000.0)
     s.set_defaults(func=cmd_single)
+
+    p_port = sub.add_parser("portfolio")
+    p_port.add_argument("--symbols", required=True, help="comma-separated, e.g. BTC/USDT,ETH/USDT")
+    p_port.add_argument("--period-days", type=int, default=365)
+    p_port.add_argument("--config", default="configs/config.phase2_1k.yaml")
+    p_port.add_argument("--balance", type=float, default=2000.0)
+    p_port.set_defaults(func=cmd_portfolio)
+
+    p_grid = sub.add_parser("grid")
+    p_grid.add_argument("--grid", required=True, help="path to grid YAML spec")
+    p_grid.add_argument("--symbols", required=True)
+    p_grid.add_argument("--period-days", type=int, default=365)
+    p_grid.add_argument("--balance", type=float, default=2000.0)
+    p_grid.add_argument("--workers", type=int, default=4)
+    p_grid.set_defaults(func=cmd_grid)
 
     args = p.parse_args()
     args.func(args)
