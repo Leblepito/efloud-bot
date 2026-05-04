@@ -1,5 +1,5 @@
 import pytest
-from data.fetcher import tf_to_minutes
+from data.timeframes import tf_to_minutes
 
 
 @pytest.mark.parametrize("tf,expected", [

@@ -46,3 +46,25 @@ def test_cache_atomic_write_no_partial_files(tmp_path, df):
     # Only the final .parquet should exist; no .tmp leftovers
     files = list(tmp_path.rglob("*.tmp"))
     assert files == []
+
+
+def test_cache_sha_mismatch_returns_none(tmp_path, df):
+    """Valid parquet but sha256 mismatch (e.g., manually-edited cache) → None."""
+    cache = OHLCVCache(tmp_path)
+    cache.put("BTC/USDT", "15m", df)
+
+    # Write a DIFFERENT but valid parquet at the same path
+    other = df.copy()
+    other.iloc[0, 0] = 999.0  # mutate one cell — sha will differ but parquet is valid
+    cache_file = cache._path("BTC/USDT", "15m")
+    other.to_parquet(cache_file)
+
+    out = cache.get("BTC/USDT", "15m")
+    assert out is None, "Sha mismatch must return None even when parquet parses cleanly"
+
+
+def test_cache_put_empty_df_is_noop(tmp_path):
+    cache = OHLCVCache(tmp_path)
+    empty = pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+    cache.put("BTC/USDT", "15m", empty)  # must not raise
+    assert cache.get("BTC/USDT", "15m") is None  # nothing was stored

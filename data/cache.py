@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 
+import pyarrow
 import pandas as pd
 
 from data.manifest import CacheManifest
@@ -36,7 +37,7 @@ class OHLCVCache:
             return None
         try:
             df = pd.read_parquet(path)
-        except Exception:
+        except (pyarrow.ArrowInvalid, pyarrow.ArrowIOError, OSError, ValueError):
             return None
         if self.verify_sha:
             actual_sha = hash_dataframe(df)
@@ -45,7 +46,9 @@ class OHLCVCache:
         return df
 
     def put(self, symbol: str, tf: str, df: pd.DataFrame) -> None:
-        """Atomic write + manifest update."""
+        """Atomic write + manifest update. No-op for empty DataFrames."""
+        if df.empty:
+            return
         path = self._path(symbol, tf)
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
