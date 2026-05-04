@@ -109,9 +109,10 @@ safety:
   adx_range_threshold: 20
   volatile_atr_mult: 2.5
 
-  # max_position_notional_pct: bakiye × % × leverage = max notional
-  # 2000 × 3.33% × 5 = $333 notional max → cap 6 paralel pozisyon (max_total_exposure*balance=2000)
-  max_position_notional_pct: 3.33     # her trade max $333 notional
+  # max_position_notional_pct: kod içinde "margin cap" olarak kullanılıyor (notional/leverage)
+  # 2000 × 2.0% × 5 = $200 notional max → 10% of available balance per trade
+  # 10 sembol × $200 = $2000 toplam notional (cüzdanın tamamı, 1x net leverage cap)
+  max_position_notional_pct: 2.0      # her trade max $200 notional (cüzdanın %10'u)
   max_total_exposure: 1.0             # Toplam notional max $2000 (cüzdan tamamı, 1x net leverage)
   max_holding_hours: 24
   max_pyramid_adds: 0                  # Pyramid kapalı (basit tut)
