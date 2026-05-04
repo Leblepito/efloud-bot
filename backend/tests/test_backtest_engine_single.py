@@ -10,6 +10,11 @@ import yaml
 from backtest.engine import run_backtest
 
 
+def _strict_dumps(obj):
+    """JSON-dump with no fallback — raises on non-serializable types."""
+    return json.dumps(obj, sort_keys=True)
+
+
 @pytest.fixture
 def base_config():
     with open("configs/config.phase2_1k.yaml", encoding="utf-8") as f:
@@ -54,4 +59,4 @@ def test_engine_deterministic(base_config, synthetic_data):
     # Drop wall-clock fields if any
     for r in (r1, r2):
         r.pop("_wall_seconds", None)
-    assert json.dumps(r1, sort_keys=True, default=str) == json.dumps(r2, sort_keys=True, default=str)
+    assert _strict_dumps(r1) == _strict_dumps(r2)

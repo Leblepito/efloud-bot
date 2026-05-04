@@ -48,6 +48,7 @@ def run_backtest(
         )
         balance = float(initial_balance)
         peak_balance = balance
+        skipped_cycles = 0  # cycles where run_cycle raised — see "skipped_cycles" in return dict
 
         # Use the first symbol's entry-TF index as the master clock
         entry_tf_name = config["timeframes"]["entry"]
@@ -60,6 +61,10 @@ def run_backtest(
             current_ts = primary_idx[i]
             for symbol in symbols:
                 tfs = data[symbol]
+                # Slicing semantics:
+                #   - entry TF: iloc[:i+1] inclusive of bar i (current bar's close is observed at current_ts).
+                #   - HTF/MTF/daily: loc[:current_ts] returns bars where index <= current_ts; non-aligned
+                #     boundaries are handled correctly (a 15min ts on a 4h index returns the latest <= ts).
                 e_slice = tfs[entry_tf_name].iloc[: i + 1]
                 h_slice = tfs[config["timeframes"]["htf"]].loc[: current_ts]
                 m_slice = tfs[config["timeframes"]["mtf"]].loc[: current_ts]
@@ -71,12 +76,13 @@ def run_backtest(
                 try:
                     orch.run_cycle(symbol, h_slice, m_slice, e_slice, d_slice, balance=balance)
                 except Exception as e:
-                    log.debug("Cycle %s @ %s skipped: %s", symbol, current_ts, e)
+                    skipped_cycles += 1
+                    log.warning("Cycle %s @ %s raised %s: %s", symbol, current_ts, type(e).__name__, e)
                     continue
 
             # PnL update (intrabar fills + MTM) — deferred to Chunk 4
 
-        closed_positions = [p for p in orch.lifecycle.positions if not p.is_open]
+        closed_positions = [p for p in orch.lifecycle.positions if not p.is_open and p.exits]
 
         return {
             "initial_balance": initial_balance,
@@ -85,6 +91,7 @@ def run_backtest(
             "trades": [_serialize_trade(p) for p in closed_positions],
             "equity_curve": [],
             "symbols": symbols,
+            "skipped_cycles": skipped_cycles,
         }
 
 

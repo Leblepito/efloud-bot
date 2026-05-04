@@ -30,7 +30,7 @@ def test_long_tp_only_hit():
     bar = Bar(open=102, high=106, low=101, close=104)
     level, price = resolve_fill(pos, bar)
     assert level == "TP1"
-    assert price == max(102, 105)  # max(open, tp1) = 105 — but TP for LONG is sell, so adverse = MIN. Re-check: for LONG TP, _adverse_fill returns max(open, trigger). 102 < 105 so max=105.
+    assert price == max(102, 105)  # LONG TP fills at max(open, trigger) per spec §6.3
 
 
 def test_long_both_hit_open_below_entry_sl_first():
