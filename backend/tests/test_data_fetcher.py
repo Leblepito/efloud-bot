@@ -43,3 +43,14 @@ def test_fetch_with_gap_returns_gap_list(fetcher):
     assert len(result.gaps) >= 1
     gap_start, gap_end = result.gaps[0]
     assert gap_end - gap_start == 30 * 60 * 1000  # 30 min gap
+
+
+def test_fetch_refuses_excessive_gaps(fetcher):
+    # Mock: only 50 of 100 expected bars (50% gap)
+    bars = [[1700000000000 + i * 900_000, 100, 101, 99, 100, 1.0] for i in range(50)]
+    fetcher.client.exchange.fetch_ohlcv.return_value = bars
+    with pytest.raises(ValueError, match="exceeds max"):
+        fetcher.fetch_ohlcv_range("BTC/USDT", "15m",
+                                     start_ms=1700000000000,
+                                     end_ms=1700000000000 + 100 * 900_000,
+                                     max_gap_pct=1.0)
