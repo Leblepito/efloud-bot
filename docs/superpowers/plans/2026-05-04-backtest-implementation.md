@@ -621,10 +621,12 @@ def hash_dataframe(df: pd.DataFrame) -> str:
 class OHLCVCache:
     """Parquet cache: cache_dir/{symbol_normalized}/{tf}.parquet"""
 
-    def __init__(self, cache_dir: Path | str):
+    def __init__(self, cache_dir: Path | str, verify_sha: bool = True):
+        """verify_sha: when False, skip sha256 check on read (fast path for trusted cache)."""
         self.dir = Path(cache_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.manifest = CacheManifest(self.dir / "manifest.json")
+        self.verify_sha = verify_sha
 
     def _path(self, symbol: str, tf: str) -> Path:
         return self.dir / symbol.replace("/", "_") / f"{tf}.parquet"
@@ -639,10 +641,11 @@ class OHLCVCache:
             df = pd.read_parquet(path)
         except Exception:
             return None
-        actual_sha = hash_dataframe(df)
-        if actual_sha != manifest_entry["sha256"]:
-            # Corrupted: caller will re-fetch
-            return None
+        if self.verify_sha:
+            actual_sha = hash_dataframe(df)
+            if actual_sha != manifest_entry["sha256"]:
+                # Corrupted: caller will re-fetch
+                return None
         return df
 
     def put(self, symbol: str, tf: str, df: pd.DataFrame) -> None:
@@ -973,7 +976,9 @@ def main():
                 print(f"[skip] {symbol} {tf} ({len(existing)} bars cached)")
                 continue
             print(f"[fetch] {symbol} {tf} ...", end="", flush=True)
-            result = fetcher.fetch_ohlcv_range(symbol, tf, start_ms, end_ms)
+            # Tolerate up to 5% gaps for legitimate Binance gaps
+            # (maintenance windows, late-listed pairs, etc.)
+            result = fetcher.fetch_ohlcv_range(symbol, tf, start_ms, end_ms, max_gap_pct=5.0)
             cache.put(symbol, tf, result.df)
             print(f" {len(result.df)} bars, {len(result.gaps)} gaps")
 
@@ -1826,21 +1831,17 @@ After each cycle iteration (inside the symbol loop), update prices:
             current_prices[symbol] = float(e_slice["close"].iloc[-1])
 ```
 
-After the symbol loop completes for tick `i`, compute MTM:
+After the symbol loop completes for tick `i`, compute MTM by calling the helper from Task 4.4b (DRY — same function used in unit test and integration):
 
 ```python
-        unrealized = 0.0
-        for p in orch.lifecycle.positions:
-            if not p.is_open or p.symbol not in current_prices:
-                continue
-            sign = 1 if p.direction == "LONG" else -1
-            unrealized += (current_prices[p.symbol] - p.avg_entry_price) * p.remaining_size * sign
-        mtm = balance + unrealized
-        peak_balance = max(peak_balance, mtm)
-        if peak_balance > 0:
-            dd = (peak_balance - mtm) / peak_balance * 100
-            max_drawdown_pct = max(max_drawdown_pct, dd)
+        # Use _compute_mtm_drawdown helper (defined in Task 4.4b below)
+        dd, peak_balance = _compute_mtm_drawdown(
+            orch.lifecycle.positions, balance, current_prices, peak_balance
+        )
+        max_drawdown_pct = max(max_drawdown_pct, dd)
 ```
+
+(Define `_compute_mtm_drawdown` in `engine.py` BEFORE `run_backtest` — see Task 4.4b for full implementation. The helper is the single source of truth for MTM math; `run_backtest` calls it per-tick.)
 
 Update return statement:
 
@@ -2019,56 +2020,79 @@ source via SafeOrchestrator(freshness_check=False)."
 
 ---
 
-### Task 4.7: TDD — Position guard regression test (spec §9.5)
+### Task 4.7: TDD — Position guard FP-tolerance unit regression (spec §9.5)
 
 **Files:**
-- Modify: `backend/tests/test_backtest_engine_portfolio.py`
+- Create: `backend/tests/test_position_guard_fp_regression.py`
 
-Validates that with new 5x leverage, position guard's FP-tolerance fix (`+ 1e-6`) holds — no false-positive `Size X exceeds max X` rejections at the cap boundary.
+A focused unit test on `PositionGuard.can_open_position` directly — does NOT require engine integration. Validates the existing `+ 1e-6` epsilon fix holds at the boundary across a sweep of cap values (1%, 2%, 3.33%, 5%, 10%) and balances ($500, $1000, $2000, $5000).
 
-- [ ] **Step 1: Add test**
+- [ ] **Step 1: Write test**
 
 ```python
-def test_no_false_position_guard_rejections_at_cap_boundary(base_config, synthetic_data):
-    """Spec §9.5: every grid run should record 0 false-positive cap rejections."""
-    # Set notional cap to 2.0 (matches current live config)
-    base_config["safety"]["max_position_notional_pct"] = 2.0
-    base_config["exchange"]["leverage"] = 5
+"""Position guard FP-tolerance regression — spec §9.5.
 
-    result = run_backtest(
-        symbols=["BTC/USDT", "ETH/USDT"],
-        data=synthetic_data,
-        config=base_config,
-        initial_balance=2000.0,
+The position guard rejects when notional > max_notional + 1e-6.
+This test asserts that at exact cap boundary, position is ALLOWED
+(the +1e-6 epsilon absorbs FP residue).
+"""
+import pytest
+from engine.safety.position_guard import PositionGuard
+
+
+@pytest.mark.parametrize("balance,cap_pct", [
+    (500.0, 1.0), (500.0, 2.0), (500.0, 3.33),
+    (1000.0, 2.0), (1000.0, 3.33), (1000.0, 5.0),
+    (2000.0, 2.0), (2000.0, 3.33), (2000.0, 5.0),
+    (5000.0, 1.0), (5000.0, 10.0),
+])
+def test_at_exact_cap_boundary_position_allowed(balance, cap_pct):
+    """Boundary case: notional == max_notional + tiny FP residue → allowed."""
+    guard = PositionGuard(max_notional_pct_of_balance=cap_pct)
+    # Construct: entry × size with FP residue ≈ balance × cap_pct/100
+    target_margin = balance * (cap_pct / 100)
+    # Add tiny FP noise via multiplication — produces residue ~1e-15
+    entry = target_margin * 1.0000000000001
+    size = 1.0
+    res = guard.can_open_position(
+        balance=balance, entry=entry, size=size,
+        sl=entry * 0.95, atr=entry * 0.05,
+        direction="LONG", symbol="BTC/USDT",
+        existing_positions=[], leverage=1,
     )
-    # If the engine ever rejects a trade with reason exactly matching
-    # "exceeds max" at boundary equality, the FP-tolerance fix regressed.
-    rejections = result.get("position_guard_rejections_at_boundary", 0)
-    assert rejections == 0, "Position guard FP-tolerance regressed (spec §9.5)"
+    assert res.allowed is True, (
+        f"FP-tolerance regression at balance=${balance}, cap={cap_pct}%: {res.reason}"
+    )
+
+
+def test_clearly_above_cap_still_rejected():
+    """Sanity: 50% over cap is still rejected (epsilon doesn't blow open the door)."""
+    guard = PositionGuard(max_notional_pct_of_balance=2.0)
+    # notional = 30 vs max = 1000 × 2% = 20
+    res = guard.can_open_position(
+        balance=1000.0, entry=30.0, size=1.0,
+        sl=29.0, atr=1.5, direction="LONG", symbol="BTC/USDT",
+        existing_positions=[], leverage=1,
+    )
+    assert res.allowed is False
+    assert "exceeds max" in res.reason
 ```
 
-- [ ] **Step 2: Wire counter in `engine.py`**
-
-Track guard rejections where `notional` rounds to the same display string as `max_notional`:
-
-```python
-    boundary_rejections = 0
-    # ... inside cycle loop, when guard rejects ...
-    if "exceeds max" in reason:
-        # Round to 2dp like the display
-        if round(notional, 2) == round(max_notional, 2):
-            boundary_rejections += 1
-
-    return {..., "position_guard_rejections_at_boundary": boundary_rejections, ...}
-```
-
-(Sketch — exact wiring depends on how guard rejections surface; may need to add a hook in `position_guard.py` or scrape orchestrator logs.)
-
-- [ ] **Step 3: Run + commit**
+- [ ] **Step 2: Run**
 
 ```
-git commit -m "test(backtest): position guard FP-tolerance regression guard per spec §9.5"
+python -m pytest backend/tests/test_position_guard_fp_regression.py -v
 ```
+
+Expected: 12 tests pass (11 boundary + 1 sanity).
+
+- [ ] **Step 3: Commit**
+
+```
+git commit -m "test(safety): FP-tolerance unit regression sweep per spec §9.5"
+```
+
+**Why this design (and NOT an integration counter):** instrumenting orchestrator-level rejection counters requires either modifying `PositionGuard` to record state, or log-scraping. Both are fragile. A direct unit test on `PositionGuard.can_open_position` covers the regression at the exact boundary that matters, with zero mocking and zero log scraping. Engine-level integration tests already cover the rejection path implicitly (via "no ValueError raised, no `false_position_guard_rejected` in trade history").
 
 ---
 
@@ -2383,8 +2407,13 @@ from backtest.reproducibility import capture_provenance
 from data.cache import OHLCVCache
 
 
-def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohlcv"):
-    cache = OHLCVCache(cache_dir)
+def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohlcv", verify_sha=True):
+    """Load OHLCV data from cache for a period.
+
+    verify_sha=True (default) → sha256 check on every read (~50-200ms/file).
+    verify_sha=False (grid worker mode) → trust the cache, skip checksum.
+    """
+    cache = OHLCVCache(cache_dir, verify_sha=verify_sha)
     end_ms = int(time.time() * 1000)
     start_ms = end_ms - period_days * 86400 * 1000
     data = {}
@@ -2491,13 +2520,24 @@ from backtest.grid import GridRunner, expand_grid, config_hash
 
 
 def _grid_run_one(cfg_with_meta: dict) -> dict:
-    """Top-level picklable function for grid worker."""
+    """Top-level picklable function for grid worker.
+
+    PERF NOTE: Each worker reloads the cache from parquet. For a 200-config grid
+    × 10 symbols × 4 TFs = 8,000 parquet reads. With sha256 verify, each takes
+    50-200ms → 7-25 min total overhead on a ~17h grid (~2-3%). Acceptable for v1.
+
+    Future optimization: pass `data` as a serialized blob in cfg_with_meta or use
+    multiprocessing.Manager shared dict. Both add complexity; defer until measured
+    overhead becomes a real bottleneck.
+    """
     cfg = cfg_with_meta["config"]
     symbols = cfg_with_meta["symbols"]
     period_days = cfg_with_meta["period_days"]
     balance = cfg_with_meta["balance"]
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
-    data = _load_data_for_period(symbols, tfs, period_days)
+    # Cache reads in worker; sha256 was already verified at fetch time, so workers
+    # can use a "trust on first read" mode for speed
+    data = _load_data_for_period(symbols, tfs, period_days, verify_sha=False)
     result = run_backtest(symbols=symbols, data=data, config=cfg, initial_balance=balance)
     result["config_hash"] = config_hash(cfg)
     # Flatten the grid-varied fields into top-level for ranking
