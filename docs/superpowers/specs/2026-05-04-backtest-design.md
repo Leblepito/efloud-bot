@@ -66,8 +66,9 @@ backtest/                          REWRITE (delete legacy runner.py)
 ├── slippage.py                    entry/sl/exit slip pct config (per-leg)
 ├── funding.py                     8h funding fee application per open position
 ├── reproducibility.py             snapshot git SHA, pip freeze, data manifest
-├── api.py                         list_runs / load_run / compare_runs (Phase 2 dashboard hook)
 └── cli.py                         argparse subcommands: single | portfolio | grid
+
+# (api.py deferred to Phase 2 dashboard work — YAGNI per spec review)
 
 engine/safe_orchestrator.py        EDITS:
   - __init__ adds `freshness_check: bool = True` (replaces brittle monkey-patch)
@@ -121,30 +122,40 @@ CLI selects mode (`single` / `portfolio` / `grid`); cache layer checks for parqu
 
 ## 6. Critical fixes incorporated from architecture review
 
-### 6.1 SafeOrchestrator: `freshness_check` + `persist` params
+### 6.1 SafeOrchestrator: full I/O purity audit + flags
 
-Replace the brittle module-globals monkey-patch in current `runner.py:298-313` with explicit constructor flags:
+Replace the brittle module-globals monkey-patch in current `runner.py:298-313` with explicit constructor flags AND audit every other I/O path. The "pure engine" claim only holds if **all** the following are addressed:
+
+| I/O path in `SafeOrchestrator` and dependencies | Backtest behavior | Implementation |
+|---|---|---|
+| `_persist_state()` writes to `state_dir` | NO disk writes | `persist: bool = True` flag; `if not self.persist: return` |
+| `validate_kline_freshness()` reads system clock | NO clock dependency | `freshness_check: bool = True` flag; skipped if False |
+| `notification_manager.notify(...)` writes to log/email/webhook | NO external notifications | Inject `NullNotificationManager` (no-op subclass) in backtest mode |
+| `logging.getLogger(...).info/warning/error` writes to file handler | Mute or route to per-worker StringIO | Backtest mode sets a `logging.NullHandler()` on the orchestrator subtree, OR uses `multiprocessing.get_logger()` with per-worker config |
+| `time.time()` / `datetime.utcnow()` for timestamps | Use bar timestamp, not wall clock | Engine passes `current_ts` from the data into orchestrator state; SafeOrchestrator must accept this (audit needed) |
+| `random.seed(...)` if any | Deterministic seed | Backtest sets `random.seed(0)` per run; document any stochastic call sites |
+
+**Implementation steps:**
+
+1. Add an explicit audit pass: `grep -nE "open\(|requests\.|time\.time|datetime\.now|datetime\.utcnow|logging\.getLogger" engine/safe_orchestrator.py engine/safety/ engine/intent.py engine/scenarios.py engine/risk/`
+2. Each match is either: (a) safe (uses bar ts), (b) needs gating (add flag/dependency injection), or (c) acceptable in test mode.
+3. The audit results go into a comment block at the top of `backtest/engine.py` listing every I/O point and how it's neutralized.
+4. **Test (`test_engine_purity.py`)**: run a short backtest under `pyfakefs` filesystem (no real disk) AND with network blocked (`unittest.mock.patch("socket.socket")`) — must complete without errors.
 
 ```python
 class SafeOrchestrator:
-    def __init__(self, config, *, freshness_check: bool = True,
-                 persist: bool = True, state_dir: str = ...):
+    def __init__(self, config, *,
+                 freshness_check: bool = True,
+                 persist: bool = True,
+                 notifications: NotificationManager | None = None,
+                 state_dir: str = ...):
         self.freshness_check = freshness_check
         self.persist = persist
-        ...
-
-    def run_cycle(self, symbol, h, m, e, d, balance):
-        if self.freshness_check:
-            validate_kline_freshness(...)
-        ...
-
-    def _persist_state(self):
-        if not self.persist:
-            return
+        self.notifications = notifications or NotificationManager()
         ...
 ```
 
-Backtest mode passes `freshness_check=False, persist=False`. No more monkey-patches; multiprocessing-safe.
+Backtest passes `freshness_check=False, persist=False, notifications=NullNotificationManager()`.
 
 ### 6.2 Single + portfolio mode in one engine
 
@@ -165,19 +176,48 @@ No separate `portfolio.py` module. Portfolio mode is just `run(symbols=ALL_TEN, 
 
 ### 6.3 Intrabar fill simulation
 
-For each open position at bar `i+1`:
+For each open position at bar `i+1`, evaluate which level triggers first based on `bar.open` proximity (deterministic tie-break since OHLC alone cannot reconstruct the within-bar path):
+
+**Tie-break rule (explicit):**
 
 ```python
-bar = next_bar
-if pos.direction == "LONG":
-    if bar.low <= pos.sl: fill_sl(price=min(bar.open, pos.sl))      # gap-down
-    elif bar.high >= pos.tp1: fill_tp1(price=max(bar.open, pos.tp1)) # gap-up
-elif pos.direction == "SHORT":
-    if bar.high >= pos.sl: fill_sl(price=max(bar.open, pos.sl))
-    elif bar.low <= pos.tp1: fill_tp1(price=min(bar.open, pos.tp1))
+def resolve_fill(pos, bar):
+    """Returns (level, fill_price) or (None, None) if neither hit."""
+    sl_hit = (pos.direction == "LONG" and bar.low <= pos.sl) or \
+             (pos.direction == "SHORT" and bar.high >= pos.sl)
+    tp_hit = (pos.direction == "LONG" and bar.high >= pos.tp1) or \
+             (pos.direction == "SHORT" and bar.low <= pos.tp1)
+
+    if not sl_hit and not tp_hit:
+        return (None, None)
+    if sl_hit and not tp_hit:
+        return ("SL", _adverse_fill(bar.open, pos.sl, pos.direction, "SL"))
+    if tp_hit and not sl_hit:
+        return ("TP1", _adverse_fill(bar.open, pos.tp1, pos.direction, "TP"))
+
+    # Both hit in same bar — use bar.open distance heuristic:
+    # whichever level is on the SAME side as bar.open from entry, that one fired first.
+    # E.g. LONG: open below entry → SL was nearer in time → SL hit first.
+    if pos.direction == "LONG":
+        return ("SL", _adverse_fill(...)) if bar.open < pos.entry else ("TP1", ...)
+    else:
+        return ("SL", _adverse_fill(...)) if bar.open > pos.entry else ("TP1", ...)
+
+def _adverse_fill(bar_open, trigger, direction, kind):
+    """Always pessimistic: fill at the worse of bar.open or trigger price."""
+    if kind == "SL":
+        return min(bar_open, trigger) if direction == "LONG" else max(bar_open, trigger)
+    else:  # TP
+        return max(bar_open, trigger) if direction == "LONG" else min(bar_open, trigger)
 ```
 
-Closes at the **worse** of bar-open or trigger price. Avoids the systematic delay of "next-cycle close" fills.
+**Properties:**
+
+- **Pessimistic** — closes at the worse of `bar.open` or trigger price (avoids systematic optimism)
+- **Deterministic** — same OHLCV → same fills, byte-identical results
+- **Same-bar SL+TP collision rule**: explicit `bar.open` heuristic; documented as a known modeling limitation (truth requires tick data)
+
+Tested in `test_intrabar_fill.py` with 6 cases: LONG/SL only, LONG/TP only, LONG/both with open<entry, LONG/both with open>entry, SHORT mirror, gap-through (bar.open beyond trigger).
 
 ### 6.4 MTM drawdown
 
@@ -187,19 +227,45 @@ Closes at the **worse** of bar-open or trigger price. Avoids the systematic dela
 
 Binance Futures charges funding every 8h (00:00, 08:00, 16:00 UTC). For 1y backtest, this can shift PnL by ±10–30%. Implementation:
 
-- `data/fetcher.fetch_funding_rates(symbol, start, end)` → DataFrame
-- For each open position at funding timestamp: `fee = position_notional × funding_rate × side_sign`
-- Apply at the timestamp boundary; deduct from `balance`
-- Tag in `trades.csv` as a separate `funding_total_paid` column per trade
+- `data/fetcher.fetch_funding_rates(symbol, start, end)` → DataFrame[ts, funding_rate]
+- For each open position at funding timestamp, the **balance impact** is:
+
+  ```
+  balance_delta = -side_sign × position_notional × funding_rate
+
+  where side_sign = +1 for LONG, -1 for SHORT
+  ```
+
+  **Sign convention** (Binance documented behavior):
+
+  | Direction | funding_rate | side_sign | balance_delta | Meaning |
+  |-----------|-------------|-----------|---------------|---------|
+  | LONG  | +0.01% | +1 | -0.01% × notional | Long PAYS positive funding |
+  | LONG  | -0.01% | +1 | +0.01% × notional | Long RECEIVES negative funding |
+  | SHORT | +0.01% | -1 | +0.01% × notional | Short RECEIVES positive funding |
+  | SHORT | -0.01% | -1 | -0.01% × notional | Short PAYS negative funding |
+
+- Apply at the timestamp boundary; mutate `balance` and append to `position.funding_paid_total` (cumulative)
+- Tag in `trades.csv`: separate `funding_total_paid` column per trade
+
+**Tests required (`test_funding_fees.py`)**: all 4 combinations from the table above + boundary case (position closes between funding timestamps → no fee applied for that window) + multi-funding case (position open across 3 funding events → cumulative deduction).
 
 ### 6.6 `holding_bars` derived from `entry_tf`
 
 ```python
-bar_minutes = pd.Timedelta(entry_tf).total_seconds() / 60
+def _tf_to_minutes(tf: str) -> float:
+    """Normalize Binance/CCXT-style TF strings to minutes.
+    Handles: '1m', '15m', '1h', '4h', '1d'. Raises ValueError for unknown."""
+    tf_map = {"m": 1, "h": 60, "d": 1440, "w": 10080}
+    if not tf or tf[-1] not in tf_map:
+        raise ValueError(f"Unsupported timeframe: {tf!r}")
+    return int(tf[:-1]) * tf_map[tf[-1]]
+
+bar_minutes = _tf_to_minutes(entry_tf)
 holding_bars = int((closed_at - opened_at).total_seconds() / 60 / bar_minutes)
 ```
 
-No more `15m` hardcode.
+No `15m` hardcode. Explicit normalization avoids `pd.Timedelta` quirks across TF strings.
 
 ### 6.7 Slippage model (per-leg, configurable)
 
@@ -211,13 +277,27 @@ class SlippageConfig:
     entry_slip_pct: float = 0.05    # 5 bp adverse on market entry
     sl_slip_pct: float = 0.10       # 10 bp adverse on SL fills (gaps are worse)
     exit_slip_pct: float = 0.05     # 5 bp adverse on TP fills
+
+def adverse_fill(price: float, direction: str, leg: str, cfg: SlippageConfig) -> float:
+    """Apply per-leg slippage in the trader-adverse direction."""
+    pct = {"entry": cfg.entry_slip_pct, "SL": cfg.sl_slip_pct, "TP": cfg.exit_slip_pct}[leg]
+    sign = +1 if (direction == "LONG" and leg == "entry") or \
+                  (direction == "SHORT" and leg in ("SL", "TP")) else -1
+    return price * (1 + sign * pct / 100)
 ```
 
-Each fill price is adjusted in the adverse direction by the slip pct before being applied to balance. Per-leg config because SL fills are systematically worse than TP fills (Plan agent flagged this as real-world reality).
+**Pyramid adds**: each pyramid entry pays `entry_slip_pct` on the **incremental notional** (not on the cumulative position). Exits (whole-position SL or per-half TP1/TP2) pay slippage on the closed notional only.
+
+**Tests required (`test_slippage.py`)**:
+- LONG entry adverse-up, LONG SL adverse-down, LONG TP adverse-down (4 cases × 2 directions = 8)
+- Pyramid: 2 adds → each pays slippage on its incremental size, position avg_entry blends slipped prices
+- TP1 partial close: half-size pays exit_slip_pct, remaining half not affected until TP2/SL
 
 ### 6.8 Reproducibility
 
 `reports/backtests/{run_id}/provenance.json`:
+
+If working tree is dirty in single mode, also write `provenance_diff.patch` (`git diff HEAD`) to the run dir so the exact code state is recoverable. Grid mode refuses dirty trees outright (since 200+ runs over 17h shouldn't sit on uncommitted code).
 
 ```json
 {
@@ -286,29 +366,77 @@ overrides:
 
 Existing `backtest/runner.py` deleted with this work. Its 3 known issues (hardcoded 15m, monkey-patch, no slippage) are resolved by the rewrite, not by patching the legacy module.
 
-## 9. Risks & open questions
+## 9. Risks, edge cases & operational concerns
 
-- **Funding rate data availability**: Binance public funding history is ~3 years; 1y window safe. If fetch fails, backtest must fail loudly (not silently produce wrong PnL).
-- **Cache invalidation on Binance kline revisions**: Binance occasionally revises old klines. The data manifest's sha256 will detect this; on mismatch, the cache file is rebuilt and a warning logged. (Phase B comparison must use freshly-fetched data, not stale cache.)
-- **Leverage scaling sensitivity**: with new 5x live leverage, the position guard's FP-tolerance fix (`+ 1e-6` in `engine/safety/position_guard.py`) must hold across all grid configs. Add a regression test: every grid run asserts no `Size X exceeds max X` rejections at boundary.
-- **Portfolio mode determinism**: `SafeOrchestrator._processed_signals` set is keyed by `(symbol, ts)`; multi-symbol single tick must process symbols in a deterministic order (alphabetical) for reproducibility.
+### 9.1 Phase B prerequisites (live-vs-backtest comparison)
+
+Public funding rate history alone is insufficient for Phase B. The live bot's actual paid funding can drift from `notional × rate` due to: timing precision (8h boundary vs entry), wallet partial fills, exchange-side rounding. To reconcile honestly:
+
+- Fetch **private** trade history via `ccxt.fetch_my_trades(symbol, since)` for each symbol the live bot traded
+- Fetch **private** funding history via `ccxt.fetch_funding_history(symbol, since)` (Binance: `/fapi/v1/income?incomeType=FUNDING_FEE`)
+- Compare backtest output against live in two layers:
+  - **Layer A**: trade-level — same entries/exits, prices within slip_pct tolerance
+  - **Layer B**: PnL-level — backtest total vs live total balance change, reconcile within ±5% (more than that = funding/slippage model needs calibration)
+- Phase B design adds `backtest/compare_live.py` with `CompareReport` output: per-trade match/miss matrix + PnL reconciliation table
+
+This is added to Phase 8 in the phase plan.
+
+### 9.2 Partial fetch failures + gap detection
+
+`data/fetcher.fetch_ohlcv_range` contract returns `(df, gaps: list[(start_ms, end_ms)])`:
+
+- `gaps` is non-empty if Binance returned fewer bars than `(end_ms - start_ms) / tf_ms`
+- Backtest engine **refuses to start** if total gap duration > 1% of requested period (configurable via `--max-gap-pct`)
+- Logged warning if 0 < gaps ≤ threshold; small gaps imputed via forward-fill (documented in result.json)
+
+### 9.3 Cache corruption recovery
+
+Parquet writes use atomic write-then-rename:
+
+```python
+def cache_put(symbol, tf, df):
+    target = cache_path(symbol, tf)
+    tmp = target.with_suffix(".tmp")
+    df.to_parquet(tmp)
+    os.replace(tmp, target)  # atomic on POSIX, near-atomic on Windows
+    update_manifest(symbol, tf, sha256_of_file(target))
+```
+
+On read: `cache.verify(symbol, tf)` re-checksums the file against the manifest. Mismatch → delete file + manifest entry, re-fetch.
+
+### 9.4 Grid search resumability
+
+`backtest/grid.py` writes per-config result atomically to `reports/backtests/{grid_run_id}/configs/{config_hash}.json`. On (re-)start:
+
+1. Compute config_hash for each entry in the grid
+2. Skip configs whose result file already exists and passes JSON-schema validation
+3. Print resume summary: "X/Y configs already complete, resuming with Z workers"
+
+Critical for 17h+ grid runs that can be interrupted by any issue. Tested in `test_grid_search.py` with a forced mid-grid interruption + restart.
+
+### 9.5 Other risks
+
+- **Portfolio mode determinism**: `SafeOrchestrator._processed_signals` set is keyed by `(symbol, ts)`; multi-symbol single tick must process symbols in alphabetical order. `test_backtest_engine_portfolio.py` asserts byte-identical `result.json` across two runs with the same data.
+- **Leverage scaling sensitivity**: new 5x live leverage may surface position-guard FP edge cases. Every grid run records `position_guard_rejections` count in result.json; CI test asserts 0 false-positive rejections at the cap boundary.
+- **Cache invalidation on Binance kline revisions**: Binance occasionally revises old klines. The data manifest's sha256 detects this; on mismatch, the cache file is rebuilt and a warning logged. (Phase B comparison MUST use freshly-fetched data, not stale cache.)
+- **Funding history depth**: Binance public funding history goes back ~3 years; 1y window is safe. If fetch fails, backtest fails loudly (not silently produce wrong PnL).
 
 ## 10. Phase plan (high-level)
 
-| Phase | Deliverable | Effort estimate |
-|-------|-------------|------------------|
-| 1 — Engine refactor + freshness/persist params | SafeOrchestrator changes, 66 tests still pass | 1 day |
-| 2 — Data layer | fetcher, cache, manifest, 2 test files | 2 days |
-| 3 — Backtest engine rewrite | engine.py, slippage, funding, intrabar fill, MTM DD, metrics, 4 test files | 3 days |
-| 4 — Grid search | grid.py, multiprocessing, ranking, 1 test file | 1 day |
-| 5 — CLI + reproducibility | cli.py, reproducibility.py, output writers | 1 day |
+| Phase | Deliverable | Effort estimate (realistic) |
+|-------|-------------|------------------------------|
+| 1 — SafeOrchestrator I/O purity audit + flags | freshness_check, persist, notifications params; full I/O grep audit; test_engine_purity.py | 1.5 days |
+| 2 — Data layer | fetcher with gap detection, cache with atomic writes + verify, manifest, 3 test files | 2.5 days |
+| 3 — Backtest engine rewrite | engine.py, slippage (per-leg + pyramid), funding (4 sign cases), intrabar fill (with same-bar tie-break), MTM DD, metrics, 4 test files | 4.5 days |
+| 4 — Grid search + resumability | grid.py with checkpoint/resume, multiprocessing, ranking, 1 test file | 1.5 days |
+| 5 — CLI + reproducibility | cli.py (3 subcommands), reproducibility.py (provenance + dirty-diff hash), output writers | 1.5 days |
 | 6 — Phase A validation runs | run portfolio + per-symbol on 1y data, write findings to `docs/results/` | 1 day |
-| 7 — Phase C grid search | confluence × notional_pct grid; pick best config | 1-2 days (mostly compute wall time) |
-| 8 — Phase B live-vs-backtest | replay live trade window in backtest mode; comparison report | 1 day |
+| 7 — Phase C grid search | confluence × notional_pct grid; rerun loop on bug discovery; pick best config | 2-3 days (compute wall time + iteration loop) |
+| 8 — Phase B live-vs-backtest | private fetch_my_trades + fetch_funding_history; compare_live.py; reconciliation report | 1.5 days |
 
-**Total**: 10–12 working days. Phase 1–5 are blocking sequentially; Phase 6+ depend on data being available (which means cache populated once, cheap thereafter).
+**Total**: 14–17 working days. Phase 1–5 sequential; Phase 6+ depend on data cache populated (one-time ~10min cost). Estimates revised upward from initial 10–12 days after spec review surfaced compression in Phase 3 (intrabar + funding + slippage all interact) and Phase 7 (iteration loop).
 
-Phase 2 (web dashboard) is a separate design + plan, after Phase 8.
+Phase 2 web dashboard is a separate design + plan, after Phase 8 lands.
 
 ---
 
