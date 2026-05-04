@@ -62,6 +62,36 @@ def test_engine_deterministic(base_config, synthetic_data):
     assert _strict_dumps(r1) == _strict_dumps(r2)
 
 
+def test_mtm_dd_isolated_unit(base_config, tmp_path):
+    """Inject a position manually; verify MTM drawdown picks up unrealized loss."""
+    import tempfile
+    from engine import SafeOrchestrator
+    from engine.notifications import NullNotificationManager
+    from backtest.engine import _compute_mtm_drawdown
+
+    with tempfile.TemporaryDirectory() as state_dir:
+        orch = SafeOrchestrator(
+            base_config, state_dir=state_dir,
+            notification_mgr=NullNotificationManager(),
+            freshness_check=False, persist=False,
+        )
+        # Manually open a LONG @ 100 size 10
+        orch.lifecycle.open_position(
+            symbol="BTC/USDT", direction="LONG", entry_price=100.0,
+            sl=95.0, tp1=105.0, tp2=110.0, size=10.0
+        )
+        # Simulate price going to 90 (unrealized loss = -100)
+        balance = 1000.0
+        peak = 1000.0
+        new_dd, new_peak = _compute_mtm_drawdown(
+            orch.lifecycle.positions, balance, {"BTC/USDT": 90.0}, peak
+        )
+        # Equity = 1000 + (90 - 100) * 10 * +1 = 900
+        # DD vs peak 1000 = 10%
+        assert new_dd == pytest.approx(10.0)
+        assert new_peak == 1000.0
+
+
 def test_mtm_drawdown_field_present(base_config, synthetic_data):
     """run_backtest result must include max_drawdown_pct (>= 0)."""
     data = {"BTC/USDT": {"4h": synthetic_data, "1h": synthetic_data,
