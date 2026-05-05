@@ -1,8 +1,13 @@
 """BinanceClient futures-specific methods — get_balance, set_leverage, set_margin_mode.
 
-Bug 1: get_balance() fetch_balance() çağırır ama Binance Futures'ta USDT
+Bug 1 (original): get_balance() fetch_balance() çağırır ama Binance Futures'ta USDT
        top-level key olarak gelmeyebilir → 0 dönerek bot'un sizing'ini bozar.
-       Fix: futures için fapiPrivateV2GetAccount.availableBalance kullan.
+       Fix v1: futures için fapiPrivateV2GetAccount.availableBalance kullan.
+
+Bug 1b (2026-05-05): availableBalance açık pozisyonların margin'ini hariç tutuyor →
+       cüzdanda $2040 olsa da pozisyon açıkken availableBalance $993 olabilir, breaker
+       false HALT veriyor. Fix v2: totalMarginBalance (mark-to-market equity) kullan;
+       hem cüzdan cash'i hem unrealized PnL'i kapsar.
 
 Bug 2: set_leverage / set_margin_mode CCXT method'ları "linear/inverse only"
        hatası veriyor (symbol parse). Direct fapi endpoint'leri ile çöz.
@@ -24,27 +29,35 @@ def _make_client_with_mock_exchange(market_type: str = "futures"):
 
 
 def test_get_balance_uses_fapi_account_for_futures():
-    """Futures'ta get_balance fapiPrivateV2GetAccount.availableBalance kullanmalı."""
+    """Futures'ta get_balance fapiPrivateV2GetAccount.totalMarginBalance kullanmalı.
+
+    Per bug 1b: availableBalance margin-locked-in-positions'ı hariç tutuyor; risk
+    breaker'ı için doğru metric totalMarginBalance (cash + unrealized PnL).
+    """
     client = _make_client_with_mock_exchange("futures")
     client.exchange.fapiPrivateV2GetAccount.return_value = {
-        "totalWalletBalance": "1000.50",
-        "availableBalance": "987.25",
+        "totalWalletBalance": "2040.00",
+        "totalMarginBalance": "2032.50",  # wallet + unrealized = mark-to-market equity
+        "availableBalance": "993.54",      # would falsely halt breaker if used
         "canTrade": True,
     }
 
     bal = client.get_balance()
 
-    assert bal == 987.25
+    assert bal == 2032.50
     client.exchange.fapiPrivateV2GetAccount.assert_called_once()
     # fetch_balance ÇAĞRILMAMALI (eski bug)
     client.exchange.fetch_balance.assert_not_called()
 
 
 def test_get_balance_falls_back_to_fetch_balance_on_futures_error():
-    """fapi endpoint fail ederse fetch_balance fallback'i çalışmalı."""
+    """fapi endpoint fail ederse fetch_balance fallback'i çalışmalı.
+
+    Fallback de 'total' okuyor (free + locked) — aynı semantik korunur.
+    """
     client = _make_client_with_mock_exchange("futures")
     client.exchange.fapiPrivateV2GetAccount.side_effect = Exception("network")
-    client.exchange.fetch_balance.return_value = {"USDT": {"free": 100.0}}
+    client.exchange.fetch_balance.return_value = {"USDT": {"total": 100.0, "free": 50.0}}
 
     bal = client.get_balance()
 
@@ -52,9 +65,9 @@ def test_get_balance_falls_back_to_fetch_balance_on_futures_error():
 
 
 def test_get_balance_uses_fetch_balance_for_spot():
-    """Spot'ta hâlâ fetch_balance kullanmalı (eski davranış korunsun)."""
+    """Spot'ta hâlâ fetch_balance kullanmalı; total (free + locked) okur."""
     client = _make_client_with_mock_exchange("spot")
-    client.exchange.fetch_balance.return_value = {"USDT": {"free": 250.0}}
+    client.exchange.fetch_balance.return_value = {"USDT": {"total": 250.0, "free": 250.0}}
 
     bal = client.get_balance()
 

@@ -59,20 +59,24 @@ class BinanceClient:
         return f"{symbol}:USDT"
 
     def get_balance(self) -> float:
-        """USDT free balance.
+        """USDT total margin balance — mark-to-market equity (wallet + unrealized PnL).
 
-        Futures için: /fapi/v2/account 'availableBalance' field'ı
-        (fetch_balance bazen futures USDT'yi top-level key olarak döndürmez,
-        defaultType=future olsa bile sıfır gelebilir).
+        For futures: /fapi/v2/account 'totalMarginBalance' field. This is the right
+        metric for risk breakers (emergency threshold, daily-loss, drawdown) because
+        it captures both wallet cash AND unrealized PnL on open positions. Returning
+        'availableBalance' here would falsely halt the breaker whenever positions are
+        open (margin locked → availableBalance < threshold even when wallet is fine).
+
+        Spot fallback returns USDT 'total' (free + locked) for the same reason.
         """
         if self.market_type == "futures":
             try:
                 info = self.exchange.fapiPrivateV2GetAccount()
-                return float(info.get("availableBalance", 0))
+                return float(info.get("totalMarginBalance", 0))
             except Exception as e:
                 log.warning(f"futures balance fetch failed: {e} — falling back to fetch_balance")
         b = self.exchange.fetch_balance()
-        return float(b.get("USDT", {}).get("free", 0))
+        return float(b.get("USDT", {}).get("total", 0))
 
     def get_price(self, symbol: str) -> float:
         """Anlık fiyat."""
