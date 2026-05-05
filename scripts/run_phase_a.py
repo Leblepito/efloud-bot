@@ -27,6 +27,14 @@ PERIOD_DAYS = 365
 INITIAL_BALANCE = 2000.0
 CONFIG_PATH = "configs/config.phase2_1k.yaml"
 
+# step_every_n_bars=4 → 4x faster than step=1 (every 4 bars = 1h cadence on 15min TF).
+# Initial step=1 estimate was ~30h total. step=4 brings this to ~7-8h, with no
+# meaningful loss of fidelity: live bot's actual cycle interval (30s) on a 15min
+# entry TF means 30 cycles repeat the same bar — only every ~30 cycles does a new
+# bar arrive, so step=2-3 in backtest already over-samples vs reality. step=4 is
+# close to live cadence + comfortably faster.
+STEP_EVERY_N_BARS = 4
+
 
 def main() -> int:
     with open(CONFIG_PATH, encoding="utf-8") as f:
@@ -45,7 +53,8 @@ def main() -> int:
         print(f"  [{symbol}] running...", end=" ", flush=True)
         data = _load_data_for_period([symbol], tfs, PERIOD_DAYS)
         result = run_backtest(
-            symbols=[symbol], data=data, config=cfg, initial_balance=INITIAL_BALANCE
+            symbols=[symbol], data=data, config=cfg, initial_balance=INITIAL_BALANCE,
+            step_every_n_bars=STEP_EVERY_N_BARS,
         )
         per_symbol[symbol] = result
         elapsed = time.time() - t0
@@ -65,7 +74,8 @@ def main() -> int:
     t0 = time.time()
     data_portfolio = _load_data_for_period(SYMBOLS, tfs, PERIOD_DAYS)
     portfolio_result = run_backtest(
-        symbols=SYMBOLS, data=data_portfolio, config=cfg, initial_balance=INITIAL_BALANCE
+        symbols=SYMBOLS, data=data_portfolio, config=cfg, initial_balance=INITIAL_BALANCE,
+        step_every_n_bars=STEP_EVERY_N_BARS,
     )
     elapsed = time.time() - t0
     print(
