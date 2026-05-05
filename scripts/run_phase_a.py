@@ -2,12 +2,15 @@
 
 Runs per-symbol 365-day backtest for all 10 phase2_1k symbols, then a portfolio
 run with all 10 symbols sharing balance. Aggregates results into a markdown
-summary at docs/results/{date}-phase-A-validation.md.
+summary at docs/results/{date}-phase-A-validation-{variant}.md.
 
-Usage: python -m scripts.run_phase_a
+Usage:
+  python -m scripts.run_phase_a                                       # default config
+  python -m scripts.run_phase_a --config configs/config.phase2_1k_h1a_conf60.yaml
 """
 from __future__ import annotations
 
+import argparse
 import json
 import time
 import uuid
@@ -25,7 +28,7 @@ SYMBOLS = [
 ]
 PERIOD_DAYS = 365
 INITIAL_BALANCE = 2000.0
-CONFIG_PATH = "configs/config.phase2_1k.yaml"
+DEFAULT_CONFIG_PATH = "configs/config.phase2_1k.yaml"
 
 # step_every_n_bars=4 → 4x faster than step=1 (every 4 bars = 1h cadence on 15min TF).
 # Initial step=1 estimate was ~30h total. step=4 brings this to ~7-8h, with no
@@ -37,12 +40,21 @@ STEP_EVERY_N_BARS = 4
 
 
 def main() -> int:
-    with open(CONFIG_PATH, encoding="utf-8") as f:
+    parser = argparse.ArgumentParser(description="Phase A strategy validation driver")
+    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH,
+                        help="Config YAML path (default: configs/config.phase2_1k.yaml)")
+    args = parser.parse_args()
+    config_path = args.config
+
+    with open(config_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
 
+    # Variant tag for output dirs: strip "config." prefix from filename stem
+    variant_tag = Path(config_path).stem.replace("config.", "", 1)
+
     today = time.strftime("%Y-%m-%d")
-    phase_dir = Path(f"reports/backtests/phase_a_{today}_{uuid.uuid4().hex[:6]}")
+    phase_dir = Path(f"reports/backtests/phase_a_{today}_{variant_tag}_{uuid.uuid4().hex[:6]}")
     phase_dir.mkdir(parents=True, exist_ok=True)
     capture_provenance(phase_dir)
 
@@ -93,7 +105,7 @@ def main() -> int:
     lines = [
         f"# Phase A — Strategy Validation ({today})",
         "",
-        f"**Config:** `{CONFIG_PATH}` ($2000 + 5x + 2.0% notional cap = $200/trade)",
+        f"**Config:** `{config_path}` ($2000 + 5x + 2.0% notional cap = $200/trade)",
         f"**Period:** {PERIOD_DAYS} days",
         f"**Initial balance:** ${INITIAL_BALANCE:,.0f}",
         "",
@@ -144,7 +156,7 @@ def main() -> int:
         "",
     ])
 
-    summary_path = Path("docs/results") / f"{today}-phase-A-validation.md"
+    summary_path = Path("docs/results") / f"{today}-phase-A-validation-{variant_tag}.md"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text("\n".join(lines), encoding="utf-8")
     print(f"\nSummary written to: {summary_path}")
