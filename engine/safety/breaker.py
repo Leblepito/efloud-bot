@@ -82,6 +82,23 @@ class CircuitBreaker:
         self.peak_balance = starting_balance
         self.current_balance = starting_balance
 
+    def sync_balance(self, live_balance: float):
+        """Sync current_balance from live exchange data (mark-to-market equity).
+
+        Without this, current_balance only updates via record_trade(pnl), which is
+        REALIZED-only — so unrealized PnL on open positions would not be reflected,
+        and the breaker would track a stale value drifting from the actual wallet.
+
+        Updates peak_balance too (high-watermark for drawdown calc).
+
+        Does NOT touch breaker state (HALTED stays HALTED until manual_reset). This
+        is by design — HALT is a safety stop requiring human acknowledgment, not an
+        automatic recovery on balance bounce.
+        """
+        self.current_balance = float(live_balance)
+        if self.current_balance > self.peak_balance:
+            self.peak_balance = self.current_balance
+
     def record_trade(self, pnl: float, timestamp: Optional[datetime] = None):
         """Kapanan trade kaydı."""
         ts = timestamp or datetime.utcnow()

@@ -211,6 +211,11 @@ class SafeOrchestrator:
         current_price = float(df_entry["close"].iloc[-1])
 
         # ═══ STEP 1: Circuit Breaker ═══
+        # Sync breaker's current_balance with live exchange equity BEFORE check.
+        # Without this, breaker drifts (record_trade is realized-only, ignores
+        # unrealized PnL and external wallet changes like manual transfers).
+        if balance is not None:
+            self.breaker.sync_balance(balance)
         breaker_status = self.breaker.check()
         if not breaker_status.can_trade:
             log.warning(f"🚨 Breaker {breaker_status.state.value}: {breaker_status.reason}")

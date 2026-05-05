@@ -125,6 +125,32 @@ async def kill_switch() -> dict:
     return {"ok": True, "closed": closed}
 
 
+@router.post("/breaker/reset", dependencies=[Depends(require_auth)])
+async def breaker_reset(reason: str = "manual via dashboard") -> dict:
+    """Manually reset the circuit breaker (clears HALTED/TRIPPED state).
+
+    HALTED requires manual reset by design — operator must acknowledge that the
+    triggering condition (emergency balance, weekly DD) has been investigated
+    before resuming. Does NOT bypass breaker re-trip on next cycle if conditions
+    still apply.
+    """
+    if not runner.orch:
+        raise HTTPException(status_code=503, detail="Bot not running")
+    prior_state = runner.orch.breaker.status.state.value
+    prior_reason = runner.orch.breaker.status.reason
+    runner.orch.breaker.manual_reset(reason)
+    await db.log_audit(
+        "breaker_reset",
+        {"prior_state": prior_state, "prior_reason": prior_reason, "reset_reason": reason},
+    )
+    return {
+        "ok": True,
+        "prior_state": prior_state,
+        "prior_reason": prior_reason,
+        "current_state": runner.orch.breaker.status.state.value,
+    }
+
+
 @router.get("/config", dependencies=[Depends(require_auth)])
 async def config() -> dict:
     if not runner.cfg:
