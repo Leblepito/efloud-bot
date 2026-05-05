@@ -96,6 +96,12 @@ def run_backtest(
 
         for i in range(warmup_bars, n_bars, step_every_n_bars):
             current_ts = primary_idx[i]
+            # Convert pandas Timestamp → naive datetime for breaker (pure Python).
+            # tz-aware → naive UTC; tz-naive → as-is. Breaker semantics are tz-agnostic
+            # (uses datetime.utcnow elsewhere) so we strip tz for consistency.
+            sim_now = current_ts.to_pydatetime()
+            if sim_now.tzinfo is not None:
+                sim_now = sim_now.replace(tzinfo=None)
             for symbol in symbols:
                 tfs = data[symbol]
                 # Slicing semantics:
@@ -111,7 +117,8 @@ def run_backtest(
                 if len(h_slice) < 50 or len(m_slice) < 50:
                     continue
                 try:
-                    orch.run_cycle(symbol, h_slice, m_slice, e_slice, d_slice, balance=balance)
+                    orch.run_cycle(symbol, h_slice, m_slice, e_slice, d_slice,
+                                   balance=balance, now=sim_now)
                 except Exception as e:
                     skipped_cycles += 1
                     log.debug("Cycle %s @ %s raised %s: %s", symbol, current_ts, type(e).__name__, e)

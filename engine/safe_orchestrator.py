@@ -13,6 +13,7 @@ Safe Orchestrator v2.1 — Güvenlik Katmanları Entegre
 
 import pandas as pd
 import logging
+from datetime import datetime
 from typing import Optional
 from dataclasses import dataclass
 
@@ -192,6 +193,7 @@ class SafeOrchestrator:
         df_entry: pd.DataFrame,
         df_daily: Optional[pd.DataFrame] = None,
         balance: Optional[float] = None,
+        now: Optional[datetime] = None,
     ) -> SafeCycleResult:
         """Safety check'li tam analiz cycle'ı."""
         warnings = []
@@ -221,7 +223,8 @@ class SafeOrchestrator:
         current_price = float(df_entry["close"].iloc[-1])
 
         # ═══ STEP 1: Circuit Breaker ═══
-        breaker_status = self.breaker.check()
+        # `now` is sim-time in backtest, None in live (uses wall-clock).
+        breaker_status = self.breaker.check(now=now)
         if not breaker_status.can_trade:
             log.warning(f"🚨 Breaker {breaker_status.state.value}: {breaker_status.reason}")
             warnings.append(f"Breaker {breaker_status.state.value}: {breaker_status.reason}")
