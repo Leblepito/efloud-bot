@@ -47,6 +47,9 @@ def compute_mtm_drawdown(positions, balance, current_prices, peak):
     return dd_pct, new_peak
 
 
+_DEFAULT_SMC_WINDOW = 500
+
+
 def run_backtest(
     *,
     symbols: list[str],
@@ -55,6 +58,7 @@ def run_backtest(
     initial_balance: float = 2000.0,
     warmup_bars: int = 200,
     step_every_n_bars: int = 1,
+    smc_window_bars: int = _DEFAULT_SMC_WINDOW,
 ) -> dict[str, Any]:
     """Run a walk-forward backtest. No I/O.
 
@@ -65,6 +69,12 @@ def run_backtest(
         initial_balance: starting USDT.
         warmup_bars: bars consumed before first cycle (analysis warmup).
         step_every_n_bars: cycle frequency (1 = every bar, 4 = every 4 bars).
+        smc_window_bars: rolling-window cap on slices passed to run_cycle. SMC analysis
+            (sfps, fvgs, swings, order_blocks) iterates the entire df each call. Without
+            a cap, slices grow unbounded → O(N²) per cycle, O(N³) per backtest.
+            500 bars (≈85 days @ 4h, 5 days @ 15min) preserves long-range signals while
+            keeping cycle cost roughly constant. Mirrors live bot behaviour where CCXT
+            fetch returns a fixed window. Set to 0 to disable (full history, slow).
 
     Returns: dict with initial_balance, final_balance, trades, symbols, etc.
     """
@@ -111,6 +121,10 @@ def run_backtest(
                 e_slice = tfs[entry_tf_name].iloc[: i + 1]
                 h_slice = tfs[config["timeframes"]["htf"]].loc[: current_ts]
                 m_slice = tfs[config["timeframes"]["mtf"]].loc[: current_ts]
+                if smc_window_bars > 0:
+                    e_slice = e_slice.iloc[-smc_window_bars:]
+                    h_slice = h_slice.iloc[-smc_window_bars:]
+                    m_slice = m_slice.iloc[-smc_window_bars:]
                 d_slice = tfs.get("1d")
                 if d_slice is not None:
                     d_slice = d_slice.loc[: current_ts]
