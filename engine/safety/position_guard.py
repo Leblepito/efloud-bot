@@ -85,9 +85,12 @@ class PositionGuard:
                 )
 
         max_notional = balance * self.max_size_pct
-        # Float tolerance: 1e-6 USDT (well below any Binance increment).
-        # Without this, notional=33.30000000001 vs max=33.3 falsely rejects.
-        if notional > max_notional + 1e-6:
+        # Float tolerance: 1e-2 USDT (1¢, far below any Binance min order increment).
+        # Real-world residue from chained float multiplications in legacy SMC sizing
+        # (entry × size / leverage with realistic prices) can reach ~1e-3 magnitude.
+        # The original 1e-6 was too tight — backtest validation showed many false
+        # rejections like "Size 40.15 exceeds max 40.15" (formatted-equal, ~1e-3 apart).
+        if notional > max_notional + 1e-2:
             return PositionCheckResult(
                 False,
                 f"Size {notional:.2f} exceeds max {max_notional:.2f} "
