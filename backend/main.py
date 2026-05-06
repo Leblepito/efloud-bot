@@ -82,8 +82,17 @@ async def lifespan(app: FastAPI):
             return False
     configure_healthz(runner.runtime_state, _breaker_halted)
 
-    # Step 3: crash counter logic (added in Task 5).
-    # (Placeholder comment here; Task 5 fills it in.)
+    # Step 3: Aşama 2 Step 2 crash-loop counter
+    rs = runner.runtime_state
+    snap = rs.snapshot()
+    if snap["fatal_exception_state"]:
+        rs.increment_crash()
+        log.warning(
+            "💥 Previous run exited with fatal_exception_state=True; "
+            f"crash_count now {rs.snapshot()['crash_count']}"
+        )
+    else:
+        rs.reset_crash_count()
 
     # Step 4: yield to FastAPI for request serving (existing `yield` line follows).
     yield

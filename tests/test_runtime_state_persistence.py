@@ -62,3 +62,38 @@ def test_loop_tick_not_persisted_across_restart(tmp_path: Path):
     s2 = RuntimeState(state_dir=str(tmp_path))
     snap2 = s2.snapshot()
     assert snap2["last_loop_tick_ms"] is None
+
+
+def test_clean_shutdown_then_startup_resets_crash_count(tmp_path: Path):
+    """Clean fatal_exception_state on disk → next startup reset_crash_count() → 0."""
+    # Pre-condition: write a runtime.json with stale crash_count but clean fatal flag
+    s1 = RuntimeState(state_dir=str(tmp_path))
+    s1.increment_crash()
+    s1.increment_crash()
+    s1.increment_crash()  # 3 crashes accumulated
+    assert s1.snapshot()["crash_count"] == 3
+    # Now: simulate "previous run exited cleanly" — fatal flag is already False
+    assert s1.snapshot()["fatal_exception_state"] is False
+
+    # Fresh startup: load + reset
+    s2 = RuntimeState(state_dir=str(tmp_path))
+    s2.reset_crash_count()
+    snap = s2.snapshot()
+    assert snap["crash_count"] == 0
+    assert snap["last_crash_ms"] is None
+
+
+def test_dirty_shutdown_then_startup_increments_crash_count(tmp_path: Path):
+    """Set fatal_exception_state on disk → next startup increment_crash() → counter rises."""
+    s1 = RuntimeState(state_dir=str(tmp_path))
+    s1.set_fatal_exception()
+    assert s1.snapshot()["fatal_exception_state"] is True
+    assert s1.snapshot()["crash_count"] == 0
+
+    # Fresh startup: load + increment
+    s2 = RuntimeState(state_dir=str(tmp_path))
+    assert s2.snapshot()["fatal_exception_state"] is True  # loaded from disk
+    s2.increment_crash()
+    snap = s2.snapshot()
+    assert snap["crash_count"] == 1
+    assert snap["fatal_exception_state"] is True  # still set; auto-clears later
