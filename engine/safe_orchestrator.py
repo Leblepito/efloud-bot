@@ -29,6 +29,7 @@ from .safety import (
     validate_kline_freshness, validate_kline_integrity,
     StaleDataError, cleanup_orphan_hedges
 )
+from utils.logging import new_trace_id, set_trace_id
 
 log = logging.getLogger("efloud.safe_orch")
 
@@ -406,6 +407,15 @@ class SafeOrchestrator:
                     )
 
                     if guard_check.allowed:
+                        # ── 0) Trace ID for log correlation across orchestrator → DB ──
+                        trace_id = new_trace_id()
+                        set_trace_id(trace_id)
+                        log.info(
+                            "signal_promoted_to_trade",
+                            extra={"symbol": symbol, "direction": latest.direction,
+                                   "confluence": latest.confluence},
+                        )
+
                         # ── 1) Borsaya gerçek emir gönder (varsa) ──
                         exchange_ok = True
                         if self.order_manager is not None:
@@ -413,6 +423,7 @@ class SafeOrchestrator:
                                 exchange_pos = self.order_manager.open_position(
                                     symbol, latest.direction, size,
                                     latest.entry, latest.sl, latest.tp1, latest.tp2,
+                                    trace_id=trace_id,
                                 )
                             except Exception as e:
                                 log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
