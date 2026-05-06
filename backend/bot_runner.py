@@ -298,6 +298,8 @@ class BotRunner:
                         symbol=pos.symbol, direction=pos.direction,
                         entry=pos.entry, sl=pos.sl, tp1=pos.tp1, tp2=pos.tp2,
                         size=pos.size, binance_order_id=pos.order_id or None,
+                        trace_id=getattr(pos, "trace_id", None),
+                        bar_ts_ms=getattr(pos, "bar_ts_ms", None),
                     ),
                     self.loop,
                 )
@@ -309,6 +311,7 @@ class BotRunner:
                         symbol=pos.symbol, exit_price=pos.exit_price,
                         pnl_usdt=pos.pnl_usdt, pnl_pct=pnl_pct,
                         reason=pos.exit_reason,
+                        trace_id=getattr(pos, "trace_id", None),
                     ),
                     self.loop,
                 )
@@ -322,6 +325,7 @@ class BotRunner:
         await db.record_trade_close(
             symbol=pos.symbol, exit_price=pos.exit_price,
             pnl_usdt=pos.pnl_usdt, pnl_pct=pnl_pct, reason=pos.exit_reason,
+            trace_id=getattr(pos, "trace_id", None),
         )
 
     # ─────────────────────────────────────────────────────────────
