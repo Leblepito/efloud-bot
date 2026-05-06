@@ -2,8 +2,8 @@
 
 **Date:** 2026-05-06
 **Parent design:** `docs/superpowers/specs/2026-05-05-epic-6-h1-design.md`
-**Decision:** **H1 HYPOTHESIS CONFIRMED** — H1b (conf=70) is the new baseline. Advance to H2.
-**H1c status:** in progress at time of writing; will be appended below when complete.
+**Decision (post-H1c update):** **H1 HYPOTHESIS CONFIRMED — H1c (conf=80) is the new baseline.** All 6 GO thresholds clear (the only variant to do so). Sharpe finally over 0.5 (0.51). H1b is retained as historical reference.
+**H1c status:** complete (see §8).
 
 ---
 
@@ -19,13 +19,13 @@ Per H1 design §3.3 acceptance: any variant returning > 0% becomes the new basel
 
 | Metric | GO threshold | Baseline (conf=50) | H1a (conf=60) | **H1b (conf=70)** | H1c (conf=80) |
 |--------|--------------|--------------------|---------------|--------------------|----------------|
-| Total return | > 0% | −43.75% | −34.32% | **+4.89%** ✅ | (pending) |
-| Max DD | < 30% | 44.24% | 34.64% | **7.17%** ✅ | (pending) |
-| Sharpe | > 0.5 | 0.03 | 0.11 | **0.27** ❌ | (pending) |
-| Profit factor | > 1.2 | 1.08 | 1.31 | **1.95** ✅ | (pending) |
-| Total trades | > 100 | 1709 | 1361 | **680** ✅ | (pending) |
-| Win rate | > 35% | 40.5% | 45.5% | **54.7%** ✅ | (pending) |
-| **Pass count** | — | 2/6 | 3/6 | **5/6** | — |
+| Total return | > 0% | −43.75% | −34.32% | +4.89% ✅ | **+11.29%** ✅ |
+| Max DD | < 30% | 44.24% | 34.64% | 7.17% ✅ | **2.83%** ✅ |
+| Sharpe | > 0.5 | 0.03 | 0.11 | 0.27 ❌ | **0.51** ✅ |
+| Profit factor | > 1.2 | 1.08 | 1.31 | 1.95 ✅ | **3.50** ✅ |
+| Total trades | > 100 | 1709 | 1361 | 680 ✅ | **213** ✅ |
+| Win rate | > 35% | 40.5% | 45.5% | 54.7% ✅ | **62.4%** ✅ |
+| **Pass count** | — | 2/6 | 3/6 | 5/6 | **6/6** ⭐ |
 
 Trajectory across the sweep is **monotone-improving** in every single metric — a strong signal that confluence threshold is the right knob.
 
@@ -109,12 +109,48 @@ Per H1 design §3.3:
 
 The path to Pathway X is open, but more hypothesis-loop iterations are needed to make the strategy competitive enough for actual Lead Trader appeal.
 
-## 8. Appendix — H1c results (to be appended)
+## 8. Appendix — H1c results (post-completion)
 
-**Status:** running at time of writing (started 2026-05-06 10:20:48). Per-symbol progress: 2/10 done.
+**Run:** `reports/backtests/phase_a_2026-05-06_phase2_1k_h1c_conf80_dc30e5/` — completed 2026-05-06.
 
-This section will be filled in once H1c completes and a follow-up commit will record:
-- Whether H1c is better, comparable, or worse than H1b
-- If better → new baseline; H2 may need re-targeting
-- If worse → H1b confirmed as local max; sweep done
-- If comparable → H1b stays baseline (already validated)
+### 8.1 Portfolio metrics
+
+| Metric | Value | vs H1b | vs GO threshold |
+|--------|-------|--------|-----------------|
+| Total return | **+11.29%** | +6.4 pp better | ✅ PASS |
+| Max DD | **2.83%** | −4.34 pp (lower is better) | ✅ PASS |
+| Sharpe | **0.51** | +0.24 better | ✅ PASS (first time crossing) |
+| Profit factor | **3.50** | +1.55 better | ✅ PASS |
+| Total trades | 213 | −467 (concern) | ✅ above 100 floor |
+| Win rate | **62.4%** | +7.7 pp better | ✅ PASS |
+| Realized giveback | 0.7% | minimal late-period bleed | — |
+
+### 8.2 Per-symbol
+
+10/10 symbols positive. Returns range +0.04% (TRX) to +3.86% (ETH). DDs all under 1.3%. Profit factors all above 2.4 (TRX 14.65, SOL 6.03, ETH 5.36 — extreme PF on the highest-conviction signals).
+
+### 8.3 Direction balance
+
+LONG 92 trades = +$263.77; SHORT 121 trades = +$394.76. Both positive (same as H1b). Direction asymmetry that drove the original H2 plan is fully gone at this confluence level.
+
+### 8.4 Exit-reason redistribution (continuing the trend)
+
+| Exit | Baseline (50) | H1b (70) | **H1c (80)** |
+|------|---------------|----------|--------------|
+| SL | 59.6% | 45.3% | **37.6%** |
+| TP1 | 7.0% | 13.8% | 20.2% |
+| TP2 | 33.4% | 40.9% | **42.3%** |
+
+R:R structure improves monotonically with tightening — TP-side exits are now the majority.
+
+### 8.5 Decision (revised from §5)
+
+**H1c is the new baseline.** All 6 GO thresholds pass. The only concern is statistical robustness — 213 trades is well above the >100 floor but considerably less than H1b's 680. To mitigate, future hypotheses will be tested on the H1c baseline and any borderline result (especially Sharpe near 0.5) will be cross-validated against H1b before final acceptance.
+
+`configs/config.phase2_1k_h1c_conf80.yaml` becomes the reference config from this point forward.
+
+### 8.6 H2 (magnitude push) impact
+
+The original A2 variant (H2 design at `2026-05-06-h2-magnitude-design.md`) was built on H1b. With H1c as new baseline + DD now only 2.83% (vs H1b's 7.17%), the magnitude headroom is **even larger**. A2 config has been rebuilt on conf=80 baseline (still risk 2% + notional 6%). The A2 hypothesis is unchanged; only the underlying baseline is updated.
+
+Expected A2 outcome on H1c base: return ~25-35% (linear scaling of +11.29%), DD ~6-10% (sub-linear due to portfolio diversification). If even close to that, Lead Trader appeal becomes plausible.
