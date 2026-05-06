@@ -46,6 +46,13 @@ class BotRunner:
         self.stopped = False
         self.last_error: Optional[str] = None
 
+        # Healthz / crash-loop runtime state (Aşama 2 Step 2)
+        from engine.safety.runtime_state import RuntimeState
+        state_dir = (
+            self.cfg.get("operation", {}).get("state_dir") if self.cfg else None
+        ) or os.environ.get("EFLOUD_STATE_DIR", "./state")
+        self.runtime_state = RuntimeState(state_dir=state_dir)
+
     # ─────────────────────────────────────────────────────────────
     # Lifecycle
     # ─────────────────────────────────────────────────────────────
@@ -190,6 +197,7 @@ class BotRunner:
                 # Reconcile first (sync ccxt — run in thread)
                 if self.order_mgr and not self.cfg["operation"]["dry_run"]:
                     closed = await loop.run_in_executor(None, self.order_mgr.reconcile)
+                    self.runtime_state.update_exchange_ping()    # NEW — exchange is reachable
                     for pos in closed:
                         await self._persist_close(pos)
 
@@ -199,6 +207,7 @@ class BotRunner:
                 duration_ms = int((loop.time() - t0) * 1000)
                 self.last_cycle_duration_ms = duration_ms
                 self.last_cycle_at = self._now_iso()
+                self.runtime_state.update_loop_tick()        # NEW — Aşama 2 Step 2
                 bus.publish(
                     "cycle_end",
                     cycle_n=self.cycle_count,
@@ -211,6 +220,7 @@ class BotRunner:
             except Exception as e:
                 log.error(f"Cycle error: {e}", exc_info=True)
                 bus.publish("error", message=str(e))
+                self.runtime_state.set_fatal_exception()    # NEW — sticky flag for healthz
 
             # Sleep until next cycle (cancellable)
             elapsed = loop.time() - t0
