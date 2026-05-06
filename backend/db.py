@@ -26,6 +26,7 @@ class Database:
         try:
             self.pool = await asyncpg.create_pool(
                 dsn=url, min_size=1, max_size=5, command_timeout=10,
+                statement_cache_size=0,
             )
             log.info("✅ Postgres pool ready")
         except Exception as e:
