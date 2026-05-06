@@ -30,10 +30,15 @@ from main import load_dotenv  # reuse parent project's .env loader
 # Load .env (prefer system env over .env values)
 load_dotenv()
 
-logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "INFO"),
-    format="%(asctime)s | %(name)-22s | %(levelname)-5s | %(message)s",
-)
+if os.environ.get("EFLOUD_LOGGING_FORMAT", "").lower() == "json":
+    from utils.logging import configure_json_logging
+    _level = getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO)
+    configure_json_logging(level=_level)
+else:
+    logging.basicConfig(
+        level=os.environ.get("LOG_LEVEL", "INFO"),
+        format="%(asctime)s | %(name)-22s | %(levelname)-5s | %(message)s",
+    )
 log = logging.getLogger("efloud.app")
 
 
