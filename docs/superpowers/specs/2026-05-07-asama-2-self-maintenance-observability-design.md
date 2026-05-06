@@ -343,6 +343,7 @@ After §8 acceptance → Aşama 3 (track record period) begins.
 5. **Log retention:** Compressed 150-200MB covers ~30+ days. Sufficient.
 6. **trace_id storage in Supabase:** `trades.trace_id varchar(12)` with INDEX on the column (added in migration 002). Index needed because alerter and post-mortem queries filter by trace_id. Confirmed sufficient bit-space (uuid4 hex truncated to 12 chars = ~62 bits, collision risk negligible at this scale).
 7. **NTP daemon choice:** chronyd vs systemd-timesyncd on Hetzner. Either is fine; pick whichever is already installed on the CX22 image. Verify via `chronyc tracking` or `timedatectl status` before shadow run begins.
+8. **Backtest engine bar_ts capture (resolved — deferred):** The live engine adds `bar_ts_ms` via Tasks 2 + 7 of `2026-05-07-asama-2-step1-foundational-refactor.md`. The backtest equivalent (modifying `backtest/engine.py` in `feature/backtest-subsystem`) is tracked as a follow-up plan, to be written after Aşama 2 Step 1 merges to master and `feature/backtest-subsystem` rebases. Until that follow-up lands, Phase B reconcile (which needs both sides to use bar-time) remains blocked.
 
 ## 11. Implementation order (priority for plan-writing) — REVISED
 
