@@ -166,3 +166,56 @@ def test_bot_runner_start_skips_trading_loop_when_crash_loop_active(monkeypatch,
     assert any("CRASH LOOP DETECTED" in r.message for r in caplog.records), (
         "expected log.critical('⛔ CRASH LOOP DETECTED ...') message"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Task 6: End-to-end lifecycle
+# ─────────────────────────────────────────────────────────────────────
+
+
+def test_e2e_crash_loop_lifecycle(tmp_path: Path):
+    """Full lifecycle: clean → 3 crashes → suspension → reset → recovers.
+
+    Uses RuntimeState + evaluate_healthz directly. Does NOT spin up FastAPI/uvicorn
+    (that's the smoke test in Step 7.2). Asserts every state transition.
+    """
+    rs = RuntimeState(state_dir=str(tmp_path))
+    now_ms = int(time.time() * 1000)
+
+    # T+0: bot just started, ticking cleanly
+    rs.update_loop_tick()
+    rs.update_exchange_ping()
+    code, payload = evaluate_healthz(rs, breaker_halted=False, now_ms=now_ms)
+    assert code == 200 and payload["status"] == "ok"
+
+    # T+1min: first crash (e.g. cycle exception → bot exits → autoheal restarts → on next start
+    # lifespan increment_crash() fires because fatal flag was set on disk)
+    rs.increment_crash()
+    assert rs.is_in_crash_loop() is False  # only 1 crash, not yet suspended
+
+    # T+2min: second crash
+    rs.increment_crash()
+    assert rs.is_in_crash_loop() is False  # 2 < threshold
+
+    # T+3min: third crash — suspension trips
+    rs.increment_crash()
+    assert rs.is_in_crash_loop() is True
+
+    # /healthz now returns 200+suspended (autoheal stays quiet)
+    rs.update_loop_tick()  # bot is alive, /healthz endpoint still responding
+    rs.update_exchange_ping()
+    code, payload = evaluate_healthz(rs, breaker_halted=False, now_ms=now_ms)
+    assert code == 200, f"expected 200 in suspension, got {code}: {payload}"
+    assert payload["status"] == "suspended"
+    assert "crash_loop_suspended" in payload["failures"]
+
+    # Operator manually clears via reset_crash_count() (per runbook step 3)
+    rs.reset_crash_count()
+    assert rs.is_in_crash_loop() is False
+
+    # /healthz now returns 200+ok again
+    rs.update_loop_tick()
+    rs.update_exchange_ping()
+    code, payload = evaluate_healthz(rs, breaker_halted=False, now_ms=now_ms)
+    assert code == 200 and payload["status"] == "ok"
+    assert payload["failures"] == []
