@@ -45,6 +45,8 @@ class Database:
         self, symbol: str, direction: str, entry: float, sl: float,
         tp1: float, tp2: float, size: float, confluence: Optional[int] = None,
         binance_order_id: Optional[str] = None,
+        trace_id: Optional[str] = None,        # NEW
+        bar_ts_ms: Optional[int] = None,        # NEW
     ) -> Optional[str]:
         """Insert trade with no exit yet. Returns trade UUID."""
         if not self.pool:
@@ -54,12 +56,12 @@ class Database:
                 row = await conn.fetchrow(
                     """
                     INSERT INTO trades (symbol, direction, entry, sl, tp1, tp2, size,
-                                        confluence, binance_order_id)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                                        confluence, binance_order_id, trace_id, bar_ts_ms)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                     RETURNING id::text
                     """,
                     symbol, direction, entry, sl, tp1, tp2, size,
-                    confluence, binance_order_id,
+                    confluence, binance_order_id, trace_id, bar_ts_ms,
                 )
                 return row["id"] if row else None
         except Exception as e:
@@ -69,12 +71,18 @@ class Database:
     async def record_trade_close(
         self, symbol: str, exit_price: float, pnl_usdt: float,
         pnl_pct: float, reason: str,
+        trace_id: Optional[str] = None,       # NEW (informational; not used in WHERE)
+        bar_ts_ms: Optional[int] = None,       # NEW (forward-compat; not yet used)
     ) -> None:
         """Update most recent open trade for symbol with exit details."""
         if not self.pool:
             return
         try:
             async with self.pool.acquire() as conn:
+                # Note: trace_id and bar_ts_ms accepted at API boundary for forward
+                # compatibility, but the existing close-by-symbol logic is preserved.
+                # A future task can switch to close-by-trace_id when all open-side
+                # writes have trace_id.
                 await conn.execute(
                     """
                     UPDATE trades
