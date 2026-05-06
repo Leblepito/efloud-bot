@@ -513,4 +513,6 @@ def main():
 
 
 if __name__ == "__main__":
+    from utils.logging import configure_json_logging
+    configure_json_logging()  # no-op unless EFLOUD_LOGGING_FORMAT=json
     main()
