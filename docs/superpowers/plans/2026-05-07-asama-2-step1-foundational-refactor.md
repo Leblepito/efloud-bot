@@ -96,16 +96,18 @@ Expected: no error, or "DATABASE_URL_TEST not set" (acceptable if running withou
 
 - [ ] **Step 0.4: Capture baseline test count**
 
-Record the exact test count from Step 0.2 output (e.g., `BASELINE_PASSED=47`). Pin this number; final test count after all tasks must be **exactly** `BASELINE_PASSED + 17` (calculated below). Any deviation = an existing test got deleted or skipped, investigate before proceeding.
+Record the exact test count from Step 0.2 output (e.g., `BASELINE_PASSED=47`). Pin this number; final test count after all tasks must be **exactly** `BASELINE_PASSED + 19` (calculated below). Any deviation = an existing test got deleted or skipped, investigate before proceeding.
 
-New tests added by this plan (= 17 total):
-- Task 1: 2 tests (`test_trace_id_column_exists`, `test_trace_id_index_exists`)
-- Task 2: 1 test (`test_bar_ts_ms_column_exists`)
-- Task 3: 5 tests (`test_get_trace_id_returns_none_when_unset`, `test_set_and_get_trace_id`, `test_new_trace_id_returns_12_char_hex`, `test_new_trace_id_is_unique_across_calls`, `test_trace_id_isolated_across_tasks`)
-- Task 3: 6 tests (`test_basic_fields_present`, `test_trace_id_picked_up_from_context`, `test_trace_id_absent_when_unset`, `test_extra_fields_merged`, `test_exception_serialised`, `test_output_is_single_line`)
-- Task 4: 2 tests (`test_no_op_when_env_flag_unset`, `test_emits_json_when_flag_set`)
-- Task 7: 2 tests (`test_record_trade_open_persists_trace_id`, `test_record_trade_open_handles_missing_trace_id`)
-- Task 9: 1 test (`test_signal_to_trade_trace_id_correlation`)
+New tests added by this plan (= 19 total):
+- Task 1 (migration 002): 2 tests (`test_trace_id_column_exists`, `test_trace_id_index_exists`)
+- Task 2 (migration 003): 1 test (`test_bar_ts_ms_column_exists`)
+- Task 3 (contextvar helpers): 5 tests (`test_get_trace_id_returns_none_when_unset`, `test_set_and_get_trace_id`, `test_new_trace_id_returns_12_char_hex`, `test_new_trace_id_is_unique_across_calls`, `test_trace_id_isolated_across_tasks`)
+- Task 3 (JSON formatter): 6 tests (`test_basic_fields_present`, `test_trace_id_picked_up_from_context`, `test_trace_id_absent_when_unset`, `test_extra_fields_merged`, `test_exception_serialised`, `test_output_is_single_line`)
+- Task 4 (env-flag wiring): 2 tests (`test_no_op_when_env_flag_unset`, `test_emits_json_when_flag_set`)
+- Task 7 (db persistence): 2 tests (`test_record_trade_open_persists_trace_id`, `test_record_trade_open_handles_missing_trace_id`)
+- Task 9 (E2E cross-thread): 1 test (`test_position_trace_id_survives_cross_thread_db_persist`)
+
+Total: 2+1+5+6+2+2+1 = **19**.
 
 Tasks 5 and 6 contribute their assertions via Task 9's E2E test (no separate per-task tests, see Task 5/6 note).
 
@@ -613,7 +615,7 @@ git commit -m "feat(logging): JSON formatter + trace_id contextvar (utils.loggin
 - [ ] **Step 4.1: Read existing main.py to find startup site**
 
 ```powershell
-cat main.py | head -40
+Get-Content main.py -TotalCount 40
 ```
 
 Locate the `if __name__ == "__main__":` block or the `setup_logging` / `logging.basicConfig` call. The new helper must run BEFORE any logger is used.
@@ -1087,7 +1089,7 @@ Expected: 2 tests pass.
 - [ ] **Step 7.6: Run full test suite for regression check**
 
 ```powershell
-python -m pytest tests/ -q 2>&1 | tail -10
+python -m pytest tests/ -q 2>&1 | Select-Object -Last 10
 ```
 
 Expected: all tests pass. Test count = baseline (Step 0.4) + new tests added in Tasks 1-7.
@@ -1272,7 +1274,7 @@ git commit -m "test: e2e trace_id survives cross-thread db persist (architectura
 python -m pytest tests/ -q 2>&1 | Select-Object -Last 10
 ```
 
-Expected: test count is exactly `BASELINE_PASSED + 17` (the 17-test count is itemised in Step 0.4). Any deviation = investigate. If the count is `BASELINE + 17` and all pass, proceed.
+Expected: test count is exactly `BASELINE_PASSED + 19` (the 19-test count is itemised in Step 0.4). Any deviation = investigate. If the count is `BASELINE + 19` and all pass, proceed.
 
 - [ ] **Step 10.2: Smoke run with JSON logging**
 
@@ -1396,7 +1398,7 @@ Per spec §14:
 
 Step 1 is **DONE** when:
 - All Task 1-10 checkboxes are checked
-- All tests pass (count = baseline + 15-18 new)
+- All tests pass (count = baseline + exactly 19 new, per Step 0.4 breakdown)
 - Smoke run with `EFLOUD_LOGGING_FORMAT=json` produces only valid JSON lines
 - Smoke run without env var produces plain logs (regression preserved)
 - Migrations 002 and 003 are applied to the dev/staging Supabase (production deferred to deploy step)
