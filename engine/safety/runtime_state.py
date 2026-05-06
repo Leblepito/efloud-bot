@@ -30,6 +30,11 @@ log = logging.getLogger("efloud.runtime_state")
 # 5 minutes — fatal flag auto-clears after this many ms of clean ticks since it was set
 FATAL_CLEAR_AFTER_MS = 5 * 60 * 1000
 
+# Crash-loop detection thresholds
+CRASH_LOOP_THRESHOLD = 3              # 3+ crashes in window → suspension
+CRASH_LOOP_WINDOW_MS = 30 * 60 * 1000  # 30-minute sliding window
+CRASH_AUTO_CLEAR_AFTER_MS = 60 * 60 * 1000  # 60 min clean uptime → reset crash_count
+
 
 class RuntimeState:
     """Thread-safe in-memory + persistent runtime state."""
@@ -100,18 +105,29 @@ class RuntimeState:
     def update_loop_tick(self) -> None:
         """Called from main loop after each successful cycle.
 
-        Side effect: auto-clears fatal_exception_state if 5+ min have elapsed
-        since the flag was set (i.e. the bot has been running cleanly for long
-        enough to be considered recovered).
+        Side effects (both checked atomically under the lock):
+        - Auto-clears fatal_exception_state if 5+ min since the flag was set.
+        - Auto-clears crash_count if 60+ min since the last crash.
         """
         now_ms = int(time.time() * 1000)
         with self._lock:
             self.last_loop_tick_ms = now_ms
+            persist_dirty = False
+
             if self.fatal_exception_state and self.fatal_exception_set_at_ms is not None:
                 if now_ms - self.fatal_exception_set_at_ms >= FATAL_CLEAR_AFTER_MS:
                     self.fatal_exception_state = False
                     self.fatal_exception_set_at_ms = None
-                    self._save()
+                    persist_dirty = True
+
+            if self.crash_count > 0 and self.last_crash_ms is not None:
+                if now_ms - self.last_crash_ms >= CRASH_AUTO_CLEAR_AFTER_MS:
+                    self.crash_count = 0
+                    self.last_crash_ms = None
+                    persist_dirty = True
+
+            if persist_dirty:
+                self._save()
 
     def update_exchange_ping(self) -> None:
         """Called when an exchange API call succeeds (e.g. reconcile)."""
@@ -161,3 +177,18 @@ class RuntimeState:
                 "crash_count": self.crash_count,
                 "last_crash_ms": self.last_crash_ms,
             }
+
+    def is_in_crash_loop(self) -> bool:
+        """Return True if the bot is in a crash-loop (≥3 crashes in last 30 min).
+
+        Reads from in-memory snapshot — no disk I/O. Used by:
+        - bot_runner.start() to skip trading loop creation (suspension mode)
+        - evaluate_healthz() to flip into the 200 + 'suspended' status branch
+        """
+        snap = self.snapshot()
+        if snap["crash_count"] < CRASH_LOOP_THRESHOLD:
+            return False
+        if snap["last_crash_ms"] is None:
+            return False
+        now_ms = int(time.time() * 1000)
+        return (now_ms - snap["last_crash_ms"]) < CRASH_LOOP_WINDOW_MS
