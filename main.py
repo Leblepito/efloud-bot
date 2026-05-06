@@ -84,9 +84,13 @@ def load_dotenv(path: str = ".env") -> int:
 
 def setup_logging(level: str = "INFO", log_file: str = "efloud_bot.log",
                     max_bytes: int = 50 * 1024 * 1024, backup_count: int = 5):
-    """Rotating file handler + stdout."""
-    fmt = "%(asctime)s | %(name)-22s | %(levelname)-5s | %(message)s"
-    formatter = logging.Formatter(fmt)
+    """Rotating file handler + stdout. Honors EFLOUD_LOGGING_FORMAT=json."""
+    if os.environ.get("EFLOUD_LOGGING_FORMAT", "").lower() == "json":
+        from utils.logging import JsonFormatter
+        formatter: logging.Formatter = JsonFormatter()
+    else:
+        fmt = "%(asctime)s | %(name)-22s | %(levelname)-5s | %(message)s"
+        formatter = logging.Formatter(fmt)
 
     root = logging.getLogger()
     root.setLevel(getattr(logging, level.upper(), logging.INFO))
