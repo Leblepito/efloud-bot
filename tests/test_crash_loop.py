@@ -110,3 +110,59 @@ def test_evaluate_healthz_normal_503_path_unchanged_when_not_in_crash_loop(state
     assert code == 503
     assert payload["status"] == "unhealthy"
     assert "loop_tick_never" in payload["failures"]
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Task 3: bot_runner.start() guard
+# ─────────────────────────────────────────────────────────────────────
+
+
+def test_bot_runner_start_skips_trading_loop_when_crash_loop_active(monkeypatch, tmp_path: Path, caplog):
+    """If crash-loop is active at start-time, BotRunner.start() must short-circuit
+    BEFORE any other init logic (config load, exchange client, etc.).
+
+    Verified by 3 signals together (any one alone is ambiguous):
+      1. log.critical("⛔ CRASH LOOP DETECTED ...") fired
+      2. runner.task remained None (no trading task created)
+      3. runner.last_error remained None (guard returned cleanly, NOT via the
+         "config not found" error branch — which would also leave task=None
+         but would set last_error)
+    """
+    import asyncio
+    import logging
+
+    # Set state dir BEFORE BotRunner() — RuntimeState reads EFLOUD_STATE_DIR
+    # eagerly in __init__ (verified Step 3.0).
+    monkeypatch.setenv("EFLOUD_STATE_DIR", str(tmp_path))
+
+    # Defensively point at a clearly-invalid config path so IF the crash-loop
+    # guard fails to short-circuit, the next branch ("config not found" at
+    # bot_runner.py:73-77) sets last_error — making the test failure
+    # diagnosable instead of silent.
+    monkeypatch.setenv("EFLOUD_CONFIG_PATH", "/nonexistent/should-never-load.yaml")
+
+    from backend.bot_runner import BotRunner
+    runner = BotRunner()
+
+    # Force crash-loop state on this runner's RuntimeState instance
+    for _ in range(CRASH_LOOP_THRESHOLD):
+        runner.runtime_state.increment_crash()
+    assert runner.runtime_state.is_in_crash_loop() is True
+
+    # Logger name in backend/bot_runner.py is "efloud.runner" (verified Step 3.0).
+    with caplog.at_level(logging.CRITICAL, logger="efloud.runner"):
+        # Wrap with timeout: if the guard regresses and start() actually runs the
+        # full init path, the test would otherwise hang / leak resources.
+        asyncio.run(asyncio.wait_for(runner.start(), timeout=2.0))
+
+    assert runner.task is None, (
+        "expected runner.task to remain None during crash-loop suspension"
+    )
+    assert runner.last_error is None, (
+        f"crash-loop guard should return cleanly without touching last_error; "
+        f"got last_error={runner.last_error!r} — likely the config-not-found "
+        f"branch fired, meaning the guard didn't short-circuit"
+    )
+    assert any("CRASH LOOP DETECTED" in r.message for r in caplog.records), (
+        "expected log.critical('⛔ CRASH LOOP DETECTED ...') message"
+    )
