@@ -1,8 +1,9 @@
 # ══════════════════════════════════════════════════════════════════
-# H2 VARIANT a2: min_confluence=70 + risk_per_trade_pct=2.0 + max_position_notional_pct=6.0
-# Magnitude push from H1b — risk 2x, notional 3x; tests scaling headroom
-# Parent: configs/config.phase2_1k_h1b_conf70.yaml (H1b new baseline)
-# Spec: docs/superpowers/specs/2026-05-06-h2-magnitude-design.md
+# H2 VARIANT a2: min_confluence=80 + risk_per_trade_pct=2.0 + max_position_notional_pct=6.0
+# Magnitude push from H1c (new baseline post-2026-05-06 sweep) — risk 2x, notional 3x
+# Originally built on H1b (conf=70); rebuilt on H1c after H1c was validated as new baseline
+# Parent: configs/config.phase2_1k_h1c_conf80.yaml (H1c — new baseline)
+# Spec: docs/superpowers/specs/2026-05-06-h2-magnitude-design.md (baseline shift recorded in appendix)
 # ══════════════════════════════════════════════════════════════════
 # ══════════════════════════════════════════════════════════════════
 # FAZ 2 — $1000 cüzdan canlı setup
@@ -82,7 +83,7 @@ risk:
   risk_per_trade_pct: 2.0             # $40 risk budget per trade — H2-A2 (was 1.0)
   max_open_positions: 10              # Eşzamanlı max 10 (her sembol için 1)
   min_rr: 1.8                         # Min R:R 1:1.8
-  min_confluence: 70                  # H1 variant (h1b) — Epic 6 trade-frequency-reduction sweep
+  min_confluence: 80                  # H1c new baseline — Epic 6 trade-frequency-reduction sweep result
   recency_bars: 40
   sl_atr_buffer: 0.5
   daily_filter_strict: false
