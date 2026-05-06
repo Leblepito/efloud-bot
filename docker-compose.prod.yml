@@ -6,6 +6,8 @@ services:
     image: efloud-bot:latest
     container_name: efloud-bot
     restart: unless-stopped
+    labels:
+      - autoheal=true
     env_file:
       - .env.production
     expose:
@@ -20,7 +22,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 120s
     logging:
       driver: json-file
       options:
@@ -47,6 +49,22 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0      # PINNED (do NOT use :latest in production)
+    container_name: efloud-autoheal
+    restart: always
+    environment:
+      - AUTOHEAL_INTERVAL=60        # check unhealthy containers every 60s
+      - AUTOHEAL_START_PERIOD=120   # match efloud-bot start_period; ignore unhealthy during this window
+      - AUTOHEAL_CONTAINER_LABEL=autoheal  # only restart containers tagged autoheal=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
 
 volumes:
   efloud_state:
