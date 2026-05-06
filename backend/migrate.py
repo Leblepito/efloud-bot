@@ -65,7 +65,7 @@ async def run_pending(pool: Optional[asyncpg.Pool] = None) -> None:
             log.warning("DATABASE_URL not set — skipping migrations")
             return
         try:
-            pool = await asyncpg.create_pool(dsn=url, min_size=1, max_size=2, command_timeout=30)
+            pool = await asyncpg.create_pool(dsn=url, min_size=1, max_size=2, command_timeout=30, statement_cache_size=0)
         except Exception as e:
             log.error(f"Cannot connect to DB for migrations: {e}")
             return
