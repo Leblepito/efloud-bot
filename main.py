@@ -209,15 +209,29 @@ def print_banner(cfg: dict, api_key: str, symbols: Optional[list] = None):
     chain = f'{cfg["timeframes"]["entry"]} → {cfg["timeframes"]["mtf"]} → {cfg["timeframes"]["htf"]}'
     mode = f"{dry} | {net}{watch}"
 
-    print("╔══════════════════════════════════════════════════════════════╗")
-    print("║   EFLOUD SMC TRADE BOT v2.1                                  ║")
-    print(f"║   Mode:    {mode:<50}║")
-    print(f"║   Symbols: {sym_str:<50}║")
-    print(f"║   Chain:   {chain:<50}║")
-    print(f"║   API key: {mask_secret(api_key):<50}║")
-    print(f"║   Min Conf: {cfg['risk']['min_confluence']}/100 | Min R:R: {cfg['risk']['min_rr']} | "
-          f"Risk: {cfg['risk']['risk_per_trade_pct']}%{'':>9}║")
-    print("╚══════════════════════════════════════════════════════════════╝")
+    log = logging.getLogger("efloud.main")
+    log.info(
+        "startup_banner",
+        extra={
+            "version": "v2.1", "mode": mode, "symbols": sym_str, "chain": chain,
+            "api_key_masked": mask_secret(api_key),
+            "min_confluence": cfg["risk"]["min_confluence"],
+            "min_rr": cfg["risk"]["min_rr"],
+            "risk_per_trade_pct": cfg["risk"]["risk_per_trade_pct"],
+        },
+    )
+
+    if os.environ.get("EFLOUD_LOGGING_FORMAT", "").lower() != "json":
+        # Operator-facing decorative banner only when not in JSON mode
+        print("╔══════════════════════════════════════════════════════════════╗")
+        print("║   EFLOUD SMC TRADE BOT v2.1                                  ║")
+        print(f"║   Mode:    {mode:<50}║")
+        print(f"║   Symbols: {sym_str:<50}║")
+        print(f"║   Chain:   {chain:<50}║")
+        print(f"║   API key: {mask_secret(api_key):<50}║")
+        print(f"║   Min Conf: {cfg['risk']['min_confluence']}/100 | Min R:R: {cfg['risk']['min_rr']} | "
+              f"Risk: {cfg['risk']['risk_per_trade_pct']}%{'':>9}║")
+        print("╚══════════════════════════════════════════════════════════════╝")
 
 
 # ═══════════════════════════════════════════════
