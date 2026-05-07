@@ -192,6 +192,67 @@ class TradeOpenedRule(Rule):
         return None
 
 
+@dataclass
+class TP1HitRule(Rule):
+    """TP1 partial fill — 50% closed, SL moves to break-even, position stays open.
+
+    Two log paths:
+    - lifecycle.add_exit (paper-trade): '🎯 TP1 HIT {symbol} | Closed 50% @ ...'
+    - exchange reconcile (live): 'RECONCILE: TP1 hit {symbol} → SL → break-even @ ...'
+    """
+    alert_key: str = "trade.tp1"
+    severity: str = "INFO"
+    dedup_window_sec: int = 0
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if rec.get("level") != "INFO":
+            return None
+        logger = rec.get("logger", "")
+        msg = rec.get("message", "")
+        if logger == "efloud.lifecycle" and "TP1 HIT" in msg:
+            return f"🎯 <b>TP1 hit (partial)</b>\n{msg}"
+        if logger == "efloud.exchange" and "RECONCILE: TP1 hit" in msg:
+            return f"🎯 <b>TP1 hit (partial)</b>\n{msg}"
+        return None
+
+
+@dataclass
+class TradeClosedRule(Rule):
+    """Full position close — TP2, SL, MANUAL, RECONCILED. Position fully exits.
+
+    Two log paths:
+    - lifecycle.close_position (paper-trade): '{✅|❌} CLOSE {symbol} {direction} @ ... | Reason={reason} | Total PnL=...'
+    - exchange._record_close (live reconcile): '{reason}: {symbol} {direction} | Entry=... Exit=... | PnL=...'
+      where {reason} ∈ {TP2, SL, MANUAL, RECONCILED, SL_POLL, TP2_POLL}
+    """
+    alert_key: str = "trade.closed"
+    severity: str = "INFO"
+    dedup_window_sec: int = 0
+
+    # Exchange-side close prefixes (full close only — TP1 is partial, handled by TP1HitRule)
+    _EXCHANGE_CLOSE_PREFIXES = ("TP2: ", "SL: ", "MANUAL: ", "RECONCILED: ", "SL_POLL: ", "TP2_POLL: ")
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if rec.get("level") != "INFO":
+            return None
+        logger = rec.get("logger", "")
+        msg = rec.get("message", "")
+        # lifecycle full close: "✅ CLOSE ..." or "❌ CLOSE ..."
+        if logger == "efloud.lifecycle" and " CLOSE " in msg and "Reason=" in msg:
+            emoji = "❌" if "❌" in msg else "✅"
+            return f"{emoji} <b>Position closed</b>\n{msg}"
+        # exchange reconcile full close
+        if logger == "efloud.exchange":
+            for prefix in self._EXCHANGE_CLOSE_PREFIXES:
+                if msg.startswith(prefix):
+                    reason = prefix.rstrip(": ")
+                    # PnL sign — "+" anywhere after "PnL=" (or "$+") suggests win
+                    is_win = "PnL=+" in msg or "$+" in msg
+                    emoji = "✅" if is_win else "❌"
+                    return f"{emoji} <b>Position closed ({reason})</b>\n{msg}"
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Exported list — alerter main loop iterates this
 # ─────────────────────────────────────────────────────────────────────
@@ -203,4 +264,6 @@ RULES: list[Rule] = [
     HealthCrashLoopRule(),
     HealthUnhealthy15MinRule(),
     TradeOpenedRule(),
+    TP1HitRule(),
+    TradeClosedRule(),
 ]

@@ -96,8 +96,84 @@ def test_trade_opened_rule_has_zero_dedup_window():
     assert TradeOpenedRule().dedup_window_sec == 0
 
 
-def test_rules_list_contains_6_in_scope_rules():
-    """Sanity: the exported RULES list has all 6 events (5 from spec §6 + trade.opened)."""
+def test_tp1_hit_rule_matches_lifecycle_log():
+    """lifecycle.add_exit:200 emits '🎯 TP1 HIT {symbol} | Closed 50% @ ...'"""
+    from ops.alerter.rules import TP1HitRule
+    rec = {
+        "level": "INFO",
+        "logger": "efloud.lifecycle",
+        "message": "🎯 TP1 HIT BTC/USDT | Closed 50% @ 51000.00 | PnL=$+12.50 | SL → BE @ 50000.00",
+    }
+    out = TP1HitRule().match_log(rec)
+    assert out is not None
+    assert "TP1" in out
+
+
+def test_tp1_hit_rule_matches_exchange_reconcile_log():
+    """exchange/__init__.py:330 emits 'RECONCILE: TP1 hit {symbol} → SL → break-even @ ...'"""
+    from ops.alerter.rules import TP1HitRule
+    rec = {
+        "level": "INFO",
+        "logger": "efloud.exchange",
+        "message": "RECONCILE: TP1 hit BTC/USDT → SL → break-even @ 50000.0",
+    }
+    out = TP1HitRule().match_log(rec)
+    assert out is not None
+    assert "TP1" in out
+
+
+def test_trade_closed_rule_matches_lifecycle_close():
+    """lifecycle.close_position:241 emits '{emoji} CLOSE ... | Reason=TP2 ...'"""
+    from ops.alerter.rules import TradeClosedRule
+    rec = {
+        "level": "INFO",
+        "logger": "efloud.lifecycle",
+        "message": "✅ CLOSE BTC/USDT LONG @ 52000.00 | Reason=TP2 | Total PnL=$+25.50 (+2.55%)",
+    }
+    out = TradeClosedRule().match_log(rec)
+    assert out is not None
+    assert "closed" in out.lower()
+
+
+def test_trade_closed_rule_matches_exchange_tp2_prefix():
+    """exchange._record_close:395 emits 'TP2: ... | Entry=... Exit=... | PnL=+X.XX%'"""
+    from ops.alerter.rules import TradeClosedRule
+    rec = {
+        "level": "INFO",
+        "logger": "efloud.exchange",
+        "message": "TP2: BTC/USDT LONG | Entry=50000.0000 Exit=52000.0000 | PnL=+4.00% ($+20.00)",
+    }
+    out = TradeClosedRule().match_log(rec)
+    assert out is not None
+    assert "TP2" in out
+
+
+def test_trade_closed_rule_matches_exchange_sl_prefix():
+    """exchange._record_close:395 emits 'SL: ... | Entry=... Exit=... | PnL=-X.XX%'"""
+    from ops.alerter.rules import TradeClosedRule
+    rec = {
+        "level": "INFO",
+        "logger": "efloud.exchange",
+        "message": "SL: BTC/USDT LONG | Entry=50000.0000 Exit=49000.0000 | PnL=-2.00% ($-10.00)",
+    }
+    out = TradeClosedRule().match_log(rec)
+    assert out is not None
+    assert "SL" in out
+
+
+def test_trade_closed_rule_does_not_match_tp1_prefix():
+    """TP1 is a PARTIAL close — TP1HitRule handles it, TradeClosedRule must not also fire."""
+    from ops.alerter.rules import TradeClosedRule
+    rec = {
+        "level": "INFO",
+        "logger": "efloud.exchange",
+        "message": "TP1: BTC/USDT LONG | Entry=50000.0000 Exit=51000.0000 | PnL=+2.00% ($+5.00)",
+    }
+    assert TradeClosedRule().match_log(rec) is None
+
+
+def test_rules_list_contains_8_in_scope_rules():
+    """Sanity: the exported RULES list has all 8 events."""
     keys = [r.alert_key for r in RULES]
     expected = {
         "breaker.tripped.daily",
@@ -106,5 +182,7 @@ def test_rules_list_contains_6_in_scope_rules():
         "health.crash_loop",
         "health.unhealthy_15min",
         "trade.opened",
+        "trade.tp1",
+        "trade.closed",
     }
     assert set(keys) == expected, f"got {set(keys)}"
