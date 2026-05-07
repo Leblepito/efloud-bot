@@ -90,6 +90,23 @@ services:
         max-size: "5m"
         max-file: "3"
 
+  daily-report:
+    image: efloud-bot:latest          # reuse the bot's image (same as alerter)
+    container_name: efloud-daily-report
+    profiles: [scheduled]             # NOT started by `up -d`; cron triggers via `run`
+    command: python -m ops.daily_report.report
+    env_file:
+      - .env.production
+    environment:
+      - EFLOUD_ALERTER_HEARTBEAT_FILE=/app/state/alerter_heartbeat.json
+    volumes:
+      - efloud_state:/app/state:ro    # read-only — only reads heartbeat file
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "3"
+
 volumes:
   efloud_state:
   efloud_state_1k:
