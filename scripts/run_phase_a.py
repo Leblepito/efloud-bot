@@ -22,7 +22,9 @@ from backtest.engine import run_backtest
 from backtest.reproducibility import capture_provenance
 from backtest.cli import _load_data_for_period
 
-SYMBOLS = [
+# Default symbol list — overridden by config's symbols.fixed_core when provided.
+# Kept here as a fallback for configs without an explicit symbol section.
+DEFAULT_SYMBOLS = [
     "BTC/USDT", "ETH/USDT", "XRP/USDT", "DOGE/USDT", "SOL/USDT",
     "BNB/USDT", "TRX/USDT", "LINK/USDT", "BCH/USDT", "ADA/USDT",
 ]
@@ -49,6 +51,11 @@ def main() -> int:
     with open(config_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
+
+    # Symbol list resolution: prefer config's symbols.fixed_core (so aggressive_v1
+    # with 21 symbols works without code changes), fall back to DEFAULT_SYMBOLS.
+    symbols_from_cfg = cfg.get("symbols", {}).get("fixed_core") if isinstance(cfg.get("symbols"), dict) else None
+    SYMBOLS = symbols_from_cfg if symbols_from_cfg else DEFAULT_SYMBOLS
 
     # Variant tag for output dirs: strip "config." prefix from filename stem
     variant_tag = Path(config_path).stem.replace("config.", "", 1)
