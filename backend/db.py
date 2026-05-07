@@ -120,6 +120,34 @@ class Database:
             log.warning(f"fetch_recent_trades failed: {e}")
             return []
 
+    async def fetch_trades_since(self, since_ts) -> list[dict[str, Any]]:
+        """Fetch closed trades whose closed_at is >= since_ts.
+
+        Args:
+            since_ts: datetime (timezone-aware preferred).
+
+        Returns: list of trade dicts (same shape as fetch_recent_trades).
+        """
+        if not self.pool:
+            return []
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id::text, symbol, direction, entry, exit, sl, tp1, tp2,
+                           size, pnl_usdt, pnl_pct, reason, opened_at, closed_at,
+                           confluence
+                    FROM trades
+                    WHERE closed_at IS NOT NULL AND closed_at >= $1
+                    ORDER BY closed_at DESC
+                    """,
+                    since_ts,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            log.warning(f"fetch_trades_since failed: {e}")
+            return []
+
     # ─────────────────────────────────────────────────────────────
     # Equity tracking
     # ─────────────────────────────────────────────────────────────
