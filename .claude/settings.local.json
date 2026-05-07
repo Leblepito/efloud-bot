@@ -28,7 +28,27 @@
       "Bash(.venv/Scripts/python -m ruff check .)",
       "Bash(/c/Users/utkuc/Downloads/leblep/.venv/Scripts/python.exe -c ' *)",
       "Read(//c/Users/utkuc/.leblep/memory/**)",
-      "Bash(where python *)"
+      "Bash(where python *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'plan\\(asama-2-step-4\\): Telegram alerter sidecar with SQLite dedup + heartbeat \\(Aşama 2 Step 4\\) *)",
+      "Bash(git push *)",
+      "Bash(git worktree *)",
+      "Bash(git log *)",
+      "Bash(git -c core.editor=true commit --no-edit)",
+      "Bash(ssh *)",
+      "Bash(curl -s \"https://api.telegram.org/bot8316847258:AAHtS5QDbLcQLwI_0nbYIig6rDGPvhV047Y/getUpdates\")",
+      "Bash(curl -s \"https://api.telegram.org/bot8316847258:AAHtS5QDbLcQLwI_0nbYIig6rDGPvhV047Y/getWebhookInfo\")",
+      "Bash(curl -s \"https://api.telegram.org/bot8795717977:AAH6oqAe4OgxdzBNWNLwCTeEORTUi0FFhEM/getMe\")",
+      "Bash(curl -s \"https://api.telegram.org/bot8795717977:AAH6oqAe4OgxdzBNWNLwCTeEORTUi0FFhEM/getUpdates\")",
+      "Bash(curl -s -X POST \"https://api.telegram.org/bot8795717977:AAH6oqAe4OgxdzBNWNLwCTeEORTUi0FFhEM/sendMessage\" -d \"chat_id=6756699467\" -d \"text=✅ efloud-bot alerter setup test — Telegram bağlantısı çalışıyor\" -d \"parse_mode=HTML\")",
+      "Bash(curl -s -X POST \"https://api.telegram.org/bot8795717977:AAH6oqAe4OgxdzBNWNLwCTeEORTUi0FFhEM/sendMessage\" --data-urlencode \"chat_id=6756699467\" --data-urlencode \"text=efloud-bot alerter setup test - Telegram connection working\")",
+      "Bash(curl -s -o /dev/null -w 'HTTP %{http_code}\\\\n' https://bot.ualgotrade.com/healthz)",
+      "Bash(git commit -m 'feat\\(alerter\\): trade.opened rule — Telegram on every confirmed trade open *)",
+      "Bash(git commit -m 'feat\\(alerter\\): TP1 hit + position closed \\(TP2/SL/manual\\) Telegram alerts *)",
+      "Bash(git commit -m 'plan\\(asama-2-step-5\\): daily email report cron + SMTP + heartbeat check \\(Aşama 2 Step 5\\) *)",
+      "PowerShell(python -c \"from ops.daily_report.report import main; print\\('OK'\\)\")",
+      "PowerShell($pwd.Path)",
+      "PowerShell(python -m pytest tests/test_daily_e2e.py -v 2>&1 | Select-Object -Last 15)"
     ]
   }
 }

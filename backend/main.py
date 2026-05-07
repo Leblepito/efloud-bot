@@ -24,16 +24,22 @@ from fastapi.staticfiles import StaticFiles
 from backend.api import router as api_router
 from backend.bot_runner import runner
 from backend.db import db
+from backend.healthz import health_router, configure as configure_healthz
 from backend.ws import websocket_handler
 from main import load_dotenv  # reuse parent project's .env loader
 
 # Load .env (prefer system env over .env values)
 load_dotenv()
 
-logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "INFO"),
-    format="%(asctime)s | %(name)-22s | %(levelname)-5s | %(message)s",
-)
+if os.environ.get("EFLOUD_LOGGING_FORMAT", "").lower() == "json":
+    from utils.logging import configure_json_logging
+    _level = getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO)
+    configure_json_logging(level=_level)
+else:
+    logging.basicConfig(
+        level=os.environ.get("LOG_LEVEL", "INFO"),
+        format="%(asctime)s | %(name)-22s | %(levelname)-5s | %(message)s",
+    )
 log = logging.getLogger("efloud.app")
 
 
@@ -60,6 +66,35 @@ async def lifespan(app: FastAPI):
     else:
         log.info("Autostart disabled (EFLOUD_AUTOSTART=0) — start bot via /api/bot/start")
 
+    # === Aşama 2 Step 2 healthz wiring (ORDER MATTERS) ===
+    # Step 1: ensure `runner` is constructed and has runtime_state
+    #         (BotRunner.__init__ from Task 3.1 creates runner.runtime_state eagerly).
+    assert runner.runtime_state is not None, "BotRunner did not initialize runtime_state"
+
+    # Step 2: configure the healthz router with concrete dependencies.
+    def _breaker_halted() -> bool:
+        try:
+            from engine.safety.breaker import BreakerState
+            if runner.orch is None:
+                return False  # bot idle (not yet started); loop_tick_never will mark unhealthy anyway
+            return runner.orch.breaker.status.state == BreakerState.HALTED
+        except Exception:
+            return False
+    configure_healthz(runner.runtime_state, _breaker_halted)
+
+    # Step 3: Aşama 2 Step 2 crash-loop counter
+    rs = runner.runtime_state
+    snap = rs.snapshot()
+    if snap["fatal_exception_state"]:
+        rs.increment_crash()
+        log.warning(
+            "💥 Previous run exited with fatal_exception_state=True; "
+            f"crash_count now {rs.snapshot()['crash_count']}"
+        )
+    else:
+        rs.reset_crash_count()
+
+    # Step 4: yield to FastAPI for request serving (existing `yield` line follows).
     yield
     # Shutdown
     log.info("🔴 App shutdown")
@@ -85,21 +120,12 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(health_router)
 
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
     await websocket_handler(websocket)
-
-
-@app.get("/healthz")
-async def healthz() -> dict:
-    """Liveness probe (Railway / uptime monitoring). No auth."""
-    return {
-        "status": "ok",
-        "bot_running": runner.running and not runner.stopped,
-        "subscribers": __import__("backend.events", fromlist=["bus"]).bus.subscriber_count,
-    }
 
 
 # ─────────────────────────────────────────────────────────────────

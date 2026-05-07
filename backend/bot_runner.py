@@ -46,11 +46,33 @@ class BotRunner:
         self.stopped = False
         self.last_error: Optional[str] = None
 
+        # Healthz / crash-loop runtime state (Aşama 2 Step 2)
+        from engine.safety.runtime_state import RuntimeState
+        state_dir = (
+            self.cfg.get("operation", {}).get("state_dir") if self.cfg else None
+        ) or os.environ.get("EFLOUD_STATE_DIR", "./state")
+        self.runtime_state = RuntimeState(state_dir=state_dir)
+
     # ─────────────────────────────────────────────────────────────
     # Lifecycle
     # ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
+        # Aşama 2 Step 3: crash-loop suspension guard.
+        # If recent crashes have crossed the threshold, do NOT spin up the
+        # trading task. The FastAPI app stays alive so /healthz can return
+        # status:"suspended", which Step 4's alerter and Step 5's daily-report
+        # turn into a CRITICAL escalation. Operator intervenes manually
+        # (see docs/runbooks/crash-loop-recovery.md).
+        if self.runtime_state.is_in_crash_loop():
+            log.critical(
+                "⛔ CRASH LOOP DETECTED: %s crashes in last %s min — trading loop SUSPENDED. "
+                "See docs/runbooks/crash-loop-recovery.md to recover.",
+                self.runtime_state.snapshot()["crash_count"],
+                30,
+            )
+            return  # Bot stays alive (FastAPI + healthz); no trading task created.
+
         # Idempotent: zaten running iken tekrar çağrılırsa hiçbir şey yapma
         if self.running and not self.stopped:
             log.info("start() ignored — runner already running")
@@ -190,6 +212,7 @@ class BotRunner:
                 # Reconcile first (sync ccxt — run in thread)
                 if self.order_mgr and not self.cfg["operation"]["dry_run"]:
                     closed = await loop.run_in_executor(None, self.order_mgr.reconcile)
+                    self.runtime_state.update_exchange_ping()    # NEW — exchange is reachable
                     for pos in closed:
                         await self._persist_close(pos)
 
@@ -199,6 +222,7 @@ class BotRunner:
                 duration_ms = int((loop.time() - t0) * 1000)
                 self.last_cycle_duration_ms = duration_ms
                 self.last_cycle_at = self._now_iso()
+                self.runtime_state.update_loop_tick()        # NEW — Aşama 2 Step 2
                 bus.publish(
                     "cycle_end",
                     cycle_n=self.cycle_count,
@@ -211,6 +235,7 @@ class BotRunner:
             except Exception as e:
                 log.error(f"Cycle error: {e}", exc_info=True)
                 bus.publish("error", message=str(e))
+                self.runtime_state.set_fatal_exception()    # NEW — sticky flag for healthz
 
             # Sleep until next cycle (cancellable)
             elapsed = loop.time() - t0
@@ -298,6 +323,8 @@ class BotRunner:
                         symbol=pos.symbol, direction=pos.direction,
                         entry=pos.entry, sl=pos.sl, tp1=pos.tp1, tp2=pos.tp2,
                         size=pos.size, binance_order_id=pos.order_id or None,
+                        trace_id=getattr(pos, "trace_id", None),
+                        bar_ts_ms=getattr(pos, "bar_ts_ms", None),
                     ),
                     self.loop,
                 )
@@ -309,6 +336,7 @@ class BotRunner:
                         symbol=pos.symbol, exit_price=pos.exit_price,
                         pnl_usdt=pos.pnl_usdt, pnl_pct=pnl_pct,
                         reason=pos.exit_reason,
+                        trace_id=getattr(pos, "trace_id", None),
                     ),
                     self.loop,
                 )
@@ -322,6 +350,7 @@ class BotRunner:
         await db.record_trade_close(
             symbol=pos.symbol, exit_price=pos.exit_price,
             pnl_usdt=pos.pnl_usdt, pnl_pct=pnl_pct, reason=pos.exit_reason,
+            trace_id=getattr(pos, "trace_id", None),
         )
 
     # ─────────────────────────────────────────────────────────────

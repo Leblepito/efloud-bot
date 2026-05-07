@@ -59,20 +59,24 @@ class BinanceClient:
         return f"{symbol}:USDT"
 
     def get_balance(self) -> float:
-        """USDT free balance.
+        """USDT total margin balance — mark-to-market equity (wallet + unrealized PnL).
 
-        Futures için: /fapi/v2/account 'availableBalance' field'ı
-        (fetch_balance bazen futures USDT'yi top-level key olarak döndürmez,
-        defaultType=future olsa bile sıfır gelebilir).
+        For futures: /fapi/v2/account 'totalMarginBalance' field. This is the right
+        metric for risk breakers (emergency threshold, daily-loss, drawdown) because
+        it captures both wallet cash AND unrealized PnL on open positions. Returning
+        'availableBalance' here would falsely halt the breaker whenever positions are
+        open (margin locked → availableBalance < threshold even when wallet is fine).
+
+        Spot fallback returns USDT 'total' (free + locked) for the same reason.
         """
         if self.market_type == "futures":
             try:
                 info = self.exchange.fapiPrivateV2GetAccount()
-                return float(info.get("availableBalance", 0))
+                return float(info.get("totalMarginBalance", 0))
             except Exception as e:
                 log.warning(f"futures balance fetch failed: {e} — falling back to fetch_balance")
         b = self.exchange.fetch_balance()
-        return float(b.get("USDT", {}).get("free", 0))
+        return float(b.get("USDT", {}).get("total", 0))
 
     def get_price(self, symbol: str) -> float:
         """Anlık fiyat."""
@@ -155,6 +159,8 @@ class Position:
     exit_reason: str = ""   # "TP1" | "TP2" | "SL" | "MANUAL" | "RECONCILED"
     exit_price: float = 0.0
     pnl_usdt: float = 0.0
+    trace_id: Optional[str] = None       # log correlation across orchestrator → DB
+    bar_ts_ms: Optional[int] = None      # bar-aligned timestamp (UTC ms epoch)
 
 
 class OrderManager:
@@ -179,8 +185,16 @@ class OrderManager:
     # ─────────────────────────────────────────────────────────────
 
     def open_position(self, symbol: str, direction: str, size: float,
-                      entry: float, sl: float, tp1: float, tp2: float) -> Optional[Position]:
-        """Yeni pozisyon aç + server-side SL + TP1 (yarı) + TP2 (yarı) yerleştir."""
+                      entry: float, sl: float, tp1: float, tp2: float,
+                      trace_id: Optional[str] = None,
+                      bar_ts_ms: Optional[int] = None) -> Optional[Position]:
+        """Yeni pozisyon aç + server-side SL + TP1 (yarı) + TP2 (yarı) yerleştir.
+
+        trace_id / bar_ts_ms: optional log-correlation + bar-alignment metadata
+        forwarded into the Position dataclass; bot_runner persists them through
+        the cross-thread DB callback. Both default to None for backwards compat
+        (orchestrator paths that don't yet thread them through).
+        """
         side = "buy" if direction == "LONG" else "sell"
         reverse_side = "sell" if direction == "LONG" else "buy"
         half_size = size / 2
@@ -189,7 +203,8 @@ class OrderManager:
             log.info(f"[DRY] {direction} {symbol} size={size:.4f} @ {entry:.2f} | "
                      f"SL={sl:.2f} TP1={tp1:.2f} TP2={tp2:.2f}")
             pos = Position(symbol, direction, entry, sl, tp1, tp2, size,
-                           opened_at=pd.Timestamp.now().isoformat())
+                           opened_at=pd.Timestamp.now().isoformat(),
+                           trace_id=trace_id, bar_ts_ms=bar_ts_ms)
             self.positions.append(pos)
             self._emit("position_opened", pos)
             return pos
@@ -249,6 +264,7 @@ class OrderManager:
                 order_id=oid, sl_order_id=sl_oid,
                 tp1_order_id=tp1_oid, tp2_order_id=tp2_oid,
                 opened_at=pd.Timestamp.now().isoformat(),
+                trace_id=trace_id, bar_ts_ms=bar_ts_ms,
             )
             self.positions.append(pos)
             self._emit("position_opened", pos)

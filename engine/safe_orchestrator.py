@@ -30,6 +30,7 @@ from .safety import (
     validate_kline_freshness, validate_kline_integrity,
     StaleDataError, cleanup_orphan_hedges
 )
+from utils.logging import new_trace_id, set_trace_id
 
 log = logging.getLogger("efloud.safe_orch")
 
@@ -132,6 +133,7 @@ class SafeOrchestrator:
             min_sl_distance_atr=safety.get("min_sl_atr", 0.5),
             max_sl_distance_atr=safety.get("max_sl_atr", 5.0),
             reserve_balance=safety.get("reserve_balance", 0.0),
+            max_open_positions=self.config.get("risk", {}).get("max_open_positions", 999),
         )
         self.store = StateStore(state_dir)
 
@@ -223,6 +225,11 @@ class SafeOrchestrator:
         current_price = float(df_entry["close"].iloc[-1])
 
         # ═══ STEP 1: Circuit Breaker ═══
+        # Sync breaker's current_balance with live exchange equity BEFORE check.
+        # Without this, breaker drifts (record_trade is realized-only, ignores
+        # unrealized PnL and external wallet changes like manual transfers).
+        if balance is not None:
+            self.breaker.sync_balance(balance)
         # `now` is sim-time in backtest, None in live (uses wall-clock).
         breaker_status = self.breaker.check(now=now)
         if not breaker_status.can_trade:
@@ -271,6 +278,8 @@ class SafeOrchestrator:
             recency_bars=risk_cfg.get("recency_bars", 40),
             df_daily=df_daily,
             daily_filter_strict=risk_cfg.get("daily_filter_strict", False),
+            symbol=symbol,
+            symbol_confluence_overrides=risk_cfg.get("symbol_confluence_overrides"),
         )
 
         # ═══ STEP 4: Scenario Planning (per-symbol) ═══
@@ -414,6 +423,15 @@ class SafeOrchestrator:
                     )
 
                     if guard_check.allowed:
+                        # ── 0) Trace ID for log correlation across orchestrator → DB ──
+                        trace_id = new_trace_id()
+                        set_trace_id(trace_id)
+                        log.info(
+                            "signal_promoted_to_trade",
+                            extra={"symbol": symbol, "direction": latest.direction,
+                                   "confluence": latest.confluence},
+                        )
+
                         # ── 1) Borsaya gerçek emir gönder (varsa) ──
                         exchange_ok = True
                         if self.order_manager is not None:
@@ -421,6 +439,7 @@ class SafeOrchestrator:
                                 exchange_pos = self.order_manager.open_position(
                                     symbol, latest.direction, size,
                                     latest.entry, latest.sl, latest.tp1, latest.tp2,
+                                    trace_id=trace_id,
                                 )
                             except Exception as e:
                                 log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)

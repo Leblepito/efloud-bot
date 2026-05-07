@@ -42,7 +42,8 @@ class PositionGuard:
                  max_pyramid_adds: int = 2,
                  min_sl_distance_atr: float = 0.5,
                  max_sl_distance_atr: float = 5.0,
-                 reserve_balance: float = 0.0):
+                 reserve_balance: float = 0.0,
+                 max_open_positions: int = 999):
         self.max_size_pct = max_notional_pct_of_balance / 100
         self.max_exposure = max_total_exposure_multiplier
         self.max_hold = max_holding_hours
@@ -50,6 +51,9 @@ class PositionGuard:
         self.min_sl_atr = min_sl_distance_atr
         self.max_sl_atr = max_sl_distance_atr
         self.reserve_balance = reserve_balance
+        # Default 999 = effectively unlimited (back-compat for tests/configs that
+        # don't set this). Real configs cap at 1-10.
+        self.max_open_positions = max_open_positions
 
     def can_open_position(self,
                             balance: float,
@@ -63,6 +67,16 @@ class PositionGuard:
                             leverage: int = 1) -> PositionCheckResult:
         """Yeni pozisyon açılabilir mi?"""
         warnings = []
+
+        # 0. Max simultaneous open positions (parallel exposure cap)
+        # Counted on `is_open` only — closed positions don't count toward the cap.
+        open_count = sum(1 for p in existing_positions if p.is_open)
+        if open_count >= self.max_open_positions:
+            return PositionCheckResult(
+                False,
+                f"max_open_positions reached: {open_count}/{self.max_open_positions} "
+                f"already open"
+            )
 
         # 1. Size > 0
         if size <= 0:

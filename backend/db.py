@@ -26,6 +26,7 @@ class Database:
         try:
             self.pool = await asyncpg.create_pool(
                 dsn=url, min_size=1, max_size=5, command_timeout=10,
+                statement_cache_size=0,
             )
             log.info("✅ Postgres pool ready")
         except Exception as e:
@@ -45,6 +46,8 @@ class Database:
         self, symbol: str, direction: str, entry: float, sl: float,
         tp1: float, tp2: float, size: float, confluence: Optional[int] = None,
         binance_order_id: Optional[str] = None,
+        trace_id: Optional[str] = None,        # NEW
+        bar_ts_ms: Optional[int] = None,        # NEW
     ) -> Optional[str]:
         """Insert trade with no exit yet. Returns trade UUID."""
         if not self.pool:
@@ -54,12 +57,12 @@ class Database:
                 row = await conn.fetchrow(
                     """
                     INSERT INTO trades (symbol, direction, entry, sl, tp1, tp2, size,
-                                        confluence, binance_order_id)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                                        confluence, binance_order_id, trace_id, bar_ts_ms)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                     RETURNING id::text
                     """,
                     symbol, direction, entry, sl, tp1, tp2, size,
-                    confluence, binance_order_id,
+                    confluence, binance_order_id, trace_id, bar_ts_ms,
                 )
                 return row["id"] if row else None
         except Exception as e:
@@ -69,12 +72,18 @@ class Database:
     async def record_trade_close(
         self, symbol: str, exit_price: float, pnl_usdt: float,
         pnl_pct: float, reason: str,
+        trace_id: Optional[str] = None,       # NEW (informational; not used in WHERE)
+        bar_ts_ms: Optional[int] = None,       # NEW (forward-compat; not yet used)
     ) -> None:
         """Update most recent open trade for symbol with exit details."""
         if not self.pool:
             return
         try:
             async with self.pool.acquire() as conn:
+                # Note: trace_id and bar_ts_ms accepted at API boundary for forward
+                # compatibility, but the existing close-by-symbol logic is preserved.
+                # A future task can switch to close-by-trace_id when all open-side
+                # writes have trace_id.
                 await conn.execute(
                     """
                     UPDATE trades
@@ -109,6 +118,34 @@ class Database:
                 return [dict(r) for r in rows]
         except Exception as e:
             log.warning(f"fetch_recent_trades failed: {e}")
+            return []
+
+    async def fetch_trades_since(self, since_ts) -> list[dict[str, Any]]:
+        """Fetch closed trades whose closed_at is >= since_ts.
+
+        Args:
+            since_ts: datetime (timezone-aware preferred).
+
+        Returns: list of trade dicts (same shape as fetch_recent_trades).
+        """
+        if not self.pool:
+            return []
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id::text, symbol, direction, entry, exit, sl, tp1, tp2,
+                           size, pnl_usdt, pnl_pct, reason, opened_at, closed_at,
+                           confluence
+                    FROM trades
+                    WHERE closed_at IS NOT NULL AND closed_at >= $1
+                    ORDER BY closed_at DESC
+                    """,
+                    since_ts,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            log.warning(f"fetch_trades_since failed: {e}")
             return []
 
     # ─────────────────────────────────────────────────────────────
