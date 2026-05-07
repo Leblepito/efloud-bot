@@ -17,9 +17,23 @@ def env_setup(monkeypatch):
 
 
 @pytest.fixture
-async def client():
-    """ASGI client without lifespan (bot worker won't start)."""
+async def client(tmp_path):
+    """ASGI client without lifespan (bot worker won't start).
+
+    Lifespan bypass means /healthz wiring (backend.main → configure_healthz) is
+    skipped, so we wire it explicitly here with a fresh RuntimeState that the
+    test can pre-populate to simulate either healthy or unhealthy states.
+    """
     from backend.main import app
+    from backend.healthz import configure as configure_healthz
+    from engine.safety.runtime_state import RuntimeState
+
+    rs = RuntimeState(state_dir=str(tmp_path))
+    # Mark loop as ticking + exchange pinging so default = healthy.
+    rs.update_loop_tick()
+    rs.update_exchange_ping()
+    configure_healthz(rs, lambda: False)  # breaker not halted
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
