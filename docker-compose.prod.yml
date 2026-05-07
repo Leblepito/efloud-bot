@@ -48,6 +48,30 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  alerter:
+    image: efloud-bot:latest          # reuse the bot's image (no separate Dockerfile)
+    container_name: efloud-alerter
+    restart: unless-stopped
+    command: python -m ops.alerter.alerter
+    env_file:
+      - .env.production
+    environment:
+      - EFLOUD_LOG_FILE=/app/logs/efloud_bot.log
+      - EFLOUD_HEALTHZ_URL=http://efloud-bot:8080/healthz
+      - EFLOUD_ALERTER_DEDUP_DB=/app/state/alerter_dedup.sqlite
+      - EFLOUD_ALERTER_HEARTBEAT_FILE=/app/state/alerter_heartbeat.json
+    volumes:
+      - efloud_logs:/app/logs:ro      # read-only — alerter only tails
+      - efloud_state:/app/state       # read-write — dedup + heartbeat live here
+    depends_on:
+      efloud-bot:
+        condition: service_started   # don't wait for healthy; alerter watches healthz
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
 volumes:
   efloud_state:
   efloud_state_1k:
