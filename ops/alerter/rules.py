@@ -1,0 +1,176 @@
+"""Alert rule definitions — log-line matchers + healthz-payload matchers.
+
+Each Rule defines: alert_key, severity, dedup_window_sec, and at least one of
+match_log() / match_health(). The alerter's main loop iterates RULES and calls
+both methods on every input — rules return None for input types they don't care
+about.
+
+In scope (Step 4):
+    breaker.tripped.daily/weekly/consecutive  — log-driven
+    health.crash_loop, health.unhealthy_15min  — healthz-driven
+
+Out of scope (Step 4b follow-up):
+    position.stuck_over_6h, exchange.error_burst, balance.unexpected_change
+"""
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass, field
+from typing import Optional
+
+# Healthz consecutive-failure threshold: 15 minutes
+UNHEALTHY_15MIN_THRESHOLD_SEC = 15 * 60
+
+
+@dataclass
+class Rule:
+    """Base rule. Subclasses override match_log and/or match_health."""
+    alert_key: str = ""
+    severity: str = "WARNING"  # "WARNING" or "CRITICAL"
+    dedup_window_sec: int = 30 * 60
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        """Given a parsed JSON log line dict, return formatted alert text or None."""
+        return None
+
+    def match_health(self, payload: dict, history: dict) -> Optional[str]:
+        """Given a /healthz response dict and alerter's mutable history dict,
+        return formatted alert text or None.
+
+        history is the alerter's in-memory per-rule scratchpad — the rule
+        may read/write keys it owns. NOT persisted across alerter restart;
+        SQLite dedup is the only persistent state.
+        """
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Log-driven rules
+# ─────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class BreakerDailyRule(Rule):
+    """Matches breaker.py:155 _trip() — 'BREAKER TRIPPED: Daily loss ... exceeds ...'"""
+    alert_key: str = "breaker.tripped.daily"
+    severity: str = "CRITICAL"
+    dedup_window_sec: int = 24 * 60 * 60  # 1 per day
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if rec.get("logger") != "efloud.safety.breaker":
+            return None
+        if rec.get("level") not in ("WARNING", "ERROR", "CRITICAL"):
+            return None
+        msg = rec.get("message", "")
+        # Two-substring check: event prefix AND specific phrase (defends against
+        # false positives from unrelated breaker logger output).
+        if "BREAKER TRIPPED" in msg and "Daily loss" in msg:
+            return f"🚨 <b>Breaker TRIPPED — daily loss limit</b>\n{msg}"
+        return None
+
+
+@dataclass
+class BreakerWeeklyRule(Rule):
+    """Matches breaker.py:162 _halt() — 'BREAKER HALTED: Weekly drawdown ... reached limit ...' (level ERROR)"""
+    alert_key: str = "breaker.tripped.weekly"
+    severity: str = "CRITICAL"
+    dedup_window_sec: int = 7 * 24 * 60 * 60  # 1 per week
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if rec.get("logger") != "efloud.safety.breaker":
+            return None
+        if rec.get("level") not in ("WARNING", "ERROR", "CRITICAL"):
+            return None
+        msg = rec.get("message", "")
+        if "BREAKER HALTED" in msg and "Weekly drawdown" in msg:
+            return f"🚨 <b>Breaker HALTED — weekly drawdown</b>\n{msg}"
+        return None
+
+
+@dataclass
+class BreakerConsecutiveRule(Rule):
+    """Matches breaker.py:168 _trip() — 'BREAKER TRIPPED: N consecutive losses'"""
+    alert_key: str = "breaker.tripped.consecutive"
+    severity: str = "WARNING"
+    dedup_window_sec: int = 30 * 60  # 30 min
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if rec.get("logger") != "efloud.safety.breaker":
+            return None
+        if rec.get("level") not in ("WARNING", "ERROR", "CRITICAL"):
+            return None
+        msg = rec.get("message", "")
+        if "BREAKER TRIPPED" in msg and "consecutive losses" in msg:
+            return f"⚠️ <b>Breaker TRIPPED — consecutive losses</b>\n{msg}"
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Healthz-driven rules
+# ─────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class HealthCrashLoopRule(Rule):
+    alert_key: str = "health.crash_loop"
+    severity: str = "CRITICAL"
+    dedup_window_sec: int = 24 * 60 * 60  # once per occurrence
+
+    def match_health(self, payload: dict, history: dict) -> Optional[str]:
+        if payload.get("status") == "suspended" and \
+           "crash_loop_suspended" in payload.get("failures", []):
+            crash_count = payload.get("checks", {}).get("crash_count", "?")
+            return (
+                f"🚨 <b>CRASH LOOP detected — bot SUSPENDED</b>\n"
+                f"crash_count = {crash_count}\n"
+                f"See docs/runbooks/crash-loop-recovery.md"
+            )
+        return None
+
+
+@dataclass
+class HealthUnhealthy15MinRule(Rule):
+    """Fires when /healthz has returned 503 (status:'unhealthy') continuously
+    for at least UNHEALTHY_15MIN_THRESHOLD_SEC.
+
+    Uses history dict to track the timestamp of the first 503 in the current
+    streak. Resets when /healthz returns ok or suspended.
+    """
+    alert_key: str = "health.unhealthy_15min"
+    severity: str = "CRITICAL"
+    dedup_window_sec: int = 24 * 60 * 60
+
+    def match_health(self, payload: dict, history: dict) -> Optional[str]:
+        status = payload.get("status")
+        if status != "unhealthy":
+            # Streak broken — clear history
+            history.pop("unhealthy_since_ts", None)
+            return None
+
+        now = int(time.time())
+        if "unhealthy_since_ts" not in history:
+            history["unhealthy_since_ts"] = now
+            return None
+
+        elapsed = now - history["unhealthy_since_ts"]
+        if elapsed >= UNHEALTHY_15MIN_THRESHOLD_SEC:
+            failures = payload.get("failures", [])
+            return (
+                f"🚨 <b>Health check failing &gt;15 min</b>\n"
+                f"elapsed: {elapsed}s\n"
+                f"failures: {failures}"
+            )
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Exported list — alerter main loop iterates this
+# ─────────────────────────────────────────────────────────────────────
+
+RULES: list[Rule] = [
+    BreakerDailyRule(),
+    BreakerWeeklyRule(),
+    BreakerConsecutiveRule(),
+    HealthCrashLoopRule(),
+    HealthUnhealthy15MinRule(),
+]
