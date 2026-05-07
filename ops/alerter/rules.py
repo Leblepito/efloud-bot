@@ -57,7 +57,7 @@ class BreakerDailyRule(Rule):
     dedup_window_sec: int = 24 * 60 * 60  # 1 per day
 
     def match_log(self, rec: dict) -> Optional[str]:
-        if rec.get("logger") != "efloud.safety.breaker":
+        if rec.get("logger") != "efloud.breaker":
             return None
         if rec.get("level") not in ("WARNING", "ERROR", "CRITICAL"):
             return None
@@ -77,7 +77,7 @@ class BreakerWeeklyRule(Rule):
     dedup_window_sec: int = 7 * 24 * 60 * 60  # 1 per week
 
     def match_log(self, rec: dict) -> Optional[str]:
-        if rec.get("logger") != "efloud.safety.breaker":
+        if rec.get("logger") != "efloud.breaker":
             return None
         if rec.get("level") not in ("WARNING", "ERROR", "CRITICAL"):
             return None
@@ -95,7 +95,7 @@ class BreakerConsecutiveRule(Rule):
     dedup_window_sec: int = 30 * 60  # 30 min
 
     def match_log(self, rec: dict) -> Optional[str]:
-        if rec.get("logger") != "efloud.safety.breaker":
+        if rec.get("logger") != "efloud.breaker":
             return None
         if rec.get("level") not in ("WARNING", "ERROR", "CRITICAL"):
             return None

@@ -16,7 +16,7 @@ def test_breaker_daily_rule_matches_log_with_daily_loss_phrase():
     """Real breaker.py:155 emits via _trip() → 'BREAKER TRIPPED: Daily loss ... exceeds ...'"""
     rec = {
         "level": "WARNING",
-        "logger": "efloud.safety.breaker",
+        "logger": "efloud.breaker",
         "message": "🚨 BREAKER TRIPPED: Daily loss -5.12% exceeds -5.0% | Resume at 2026-05-08T00:00:00",
     }
     out = BreakerDailyRule().match_log(rec)
@@ -28,7 +28,7 @@ def test_breaker_weekly_rule_matches_log_with_weekly_drawdown_phrase():
     """Real breaker.py:162 emits via _halt() → level ERROR with 'BREAKER HALTED: Weekly drawdown ...'"""
     rec = {
         "level": "ERROR",
-        "logger": "efloud.safety.breaker",
+        "logger": "efloud.breaker",
         "message": "⛔ BREAKER HALTED: Weekly drawdown 8.50% reached limit 8.0% | MANUAL RESET REQUIRED",
     }
     out = BreakerWeeklyRule().match_log(rec)
@@ -40,7 +40,7 @@ def test_breaker_consecutive_rule_matches_log_with_consecutive_phrase():
     """Real breaker.py:168 _trip() → 'BREAKER TRIPPED: 3 consecutive losses'"""
     rec = {
         "level": "WARNING",
-        "logger": "efloud.safety.breaker",
+        "logger": "efloud.breaker",
         "message": "🚨 BREAKER TRIPPED: 3 consecutive losses | Resume at 2026-05-07T22:00:00",
     }
     out = BreakerConsecutiveRule().match_log(rec)
