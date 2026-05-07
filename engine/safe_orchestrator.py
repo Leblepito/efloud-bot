@@ -265,6 +265,8 @@ class SafeOrchestrator:
             recency_bars=risk_cfg.get("recency_bars", 40),
             df_daily=df_daily,
             daily_filter_strict=risk_cfg.get("daily_filter_strict", False),
+            symbol=symbol,
+            symbol_confluence_overrides=risk_cfg.get("symbol_confluence_overrides"),
         )
 
         # ═══ STEP 4: Scenario Planning (per-symbol) ═══
