@@ -76,8 +76,28 @@ def test_health_unhealthy_15min_rule_fires_only_after_threshold():
     assert "15" in out or "unhealthy" in out.lower()
 
 
-def test_rules_list_contains_5_in_scope_rules():
-    """Sanity: the exported RULES list has all 5 in-scope events, no more."""
+def test_trade_opened_rule_matches_safe_orch_open_log():
+    """Real safe_orchestrator.py:448 emits via log.info → '✅ [SYMBOL] Opened LONG @ ...'"""
+    from ops.alerter.rules import TradeOpenedRule
+    rec = {
+        "level": "INFO",
+        "logger": "efloud.safe_orch",
+        "message": "✅ [BTC/USDT] Opened LONG @ 50000.0000 size=0.001000 SL=49000.0000 TP1=51000.0000 TP2=52000.0000 Conf=80",
+    }
+    out = TradeOpenedRule().match_log(rec)
+    assert out is not None
+    assert "Opened" in out
+    assert "BTC/USDT" in out
+
+
+def test_trade_opened_rule_has_zero_dedup_window():
+    """Every open is unique — should always fire."""
+    from ops.alerter.rules import TradeOpenedRule
+    assert TradeOpenedRule().dedup_window_sec == 0
+
+
+def test_rules_list_contains_6_in_scope_rules():
+    """Sanity: the exported RULES list has all 6 events (5 from spec §6 + trade.opened)."""
     keys = [r.alert_key for r in RULES]
     expected = {
         "breaker.tripped.daily",
@@ -85,5 +105,6 @@ def test_rules_list_contains_5_in_scope_rules():
         "breaker.tripped.consecutive",
         "health.crash_loop",
         "health.unhealthy_15min",
+        "trade.opened",
     }
     assert set(keys) == expected, f"got {set(keys)}"

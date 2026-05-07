@@ -164,6 +164,35 @@ class HealthUnhealthy15MinRule(Rule):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Trade lifecycle (operator visibility — every confirmed open)
+# ─────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class TradeOpenedRule(Rule):
+    """Matches safe_orchestrator.py:448 log line on confirmed trade open.
+
+    Format: '✅ [SYMBOL] Opened LONG/SHORT @ {price} size={size} SL=... TP1=... TP2=... Conf=...'
+
+    No dedup — every trade open is a unique event the operator wants to see.
+    """
+    alert_key: str = "trade.opened"
+    severity: str = "INFO"
+    dedup_window_sec: int = 0  # always fire — every open is unique
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if rec.get("logger") != "efloud.safe_orch":
+            return None
+        if rec.get("level") != "INFO":
+            return None
+        msg = rec.get("message", "")
+        # Match: "✅ [SYMBOL] Opened LONG/SHORT @ ..."
+        if "Opened" in msg and "@" in msg and ("LONG" in msg or "SHORT" in msg):
+            return f"📈 <b>Trade opened</b>\n{msg}"
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Exported list — alerter main loop iterates this
 # ─────────────────────────────────────────────────────────────────────
 
@@ -173,4 +202,5 @@ RULES: list[Rule] = [
     BreakerConsecutiveRule(),
     HealthCrashLoopRule(),
     HealthUnhealthy15MinRule(),
+    TradeOpenedRule(),
 ]
