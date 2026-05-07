@@ -66,6 +66,7 @@ class Position:
     sl: float = 0.0
     tp1: float = 0.0
     tp2: float = 0.0
+    initial_sl: float = 0.0   # Original SL set at open time — never modified (sl can move to BE)
 
     # Lifecycle flags
     tp1_hit: bool = False
@@ -155,6 +156,7 @@ class PositionLifecycle:
             id=pos_id, symbol=symbol, direction=direction,
             entries=[entry],
             sl=sl, tp1=tp1, tp2=tp2,
+            initial_sl=sl,         # snapshot at open — preserves zone for reporting
             scenario_id=scenario_id,
             opened_at=now,
         )

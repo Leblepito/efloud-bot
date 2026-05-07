@@ -9,6 +9,9 @@ _PROFIT_FACTOR_INFINITY_PROXY = 999.0
 
 
 def serialize_trade(p) -> dict:
+    # Initial SL is what was set at open time. Position.sl can move to break-even
+    # on TP1 hit; initial_sl preserves the original zone for visualization.
+    initial_sl = getattr(p, "initial_sl", None) or float(p.sl)
     return {
         "symbol": p.symbol,
         "direction": p.direction,
@@ -18,6 +21,11 @@ def serialize_trade(p) -> dict:
         "exit_reason": p.exits[-1].reason if p.exits else None,
         "opened_at": str(p.opened_at),
         "closed_at": str(p.closed_at) if p.closed_at else None,
+        # Zone fields — original SL/TP1/TP2 set at entry (not mutated post-open)
+        "sl": float(initial_sl),
+        "tp1": float(p.tp1),
+        "tp2": float(p.tp2),
+        "sl_moved_to_be": bool(getattr(p, "sl_moved_to_be", False)),
     }
 
 
