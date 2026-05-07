@@ -38,16 +38,32 @@ def evaluate_healthz(
 ) -> Tuple[int, dict]:
     """Pure function: evaluate healthz conditions, return (status_code, payload).
 
+    Outcomes:
+      - (200, {status:"ok"})        — all checks pass
+      - (200, {status:"suspended", failures:["crash_loop_suspended"]})
+                                    — crash-loop suspension active (NOT 503;
+                                      see plan §"Spec deviations" for why)
+      - (503, {status:"unhealthy"}) — at least one normal check failed
+
     Args:
         state: RuntimeState instance (read-only — caller takes a snapshot inside).
         breaker_halted: True if CircuitBreaker is in HALTED state.
         now_ms: current epoch ms (passed in for testability — never call time.time() here).
-
-    Returns:
-        (200, payload) when all conditions hold.
-        (503, payload) when any condition fails. payload["failures"] lists offending checks.
     """
     snap = state.snapshot()
+
+    # Suspension branch — takes precedence over normal checks.
+    # See plan §"Spec deviations" — returning 200 here keeps the autoheal sidecar
+    # from restart-looping us; alerter (Step 4) keys off the 'failures' field.
+    if state.is_in_crash_loop():
+        return (200, {
+            "status": "suspended",
+            "checks": snap,
+            "now_ms": now_ms,
+            "failures": ["crash_loop_suspended"],
+        })
+
+    # Normal 4-condition health check (Step 2 contract).
     failures: list[str] = []
 
     if snap["last_loop_tick_ms"] is None:

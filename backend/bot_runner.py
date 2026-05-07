@@ -58,6 +58,21 @@ class BotRunner:
     # ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
+        # Aşama 2 Step 3: crash-loop suspension guard.
+        # If recent crashes have crossed the threshold, do NOT spin up the
+        # trading task. The FastAPI app stays alive so /healthz can return
+        # status:"suspended", which Step 4's alerter and Step 5's daily-report
+        # turn into a CRITICAL escalation. Operator intervenes manually
+        # (see docs/runbooks/crash-loop-recovery.md).
+        if self.runtime_state.is_in_crash_loop():
+            log.critical(
+                "⛔ CRASH LOOP DETECTED: %s crashes in last %s min — trading loop SUSPENDED. "
+                "See docs/runbooks/crash-loop-recovery.md to recover.",
+                self.runtime_state.snapshot()["crash_count"],
+                30,
+            )
+            return  # Bot stays alive (FastAPI + healthz); no trading task created.
+
         # Idempotent: zaten running iken tekrar çağrılırsa hiçbir şey yapma
         if self.running and not self.stopped:
             log.info("start() ignored — runner already running")
