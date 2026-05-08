@@ -65,6 +65,9 @@ symbols:
     - OP/USDT       # +0.81% (DD 9.35%, override 80)
     - LTC/USDT      # +0.80% (DD 7.31%, override 80)
     - BTC/USDT      # +0.17% (DD 7.59%, override 80)
+    # Selective tier (conf=85 override — user-requested re-add despite weak Phase A 2.0;
+    # high threshold filters most signals to compensate for negative backtest return)
+    - XRP/USDT      # -6.63% (DD 10.40%, override 85)
   dynamic_top_n: 0
   dynamic_exclude: []
   refresh_dynamic_hours: 24
@@ -108,6 +111,7 @@ risk:
     ADA/USDT: 80
     OP/USDT: 80
     LTC/USDT: 80
+    XRP/USDT: 85   # User re-added 2026-05-08; high threshold to compensate for -6.63% Phase A perf
 
   # Opt-in reverse-from-risk (legacy default, mevcut SMC sizing)
   position_size_calculation: legacy
