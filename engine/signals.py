@@ -2,12 +2,54 @@
 
 import logging
 from dataclasses import dataclass, field, asdict
-from typing import List, Optional
+from typing import Dict, List, Optional
 from .smc import SMCEngine
 from .confluence import calc_confluence
 import pandas as pd
 
 log = logging.getLogger("efloud.signals")
+
+
+def _normalize_symbol(symbol: str) -> str:
+    """Canonicalize symbol form to `BASE/QUOTE` (with slash).
+
+    Tolerates exchange-API forms like `ETHUSDT` (no slash) by inserting one
+    before the quote currency. Must remain pure (no I/O) so it can be reused
+    in tests.
+    """
+    if not symbol or "/" in symbol:
+        return symbol
+    # Default: assume the last 4 chars are the quote (USDT, BUSD, USDC).
+    # Adjust if/when we trade against shorter-quote pairs.
+    for quote in ("USDT", "USDC", "BUSD"):
+        if symbol.endswith(quote):
+            base = symbol[: -len(quote)]
+            return f"{base}/{quote}"
+    return symbol
+
+
+def resolve_min_confluence(
+    symbol: Optional[str],
+    global_min: int,
+    symbol_overrides: Optional[Dict[str, int]],
+) -> int:
+    """Pick the effective confluence threshold for a given symbol.
+
+    Lookup precedence: explicit per-symbol override > global default.
+    Returns `global_min` if symbol is unknown/missing or overrides are empty.
+
+    Symbol format is normalized so that `ETHUSDT` resolves the same as
+    `ETH/USDT`. Override values of 0 (literally zero) are respected — only
+    `None`/missing keys fall back.
+    """
+    if not symbol_overrides or symbol is None:
+        return global_min
+    canonical = _normalize_symbol(symbol)
+    if canonical in symbol_overrides:
+        return symbol_overrides[canonical]
+    if symbol in symbol_overrides:
+        return symbol_overrides[symbol]
+    return global_min
 
 
 @dataclass
@@ -42,6 +84,8 @@ def generate_signals(
     recency_bars: int = 20,
     df_daily: Optional[pd.DataFrame] = None,   # 4. TF — 1d filter (opsiyonel)
     daily_filter_strict: bool = False,          # True = 1d ters yön → reddet
+    symbol: Optional[str] = None,               # NEW — for per-symbol threshold lookup
+    symbol_confluence_overrides: Optional[Dict[str, int]] = None,  # NEW
 ) -> List[Signal]:
     """
     4-Timeframe Efloud setup akışı:
@@ -190,7 +234,12 @@ def generate_signals(
         if score > max_seen_score:
             max_seen_score = score
 
-        if score < min_confluence:
+        effective_threshold = resolve_min_confluence(
+            symbol=symbol,
+            global_min=min_confluence,
+            symbol_overrides=symbol_confluence_overrides,
+        )
+        if score < effective_threshold:
             reject_confluence += 1
             continue
 

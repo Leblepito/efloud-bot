@@ -125,6 +125,7 @@ class SafeOrchestrator:
             min_sl_distance_atr=safety.get("min_sl_atr", 0.5),
             max_sl_distance_atr=safety.get("max_sl_atr", 5.0),
             reserve_balance=safety.get("reserve_balance", 0.0),
+            max_open_positions=self.config.get("risk", {}).get("max_open_positions", 999),
         )
         self.store = StateStore(state_dir)
 
@@ -264,6 +265,8 @@ class SafeOrchestrator:
             recency_bars=risk_cfg.get("recency_bars", 40),
             df_daily=df_daily,
             daily_filter_strict=risk_cfg.get("daily_filter_strict", False),
+            symbol=symbol,
+            symbol_confluence_overrides=risk_cfg.get("symbol_confluence_overrides"),
         )
 
         # ═══ STEP 4: Scenario Planning (per-symbol) ═══
