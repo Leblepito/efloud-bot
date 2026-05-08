@@ -197,6 +197,11 @@ def generate_signals(
             continue
         if brk.idx < recent_cutoff:
             continue
+        # BOS events fire far more often than CHoCH; tighten the recency
+        # window so we don't enter on stale continuation breaks (e.g. a
+        # BOS from 6h ago whose breakout move is already exhausted).
+        if brk.kind == "BOS" and brk.idx < (last_bar_idx - recency_bars // 2):
+            continue
         aligned_chochs += 1
 
         is_long = brk.direction == "BULL"
