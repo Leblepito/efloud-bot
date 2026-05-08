@@ -2,6 +2,10 @@
 exchange whose fetch_open_orders() hits fapi.binance.com (futures), not
 api.binance.com (spot). Tests by intercepting the HTTP call before it
 goes out — no live exchange, no auth, no markets reload over the network.
+
+Note: the shared_markets fixture makes one real HTTP call to load Binance
+public markets metadata (~2s). CI without internet will fail-fast at the
+fixture; per the plan this is acceptable for a regression-pinning test.
 """
 import ccxt
 import pytest
