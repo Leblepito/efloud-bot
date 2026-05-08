@@ -241,7 +241,7 @@ class OrderManager:
             log.info(f"[DRY] {direction} {symbol} size={size:.4f} @ {entry:.2f} | "
                      f"SL={sl:.2f} TP1={tp1:.2f} TP2={tp2:.2f}")
             pos = Position(symbol, direction, entry, sl, tp1, tp2, size,
-                           opened_at=pd.Timestamp.now().isoformat(),
+                           opened_at=pd.Timestamp.now(tz="UTC").isoformat(),
                            trace_id=trace_id, bar_ts_ms=bar_ts_ms)
             self.positions.append(pos)
             self._persist()
@@ -302,7 +302,7 @@ class OrderManager:
                 sl=sl, tp1=tp1, tp2=tp2, size=size,
                 order_id=oid, sl_order_id=sl_oid,
                 tp1_order_id=tp1_oid, tp2_order_id=tp2_oid,
-                opened_at=pd.Timestamp.now().isoformat(),
+                opened_at=pd.Timestamp.now(tz="UTC").isoformat(),
                 trace_id=trace_id, bar_ts_ms=bar_ts_ms,
             )
             self.positions.append(pos)
@@ -443,7 +443,7 @@ class OrderManager:
         pnl_usdt = (exit_price - pos.entry) * pos.size if is_long else \
                    (pos.entry - exit_price) * pos.size
 
-        pos.closed_at = pd.Timestamp.now().isoformat()
+        pos.closed_at = pd.Timestamp.now(tz="UTC").isoformat()
         pos.exit_reason = reason
         pos.exit_price = exit_price
         pos.pnl_usdt = pnl_usdt
