@@ -171,6 +171,64 @@ class TestRejectSummaryLog:
             f"records: {[r.message for r in caplog.records]}"
         )
 
+    def test_choch_at_full_recency_still_triggers(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """CHoCH (rare event) keeps the full recency_bars window.
+
+        Guards against accidentally tightening CHoCH along with BOS in
+        Task 5. idx=12 in a 50-bar df with recency_bars=40 sits at the
+        edge of the CHoCH window (last_bar_idx-recency = 9), still passes.
+        """
+        old_choch = SimpleNamespace(
+            direction="BULL", kind="CHoCH", idx=12, ts="2026-05-08T00:00", price=100.0
+        )
+        engine = self._make_mock_engine(old_choch)
+        df = pd.DataFrame({"close": [100.0] * 50})
+
+        with caplog.at_level(logging.INFO, logger="efloud.signals"):
+            generate_signals(
+                engine, df, df, df,
+                min_confluence=70, min_rr=1.5, fib_ext=1.618,
+                recency_bars=40,
+                symbol="ETH/USDT",
+            )
+
+        reject_msgs = [
+            rec.message for rec in caplog.records
+            if "0 signals" in rec.message and "Rejects" in rec.message
+        ]
+        assert reject_msgs, "CHoCH at full recency window was wrongly filtered"
+
+    def test_bos_against_htf_bias_is_rejected(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """BEAR BOS under BULL HTF bias must not produce signals.
+
+        Existing direction filter guards this; the test prevents accidental
+        removal during future refactors.
+        """
+        counter_bos = SimpleNamespace(
+            direction="BEAR", kind="BOS", idx=45, ts="2026-05-08T00:00", price=100.0
+        )
+        engine = self._make_mock_engine(counter_bos)
+        df = pd.DataFrame({"close": [100.0] * 50})
+
+        with caplog.at_level(logging.INFO, logger="efloud.signals"):
+            sigs = generate_signals(
+                engine, df, df, df,
+                min_confluence=70, min_rr=1.5, fib_ext=1.618,
+                recency_bars=40,
+                symbol="ETH/USDT",
+            )
+
+        assert sigs == []
+        reject_msgs = [
+            rec.message for rec in caplog.records
+            if "0 signals" in rec.message and "Rejects" in rec.message
+        ]
+        assert reject_msgs == [], "Counter-direction BOS leaked through"
+
     def test_reject_log_uses_per_symbol_override_threshold(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
