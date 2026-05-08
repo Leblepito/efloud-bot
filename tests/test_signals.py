@@ -89,7 +89,7 @@ class TestRejectSummaryLog:
         assert sigs == []
         reject_msgs = [
             rec.message for rec in caplog.records
-            if "CHoCH" in rec.message and "Rejects" in rec.message
+            if "0 signals" in rec.message and "Rejects" in rec.message
         ]
         assert reject_msgs, f"No reject summary logged. Records: {[r.message for r in caplog.records]}"
         msg = reject_msgs[0]
@@ -250,7 +250,7 @@ class TestRejectSummaryLog:
 
         reject_msgs = [
             rec.message for rec in caplog.records
-            if "CHoCH" in rec.message and "Rejects" in rec.message
+            if "0 signals" in rec.message and "Rejects" in rec.message
         ]
         assert reject_msgs
         msg = reject_msgs[0]

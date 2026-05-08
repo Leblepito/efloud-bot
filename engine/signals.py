@@ -182,7 +182,7 @@ def generate_signals(
     recent_cutoff = last_bar_idx - recency_bars
     
     # Diagnostics: reject reasons
-    aligned_chochs = 0
+    aligned_triggers = 0  # CHoCH or BOS aligned with HTF bias + within recency
     reject_confluence = 0
     reject_rr = 0
     reject_tp_wrong_side = 0
@@ -202,7 +202,7 @@ def generate_signals(
         # BOS from 6h ago whose breakout move is already exhausted).
         if brk.kind == "BOS" and brk.idx < (last_bar_idx - recency_bars // 2):
             continue
-        aligned_chochs += 1
+        aligned_triggers += 1
 
         is_long = brk.direction == "BULL"
         price = brk.price
@@ -330,7 +330,7 @@ def generate_signals(
         log.info(f"Signal: {sig.direction} @ {sig.entry} | Conf={sig.confluence} | R:R={sig.rr1}/{sig.rr2}")
 
     # Diagnostic: reject reason breakdown
-    if aligned_chochs > 0 and len(signals) == 0:
+    if aligned_triggers > 0 and len(signals) == 0:
         effective_threshold = resolve_min_confluence(
             symbol=symbol,
             global_min=min_confluence,
@@ -348,6 +348,6 @@ def generate_signals(
             reasons.append(f"TP wrong side ({reject_tp_wrong_side}×)")
         if reject_rr > 0:
             reasons.append(f"R:R<{min_rr} ({reject_rr}×, max seen: {max_seen_rr:.2f})")
-        log.info(f"📉 {prefix}{aligned_chochs} CHoCH, 0 signals. Rejects: {' | '.join(reasons)}")
+        log.info(f"📉 {prefix}{aligned_triggers} triggers, 0 signals. Rejects: {' | '.join(reasons)}")
 
     return signals
