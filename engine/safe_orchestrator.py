@@ -447,8 +447,9 @@ class SafeOrchestrator:
                 log.info(f"🔁 [{symbol}] Signal already processed {age_min:.0f}min ago — skipping")
             else:
                 self._processed_signals[sig_key] = now_ts
-                self._persist_state()  # persist dedup cache so a mid-cycle restart
-                                       # can't re-open the same signal (SOL double-open fix)
+                # Persist dedup cache immediately so a mid-cycle restart can't
+                # re-open the same signal (SOL double-open, 2026-05-08).
+                self._persist_state()
 
                 # Sembol tradeable mi? (read-only ise notification gönder, trade etme)
                 is_tradeable = True

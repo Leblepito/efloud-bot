@@ -80,8 +80,8 @@ def test_processed_signals_round_trip(fs_state_dir):
     assert abs(orch._processed_signals[sig_key] - now_ts) < 1.0
 
 
-def test_processed_signals_persists_after_record(fs_state_dir):
-    """When a signal is recorded, the disk file reflects it on next read."""
+def test_persist_state_writes_processed_signals(fs_state_dir):
+    """_persist_state() serializes the dedup dict to disk in the round-trippable form."""
     orch = SafeOrchestrator(_minimal_cfg(), state_dir=fs_state_dir)
     sig_key = ("FIL/USDT", "LONG", 1.10)
     now_ts = time.time()
