@@ -5,8 +5,9 @@
 # Goal: more daily trade activity without sacrificing per-trade quality.
 # Validation: docs/results/2026-05-07-aggressive-v1-final.md (Phase A 2.0).
 #
-# Changes from H2-A2 baseline:
-#   confluence:           80 → 70 (global) + per-symbol overrides (mid tier 80)
+# Changes from H2-A2 baseline (2026-05-08 bull-aware revision):
+#   confluence:           80 → 55 (global) + per-symbol overrides (mid 65, XRP 75)
+#   trigger:              CHoCH-only → CHoCH + BOS (continuation breaks now valid)
 #   max_open_positions:   1 (de-facto) → 5 (now ENFORCED via new gate)
 #   max_position_notional_pct: 6.0 → 10.0 (per-trade exposure 1.67x)
 #   daily_loss_limit_pct: 10.0 (kept; allows ~5 SL hits before breaker)
@@ -95,7 +96,7 @@ risk:
   risk_per_trade_pct: 2.0             # $40 risk budget per trade @ $2000 (no change vs H2-A2)
   max_open_positions: 5               # ENFORCED gate (commit 20c6ccd) — was effective-1
   min_rr: 1.8                         # Min R:R 1:1.8
-  min_confluence: 70                  # Global default; weak coins overridden in symbol_confluence_overrides
+  min_confluence: 55                  # ChoCH(25) + MTF onay(20) + 1 SMC layer(10) — see docs/superpowers/specs/2026-05-08-bull-aware-signal-trigger-design.md
   recency_bars: 40
   sl_atr_buffer: 0.5
   daily_filter_strict: false
@@ -106,12 +107,12 @@ risk:
   # Bottom 30% (12 originally negative-return symbols) DROPPED from fixed_core
   # entirely (see symbols section above), not overridden.
   symbol_confluence_overrides:
-    BTC/USDT: 80
-    SUI/USDT: 80
-    ADA/USDT: 80
-    OP/USDT: 80
-    LTC/USDT: 80
-    XRP/USDT: 85   # User re-added 2026-05-08; high threshold to compensate for -6.63% Phase A perf
+    BTC/USDT: 65
+    SUI/USDT: 65
+    ADA/USDT: 65
+    OP/USDT: 65
+    LTC/USDT: 65
+    XRP/USDT: 75   # User re-added 2026-05-08; tightened from 85 alongside the 70→55 global recalibration to keep the gap (was 85 vs 70 = +15; now 75 vs 55 = +20)
 
   # Opt-in reverse-from-risk (legacy default, mevcut SMC sizing)
   position_size_calculation: legacy
