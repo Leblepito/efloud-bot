@@ -200,14 +200,31 @@ class PositionGuard:
         return PositionCheckResult(True, warnings=warnings)
 
     def check_holding_time(self, position) -> PositionCheckResult:
-        """Pozisyon çok uzun süredir açık mı?"""
+        """Pozisyon çok uzun süredir açık mı?
+
+        Tolerates both TZ-naive ('2026-05-08T10:14:12') and TZ-aware
+        ('2026-05-08T10:14:12+00:00' / '...Z') opened_at formats. Mixing
+        the two used to raise TypeError on subtraction, silently bypassing
+        the force-close protection (2026-05-08 incident).
+        """
         if not position.opened_at:
             return PositionCheckResult(True)
 
+        raw = position.opened_at
+        # Strip trailing Z so fromisoformat accepts it (Z support pre-3.11).
+        if raw.endswith("Z"):
+            raw = raw[:-1]
+
         try:
-            opened = datetime.fromisoformat(position.opened_at.replace("Z", ""))
+            opened = datetime.fromisoformat(raw)
         except Exception:
             return PositionCheckResult(True)
+
+        # Drop tzinfo so the subtraction is naive-vs-naive. We're comparing
+        # against datetime.utcnow() which is naive UTC, so a TZ-aware UTC
+        # value can be safely de-zoned without arithmetic distortion.
+        if opened.tzinfo is not None:
+            opened = opened.replace(tzinfo=None)
 
         age = datetime.utcnow() - opened
         hours = age.total_seconds() / 3600
