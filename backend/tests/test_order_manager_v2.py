@@ -187,6 +187,38 @@ class TestReconciliation:
         assert new_sl_call.args[3] == 0.5  # remaining half
         assert new_sl_call.kwargs["params"]["stopPrice"] == 95000  # entry
 
+    def test_position_kept_when_binance_returns_ccxt_futures_symbol_format(
+        self, mgr, mock_client
+    ):
+        """Reconcile must compare symbols regardless of CCXT futures notation.
+
+        CCXT's fetch_positions returns symbols with the contract suffix
+        (e.g. 'FIL/USDT:USDT'), while bot positions are tracked in slash
+        form ('FIL/USDT'). Without normalization, the bot mistakenly thinks
+        every position is closed and emits false RECONCILED events.
+        Live observed 2026-05-08: FIL+RENDER positions falsely reported as
+        closed with PnL=+$89 RECONCILED while still open on Binance.
+        """
+        pos = Position(
+            symbol="FIL/USDT", direction="LONG", entry=1.10, sl=1.07,
+            tp1=1.16, tp2=1.15, size=930.0,
+            sl_order_id="SL-1", tp1_order_id="TP1-1", tp2_order_id="TP2-1",
+        )
+        mgr.positions = [pos]
+
+        # Production reality: CCXT futures notation (not seen in old tests)
+        mock_client.get_open_positions.return_value = [
+            {"symbol": "FIL/USDT:USDT", "contracts": 930.0}
+        ]
+        mock_client.exchange.fetch_open_orders.return_value = [
+            {"id": "SL-1"}, {"id": "TP1-1"}, {"id": "TP2-1"},
+        ]
+
+        closed = mgr.reconcile()
+
+        assert closed == [], "Position falsely reconciled despite being open on Binance"
+        assert pos in mgr.positions, "Position incorrectly removed from local list"
+
     def test_dry_run_reconcile_is_noop(self, mock_client):
         mgr_dry = OrderManager(mock_client, dry_run=True)
         mgr_dry.positions = [
