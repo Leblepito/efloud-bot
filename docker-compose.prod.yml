@@ -15,6 +15,7 @@ services:
     volumes:
       - efloud_state:/app/state
       - efloud_state_1k:/app/state_1k
+      - efloud_state_aggressive:/app/state_aggressive
       - efloud_logs:/app/logs
       - efloud_reports:/app/reports
     healthcheck:
@@ -110,6 +111,7 @@ services:
 volumes:
   efloud_state:
   efloud_state_1k:
+  efloud_state_aggressive:
   efloud_logs:
   efloud_reports:
   caddy_data:
