@@ -119,9 +119,16 @@ class CircuitBreaker:
                          f"(was {self.consecutive_losses})")
             self.consecutive_losses = 0
 
-    def check(self) -> BreakerStatus:
-        """Mevcut durumu değerlendir ve breaker state güncelle."""
-        now = datetime.utcnow()
+    def check(self, now: Optional[datetime] = None) -> BreakerStatus:
+        """Mevcut durumu değerlendir ve breaker state güncelle.
+
+        `now`: optional sim-time. Live mode passes None → wall-clock. Backtest
+        engine passes the current bar timestamp so cooldowns resolve in sim-time
+        rather than wall-clock (otherwise a 120-min cooldown wastes 120 REAL
+        minutes of backtest while sim-time advances unbounded).
+        """
+        if now is None:
+            now = datetime.utcnow()
         self._cleanup_old_trades(now)
 
         # Eğer zaten HALTED → manual reset bekler

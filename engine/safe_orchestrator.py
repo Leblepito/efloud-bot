@@ -13,6 +13,7 @@ Safe Orchestrator v2.1 — Güvenlik Katmanları Entegre
 
 import pandas as pd
 import logging
+from datetime import datetime
 from typing import Optional
 from dataclasses import dataclass
 
@@ -69,17 +70,24 @@ class SafeOrchestrator:
 
     def __init__(self, config: dict, state_dir: str = "./state",
                   permission_mgr=None, notification_mgr=None,
-                  order_manager=None):
+                  order_manager=None,
+                  *,
+                  freshness_check: bool = True,
+                  persist: bool = True):
         """
         permission_mgr: PermissionManager instance (opsiyonel)
         notification_mgr: NotificationManager instance (opsiyonel)
         order_manager: OrderManager instance — borsaya gerçek emir gönderir.
                        None ise sadece lifecycle (paper-trade / test mode).
+        freshness_check: False ise validate_kline_freshness çağrılmaz (backtest mode).
+        persist: False ise _persist_state disk'e yazmaz (backtest mode).
         """
         self.config = config
         self.permission_mgr = permission_mgr
         self.notification_mgr = notification_mgr
         self.order_manager = order_manager
+        self.freshness_check = freshness_check
+        self.persist = persist
 
         # Core engines
         sc = config["structure"]
@@ -165,6 +173,8 @@ class SafeOrchestrator:
 
     def _persist_state(self):
         """State'i diske yaz."""
+        if not self.persist:
+            return
         self.store.save("breaker", self.breaker.to_dict())
         self.store.save("positions",
                          [p.to_dict() for p in self.lifecycle.positions])
@@ -185,6 +195,7 @@ class SafeOrchestrator:
         df_entry: pd.DataFrame,
         df_daily: Optional[pd.DataFrame] = None,
         balance: Optional[float] = None,
+        now: Optional[datetime] = None,
     ) -> SafeCycleResult:
         """Safety check'li tam analiz cycle'ı."""
         warnings = []
@@ -201,7 +212,8 @@ class SafeOrchestrator:
         ]:
             try:
                 validate_kline_integrity(df)
-                validate_kline_freshness(df, tfname, tolerance_factor=2.5)
+                if self.freshness_check:
+                    validate_kline_freshness(df, tfname, tolerance_factor=2.5)
             except (StaleDataError, ValueError) as e:
                 warnings.append(f"{name} data issue: {e}")
                 log.warning(f"⚠️  {name} ({tfname}): {e}")
@@ -218,7 +230,8 @@ class SafeOrchestrator:
         # unrealized PnL and external wallet changes like manual transfers).
         if balance is not None:
             self.breaker.sync_balance(balance)
-        breaker_status = self.breaker.check()
+        # `now` is sim-time in backtest, None in live (uses wall-clock).
+        breaker_status = self.breaker.check(now=now)
         if not breaker_status.can_trade:
             log.warning(f"🚨 Breaker {breaker_status.state.value}: {breaker_status.reason}")
             warnings.append(f"Breaker {breaker_status.state.value}: {breaker_status.reason}")

@@ -17,6 +17,8 @@ import logging
 from typing import Optional
 from datetime import datetime
 
+from .null_manager import NullNotificationManager
+
 log = logging.getLogger("efloud.notifications")
 
 
@@ -99,3 +101,4 @@ class NotificationManager:
             print(msg)
         if 'log' in self.channels:
             getattr(log, level.lower(), log.info)(msg)
+
