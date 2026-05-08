@@ -191,8 +191,9 @@ def generate_signals(
     score_buckets: Dict[int, int] = {}
 
     for brk in e_brks:
-        # Sadece CHoCH + HTF yönünde + son N bar içinde
-        if brk.kind != "CHoCH" or brk.direction != htf_bias:
+        # CHoCH (reversal) + BOS (continuation) — both must align with HTF bias.
+        # See docs/superpowers/specs/2026-05-08-bull-aware-signal-trigger-design.md
+        if brk.kind not in ("CHoCH", "BOS") or brk.direction != htf_bias:
             continue
         if brk.idx < recent_cutoff:
             continue
