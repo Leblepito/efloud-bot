@@ -52,6 +52,19 @@ def resolve_min_confluence(
     return global_min
 
 
+def _format_score_histogram(buckets: Dict[int, int], top_n: int = 3) -> str:
+    """Render a score-bucket histogram as `score×count` pairs, highest-score first.
+
+    Returns an empty string when no buckets are populated. Used in the reject
+    summary log so that calibration decisions can be made from observed
+    confluence distribution rather than just the maximum.
+    """
+    if not buckets:
+        return ""
+    top = sorted(buckets.items(), key=lambda kv: kv[0], reverse=True)[:top_n]
+    return " ".join(f"{score}×{count}" for score, count in top)
+
+
 @dataclass
 class Signal:
     direction: str          # "LONG" | "SHORT"
@@ -175,6 +188,7 @@ def generate_signals(
     reject_tp_wrong_side = 0
     max_seen_score = 0
     max_seen_rr = 0.0
+    score_buckets: Dict[int, int] = {}
 
     for brk in e_brks:
         # Sadece CHoCH + HTF yönünde + son N bar içinde
@@ -233,6 +247,8 @@ def generate_signals(
 
         if score > max_seen_score:
             max_seen_score = score
+        bucket = (score // 5) * 5
+        score_buckets[bucket] = score_buckets.get(bucket, 0) + 1
 
         effective_threshold = resolve_min_confluence(
             symbol=symbol,
@@ -309,13 +325,23 @@ def generate_signals(
 
     # Diagnostic: reject reason breakdown
     if aligned_chochs > 0 and len(signals) == 0:
+        effective_threshold = resolve_min_confluence(
+            symbol=symbol,
+            global_min=min_confluence,
+            symbol_overrides=symbol_confluence_overrides,
+        )
+        prefix = f"[{symbol}] " if symbol else ""
         reasons = []
         if reject_confluence > 0:
-            reasons.append(f"conf<{min_confluence} ({reject_confluence}×, max seen: {max_seen_score})")
+            hist = _format_score_histogram(score_buckets)
+            hist_part = f", hist: {hist}" if hist else ""
+            reasons.append(
+                f"conf<{effective_threshold} ({reject_confluence}×, max={max_seen_score}{hist_part})"
+            )
         if reject_tp_wrong_side > 0:
             reasons.append(f"TP wrong side ({reject_tp_wrong_side}×)")
         if reject_rr > 0:
             reasons.append(f"R:R<{min_rr} ({reject_rr}×, max seen: {max_seen_rr:.2f})")
-        log.info(f"📉 {aligned_chochs} CHoCH analyzed, 0 signals. Rejects: {' | '.join(reasons)}")
+        log.info(f"📉 {prefix}{aligned_chochs} CHoCH, 0 signals. Rejects: {' | '.join(reasons)}")
 
     return signals

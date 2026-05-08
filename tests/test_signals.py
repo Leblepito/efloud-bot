@@ -1,0 +1,123 @@
+"""Tests for engine.signals diagnostic logging helpers."""
+
+import logging
+from types import SimpleNamespace
+from typing import Dict
+from unittest.mock import MagicMock
+
+import pandas as pd
+import pytest
+
+from engine.signals import _format_score_histogram, generate_signals
+
+
+class TestFormatScoreHistogram:
+    """Histogram of confluence-score buckets emitted in the reject summary log."""
+
+    def test_empty_dict_returns_empty_string(self) -> None:
+        assert _format_score_histogram({}) == ""
+
+    def test_single_bucket(self) -> None:
+        assert _format_score_histogram({60: 5}) == "60×5"
+
+    def test_multiple_buckets_sorted_by_score_descending(self) -> None:
+        # Three buckets, all shown; highest score first so the reader sees
+        # how close any reject came to the floor.
+        buckets: Dict[int, int] = {55: 1, 60: 5, 65: 2}
+        assert _format_score_histogram(buckets) == "65×2 60×5 55×1"
+
+    def test_top_n_limits_output_to_three_highest_scores(self) -> None:
+        buckets: Dict[int, int] = {50: 1, 55: 2, 60: 5, 65: 3, 70: 1}
+        # Default top_n=3 → 70, 65, 60 (highest scores, regardless of count)
+        assert _format_score_histogram(buckets) == "70×1 65×3 60×5"
+
+    def test_top_n_override(self) -> None:
+        buckets: Dict[int, int] = {55: 1, 60: 5, 65: 2}
+        assert _format_score_histogram(buckets, top_n=1) == "65×2"
+
+
+class TestRejectSummaryLog:
+    """Reject summary log must surface symbol + score histogram for calibration."""
+
+    def _make_mock_engine(self, choch_break) -> MagicMock:
+        e_range = SimpleNamespace(
+            discount=False, premium=False, dev_bull=False, dev_bear=False,
+            lo=99.0, hi=101.0,
+        )
+        engine = MagicMock()
+        engine.analyze.return_value = {
+            "trend": "BULL",
+            "active_fvgs": [],
+            "active_obs": [],
+            "swing_highs": [],
+            "swing_lows": [],
+            "range": e_range,
+        }
+        engine.swings.return_value = ([], [])
+        # First call (for mtf_brks) returns empty; second (e_brks) returns the CHoCH.
+        engine.structure.side_effect = [[], [choch_break]]
+        engine.order_blocks.return_value = []
+        engine.sfps.return_value = []
+        engine.range_info.return_value = e_range
+        engine.ote.return_value = None
+        return engine
+
+    def test_reject_log_contains_symbol_prefix_and_histogram(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # A CHoCH aligned with BULL HTF bias, recent, but with no extra
+        # confluence layers → score == 25 (HTF bias only), well below floor 70.
+        choch_break = SimpleNamespace(
+            direction="BULL", kind="CHoCH", idx=45, ts="2026-05-08T00:00", price=100.0
+        )
+        engine = self._make_mock_engine(choch_break)
+        df = pd.DataFrame({"close": [100.0] * 50})
+
+        with caplog.at_level(logging.INFO, logger="efloud.signals"):
+            sigs = generate_signals(
+                engine, df, df, df,
+                min_confluence=70, min_rr=1.5, fib_ext=1.618,
+                recency_bars=40,
+                symbol="ETH/USDT",
+            )
+
+        assert sigs == []
+        reject_msgs = [
+            rec.message for rec in caplog.records
+            if "CHoCH" in rec.message and "Rejects" in rec.message
+        ]
+        assert reject_msgs, f"No reject summary logged. Records: {[r.message for r in caplog.records]}"
+        msg = reject_msgs[0]
+        assert "[ETH/USDT]" in msg
+        assert "conf<70" in msg
+        assert "max=25" in msg
+        assert "hist:" in msg
+        assert "25×1" in msg
+
+    def test_reject_log_uses_per_symbol_override_threshold(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Same setup but XRP override 85 — log must reflect effective threshold.
+        choch_break = SimpleNamespace(
+            direction="BULL", kind="CHoCH", idx=45, ts="2026-05-08T00:00", price=100.0
+        )
+        engine = self._make_mock_engine(choch_break)
+        df = pd.DataFrame({"close": [100.0] * 50})
+
+        with caplog.at_level(logging.INFO, logger="efloud.signals"):
+            generate_signals(
+                engine, df, df, df,
+                min_confluence=70, min_rr=1.5, fib_ext=1.618,
+                recency_bars=40,
+                symbol="XRP/USDT",
+                symbol_confluence_overrides={"XRP/USDT": 85},
+            )
+
+        reject_msgs = [
+            rec.message for rec in caplog.records
+            if "CHoCH" in rec.message and "Rejects" in rec.message
+        ]
+        assert reject_msgs
+        msg = reject_msgs[0]
+        assert "[XRP/USDT]" in msg
+        assert "conf<85" in msg  # effective threshold, not the global 70
