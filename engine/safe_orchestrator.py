@@ -217,6 +217,24 @@ class SafeOrchestrator:
                 f"{[(p.symbol, p.direction, p.is_open) for p in restored]}"
             )
 
+        # Restore _processed_signals so a mid-cycle restart cannot re-open the
+        # same signal twice. Disk format: list of [key_tuple_as_list, timestamp].
+        # See SOL double-open incident, 2026-05-08 10:14 → 10:18 UTC.
+        saved_sigs = self.store.load("processed_signals")
+        if saved_sigs:
+            try:
+                self._processed_signals = {
+                    tuple(entry[0]): float(entry[1])
+                    for entry in saved_sigs
+                    if isinstance(entry, (list, tuple)) and len(entry) == 2
+                }
+                log.info(
+                    f"♻️  Restored {len(self._processed_signals)} processed signal(s) from disk"
+                )
+            except Exception as e:
+                log.warning(f"Could not restore processed_signals: {e}")
+                self._processed_signals = {}
+
     def _persist_state(self):
         """State'i diske yaz."""
         if not self.persist:
@@ -235,6 +253,16 @@ class SafeOrchestrator:
                 d["symbol"] = sym
                 all_active.append(d)
         self.store.save("scenarios", all_active)
+
+        # _processed_signals — JSON-friendly form: list of [key_list, ts].
+        # Tuples are not JSON-native; we serialize as lists and reconstruct on load.
+        try:
+            self.store.save(
+                "processed_signals",
+                [[list(k), ts] for k, ts in self._processed_signals.items()],
+            )
+        except Exception as e:
+            log.warning(f"Could not persist processed_signals: {e}")
 
     def run_cycle(
         self,
@@ -419,6 +447,9 @@ class SafeOrchestrator:
                 log.info(f"🔁 [{symbol}] Signal already processed {age_min:.0f}min ago — skipping")
             else:
                 self._processed_signals[sig_key] = now_ts
+                # Persist dedup cache immediately so a mid-cycle restart can't
+                # re-open the same signal (SOL double-open, 2026-05-08).
+                self._persist_state()
 
                 # Sembol tradeable mi? (read-only ise notification gönder, trade etme)
                 is_tradeable = True
