@@ -27,6 +27,21 @@ export type OpenPosition = {
   opened_at: string;
 };
 
+export type OpenOrder = {
+  id: string;
+  symbol: string;
+  type: string;          // "market" | "limit" | "stop_market" | "take_profit_market" | ...
+  side: string;          // "buy" | "sell"
+  price: number | null;
+  stop_price: number | null;
+  amount: number | null;
+  filled: number | null;
+  remaining: number | null;
+  reduce_only: boolean;
+  status: string;        // "open" | "closed" | ...
+  timestamp: number | null;  // ms epoch
+};
+
 export type Trade = {
   id: string;
   symbol: string;

@@ -5,6 +5,7 @@ import { TopBar } from "@/components/TopBar";
 import { StatusGrid } from "@/components/StatusGrid";
 import { EquityChart } from "@/components/EquityChart";
 import { PositionsTable } from "@/components/PositionsTable";
+import { OpenOrdersTable } from "@/components/OpenOrdersTable";
 import { TradesTable } from "@/components/TradesTable";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { LiveSync } from "@/components/LiveSync";
@@ -30,6 +31,9 @@ export default function Dashboard() {
         </section>
         <section>
           <PositionsTable />
+        </section>
+        <section>
+          <OpenOrdersTable />
         </section>
         <section>
           <TradesTable />
