@@ -1,10 +1,13 @@
 """Binance exchange client + order manager — CCXT tabanlı."""
 
 import ccxt
+import json
+import os
 import pandas as pd
 import logging
+from pathlib import Path
 from typing import Optional, Dict, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 
 log = logging.getLogger("efloud.exchange")
 
@@ -141,15 +144,18 @@ class BinanceClient:
             return False
 
     def get_open_positions(self, symbol: str = None) -> list:
-        """Açık pozisyonları getir."""
+        """Açık pozisyonları getir.
+
+        Raises on transport/API failure — callers must distinguish 'no positions'
+        from 'fetch failed'. Reconcile relies on this distinction: silently
+        returning [] on exception caused the 2026-05-08 stacking bug where
+        every API hiccup was interpreted as 'all positions closed', wiping
+        local state and letting the next signal re-open + restack TP/SL trios.
+        """
         if self.market_type != "futures":
             return []
-        try:
-            positions = self.exchange.fetch_positions([symbol] if symbol else None)
-            return [p for p in positions if float(p.get("contracts", 0)) > 0]
-        except Exception as e:
-            log.error(f"Fetch positions error: {e}")
-            return []
+        positions = self.exchange.fetch_positions([symbol] if symbol else None)
+        return [p for p in positions if float(p.get("contracts", 0)) > 0]
 
 
 @dataclass
@@ -185,12 +191,24 @@ class OrderManager:
     """
 
     def __init__(self, client: BinanceClient, dry_run: bool = True,
-                 on_position_change=None):
+                 on_position_change=None, state_dir: Optional[str] = None):
         self.client = client
         self.dry_run = dry_run
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
+
+        # Persistence — state_dir=None disables it (keeps old test fixtures working).
+        # When set, self.positions is mirrored to a JSON file after every state
+        # change so a restart picks up the same open positions and PositionGuard's
+        # duplicate-direction check stays effective. See 2026-05-08 stacking bug
+        # for why this matters in production.
+        self._state_dir: Optional[Path] = Path(state_dir) if state_dir else None
+        self._state_file: Optional[Path] = (
+            self._state_dir / "order_manager_positions.json" if self._state_dir else None
+        )
+        if self._state_dir is not None:
+            self._restore()
 
     # ─────────────────────────────────────────────────────────────
     # Open / Close
@@ -218,6 +236,7 @@ class OrderManager:
                            opened_at=pd.Timestamp.now().isoformat(),
                            trace_id=trace_id, bar_ts_ms=bar_ts_ms)
             self.positions.append(pos)
+            self._persist()
             self._emit("position_opened", pos)
             return pos
 
@@ -279,6 +298,7 @@ class OrderManager:
                 trace_id=trace_id, bar_ts_ms=bar_ts_ms,
             )
             self.positions.append(pos)
+            self._persist()
             self._emit("position_opened", pos)
             return pos
 
@@ -313,12 +333,17 @@ class OrderManager:
 
         bn_orders_raw: list = []
         bn_order_ids: set = set()
+        orders_fetch_ok = True
         try:
             bn_orders_raw = self.client.exchange.fetch_open_orders()
             bn_order_ids = {str(o.get("id", "")) for o in bn_orders_raw}
         except Exception as e:
             log.warning(f"Reconcile: open orders fetch failed: {e}")
+            orders_fetch_ok = False
             # bn_orders_raw stays []; bn_order_ids stays empty set
+            # CRITICAL: do NOT use missing-order = filled logic when fetch failed —
+            # that's how the 2026-05-08 stacking bug fired (every transient API
+            # error tripped TP1-hit on every open position).
 
         # Binance'deki açık pozisyon symbol'leri.
         # CCXT futures returns 'FIL/USDT:USDT'; bot tracks 'FIL/USDT'. Strip the
@@ -341,7 +366,9 @@ class OrderManager:
                 continue
 
             # Pozisyon hâlâ açık — TP1 fill kontrolü
-            if pos.tp1_order_id and not pos.tp1_hit:
+            # Only run when the open-orders fetch succeeded; otherwise an empty
+            # bn_order_ids (from a failed fetch) would falsely declare TP1 filled.
+            if orders_fetch_ok and pos.tp1_order_id and not pos.tp1_hit:
                 if pos.tp1_order_id not in bn_order_ids:
                     # TP1 order'ı kaybolmuş = filled
                     pos.tp1_hit = True
@@ -349,6 +376,9 @@ class OrderManager:
                     self._move_sl_to_breakeven(pos)
                     self._emit("tp1_hit", pos)
 
+        # Always persist after a reconcile pass so disk reflects latest exchange-derived
+        # state (closes removed from list, tp1_hit flags flipped, sl_order_id updated).
+        self._persist()
         return closed_now
 
     def _move_sl_to_breakeven(self, pos: Position) -> None:
@@ -471,6 +501,7 @@ class OrderManager:
 
         self._record_close(pos, price, reason)
         self.positions.remove(pos)
+        self._persist()
 
     def kill_switch(self) -> int:
         """Tüm açık pozisyonları piyasa fiyatından kapat + tüm pending order'ları iptal et.
@@ -503,3 +534,55 @@ class OrderManager:
     @property
     def open_count(self) -> int:
         return len(self.positions)
+
+    # ─────────────────────────────────────────────────────────────
+    # Persistence — opt-in via state_dir
+    # ─────────────────────────────────────────────────────────────
+
+    def _persist(self) -> None:
+        """Atomically write self.positions to disk (no-op if state_dir not set)."""
+        if self._state_file is None:
+            return
+        try:
+            self._state_dir.mkdir(parents=True, exist_ok=True)
+            tmp = self._state_file.with_suffix(".json.tmp")
+            payload = {"positions": [asdict(p) for p in self.positions]}
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self._state_file)
+        except Exception as e:
+            log.error(f"OrderManager state persist failed: {e}")
+
+    def _restore(self) -> None:
+        """Load self.positions from state file. Corrupt files are quarantined."""
+        if self._state_file is None or not self._state_file.exists():
+            return
+        try:
+            with open(self._state_file, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            raw = payload.get("positions", [])
+            restored: List[Position] = []
+            for d in raw:
+                # Tolerate unknown fields from older formats.
+                fields = {f.name for f in Position.__dataclass_fields__.values()}
+                clean = {k: v for k, v in d.items() if k in fields}
+                restored.append(Position(**clean))
+            self.positions = restored
+            if restored:
+                log.info(
+                    f"♻️  OrderManager restored {len(restored)} position(s) from "
+                    f"{self._state_file}: "
+                    f"{[(p.symbol, p.direction, p.size) for p in restored]}"
+                )
+        except Exception as e:
+            log.error(f"OrderManager restore failed: {e} — quarantining state file")
+            try:
+                bad = self._state_file.with_suffix(
+                    f".corrupt.{int(pd.Timestamp.now().timestamp())}.json"
+                )
+                self._state_file.rename(bad)
+            except Exception:
+                pass
+            self.positions = []

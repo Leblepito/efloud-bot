@@ -119,6 +119,7 @@ class Position:
         return diff * self.remaining_size
 
     def to_dict(self) -> dict:
+        """Compact summary (counts of entries/exits) — used by report/UI snapshots."""
         return {
             "id": self.id, "symbol": self.symbol, "direction": self.direction,
             "avg_entry": round(self.avg_entry_price, 8),
@@ -130,6 +131,43 @@ class Position:
             "entries": len(self.entries), "exits": len(self.exits),
             "hedge_id": self.hedge_id, "scenario_id": self.scenario_id,
         }
+
+    def to_full_dict(self) -> dict:
+        """Lossless serialization — preserves entries/exits for state restore.
+
+        Required to restore lifecycle.positions after a bot restart so that
+        PositionGuard's duplicate-direction check (existing_positions=lifecycle)
+        still rejects re-opens. See 2026-05-08 stacking bug.
+        """
+        return {
+            "id": self.id, "symbol": self.symbol, "direction": self.direction,
+            "entries": [e.__dict__ for e in self.entries],
+            "exits": [e.__dict__ for e in self.exits],
+            "sl": self.sl, "tp1": self.tp1, "tp2": self.tp2,
+            "initial_sl": self.initial_sl,
+            "tp1_hit": self.tp1_hit, "tp2_hit": self.tp2_hit,
+            "sl_moved_to_be": self.sl_moved_to_be,
+            "hedge_id": self.hedge_id, "scenario_id": self.scenario_id,
+            "opened_at": self.opened_at, "closed_at": self.closed_at,
+        }
+
+    @classmethod
+    def from_full_dict(cls, d: dict) -> "Position":
+        """Inverse of to_full_dict."""
+        return cls(
+            id=d["id"], symbol=d["symbol"], direction=d["direction"],
+            entries=[Entry(**e) for e in d.get("entries", [])],
+            exits=[Exit(**e) for e in d.get("exits", [])],
+            sl=d.get("sl", 0.0), tp1=d.get("tp1", 0.0), tp2=d.get("tp2", 0.0),
+            initial_sl=d.get("initial_sl", 0.0),
+            tp1_hit=d.get("tp1_hit", False),
+            tp2_hit=d.get("tp2_hit", False),
+            sl_moved_to_be=d.get("sl_moved_to_be", False),
+            hedge_id=d.get("hedge_id"),
+            scenario_id=d.get("scenario_id"),
+            opened_at=d.get("opened_at", ""),
+            closed_at=d.get("closed_at"),
+        )
 
 
 class PositionLifecycle:

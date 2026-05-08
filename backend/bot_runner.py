@@ -153,10 +153,13 @@ class BotRunner:
         notif_mgr = NotificationManager(channels=["log"])  # WS push üzerinden ayrıca yapılır
         state_dir = self.cfg["operation"].get("state_dir", "./state")
 
-        # OrderManager FIRST — orchestrator'a inject edilecek
+        # OrderManager FIRST — orchestrator'a inject edilecek.
+        # state_dir same as orchestrator's so restart restores order_mgr.positions
+        # (prevents duplicate SL+TP1+TP2 stacking on Binance — 2026-05-08 bug).
         self.order_mgr = OrderManager(
             self.client, dry_run=self.cfg["operation"]["dry_run"],
             on_position_change=self._on_position_change,
+            state_dir=state_dir,
         )
 
         self.orch = SafeOrchestrator(
