@@ -14,7 +14,7 @@ Check'ler:
 import logging
 from dataclasses import dataclass
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 log = logging.getLogger("efloud.posguard")
 
@@ -211,7 +211,8 @@ class PositionGuard:
             return PositionCheckResult(True)
 
         raw = position.opened_at
-        # Strip trailing Z so fromisoformat accepts it (Z support pre-3.11).
+        # Strip trailing Z; fromisoformat handles it natively on 3.11+, but
+        # the slice keeps us safe on older interpreters and is a no-op otherwise.
         if raw.endswith("Z"):
             raw = raw[:-1]
 
@@ -220,11 +221,12 @@ class PositionGuard:
         except Exception:
             return PositionCheckResult(True)
 
-        # Drop tzinfo so the subtraction is naive-vs-naive. We're comparing
-        # against datetime.utcnow() which is naive UTC, so a TZ-aware UTC
-        # value can be safely de-zoned without arithmetic distortion.
+        # Convert any TZ-aware value to UTC before dropping tzinfo, so a hand-
+        # edited non-UTC offset (e.g. "+03:00") is normalized rather than
+        # silently distorted by hours. Subtracting against datetime.utcnow()
+        # below requires a naive datetime.
         if opened.tzinfo is not None:
-            opened = opened.replace(tzinfo=None)
+            opened = opened.astimezone(timezone.utc).replace(tzinfo=None)
 
         age = datetime.utcnow() - opened
         hours = age.total_seconds() / 3600
