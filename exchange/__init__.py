@@ -9,6 +9,18 @@ from dataclasses import dataclass, field
 log = logging.getLogger("efloud.exchange")
 
 
+def _strip_contract_suffix(symbol: str) -> str:
+    """Normalize CCXT futures contract notation: 'FIL/USDT:USDT' → 'FIL/USDT'.
+
+    CCXT returns linear futures symbols with a `:USDT` (or `:USDC`) suffix from
+    `fetch_positions` and similar endpoints, but local Position objects are
+    tracked in slash-only form. This helper bridges the two so symbol set
+    comparisons (e.g. in reconcile) don't silently fail when both sides come
+    from different CCXT call paths.
+    """
+    return symbol.split(":", 1)[0] if ":" in symbol else symbol
+
+
 class BinanceClient:
     """CCXT ile Binance Futures/Spot bağlantısı."""
 
@@ -308,8 +320,14 @@ class OrderManager:
             log.warning(f"Reconcile: open orders fetch failed: {e}")
             # bn_orders_raw stays []; bn_order_ids stays empty set
 
-        # Binance'deki açık pozisyon symbol'leri
-        bn_open_symbols = {p["symbol"] for p in bn_positions if float(p.get("contracts", 0)) > 0}
+        # Binance'deki açık pozisyon symbol'leri.
+        # CCXT futures returns 'FIL/USDT:USDT'; bot tracks 'FIL/USDT'. Strip the
+        # contract suffix so set membership matches local Position.symbol form.
+        bn_open_symbols = {
+            _strip_contract_suffix(p["symbol"])
+            for p in bn_positions
+            if float(p.get("contracts", 0)) > 0
+        }
 
         closed_now: List[Position] = []
 
