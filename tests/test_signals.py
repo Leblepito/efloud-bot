@@ -137,6 +137,40 @@ class TestRejectSummaryLog:
         assert "[ETH/USDT]" in msg
         assert "max=25" in msg
 
+    def test_bos_past_bos_recency_window_is_rejected(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """BOS more than recency_bars/2 bars old must not trigger.
+
+        Pre-Task-5: BOS uses the global recency_bars=40 → idx=25 in a
+        50-bar df is fresh enough → reject log appears.
+        Post-Task-5: BOS uses 40/2=20 bar window → idx=25 is stale → no
+        reject log emitted (filtered at trigger gate, before scoring).
+        """
+        stale_bos = SimpleNamespace(
+            direction="BULL", kind="BOS", idx=25, ts="2026-05-08T00:00", price=100.0
+        )
+        engine = self._make_mock_engine(stale_bos)
+        df = pd.DataFrame({"close": [100.0] * 50})
+
+        with caplog.at_level(logging.INFO, logger="efloud.signals"):
+            sigs = generate_signals(
+                engine, df, df, df,
+                min_confluence=70, min_rr=1.5, fib_ext=1.618,
+                recency_bars=40,
+                symbol="ETH/USDT",
+            )
+
+        assert sigs == []
+        reject_msgs = [
+            rec.message for rec in caplog.records
+            if "0 signals" in rec.message and "Rejects" in rec.message
+        ]
+        assert reject_msgs == [], (
+            "Stale BOS slipped through; expected trigger-gate rejection. "
+            f"records: {[r.message for r in caplog.records]}"
+        )
+
     def test_reject_log_uses_per_symbol_override_threshold(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
