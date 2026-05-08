@@ -1,33 +1,32 @@
 # ══════════════════════════════════════════════════════════════════
-# AGGRESSIVE MODE v1 — daily-action focused, 21-coin universe
+# AGGRESSIVE MODE v1 — daily-action focused, 9-coin curated universe
 # ══════════════════════════════════════════════════════════════════
 # Built on H2-A2 (parent: config.phase2_1k_h2a2_risk2_notional6.yaml).
 # Goal: more daily trade activity without sacrificing per-trade quality.
-# Plan: docs/superpowers/specs/2026-05-07-aggressive-mode-v1-design.md
+# Validation: docs/results/2026-05-07-aggressive-v1-final.md (Phase A 2.0).
 #
 # Changes from H2-A2 baseline:
-#   confluence:           80 → 70 (global default, weak coins overridden 85-90)
+#   confluence:           80 → 70 (global) + per-symbol overrides (mid tier 80)
 #   max_open_positions:   1 (de-facto) → 5 (now ENFORCED via new gate)
 #   max_position_notional_pct: 6.0 → 10.0 (per-trade exposure 1.67x)
 #   daily_loss_limit_pct: 10.0 (kept; allows ~5 SL hits before breaker)
 #   emergency_threshold:  1800 → 1700 (tighten cushion to 85% of starting)
-#   symbols:              10 → 21 (added 11 candidates: AVAX, DOT, ATOM, NEAR,
-#                         FIL, LTC, ARB, OP, APT, SUI, RENDER)
-#   risk_per_trade_pct:   2.0 (kept — keeps SL distance reasonable; user-confirmed)
+#   symbols:              10 H2-A2 → 9 curated (Phase A 2.0 tier-ranked from 21
+#                         candidates: top 4 + mid 5 kept, 12 dropped)
+#   risk_per_trade_pct:   2.0 (kept — keeps SL distance reasonable)
 #
-# Math sanity (per Phase A 2.0 plan §"Math doğrulaması"):
+# Math sanity:
 #   Risk 2% × max 5 positions = 10% wallet at risk simultaneously
 #                              = matches daily_loss_limit_pct
 #   Per trade notional cap 10% × leverage 5 = $1000 max position at $2000
 #   5 simultaneous × $1000 = $5000 total notional = max_total_exposure 1.0 × wallet
-#                            (under 5x leverage cap — see line below)
+#                            (under 5x leverage cap)
 #
-# Workflow:
-#   1. Step 1 (this file) — schema with empty symbol_confluence_overrides
-#   2. Step 3 — Phase A 2.0 backtest produces per-symbol metrics
-#   3. Step 4 — overrides populated from results (top 30%: 70 default,
-#               mid 40%: 80 override, bottom 30%: 85-90 OR drop)
-#   4. Step 5 — final validation re-run
+# Validated portfolio metrics (Step 5 final, 365d backtest):
+#   Total return:  +49.12% (H2-A2 was +42.48%)
+#   Total trades:  364     (H2-A2 was 206 — 77% more daily action)
+#   Max DD:        11.49%  (within 12% target)
+#   Profit factor: 2.44
 #
 # Önkoşullar (preflight.py ile doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi)
@@ -48,7 +47,7 @@ exchange:
   leverage: 5              # 5x kaldıraç (orta-agresif)
   margin_mode: ISOLATED    # Pozisyonlar birbirini etkilemez
 
-# ── 21 sembol — 10 H2-A2 baseline + 11 aggressive_v1 yeni (Phase A 2.0 ile validate edilecek) ──
+# ── 9 sembol — Phase A 2.0 (2026-05-07) tier-ranked from 21 candidates ──
 symbols:
   mode: fixed
   # 9 symbols — Step 4 tuning result from Phase A 2.0 (2026-05-07).
@@ -66,6 +65,9 @@ symbols:
     - OP/USDT       # +0.81% (DD 9.35%, override 80)
     - LTC/USDT      # +0.80% (DD 7.31%, override 80)
     - BTC/USDT      # +0.17% (DD 7.59%, override 80)
+    # Selective tier (conf=85 override — user-requested re-add despite weak Phase A 2.0;
+    # high threshold filters most signals to compensate for negative backtest return)
+    - XRP/USDT      # -6.63% (DD 10.40%, override 85)
   dynamic_top_n: 0
   dynamic_exclude: []
   refresh_dynamic_hours: 24
@@ -109,6 +111,7 @@ risk:
     ADA/USDT: 80
     OP/USDT: 80
     LTC/USDT: 80
+    XRP/USDT: 85   # User re-added 2026-05-08; high threshold to compensate for -6.63% Phase A perf
 
   # Opt-in reverse-from-risk (legacy default, mevcut SMC sizing)
   position_size_calculation: legacy
