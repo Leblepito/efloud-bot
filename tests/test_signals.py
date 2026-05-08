@@ -37,9 +37,14 @@ class TestFormatScoreHistogram:
 
 
 class TestRejectSummaryLog:
-    """Reject summary log must surface symbol + score histogram for calibration."""
+    """Reject summary log + trigger acceptance for CHoCH/BOS breaks.
 
-    def _make_mock_engine(self, choch_break) -> MagicMock:
+    The mock engine returns a single user-supplied StructBreak in `e_brks`
+    so each test can target one trigger-gate scenario (CHoCH/BOS, fresh/stale,
+    aligned/counter-direction) without spinning up the real SMC pipeline.
+    """
+
+    def _make_mock_engine(self, break_obj) -> MagicMock:
         e_range = SimpleNamespace(
             discount=False, premium=False, dev_bull=False, dev_bear=False,
             lo=99.0, hi=101.0,
@@ -54,8 +59,8 @@ class TestRejectSummaryLog:
             "range": e_range,
         }
         engine.swings.return_value = ([], [])
-        # First call (for mtf_brks) returns empty; second (e_brks) returns the CHoCH.
-        engine.structure.side_effect = [[], [choch_break]]
+        # First call (for mtf_brks) returns empty; second (e_brks) returns the break.
+        engine.structure.side_effect = [[], [break_obj]]
         engine.order_blocks.return_value = []
         engine.sfps.return_value = []
         engine.range_info.return_value = e_range
