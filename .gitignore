@@ -34,3 +34,12 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# Claude Code local state — drift per session, never commit
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/projects/
+
+# Local working dirs / venv variations
+.tmp/
+tmp/
