@@ -99,6 +99,44 @@ class TestRejectSummaryLog:
         assert "hist:" in msg
         assert "25×1" in msg
 
+    def test_bos_in_htf_direction_reaches_confluence_scoring(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """BOS aligned with HTF bias must be a valid trigger candidate.
+
+        Pre-change: signals.py drops every non-CHoCH break, so this BOS is
+        silently ignored and no reject log is emitted.
+        Post-change: BOS goes through to confluence scoring; with no extra
+        layers the score is 25 (HTF bias only) → reject log emitted with
+        bucket 25.
+        """
+        bos_break = SimpleNamespace(
+            direction="BULL", kind="BOS", idx=45, ts="2026-05-08T00:00", price=100.0
+        )
+        engine = self._make_mock_engine(bos_break)
+        df = pd.DataFrame({"close": [100.0] * 50})
+
+        with caplog.at_level(logging.INFO, logger="efloud.signals"):
+            sigs = generate_signals(
+                engine, df, df, df,
+                min_confluence=70, min_rr=1.5, fib_ext=1.618,
+                recency_bars=40,
+                symbol="ETH/USDT",
+            )
+
+        assert sigs == []
+        reject_msgs = [
+            rec.message for rec in caplog.records
+            if "0 signals" in rec.message and "Rejects" in rec.message
+        ]
+        assert reject_msgs, (
+            "BOS trigger was filtered before confluence scoring; "
+            f"records: {[r.message for r in caplog.records]}"
+        )
+        msg = reject_msgs[0]
+        assert "[ETH/USDT]" in msg
+        assert "max=25" in msg
+
     def test_reject_log_uses_per_symbol_override_threshold(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
