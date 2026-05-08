@@ -29,11 +29,19 @@ class BinanceClient:
 
     def __init__(self, api_key: str = "", api_secret: str = "",
                  testnet: bool = True, market_type: str = "futures"):
+        # CCXT 4.x binance only accepts 'spot|future|margin|delivery|option' for
+        # options.defaultType. The bot uses 'futures' (plural) as its own internal
+        # market_type label (40+ `== "futures"` comparisons across the codebase),
+        # so we normalize here for CCXT and leave self.market_type unchanged.
+        # Without this normalization, fetch_open_orders silently falls through
+        # is_linear/is_inverse and routes to /api/v3/openOrders (spot) — see the
+        # 2026-05-08 reconcile-blindspot incident.
+        ccxt_default_type = "future" if market_type == "futures" else market_type
         opts = {
             "apiKey": api_key,
             "secret": api_secret,
             "enableRateLimit": True,
-            "options": {"defaultType": market_type},
+            "options": {"defaultType": ccxt_default_type},
         }
         if testnet:
             opts["sandbox"] = True
