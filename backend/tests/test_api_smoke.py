@@ -96,6 +96,25 @@ async def test_positions_empty_when_no_bot(client):
 
 
 @pytest.mark.asyncio
+async def test_orders_requires_auth(client):
+    r = await client.get("/api/orders")
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_orders_empty_when_no_bot(client):
+    """Bot client not initialized → endpoint returns [] instead of 5xx.
+
+    Mirrors /api/positions behavior: graceful empty list keeps the dashboard
+    functional even before the bot worker has started up.
+    """
+    await client.post("/api/login", json={"password": "test-password-123"})
+    r = await client.get("/api/orders")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+@pytest.mark.asyncio
 async def test_history_empty_no_db(client):
     await client.post("/api/login", json={"password": "test-password-123"})
     r = await client.get("/api/history")

@@ -72,6 +72,41 @@ async def positions() -> list[dict]:
     return out
 
 
+@router.get("/orders", dependencies=[Depends(require_auth)])
+async def orders() -> list[dict]:
+    """Open orders on Binance (limit / TP / SL) — live fetch.
+
+    Returns [] when bot client is not initialized (worker hasn't started).
+    Returns [] on CCXT error and logs a warning so the dashboard stays
+    functional through transient exchange/network issues.
+    """
+    if not runner.client:
+        return []
+    try:
+        raw = runner.client.exchange.fetch_open_orders()
+    except Exception as e:
+        log.warning(f"Open orders fetch failed: {e}")
+        return []
+    out: list[dict] = []
+    for o in raw:
+        info = o.get("info") or {}
+        out.append({
+            "id": str(o.get("id", "")),
+            "symbol": o.get("symbol", ""),
+            "type": (o.get("type") or info.get("type") or "").lower(),
+            "side": (o.get("side") or info.get("side") or "").lower(),
+            "price": o.get("price"),
+            "stop_price": o.get("stopPrice") or info.get("stopPrice"),
+            "amount": o.get("amount"),
+            "filled": o.get("filled"),
+            "remaining": o.get("remaining"),
+            "reduce_only": bool(o.get("reduceOnly") or info.get("reduceOnly") or False),
+            "status": o.get("status", ""),
+            "timestamp": o.get("timestamp"),
+        })
+    return out
+
+
 @router.get("/history", dependencies=[Depends(require_auth)])
 async def history(limit: int = 50) -> list[dict]:
     return await db.fetch_recent_trades(limit=min(limit, 500))
