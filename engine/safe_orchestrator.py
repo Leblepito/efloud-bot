@@ -165,19 +165,68 @@ class SafeOrchestrator:
             except Exception as e:
                 log.warning(f"Could not restore breaker state: {e}")
 
-        # Position reconciliation log için
+        # Restore lifecycle positions so duplicate-direction guard is effective
+        # after a restart. Skipping this caused the 2026-05-08 stacking bug:
+        # bot opened FIL+RENDER, container restarted, lifecycle came up empty,
+        # PositionGuard saw no existing positions, signal re-fired, OrderManager
+        # placed a fresh SL+TP1+TP2 trio on top of the still-live Binance ones.
+        from .lifecycle import Position as LifecyclePosition
         saved_positions = self.store.load("positions")
         if saved_positions:
-            log.info(f"♻️  Found {len(saved_positions)} saved positions — "
-                     f"reconcile with exchange recommended")
+            restored = []
+            for d in saved_positions:
+                if not isinstance(d, dict):
+                    continue
+                # Tolerate compact (legacy) dicts that lack entries/exits — they
+                # cannot drive strategy logic but at minimum a synthetic single-Entry
+                # restoration is enough for the guard's open-status check.
+                if "entries" in d and isinstance(d["entries"], list):
+                    try:
+                        restored.append(LifecyclePosition.from_full_dict(d))
+                        continue
+                    except Exception as e:
+                        log.warning(f"Failed to restore position from full dict: {e}")
+                # Legacy compact dict fallback — synthesize a minimal viable Position
+                # so duplicate-direction guard works (size + symbol + direction).
+                try:
+                    from .lifecycle import Entry as LifecycleEntry
+                    size = float(d.get("remaining_size") or 0.0)
+                    if size <= 0:
+                        continue
+                    avg = float(d.get("avg_entry") or 0.0)
+                    pos = LifecyclePosition(
+                        id=str(d.get("id", "")), symbol=str(d.get("symbol", "")),
+                        direction=str(d.get("direction", "LONG")),
+                        entries=[LifecycleEntry(
+                            id="restored", price=avg, size=size,
+                            timestamp=str(d.get("opened_at", "")), reason="initial",
+                        )],
+                        sl=float(d.get("sl") or 0.0),
+                        tp1=float(d.get("tp1") or 0.0),
+                        tp2=float(d.get("tp2") or 0.0),
+                        tp1_hit=bool(d.get("tp1_hit", False)),
+                        scenario_id=d.get("scenario_id"),
+                        opened_at=str(d.get("opened_at", "")),
+                    )
+                    restored.append(pos)
+                except Exception as e:
+                    log.warning(f"Failed to restore legacy compact position: {e}")
+            self.lifecycle.positions = restored
+            log.info(
+                f"♻️  Restored {len(restored)} lifecycle position(s): "
+                f"{[(p.symbol, p.direction, p.is_open) for p in restored]}"
+            )
 
     def _persist_state(self):
         """State'i diske yaz."""
         if not self.persist:
             return
         self.store.save("breaker", self.breaker.to_dict())
+        # Use lossless to_full_dict so a restart can rebuild lifecycle.positions
+        # with full entries/exits — the compact to_dict() is for UI snapshots
+        # and loses the data that PositionGuard needs to enforce duplicate-direction.
         self.store.save("positions",
-                         [p.to_dict() for p in self.lifecycle.positions])
+                         [p.to_full_dict() for p in self.lifecycle.positions])
         # Tüm sembollerin aktif senaryolarını (symbol bilgisiyle birlikte) kaydet
         all_active = []
         for sym, planner in self._planners.items():
