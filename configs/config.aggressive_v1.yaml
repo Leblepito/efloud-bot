@@ -8,20 +8,23 @@
 # Changes from H2-A2 baseline (2026-05-08 bull-aware revision):
 #   confluence:           80 → 55 (global) + per-symbol overrides (mid 65, XRP 75)
 #   trigger:              CHoCH-only → CHoCH + BOS (continuation breaks now valid)
-#   max_open_positions:   1 (de-facto) → 5 (now ENFORCED via new gate)
+#   max_open_positions:   1 (de-facto) → 5 → 10 (2026-05-09 user request)
 #   max_position_notional_pct: 6.0 → 10.0 (per-trade exposure 1.67x)
-#   daily_loss_limit_pct: 10.0 (kept; allows ~5 SL hits before breaker)
+#   daily_loss_limit_pct: 10.0 → 20.0 (2026-05-09 — aligned with 10 × 2% risk)
+#   weekly_drawdown_limit_pct: 15.0 → 30.0 (2026-05-09 — keeps weekly > daily)
 #   emergency_threshold:  1800 → 1700 (tighten cushion to 85% of starting)
 #   symbols:              10 H2-A2 → 9 curated (Phase A 2.0 tier-ranked from 21
 #                         candidates: top 4 + mid 5 kept, 12 dropped)
 #   risk_per_trade_pct:   2.0 (kept — keeps SL distance reasonable)
 #
 # Math sanity:
-#   Risk 2% × max 5 positions = 10% wallet at risk simultaneously
-#                              = matches daily_loss_limit_pct
-#   Per trade notional cap 10% × leverage 5 = $1000 max position at $2000
-#   5 simultaneous × $1000 = $5000 total notional = max_total_exposure 1.0 × wallet
-#                            (under 5x leverage cap)
+#   Risk 2% × max 10 positions = 20% wallet at risk simultaneously
+#                              = matches daily_loss_limit_pct (20%)
+#   Per trade notional cap 10% × leverage 5 = max $X notional per trade
+#                                              (X scales with availableBalance
+#                                              under sizing_balance_source: available)
+#   10 simultaneous × $X = total notional varies; max_total_exposure cap still 1.0× wallet
+#                          (under 5x leverage cap)
 #
 # Validated portfolio metrics (Step 5 final, 365d backtest):
 #   Total return:  +49.12% (H2-A2 was +42.48%)
@@ -91,10 +94,10 @@ fibonacci:
   ote_upper: 0.786
   ext_tp2: 1.618
 
-# ── Risk: aggressive — 10% notional per trade × 5 positions = 50% net exposure ──
+# ── Risk: aggressive — 10% notional per trade × 10 positions = 100% gross exposure ──
 risk:
   risk_per_trade_pct: 2.0             # $40 risk budget per trade @ $2000 (no change vs H2-A2)
-  max_open_positions: 5               # ENFORCED gate (commit 20c6ccd) — was effective-1
+  max_open_positions: 10              # 2026-05-09 user request — was 5, scaled with daily_loss 20%
   min_rr: 1.8                         # Min R:R 1:1.8
   min_confluence: 55                  # ChoCH(25) + MTF onay(20) + 1 SMC layer(10) — see docs/superpowers/specs/2026-05-08-bull-aware-signal-trigger-design.md
   recency_bars: 40
@@ -140,10 +143,10 @@ operation:
   state_dir: ./state_aggressive
   reports_dir: ./reports_aggressive
 
-# ── Safety: aggressive limits — daily 10% allows ~5 SL hits, weekly 15% halts deeper ──
+# ── Safety: aggressive limits — daily 20% allows ~10 SL hits, weekly 30% halts deeper ──
 safety:
-  daily_loss_limit_pct: 10.0          # $200 günlük max kayıp; matches 5 × risk_per_trade_pct
-  weekly_drawdown_limit_pct: 15.0     # $300 haftalık DD → HALT
+  daily_loss_limit_pct: 20.0          # 2026-05-09: was 10.0 — aligned with 10 × 2% risk
+  weekly_drawdown_limit_pct: 30.0     # 2026-05-09: was 15.0 — keeps weekly > daily
   consecutive_loss_limit: 3            # 3 ardışık SL → 120dk pause
   consecutive_pause_min: 120
   starting_balance: 2000              # Session anchor; reset on deploy if wallet differs
@@ -154,8 +157,8 @@ safety:
 
   # max_position_notional_pct: kod içinde "margin cap" olarak kullanılıyor.
   # Formül: balance × pct/100 × leverage = max notional per trade
-  # 2000 × 10.0% × 5 = $1000 notional max per trade
-  # 5 simultaneous × $1000 = $5000 toplam notional (max_total_exposure ile sınırlı)
+  #   (balance = availableBalance under sizing_balance_source: available — PR #25)
+  # 10 simultaneous trades × X notional = total notional (max_total_exposure ile sınırlı)
   max_position_notional_pct: 10.0     # was 6.0 (H2-A2) → 10.0 = +67% per-trade size
   max_total_exposure: 1.0              # Tüm açık notional ≤ wallet (1x net leverage)
   max_holding_hours: 24
