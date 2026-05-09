@@ -345,6 +345,16 @@ class OrderManager:
         try:
             bn_orders_raw = self.client.exchange.fetch_open_orders()
             bn_order_ids = {str(o.get("id", "")) for o in bn_orders_raw}
+            # Also fetch algo orders (server-side TP/SL via /fapi/v1/algo/open-orders).
+            # CCXT fetch_open_orders does NOT include algo orders — without this,
+            # every reconcile cycle falsely declares TP1 filled because the algo
+            # TP1 order is "missing" from the regular orders list. See 2026-05-09
+            # LTC/ADA reconcile incident: bot moved SL to break-even on phantom TP1.
+            try:
+                algo_orders = self.client.exchange.fapiPrivateGetOpenAlgoOrders({})
+                bn_order_ids.update(str(a.get("algoId", "")) for a in algo_orders)
+            except Exception as e:
+                log.warning(f"Reconcile: algo orders fetch failed: {e} — TP1-hit detection may misfire")
         except Exception as e:
             log.warning(f"Reconcile: open orders fetch failed: {e}")
             orders_fetch_ok = False
