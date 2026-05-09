@@ -122,7 +122,7 @@ risk:
   #               concurrent pozisyon sayısı arttıkça doğal olarak küçülür.
   #               Manuel deposit/withdraw da otomatik yansır (cüzdan büyür →
   #               sonraki trade büyür; cüzdan küçülür → sonraki trade küçülür).
-  # sizing_balance_source: total
+  sizing_balance_source: available
 
   # Opt-in reverse-from-risk (legacy default, mevcut SMC sizing)
   position_size_calculation: legacy
