@@ -101,6 +101,29 @@ class BinanceClient:
         b = self.exchange.fetch_balance()
         return float(b.get("USDT", {}).get("total", 0))
 
+    def get_available_margin(self) -> float:
+        """USDT available margin — free balance not locked in open positions.
+
+        For futures: /fapi/v2/account 'availableBalance' field. This is the right
+        metric for *new-position sizing decisions* — it answers "how much margin
+        do I have left to deploy?" rather than "what's my total equity?".
+
+        Note: get_balance() returns totalMarginBalance (wallet + unrealized PnL),
+        which is the right metric for risk breakers (drawdown, daily-loss). The
+        two methods serve different purposes; both are valid and intentional.
+
+        Spot fallback returns USDT 'free' (not 'total'), since locked balance is
+        economically committed and shouldn't size new entries.
+        """
+        if self.market_type == "futures":
+            try:
+                info = self.exchange.fapiPrivateV2GetAccount()
+                return float(info.get("availableBalance", 0))
+            except Exception as e:
+                log.warning(f"futures available margin fetch failed: {e} — falling back to fetch_balance")
+        b = self.exchange.fetch_balance()
+        return float(b.get("USDT", {}).get("free", 0))
+
     def get_price(self, symbol: str) -> float:
         """Anlık fiyat."""
         t = self.exchange.fetch_ticker(symbol)
