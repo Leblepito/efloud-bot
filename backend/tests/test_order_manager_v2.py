@@ -228,6 +228,81 @@ class TestReconciliation:
         assert result == []
         mock_client.get_open_positions.assert_not_called()
 
+    def test_orphan_position_detected_and_warned(self, mgr, mock_client, caplog):
+        """When exchange has positions not tracked locally, reconcile must
+        emit a structured ORPHAN warning so an operator can investigate.
+
+        Background: 2026-05-09 LTC/ADA incident — bot had 3 of 5 exchange
+        positions in local state. Without orphan detection, the missing
+        positions were invisible to ops monitoring; they had to be
+        discovered by manually diffing exchange vs state.
+
+        Behavior contract:
+        - Orphan symbols MUST appear in WARNING-level logs with the
+          'ORPHAN POSITION DETECTED' marker so log-search alerts fire.
+        - Bot MUST NOT auto-import or auto-manage the orphan (no SL/TP
+          context for an unknown trade).
+        - Existing tracked positions MUST stay untouched.
+        """
+        import logging
+        # Local state: only BTC tracked
+        tracked = Position(symbol="BTC/USDT", direction="LONG", entry=95000,
+                           sl=94000, tp1=96000, tp2=97000, size=1.0,
+                           sl_order_id="SL-1", tp1_order_id="TP1-1",
+                           tp2_order_id="TP2-1")
+        mgr.positions = [tracked]
+
+        # Exchange reports: BTC (tracked) + ETH (orphan) + LTC (orphan)
+        mock_client.get_open_positions.return_value = [
+            {"symbol": "BTC/USDT:USDT", "contracts": 1.0,
+             "side": "long", "entryPrice": 95000, "unrealizedPnl": 0.0},
+            {"symbol": "ETH/USDT:USDT", "contracts": 2.0,
+             "side": "long", "entryPrice": 2400, "unrealizedPnl": 50.0},
+            {"symbol": "LTC/USDT:USDT", "contracts": 55.434,
+             "side": "long", "entryPrice": 58.18, "unrealizedPnl": 14.19},
+        ]
+        mock_client.exchange.fetch_open_orders.return_value = [
+            {"id": "SL-1"}, {"id": "TP1-1"}, {"id": "TP2-1"},
+        ]
+
+        with caplog.at_level(logging.WARNING, logger="efloud.exchange"):
+            closed = mgr.reconcile()
+
+        # No closes — BTC still tracked, ETH+LTC are orphans not tracked
+        assert closed == []
+        # Tracked position untouched
+        assert tracked in mgr.positions
+        assert len(mgr.positions) == 1
+        # Both orphans logged with the ORPHAN marker
+        warning_messages = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        eth_warned = any("ORPHAN POSITION DETECTED" in m and "ETH/USDT" in m for m in warning_messages)
+        ltc_warned = any("ORPHAN POSITION DETECTED" in m and "LTC/USDT" in m for m in warning_messages)
+        assert eth_warned, f"ETH orphan not warned. Logs: {warning_messages}"
+        assert ltc_warned, f"LTC orphan not warned. Logs: {warning_messages}"
+
+    def test_no_orphan_warning_when_all_positions_tracked(self, mgr, mock_client, caplog):
+        """When state matches exchange exactly, no orphan warning fires."""
+        import logging
+        pos = Position(symbol="BTC/USDT", direction="LONG", entry=95000,
+                       sl=94000, tp1=96000, tp2=97000, size=1.0,
+                       sl_order_id="SL-1", tp1_order_id="TP1-1",
+                       tp2_order_id="TP2-1")
+        mgr.positions = [pos]
+        mock_client.get_open_positions.return_value = [
+            {"symbol": "BTC/USDT:USDT", "contracts": 1.0,
+             "side": "long", "entryPrice": 95000, "unrealizedPnl": 0.0},
+        ]
+        mock_client.exchange.fetch_open_orders.return_value = [
+            {"id": "SL-1"}, {"id": "TP1-1"}, {"id": "TP2-1"},
+        ]
+
+        with caplog.at_level(logging.WARNING, logger="efloud.exchange"):
+            mgr.reconcile()
+
+        orphan_warnings = [r.message for r in caplog.records
+                           if r.levelname == "WARNING" and "ORPHAN" in r.message]
+        assert orphan_warnings == [], f"Unexpected orphan warning: {orphan_warnings}"
+
 
 class TestKillSwitch:
     """kill_switch() must close all open positions + cancel pending orders."""
