@@ -114,6 +114,16 @@ risk:
     LTC/USDT: 65
     XRP/USDT: 75   # User re-added 2026-05-08; tightened from 85 alongside the 70→55 global recalibration to keep the gap (was 85 vs 70 = +15; now 75 vs 55 = +20)
 
+  # ── Sizing balance source (PR-A, 2026-05-09) ──
+  # 'total'     → use totalMarginBalance (wallet + unrealized PnL). Each new
+  #               position sized off full equity. Default for backward compat.
+  # 'available' → use availableBalance (free margin not locked in positions).
+  #               Each new position sized off REMAINING margin → boyutlar
+  #               concurrent pozisyon sayısı arttıkça doğal olarak küçülür.
+  #               Manuel deposit/withdraw da otomatik yansır (cüzdan büyür →
+  #               sonraki trade büyür; cüzdan küçülür → sonraki trade küçülür).
+  # sizing_balance_source: total
+
   # Opt-in reverse-from-risk (legacy default, mevcut SMC sizing)
   position_size_calculation: legacy
   max_loss_per_trade_usdt: 40         # Bumped 20 → 40 to match risk_per_trade_pct: 2.0
