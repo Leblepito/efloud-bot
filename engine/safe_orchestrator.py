@@ -54,6 +54,26 @@ def _sizing_balance(client, source, live_balance: float) -> float:
         - 'available' → client.get_available_margin() (availableBalance)
         - None / typo → live_balance + log warning
         - client is None → live_balance (no exchange call, dry_run safe)
+
+    Worked example ('available' mode, $2000 wallet, 10% notional cap, 5x lev):
+
+        Step  | Event                  | wallet | locked | avail | next sizing
+        ------|------------------------|--------|--------|-------|--------------
+        0     | start                  | 2000   | 0      | 2000  | —
+        1     | trade 1 opens (m=200)  | 2000   | 200    | 1800  | —
+        2     | trade 2 signal         | 2000   | 200    | 1800  | 1800×10% = 180
+        3     | trade 2 opens          | 2000   | 380    | 1620  | —
+        4     | trade 3 signal         | 2000   | 380    | 1620  | 1620×10% = 162
+        5     | trade 3 opens          | 2000   | 542    | 1458  | —
+        6     | trade 1 TP +$20        | 2020   | 342    | 1678  | —
+        7     | trade 4 signal         | 2020   | 342    | 1678  | 1678×10% ≈ 168
+
+    Each new-position decision uses the LIVE availableBalance — Binance's own
+    margin accounting, fetched fresh per signal. Manual deposits, withdrawals,
+    TP/SL fills, unrealized PnL on still-open positions all flow through
+    automatically because we re-query each time.
+
+    The helper returns 0.0 cleanly when fully margined (size→0, guard rejects).
     """
     if client is None:
         return live_balance

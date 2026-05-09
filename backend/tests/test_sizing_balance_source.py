@@ -89,3 +89,65 @@ class TestSizingBalanceSource:
         # Bool, int, etc. — all should fall back to 'total'
         assert _sizing_balance(client, source=True, live_balance=2000.0) == 2000.0
         assert _sizing_balance(client, source=42, live_balance=2000.0) == 2000.0
+
+
+class TestAvailableMarginScenario:
+    """End-to-end scenario test mirroring the helper's docstring example.
+
+    Verifies the helper correctly tracks an evolving availableBalance across
+    a sequence of trades, including a TP fill that frees margin before the
+    next signal. This is the user-stated requirement: each new-position
+    sizing reflects whatever margin Binance reports as available right now.
+
+    Scenario (config: 10% notional cap, 5x leverage, $2000 wallet):
+        - Trade 1 opens with margin 200 → available drops 2000→1800
+        - Trade 2 signal: sizes off 1800 (10% = 180 margin)
+        - Trade 2 opens → available drops 1800→1620
+        - Trade 3 signal: sizes off 1620 (10% = 162 margin)
+        - Trade 3 opens → available drops 1620→1458
+        - Trade 1 TP fills (+$20 PnL, returns 200 margin + 20 profit)
+          → available rises 1458→1678
+        - Trade 4 signal: sizes off 1678 (10% ≈ 168 margin)
+    """
+
+    def test_evolving_available_balance_across_trade_lifecycle(self):
+        client = MagicMock()
+        # Simulate Binance availableBalance values at each signal moment.
+        # The bot calls get_available_margin() exactly once per signal.
+        client.get_available_margin.side_effect = [
+            1800.0,  # Trade 2 signal — Trade 1 already locked 200
+            1620.0,  # Trade 3 signal — Trade 1+2 locked 380
+            1678.0,  # Trade 4 signal — Trade 1 closed (+20), Trade 2+3 still open
+        ]
+
+        # live_balance (totalMarginBalance) drifts independently — we don't
+        # use it in 'available' mode, but provide realistic values so a bug
+        # that silently falls back to live_balance would cause assertions to
+        # fail.
+        live_balances = [2000.0, 2000.0, 2020.0]
+        expected_available = [1800.0, 1620.0, 1678.0]
+
+        for i, (live, expected) in enumerate(zip(live_balances, expected_available)):
+            result = _sizing_balance(client, source="available", live_balance=live)
+            assert result == pytest.approx(expected), (
+                f"Trade {i+2} signal: expected available={expected}, got {result}. "
+                f"This means the helper isn't correctly forwarding to "
+                f"client.get_available_margin() — it may be falling back to "
+                f"live_balance ({live}) silently."
+            )
+
+        # Sanity: helper must have called the client once per signal, not
+        # cached or skipped.
+        assert client.get_available_margin.call_count == 3
+
+    def test_full_margin_returns_zero_no_crash(self):
+        """When all margin is deployed across max_open_positions, the next
+        signal must see availableBalance=0 and produce size=0 cleanly. This
+        is the bot's natural backpressure — no new positions when wallet is
+        fully committed."""
+        client = MagicMock()
+        client.get_available_margin.return_value = 0.0
+        result = _sizing_balance(client, source="available", live_balance=2000.0)
+        assert result == 0.0
+        # Downstream calc_position_size(balance=0, ...) will produce 0 contracts
+        # (multiplied by 0 risk_amount), guard rejects, no order placed.
