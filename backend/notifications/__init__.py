@@ -6,7 +6,7 @@ notifications mainline because Telegram is one of multiple possible channels
 (Discord, Slack, etc. could follow the same shape).
 
 Env vars (both required to enable, otherwise the notifier is a no-op):
-- EFLOUD_TELEGRAM_BOT_TOKEN: BotFather token (e.g. "123456:ABC-DEF...")
+- EFLOUD_TELEGRAM_TOKEN: BotFather token (e.g. "123456:ABC-DEF...")
 - EFLOUD_TELEGRAM_CHAT_ID: chat or channel ID (e.g. "-1001234567890")
 
 Optional:
@@ -45,7 +45,7 @@ class TelegramNotifier:
     """
 
     def __init__(self) -> None:
-        self.bot_token: Optional[str] = os.environ.get("EFLOUD_TELEGRAM_BOT_TOKEN")
+        self.bot_token: Optional[str] = os.environ.get("EFLOUD_TELEGRAM_TOKEN")
         self.chat_id: Optional[str] = os.environ.get("EFLOUD_TELEGRAM_CHAT_ID")
         self.thread_id: Optional[str] = os.environ.get("EFLOUD_TELEGRAM_THREAD_ID")
         self.parse_mode: str = os.environ.get("EFLOUD_TELEGRAM_PARSE_MODE", "Markdown")
@@ -63,7 +63,7 @@ class TelegramNotifier:
                 f"{', thread=' + self.thread_id if self.thread_id else ''})"
             )
         else:
-            log.info("Telegram notifier disabled (EFLOUD_TELEGRAM_BOT_TOKEN/CHAT_ID not set)")
+            log.info("Telegram notifier disabled (EFLOUD_TELEGRAM_TOKEN/CHAT_ID not set)")
 
     def send(self, text: str) -> bool:
         """Send a Telegram message. Returns True on 2xx response, False otherwise.
