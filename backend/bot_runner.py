@@ -17,6 +17,7 @@ import yaml
 
 from backend.db import db
 from backend.events import bus
+from backend.notifications import TelegramNotifier
 from engine import SafeOrchestrator
 from engine.notifications import NotificationManager
 from engine.permissions import PermissionManager
@@ -39,6 +40,10 @@ class BotRunner:
         self.orch: Optional[SafeOrchestrator] = None
         self.order_mgr: Optional[OrderManager] = None
         self.universe: Optional[SymbolUniverse] = None
+        # Telegram notifier — env-gated, no-op when EFLOUD_TELEGRAM_BOT_TOKEN/
+        # CHAT_ID are not set. Constructed once at runner init so that
+        # subsequent env edits don't change behavior mid-run (predictable).
+        self.notifier: TelegramNotifier = TelegramNotifier()
         self.cycle_count = 0
         self.last_cycle_at: Optional[str] = None
         self.last_cycle_duration_ms: int = 0
@@ -299,7 +304,14 @@ class BotRunner:
     # ─────────────────────────────────────────────────────────────
 
     def _on_position_change(self, event_type: str, pos: Position) -> None:
-        """Sync callback from OrderManager — bridge to async event bus + DB."""
+        """Sync callback from OrderManager — bridge to async event bus + DB.
+
+        Also fires Telegram notifications (best-effort, fire-and-forget) so
+        the operator gets immediate visibility without polling. Notifier calls
+        swallow exceptions internally; a failed Telegram POST will NEVER
+        propagate back into the trading loop. See backend/notifications/__init__.py
+        for the contract.
+        """
         payload = {
             "symbol": pos.symbol,
             "direction": pos.direction,
@@ -315,6 +327,29 @@ class BotRunner:
             "closed_at": pos.closed_at or None,
         }
         bus.publish(event_type, **payload)
+
+        # Telegram notifications — wrapped in try so any unexpected formatting
+        # bug cannot break DB persistence below.
+        try:
+            if event_type == "position_opened":
+                self.notifier.notify_position_opened(
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry=pos.entry, sl=pos.sl, tp1=pos.tp1, tp2=pos.tp2,
+                    size=pos.size,
+                )
+            elif event_type == "tp1_hit":
+                self.notifier.notify_tp1_hit(
+                    symbol=pos.symbol, direction=pos.direction, entry=pos.entry,
+                )
+            elif event_type == "position_closed":
+                self.notifier.notify_position_closed(
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry=pos.entry, exit_price=pos.exit_price or 0.0,
+                    pnl_usdt=pos.pnl_usdt or 0.0,
+                    exit_reason=pos.exit_reason or "UNKNOWN",
+                )
+        except Exception as e:
+            log.warning(f"Telegram notification dispatch failed: {e}")
 
         # Persist to DB (best-effort, fire-and-forget cross-thread)
         if not self.loop:
