@@ -15,6 +15,7 @@ from typing import Optional
 
 import yaml
 
+from backend.audit.journal import AuditEngine
 from backend.db import db
 from backend.events import bus
 from backend.notifications import TelegramNotifier
@@ -44,6 +45,11 @@ class BotRunner:
         # CHAT_ID are not set. Constructed once at runner init so that
         # subsequent env edits don't change behavior mid-run (predictable).
         self.notifier: TelegramNotifier = TelegramNotifier()
+        # Audit engine — scores closed trades; uses backend.db pool when ready.
+        # Lazy-bound to db.pool in start() because pool is created in main.py
+        # before BotRunner.start(). Always-present sentinel so downstream code
+        # never has None-check on the attr; the engine itself no-ops on None pool.
+        self.audit_engine: AuditEngine = AuditEngine(pool=None)
         self.cycle_count = 0
         self.last_cycle_at: Optional[str] = None
         self.last_cycle_duration_ms: int = 0
@@ -175,6 +181,10 @@ class BotRunner:
 
         # Capture the running loop so executor-thread callbacks can schedule DB writes
         self.loop = asyncio.get_running_loop()
+
+        # Bind audit engine to the live DB pool now that backend.db is connected.
+        # Pool may still be None in degraded mode (no DATABASE_URL); engine no-ops.
+        self.audit_engine = AuditEngine(pool=db.pool)
 
         # Spawn the worker task
         self.task = asyncio.create_task(self._run_loop(), name="bot_runner")
@@ -378,8 +388,30 @@ class BotRunner:
                     ),
                     self.loop,
                 )
+                # Audit dispatch — fire-and-forget, runs AFTER record_trade_close.
+                # Delays 2s to let the DB row commit before audit's tier-1
+                # trace_id query runs. Engine itself never raises.
+                asyncio.run_coroutine_threadsafe(
+                    self._audit_after_delay(pos),
+                    self.loop,
+                )
         except Exception as e:
             log.warning(f"DB persist failed: {e}")
+
+    async def _audit_after_delay(self, pos: Position) -> None:
+        """Run audit AFTER record_trade_close commits.
+
+        Delay is small (2s) — enough for the prior `record_trade_close`
+        coroutine to flush its INSERT, not enough to materially delay anything.
+
+        AuditEngine.score_closed_trade itself never raises, so this wrapper
+        is mostly a sequencing primitive.
+        """
+        try:
+            await asyncio.sleep(2.0)
+            await self.audit_engine.score_closed_trade(pos)
+        except Exception as e:
+            log.warning(f"Audit dispatch failed for {pos.symbol}: {e}")
 
     async def _persist_close(self, pos: Position) -> None:
         """Async DB write for reconciled closes (already emitted in OrderManager)."""
