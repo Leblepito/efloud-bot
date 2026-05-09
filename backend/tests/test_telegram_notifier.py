@@ -16,25 +16,25 @@ from backend.notifications import TelegramNotifier
 
 class TestEnableDisable:
     def test_disabled_when_no_env_vars(self, monkeypatch):
-        monkeypatch.delenv("EFLOUD_TELEGRAM_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("EFLOUD_TELEGRAM_TOKEN", raising=False)
         monkeypatch.delenv("EFLOUD_TELEGRAM_CHAT_ID", raising=False)
         n = TelegramNotifier()
         assert n.enabled is False
 
     def test_disabled_when_only_token_set(self, monkeypatch):
-        monkeypatch.setenv("EFLOUD_TELEGRAM_BOT_TOKEN", "1:abc")
+        monkeypatch.setenv("EFLOUD_TELEGRAM_TOKEN", "1:abc")
         monkeypatch.delenv("EFLOUD_TELEGRAM_CHAT_ID", raising=False)
         n = TelegramNotifier()
         assert n.enabled is False
 
     def test_disabled_when_only_chat_id_set(self, monkeypatch):
-        monkeypatch.delenv("EFLOUD_TELEGRAM_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("EFLOUD_TELEGRAM_TOKEN", raising=False)
         monkeypatch.setenv("EFLOUD_TELEGRAM_CHAT_ID", "12345")
         n = TelegramNotifier()
         assert n.enabled is False
 
     def test_enabled_with_both_env_vars(self, monkeypatch):
-        monkeypatch.setenv("EFLOUD_TELEGRAM_BOT_TOKEN", "1:abc")
+        monkeypatch.setenv("EFLOUD_TELEGRAM_TOKEN", "1:abc")
         monkeypatch.setenv("EFLOUD_TELEGRAM_CHAT_ID", "12345")
         n = TelegramNotifier()
         assert n.enabled is True
@@ -42,7 +42,7 @@ class TestEnableDisable:
     def test_send_returns_false_when_disabled(self, monkeypatch):
         """send() must be a no-op (return False) when env vars are missing,
         and MUST NOT make any HTTP call."""
-        monkeypatch.delenv("EFLOUD_TELEGRAM_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("EFLOUD_TELEGRAM_TOKEN", raising=False)
         n = TelegramNotifier()
         with patch("backend.notifications.requests.post") as mock_post:
             assert n.send("hello") is False
@@ -54,7 +54,7 @@ class TestSendBehavior:
 
     @pytest.fixture
     def notifier(self, monkeypatch):
-        monkeypatch.setenv("EFLOUD_TELEGRAM_BOT_TOKEN", "1:abc")
+        monkeypatch.setenv("EFLOUD_TELEGRAM_TOKEN", "1:abc")
         monkeypatch.setenv("EFLOUD_TELEGRAM_CHAT_ID", "-100123")
         return TelegramNotifier()
 
@@ -75,7 +75,7 @@ class TestSendBehavior:
             assert payload["parse_mode"] == "Markdown"
 
     def test_send_includes_thread_id_when_set(self, monkeypatch):
-        monkeypatch.setenv("EFLOUD_TELEGRAM_BOT_TOKEN", "1:abc")
+        monkeypatch.setenv("EFLOUD_TELEGRAM_TOKEN", "1:abc")
         monkeypatch.setenv("EFLOUD_TELEGRAM_CHAT_ID", "-100123")
         monkeypatch.setenv("EFLOUD_TELEGRAM_THREAD_ID", "42")
         n = TelegramNotifier()
@@ -104,7 +104,7 @@ class TestMessageFormatters:
 
     @pytest.fixture
     def notifier(self, monkeypatch):
-        monkeypatch.setenv("EFLOUD_TELEGRAM_BOT_TOKEN", "1:abc")
+        monkeypatch.setenv("EFLOUD_TELEGRAM_TOKEN", "1:abc")
         monkeypatch.setenv("EFLOUD_TELEGRAM_CHAT_ID", "-100123")
         return TelegramNotifier()
 
@@ -180,7 +180,7 @@ class TestMessageFormatters:
 
     def test_formatters_are_noop_when_disabled(self, monkeypatch):
         """When notifier is disabled, formatters MUST NOT call send()."""
-        monkeypatch.delenv("EFLOUD_TELEGRAM_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("EFLOUD_TELEGRAM_TOKEN", raising=False)
         n = TelegramNotifier()
         with patch.object(n, "send") as mock_send:
             n.notify_position_opened("BTC/USDT", "LONG", 1, 1, 1, 1, 1)
@@ -194,7 +194,7 @@ class TestZeroDivisionGuard:
     and dry-run code paths can hit it). Must not raise."""
 
     def test_zero_entry_does_not_crash_pnl_pct(self, monkeypatch):
-        monkeypatch.setenv("EFLOUD_TELEGRAM_BOT_TOKEN", "1:abc")
+        monkeypatch.setenv("EFLOUD_TELEGRAM_TOKEN", "1:abc")
         monkeypatch.setenv("EFLOUD_TELEGRAM_CHAT_ID", "-100123")
         n = TelegramNotifier()
         with patch.object(n, "send") as mock_send:

@@ -40,7 +40,7 @@ class BotRunner:
         self.orch: Optional[SafeOrchestrator] = None
         self.order_mgr: Optional[OrderManager] = None
         self.universe: Optional[SymbolUniverse] = None
-        # Telegram notifier — env-gated, no-op when EFLOUD_TELEGRAM_BOT_TOKEN/
+        # Telegram notifier — env-gated, no-op when EFLOUD_TELEGRAM_TOKEN/
         # CHAT_ID are not set. Constructed once at runner init so that
         # subsequent env edits don't change behavior mid-run (predictable).
         self.notifier: TelegramNotifier = TelegramNotifier()
