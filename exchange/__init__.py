@@ -372,6 +372,43 @@ class OrderManager:
             if float(p.get("contracts", 0)) > 0
         }
 
+        # Orphan detection: positions on exchange but not tracked locally.
+        # These typically arise from one of three scenarios:
+        #   1. Manual position opened outside the bot (dashboard, mobile, API).
+        #   2. Bot crashed after market entry but before persisting Position.
+        #   3. State file corruption / loss / manual edit gone wrong.
+        # We DO NOT auto-import: bot has no SL/TP/entry context for the orphan,
+        # and may not own the trade decision. Instead emit a structured warning
+        # event so an operator (or Hermes-style ops agent) can investigate and
+        # either close the orphan manually, run a reconcile script with explicit
+        # parameters, or accept it. See 2026-05-09 LTC/ADA orphan incident: bot
+        # had only 3 of 5 exchange positions in state; manual `state_aggressive/
+        # order_manager_positions.json` injection was needed.
+        local_symbols = {p.symbol for p in self.positions}
+        orphan_symbols = bn_open_symbols - local_symbols
+        if orphan_symbols:
+            for orphan in sorted(orphan_symbols):
+                # Find the matching exchange position payload to enrich the warning.
+                ex_pos = next(
+                    (p for p in bn_positions
+                     if _strip_contract_suffix(p["symbol"]) == orphan
+                     and float(p.get("contracts", 0)) > 0),
+                    None,
+                )
+                if ex_pos:
+                    side = ex_pos.get("side", "?")
+                    qty = ex_pos.get("contracts", 0)
+                    entry_p = ex_pos.get("entryPrice", 0)
+                    upnl = ex_pos.get("unrealizedPnl", 0)
+                    log.warning(
+                        f"⚠️  ORPHAN POSITION DETECTED: {orphan} {side} qty={qty} "
+                        f"entry={entry_p} upnl={upnl} — NOT in local state. "
+                        f"Bot will NOT manage SL/TP for this position. "
+                        f"Manual reconcile required if this was a bot-opened trade."
+                    )
+                else:
+                    log.warning(f"⚠️  ORPHAN POSITION DETECTED: {orphan} — details unavailable")
+
         closed_now: List[Position] = []
 
         for pos in self.positions[:]:
