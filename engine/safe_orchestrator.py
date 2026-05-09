@@ -35,6 +35,41 @@ from utils.logging import new_trace_id, set_trace_id
 log = logging.getLogger("efloud.safe_orch")
 
 
+def _sizing_balance(client, source, live_balance: float) -> float:
+    """Choose which balance metric to feed into position sizing.
+
+    Args:
+        client: BinanceClient instance, or None in dry_run.
+        source: 'total' | 'available' | None. None and unknown values fall
+            back to 'total' (with a warning) for backward compatibility.
+        live_balance: the balance already fetched by the caller; used when
+            client is None (dry_run) and as the 'total' return value.
+
+    Returns:
+        Float USDT amount to use as the 'balance' parameter for
+        calc_position_size().
+
+    Contract:
+        - 'total' → live_balance (totalMarginBalance, already fetched)
+        - 'available' → client.get_available_margin() (availableBalance)
+        - None / typo → live_balance + log warning
+        - client is None → live_balance (no exchange call, dry_run safe)
+    """
+    if client is None:
+        return live_balance
+    normalized = (source or "total").lower() if isinstance(source, str) else "total"
+    if normalized == "total":
+        return live_balance
+    if normalized == "available":
+        return float(client.get_available_margin())
+    # Unknown value — defensive fallback
+    log.warning(
+        f"Unknown sizing_balance_source={source!r}, falling back to 'total'. "
+        f"Valid values: 'total', 'available'."
+    )
+    return live_balance
+
+
 @dataclass
 class SafeCycleResult:
     """Güvenlik bilgilerini de içeren cycle sonucu."""
@@ -486,12 +521,23 @@ class SafeOrchestrator:
                     else:
                         from risk import calc_position_size
                         max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
+                        # Choose sizing balance: 'total' (default) or 'available'
+                        sizing_source = risk_cfg.get("sizing_balance_source", "total")
+                        sizing_bal = _sizing_balance(
+                            self.client, sizing_source, actual_balance
+                        )
                         size = calc_position_size(
-                            actual_balance, risk_cfg["risk_per_trade_pct"],
+                            sizing_bal, risk_cfg["risk_per_trade_pct"],
                             latest.entry, latest.sl,
                             self.config["exchange"].get("leverage", 1),
                             max_notional_pct=max_notional,
                         )
+                        if sizing_source == "available" and sizing_bal < actual_balance:
+                            log.info(
+                                f"sizing: source=available balance=${sizing_bal:.2f} "
+                                f"(vs total=${actual_balance:.2f}, "
+                                f"delta=${actual_balance-sizing_bal:.2f} locked)"
+                            )
 
                     atr = self.intent._atr(df_entry, 14)
                     guard_check = self.pos_guard.can_open_position(
@@ -573,8 +619,13 @@ class SafeOrchestrator:
                 balance_now = balance if balance else 10000.0
                 mid = (scen.entry_zone_top + scen.entry_zone_bottom) / 2
                 max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
+                # Choose sizing balance: 'total' (default) or 'available'
+                sizing_source = risk_cfg.get("sizing_balance_source", "total")
+                sizing_bal = _sizing_balance(
+                    self.client, sizing_source, balance_now
+                )
                 add_size = calc_position_size(
-                    balance_now, risk_cfg["risk_per_trade_pct"] * 0.5,
+                    sizing_bal, risk_cfg["risk_per_trade_pct"] * 0.5,
                     mid, scen.sl, self.config["exchange"].get("leverage", 1),
                     max_notional_pct=max_notional,
                 )
