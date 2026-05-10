@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { mutate } from "swr";
 import { postJson } from "@/lib/api";
 
@@ -11,8 +12,17 @@ export function KillSwitch() {
   const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
   const [closed, setClosed] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const startedAt = useRef<number | null>(null);
   const rafId = useRef<number | null>(null);
+
+  const cancelHold = () => {
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+    rafId.current = null;
+    setHolding(false);
+    setProgress(0);
+    startedAt.current = null;
+  };
 
   const tick = () => {
     if (startedAt.current == null) return;
@@ -29,13 +39,14 @@ export function KillSwitch() {
   const activate = async () => {
     setHolding(false);
     setBusy(true);
+    setError(null);
     try {
       const r = await postJson<{ ok: boolean; closed: number }>("/api/kill-switch");
       setClosed(r.closed);
       mutate("/api/positions");
       mutate("/api/status");
     } catch (e) {
-      console.error("kill switch failed", e);
+      setError((e as Error).message || "Kill switch failed");
     } finally {
       setBusy(false);
       setProgress(0);
@@ -44,27 +55,37 @@ export function KillSwitch() {
   };
 
   const onPress = () => {
-    if (busy) return;
+    if (busy || holding) return;
+    setError(null);
     setHolding(true);
     startedAt.current = Date.now();
     rafId.current = requestAnimationFrame(tick);
   };
 
   const onRelease = () => {
-    if (rafId.current) cancelAnimationFrame(rafId.current);
-    rafId.current = null;
-    if (progress < 1) {
-      setHolding(false);
-      setProgress(0);
-      startedAt.current = null;
+    if (progress < 1) cancelHold();
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.repeat) return;
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      onPress();
     }
   };
 
+  const onKeyUp = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      onRelease();
+    }
+  };
+
+  // Cleanup on unmount + reset success/error toast after a few seconds.
   useEffect(() => () => {
     if (rafId.current) cancelAnimationFrame(rafId.current);
   }, []);
 
-  // Reset success message after a few seconds
   useEffect(() => {
     if (closed != null) {
       const t = setTimeout(() => setClosed(null), 4000);
@@ -72,20 +93,54 @@ export function KillSwitch() {
     }
   }, [closed]);
 
+  useEffect(() => {
+    if (error != null) {
+      const t = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [error]);
+
   return (
     <div className="flex items-center gap-3">
       {closed != null && (
-        <span className="text-[10px] tracking-widest text-accent-red font-mono">
+        <span
+          role="status"
+          aria-live="polite"
+          className="text-[10px] tracking-widest text-accent-red font-mono"
+        >
           {closed} POSITION{closed === 1 ? "" : "S"} CLOSED
         </span>
       )}
+      {error != null && (
+        <span
+          role="alert"
+          aria-live="assertive"
+          className="text-[10px] tracking-widest text-accent-amber font-mono"
+        >
+          KILL FAILED: {error}
+        </span>
+      )}
       <button
+        type="button"
         onMouseDown={onPress}
         onMouseUp={onRelease}
         onMouseLeave={onRelease}
         onTouchStart={onPress}
         onTouchEnd={onRelease}
+        onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
+        onBlur={onRelease}
         disabled={busy}
+        aria-disabled={busy}
+        aria-pressed={holding}
+        aria-busy={busy}
+        aria-keyshortcuts="Space Enter"
+        aria-describedby="killswitch-help"
+        aria-label={
+          busy
+            ? "Kill switch activating, please wait"
+            : "Hold to activate kill switch and close all open positions"
+        }
         className="
           relative overflow-hidden
           h-10 px-5
@@ -98,11 +153,14 @@ export function KillSwitch() {
           disabled:opacity-50 disabled:cursor-wait
           group
         "
-        aria-label="Hold to activate kill switch"
       >
         {/* corner cuts via clip-path */}
         <span className="relative z-10">
-          {busy ? "Halting…" : holding ? `Hold ${Math.ceil((1 - progress) * (HOLD_MS / 1000) * 10) / 10}s` : "⬢ Kill Switch"}
+          {busy
+            ? "Halting…"
+            : holding
+            ? `Hold ${Math.ceil((1 - progress) * (HOLD_MS / 1000) * 10) / 10}s`
+            : "⬢ Kill Switch"}
         </span>
         <span
           aria-hidden
@@ -110,6 +168,11 @@ export function KillSwitch() {
           style={{ width: `${progress * 100}%` }}
         />
       </button>
+      <span id="killswitch-help" className="sr-only">
+        Hold the Kill Switch button (mouse, touch, Space, or Enter) for{" "}
+        {(HOLD_MS / 1000).toFixed(1)} seconds to immediately close all open positions on the
+        exchange. Releasing or moving focus away before completion cancels the action.
+      </span>
     </div>
   );
 }

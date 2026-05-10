@@ -4,6 +4,7 @@ import { useState } from "react";
 import { mutate } from "swr";
 import { postJson } from "@/lib/api";
 import { useStatus } from "@/hooks/useStatus";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 type ControlResult = {
   ok: boolean;
@@ -12,20 +13,17 @@ type ControlResult = {
   last_error?: string | null;
 };
 
+type Action = "start" | "stop" | "restart";
+
 export function BotControl() {
   const { data } = useStatus();
   const running = !!data?.running;
-  const [busy, setBusy] = useState<null | "start" | "stop" | "restart">(null);
+  const [busy, setBusy] = useState<null | Action>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [confirmStop, setConfirmStop] = useState(false);
 
-  const call = async (action: "start" | "stop" | "restart") => {
+  const performAction = async (action: Action) => {
     if (busy) return;
-    if (action === "stop") {
-      const ok = window.confirm(
-        "Bot duracak. Açık pozisyonlar borsada kalır (KillSwitch farklı bir aksiyondur). Devam edilsin mi?"
-      );
-      if (!ok) return;
-    }
     setBusy(action);
     setFlash(null);
     try {
@@ -50,16 +48,33 @@ export function BotControl() {
     }
   };
 
+  const onStopClick = () => {
+    if (busy || !running) return;
+    setConfirmStop(true);
+  };
+
+  const onConfirmStop = () => {
+    setConfirmStop(false);
+    void performAction("stop");
+  };
+
   return (
     <div className="flex items-center gap-2">
       {flash && (
-        <span className="text-[10px] tracking-widest font-mono text-text-muted">
+        <span
+          role="status"
+          aria-live="polite"
+          className="text-[10px] tracking-widest font-mono text-text-muted"
+        >
           {flash}
         </span>
       )}
       <button
-        onClick={() => call("start")}
+        type="button"
+        onClick={() => performAction("start")}
         disabled={busy !== null || running}
+        aria-busy={busy === "start"}
+        aria-disabled={busy !== null || running}
         className="
           h-10 px-4
           border border-accent-green
@@ -75,8 +90,12 @@ export function BotControl() {
         {busy === "start" ? "..." : "▶ Start"}
       </button>
       <button
-        onClick={() => call("stop")}
+        type="button"
+        onClick={onStopClick}
         disabled={busy !== null || !running}
+        aria-busy={busy === "stop"}
+        aria-disabled={busy !== null || !running}
+        aria-haspopup="dialog"
         className="
           h-10 px-4
           border border-text-muted
@@ -92,8 +111,11 @@ export function BotControl() {
         {busy === "stop" ? "..." : "■ Stop"}
       </button>
       <button
-        onClick={() => call("restart")}
+        type="button"
+        onClick={() => performAction("restart")}
         disabled={busy !== null}
+        aria-busy={busy === "restart"}
+        aria-disabled={busy !== null}
         className="
           h-10 px-4
           border border-accent-amber
@@ -108,6 +130,16 @@ export function BotControl() {
       >
         {busy === "restart" ? "..." : "↻ Restart"}
       </button>
+      <ConfirmDialog
+        open={confirmStop}
+        title="Bot durdurulsun mu?"
+        description="Bot trade döngüsü duracak. Açık pozisyonlar borsada kalır — bunları kapatmak için Kill Switch farklı bir aksiyondur."
+        confirmLabel="Durdur"
+        cancelLabel="Vazgeç"
+        destructive={true}
+        onConfirm={onConfirmStop}
+        onCancel={() => setConfirmStop(false)}
+      />
     </div>
   );
 }
