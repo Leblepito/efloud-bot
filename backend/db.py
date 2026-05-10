@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import json
 from typing import Any, Optional
 
 import asyncpg
@@ -195,8 +196,8 @@ class Database:
         try:
             async with self.pool.acquire() as conn:
                 await conn.execute(
-                    "INSERT INTO audit_log (event, payload) VALUES ($1, $2)",
-                    event, payload,
+                    "INSERT INTO audit_log (event, payload) VALUES ($1, $2::jsonb)",
+                    event, json.dumps(payload, default=str),
                 )
         except Exception as e:
             log.warning(f"log_audit failed: {e}")
