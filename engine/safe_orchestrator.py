@@ -141,6 +141,12 @@ class SafeOrchestrator:
         self.permission_mgr = permission_mgr
         self.notification_mgr = notification_mgr
         self.order_manager = order_manager
+        # Convenience reference to BinanceClient for sizing helpers (PR #24).
+        # PR #24 introduced `self.client` references in _calc_size paths but
+        # forgot to set the attribute in __init__, causing AttributeError on
+        # every cycle that reached calc_position_size with a missing position.
+        # Falls back to None when order_manager is None (paper-trade / unit tests).
+        self.client = order_manager.client if order_manager is not None else None
         self.freshness_check = freshness_check
         self.persist = persist
 
