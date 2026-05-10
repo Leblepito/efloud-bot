@@ -35,7 +35,10 @@ backtest/engine.py  → walk-forward simulation
 ops/                → Telegram alerter, daily reports
 ```
 
-**Anahtar dosya:satır referansları**
+**Anahtar dosya:satır referansları** *(yaklaşık — düzenleme öncesi `grep`/`rg`
+veya doğrudan dosya okuyarak gerçek satır numarasını ve fonksiyon konumunu
+mutlaka doğrula)*
+
 | Sembol | Yer |
 |--------|-----|
 | `BinanceClient` | `exchange/__init__.py:27` |
@@ -62,6 +65,20 @@ ops/                → Telegram alerter, daily reports
 - Canlı deploy, risk parametresi değişikliği, mainnet aç/kapa **Hermes veya Utku onayı olmadan yapılmaz.**
 - Mainnet guard: `EFLOUD_ALLOW_MAINNET=1` env yoksa testnet'e zorlanır.
 - `dry_run: true` default — false'a çekmeden önce backtest + onay.
+
+### Rol Ayrımı: Hermes vs Claude Code
+
+**Hermes** (insan onay/aksiyon zinciri):
+- Canlı production yönetimi: deploy, VPS/SSH erişimi, `docker compose up -d`, `backend.migrate up`.
+- Risk kararları: risk/safety config değişiklikleri, mainnet aç/kapa, leverage/sizing.
+- Merge/deploy onayı: PR sign-off, production rollout.
+- Incident response: canlı sistem teşhis ve düzeltme.
+
+**Claude Code** (repo içi non-critical iş):
+- Docs, tests, refactor önerisi, PR hazırlığı.
+- Code review yardımcıları (efloud-code-reviewer, efloud-risk-ops-reviewer agent'ları).
+- Backtest analizi, kod araştırma, yeni feature taslağı.
+- **Yapmaz**: production komutu çalıştırmak, canlı risk/config değiştirmek, merge/deploy etmek, mainnet guard'ı bypass etmek.
 
 ---
 
@@ -117,7 +134,6 @@ ops/                → Telegram alerter, daily reports
 ## 7. Custom Agents & Skills (proje içi)
 
 `.claude/agents/`
-- **efloud-explorer** — read-only kod-haritası; "X nerede / Y'yi kim çağırıyor" sorularına anında file:line cevap verir. Değişiklikten **önce** çağır.
 - **efloud-code-reviewer** — diff/PR review, atomik PR & simplicity guard.
 - **efloud-risk-ops-reviewer** — `engine/safety/`, `exchange/`, `config.yaml` (risk:/safety:),
   `docker-compose.prod.yml`, migrations değişikliklerinde **zorunlu**.
@@ -127,11 +143,10 @@ ops/                → Telegram alerter, daily reports
 - **efloud-bugfix-workflow** — repro → lokalize → fix → test → PR akışı.
 - **efloud-deploy-safety** — Hetzner/compose deploy guard'ları.
 - **efloud-trading-risk-checklist** — `risk:`/`safety:` config değişiklikleri için kontrol listesi.
-- **efloud-uiux-audit** — Next.js dashboard kapsamlı UI/UX denetimi (research, kod değil).
-- **efloud-forex-adapter-research** — forex broker seçim memo'su (MT5/OANDA/cTrader). Implementation değil, karar dokümanı.
 
-`.claude/commands/`
-- **/review** — `efloud-code-reviewer` (+ gerekirse `efloud-risk-ops-reviewer`) kısayolu.
+> Ek opsiyonel agent/skill'ler (efloud-explorer, efloud-uiux-audit,
+> efloud-forex-adapter-research, /review komutu) ayrı PR'da
+> (`docs: add optional efloud Claude extras`) önerilmiştir.
 
 `.claude/settings.local.json` ve `.env` **gitignore'da** — secret commit edilmez.
 
