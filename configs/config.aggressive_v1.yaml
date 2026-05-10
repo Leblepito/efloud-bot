@@ -57,6 +57,15 @@ symbols:
   # 9 symbols — Step 4 tuning result from Phase A 2.0 (2026-05-07).
   # Dropped 12 negative-return coins: TRX, BNB, AVAX, DOGE, LINK, XRP, APT, NEAR,
   # DOT, BCH, ATOM, ARB. See docs/results/2026-05-07-phase-A-validation-aggressive_v1.md
+  #
+  # 2026-05-10 user-requested expansion: 10 → 20 coins via experimental tier.
+  # The original Phase A 2.0 backtest dropped 6 of these (TRX, BNB, AVAX, DOGE,
+  # DOT, BCH) for negative returns; 4 (DYDX, FET, PEPE, AAVE) were never backtested.
+  # All 10 added under conf=85 high-bar override — same threshold pattern XRP
+  # was re-added with on 2026-05-08, then loosened to 75 after 70→55 global
+  # recalibration. These start at 85 pending fresh audit data (2 weeks). After
+  # data accumulates, weak performers will be dropped or threshold-tightened,
+  # strong ones moved into mid (80) or top (default 70) tier.
   fixed_core:
     # Top tier (conf=70 default — best return + low DD)
     - ETH/USDT      # +22.28% / DD 7.37% / PF 2.46
@@ -72,6 +81,19 @@ symbols:
     # Selective tier (conf=85 override — user-requested re-add despite weak Phase A 2.0;
     # high threshold filters most signals to compensate for negative backtest return)
     - XRP/USDT      # -6.63% (DD 10.40%, override 85)
+    # Experimental tier (conf=85 override — added 2026-05-10, no recent backtest data;
+    # 6 had negative returns in Phase A 2.0, 4 (DYDX, FET, PEPE, AAVE) untested.
+    # Pending 2-week audit verification: drop weak, promote strong)
+    - DOGE/USDT     # Phase A 2.0: dropped (negative)  → conf=85 high bar
+    - 1000PEPE/USDT # Untested in Phase A 2.0           → conf=85 high bar (Binance Futures uses 1000× contract)
+    - FET/USDT      # Untested in Phase A 2.0           → conf=85 high bar
+    - BNB/USDT      # Phase A 2.0: dropped (negative)  → conf=85 high bar
+    - TRX/USDT      # Phase A 2.0: dropped (negative)  → conf=85 high bar
+    - AVAX/USDT     # Phase A 2.0: dropped (negative)  → conf=85 high bar
+    - DOT/USDT      # Phase A 2.0: dropped (negative)  → conf=85 high bar
+    - BCH/USDT      # Phase A 2.0: dropped (negative)  → conf=85 high bar
+    - DYDX/USDT     # Untested in Phase A 2.0           → conf=85 high bar
+    - AAVE/USDT     # Untested in Phase A 2.0           → conf=85 high bar
   dynamic_top_n: 0
   dynamic_exclude: []
   refresh_dynamic_hours: 24
@@ -116,6 +138,19 @@ risk:
     OP/USDT: 65
     LTC/USDT: 65
     XRP/USDT: 75   # User re-added 2026-05-08; tightened from 85 alongside the 70→55 global recalibration to keep the gap (was 85 vs 70 = +15; now 75 vs 55 = +20)
+    # Experimental tier (added 2026-05-10) — conf=85 high bar.
+    # Gap = 30 above global 55, +5 above XRP's 75. After 2 weeks audit data,
+    # promote strong performers down to 75/65, drop weak ones from fixed_core.
+    DOGE/USDT: 85
+    1000PEPE/USDT: 85
+    FET/USDT: 85
+    BNB/USDT: 85
+    TRX/USDT: 85
+    AVAX/USDT: 85
+    DOT/USDT: 85
+    BCH/USDT: 85
+    DYDX/USDT: 85
+    AAVE/USDT: 85
 
   # ── Sizing balance source (PR-A, 2026-05-09) ──
   # 'total'     → use totalMarginBalance (wallet + unrealized PnL). Each new
