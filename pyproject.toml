@@ -1,4 +1,30 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["tests", "backend/tests"]
+testpaths = ["."]
+norecursedirs = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    "frontend",
+    "data",
+    "logs",
+    "reports",
+    "state",
+    "state_1k",
+    "deploy",
+    "scripts",
+    "ops",
+    "docs",
+]
+# Stale CLI scripts at repo root that import the retired backtest.runner module.
+# Excluded so pytest discovery doesn't break on import; tracked for follow-up
+# cleanup (rename/move under scripts/diag/ or delete).
+addopts = [
+    "--ignore=test_backtest.py",
+    "--ignore=test_backtest_multi.py",
+    "--ignore=test_real_backtest.py",
+    "--ignore=test_real_data.py",
+]
