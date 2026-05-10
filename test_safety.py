@@ -39,7 +39,7 @@ def gen_ohlcv(n=500, start=2000.0, drift=0.0003, vol=0.006, tf_min=15, seed=42):
     }, index=ts)
 
 
-def test_case(name, orch, cfg_override=None, data_override=None):
+def _run_case(name, orch, cfg_override=None, data_override=None):
     """Tek test case'i çalıştır ve sonucu yazdır."""
     print(f"\n{'═'*70}\n  TEST: {name}\n{'═'*70}")
 
@@ -109,7 +109,7 @@ def main():
     # TEST 1: Normal cycle, trending market
     # ─────────────────────────────────────────
     orch1 = SafeOrchestrator(config, state_dir=state_dir)
-    r1 = test_case("1. Normal trending market", orch1)
+    r1 = _run_case("1. Normal trending market", orch1)
     assert r1.breaker_state == "OPEN", "Breaker should be OPEN"
 
     # ─────────────────────────────────────────
@@ -121,7 +121,7 @@ def main():
     ranging_entry = gen_ohlcv(500, drift=0.0, vol=0.001, tf_min=15, seed=99)
     ranging_mtf = gen_ohlcv(300, drift=0.0, vol=0.001, tf_min=60, seed=99)
     ranging_htf = gen_ohlcv(200, drift=0.0, vol=0.001, tf_min=240, seed=99)
-    r2 = test_case("2. Ranging market (low ADX)", orch2,
+    r2 = _run_case("2. Ranging market (low ADX)", orch2,
                     data_override={"entry": ranging_entry, "mtf": ranging_mtf,
                                      "htf": ranging_htf})
     print(f"  → Expected RANGING or VOLATILE regime, got: {r2.regime}")
@@ -134,7 +134,7 @@ def main():
     volatile_entry = gen_ohlcv(500, drift=0.0003, vol=0.025, tf_min=15, seed=7)
     volatile_mtf = gen_ohlcv(300, drift=0.0003, vol=0.025, tf_min=60, seed=7)
     volatile_htf = gen_ohlcv(200, drift=0.0003, vol=0.025, tf_min=240, seed=7)
-    r3 = test_case("3. Volatile market", orch3,
+    r3 = _run_case("3. Volatile market", orch3,
                     data_override={"entry": volatile_entry, "mtf": volatile_mtf,
                                      "htf": volatile_htf})
     print(f"  → Regime: {r3.regime}")
