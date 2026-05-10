@@ -24,7 +24,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import List, Optional, Literal
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
 
 log = logging.getLogger("efloud.lifecycle")
@@ -72,6 +72,10 @@ class Position:
     tp1_hit: bool = False
     tp2_hit: bool = False
     sl_moved_to_be: bool = False   # SL break-even'a çekildi mi
+
+    # Weakness churn protection
+    weakness_exit_count: int = 0
+    last_weakness_ts: Optional[str] = None
 
     # Hedge linking
     hedge_id: Optional[str] = None
@@ -147,6 +151,8 @@ class Position:
             "initial_sl": self.initial_sl,
             "tp1_hit": self.tp1_hit, "tp2_hit": self.tp2_hit,
             "sl_moved_to_be": self.sl_moved_to_be,
+            "weakness_exit_count": self.weakness_exit_count,
+            "last_weakness_ts": self.last_weakness_ts,
             "hedge_id": self.hedge_id, "scenario_id": self.scenario_id,
             "opened_at": self.opened_at, "closed_at": self.closed_at,
         }
@@ -163,6 +169,8 @@ class Position:
             tp1_hit=d.get("tp1_hit", False),
             tp2_hit=d.get("tp2_hit", False),
             sl_moved_to_be=d.get("sl_moved_to_be", False),
+            weakness_exit_count=d.get("weakness_exit_count", 0),
+            last_weakness_ts=d.get("last_weakness_ts"),
             hedge_id=d.get("hedge_id"),
             scenario_id=d.get("scenario_id"),
             opened_at=d.get("opened_at", ""),
@@ -360,8 +368,32 @@ class PositionLifecycle:
                     continue
 
             # Weakness check (momentum zayıfladı mı?)
-            if intent_checker and pos.tp1_hit:
+            # ── Churn protection ──
+            # Max 3 WEAKNESS exits per position to prevent geometric-decay churn.
+            # Min 4 bars (≈4 min on 1m) between consecutive WEAKNESS exits.
+            # Min remaining size 0.01 to avoid dust exits.
+            MAX_WEAKNESS_EXITS = 3
+            WEAKNESS_COOLDOWN_BARS = 4   # minutes between weakness exits
+            MIN_REMAINING_SIZE = 0.01    # USDT-notional threshold
+
+            if intent_checker and pos.tp1_hit and pos.weakness_exit_count < MAX_WEAKNESS_EXITS:
+                # Cooldown check
+                if pos.last_weakness_ts:
+                    try:
+                        last_t = datetime.fromisoformat(pos.last_weakness_ts)
+                        elapsed = (datetime.now(timezone.utc) - last_t).total_seconds() / 60.0
+                        if elapsed < WEAKNESS_COOLDOWN_BARS:
+                            continue
+                    except (ValueError, TypeError):
+                        pass  # bad timestamp — allow the check
+
+                # Size check — don't exit dust
+                if pos.remaining_size < MIN_REMAINING_SIZE:
+                    continue
+
                 if intent_checker(pos):
+                    pos.weakness_exit_count += 1
+                    pos.last_weakness_ts = datetime.now(timezone.utc).isoformat()
                     self.partial_close(pos, price, 0.25, "WEAKNESS")
 
     # ── Query ──
