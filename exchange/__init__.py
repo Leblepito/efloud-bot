@@ -247,6 +247,94 @@ class OrderManager:
     # Open / Close
     # ─────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _extract_filled_amount(entry_order: dict, fallback_size: float) -> float:
+        """Return actual filled amount from an exchange order response.
+
+        Binance/CCXT responses are not perfectly stable across endpoints and
+        versions. Prefer fill fields when present; fall back to requested size
+        so rollback still attempts to close the whole intended entry.
+        """
+        for key in ("filled", "executedQty", "amount", "origQty"):
+            raw = entry_order.get(key) if isinstance(entry_order, dict) else None
+            if raw in (None, ""):
+                continue
+            try:
+                amount = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if amount > 0:
+                return amount
+        return fallback_size
+
+    def _rollback_entry_after_protection_failure(
+        self,
+        ccxt_sym: str,
+        rollback_side: str,
+        rollback_size: float,
+        symbol: str,
+        direction: str,
+        entry_order_id: str,
+        original_error: Exception,
+    ) -> bool:
+        """Best-effort reduceOnly market close after SL placement failure.
+
+        This is the critical orphan-prevention safety net: if the market entry
+        filled but the protective SL could not be placed, immediately try to
+        flatten the just-opened exchange position instead of leaving it live and
+        untracked.
+        """
+        try:
+            rollback_order = self.client.exchange.create_order(
+                ccxt_sym,
+                "market",
+                rollback_side,
+                rollback_size,
+                params={"reduceOnly": True},
+            )
+            log.critical(
+                "order_manager.entry_rollback_after_sl_failure: %s %s entry_order_id=%s "
+                "rollback_order_id=%s rollback_size=%s original_error=%s",
+                symbol,
+                direction,
+                entry_order_id,
+                rollback_order.get("id", "") if isinstance(rollback_order, dict) else "",
+                rollback_size,
+                original_error,
+                extra={
+                    "event": "order_manager.entry_rollback_after_sl_failure",
+                    "symbol": symbol,
+                    "direction": direction,
+                    "entry_order_id": entry_order_id,
+                    "rollback_size": rollback_size,
+                    "rollback_order_id": rollback_order.get("id", "") if isinstance(rollback_order, dict) else "",
+                    "original_error": str(original_error),
+                },
+            )
+            return True
+        except Exception as rollback_error:
+            log.critical(
+                "order_manager.entry_rollback_failed: %s %s entry_order_id=%s "
+                "rollback_size=%s original_error=%s rollback_error=%s",
+                symbol,
+                direction,
+                entry_order_id,
+                rollback_size,
+                original_error,
+                rollback_error,
+                exc_info=True,
+                extra={
+                    "event": "order_manager.entry_rollback_failed",
+                    "symbol": symbol,
+                    "direction": direction,
+                    "entry_order_id": entry_order_id,
+                    "rollback_size": rollback_size,
+                    "original_error": str(original_error),
+                    "rollback_error": str(rollback_error),
+                },
+            )
+            return False
+
     def open_position(self, symbol: str, direction: str, size: float,
                       entry: float, sl: float, tp1: float, tp2: float,
                       trace_id: Optional[str] = None,
@@ -276,52 +364,91 @@ class OrderManager:
         # CCXT'nin futures route'una gitmesi için symbol'i collateral notation ile sar
         ccxt_sym = self.client.to_ccxt_symbol(symbol)
 
+        # 1) Market entry order. If this fails, nothing was opened and no
+        # rollback is required.
         try:
-            # 1) Market entry order
             entry_order = self.client.exchange.create_order(ccxt_sym, "market", side, size)
-            oid = entry_order.get("id", "")
-            # Capture actual fill price (slippage tracking).
-            # CCXT market orders return `average` (preferred) or `price` after fill.
-            actual_entry = entry
-            raw_avg = entry_order.get("average") or entry_order.get("price") or 0
-            try:
-                fill_price = float(raw_avg) if raw_avg else 0.0
-            except (TypeError, ValueError):
-                fill_price = 0.0
-            if fill_price > 0:
-                actual_entry = fill_price
-                slip_pct = ((actual_entry - entry) / entry * 100) if entry else 0.0
-                log.info(
-                    f"MARKET {direction} {symbol} size={size} fill={actual_entry:.4f} "
-                    f"(signal={entry:.4f}, slip={slip_pct:+.3f}%) | order_id={oid}"
-                )
-            else:
-                log.info(f"MARKET {direction} {symbol} size={size} | order_id={oid}")
+        except Exception as e:
+            log.error(f"Order failed for {symbol}: {e}", exc_info=True)
+            return None
 
-            # 2) Server-side SL — STOP_MARKET reduceOnly
+        oid = entry_order.get("id", "") if isinstance(entry_order, dict) else ""
+        rollback_size = self._extract_filled_amount(entry_order, size)
+
+        # Capture actual fill price (slippage tracking).
+        # CCXT market orders return `average` (preferred) or `price` after fill.
+        actual_entry = entry
+        raw_avg = entry_order.get("average") or entry_order.get("price") or 0
+        try:
+            fill_price = float(raw_avg) if raw_avg else 0.0
+        except (TypeError, ValueError):
+            fill_price = 0.0
+        if fill_price > 0:
+            actual_entry = fill_price
+            slip_pct = ((actual_entry - entry) / entry * 100) if entry else 0.0
+            log.info(
+                f"MARKET {direction} {symbol} size={size} fill={actual_entry:.4f} "
+                f"(signal={entry:.4f}, slip={slip_pct:+.3f}%) | order_id={oid}"
+            )
+        else:
+            log.info(f"MARKET {direction} {symbol} size={size} | order_id={oid}")
+
+        # 2) Server-side SL — STOP_MARKET reduceOnly. If this fails after the
+        # market entry filled, immediately try to flatten the exchange position.
+        try:
             sl_order = self.client.exchange.create_order(
                 ccxt_sym, "STOP_MARKET", reverse_side, size,
                 params={"stopPrice": sl, "reduceOnly": True}
             )
-            sl_oid = sl_order.get("id", "")
-            log.info(f"  ↳ SL @ {sl:.4f} | order_id={sl_oid}")
+        except Exception as e:
+            log.error(f"Order failed for {symbol}: {e}", exc_info=True)
+            self._rollback_entry_after_protection_failure(
+                ccxt_sym=ccxt_sym,
+                rollback_side=reverse_side,
+                rollback_size=rollback_size,
+                symbol=symbol,
+                direction=direction,
+                entry_order_id=oid,
+                original_error=e,
+            )
+            return None
 
-            # 3) Server-side TP1 — TAKE_PROFIT_MARKET, yarı boyut, reduceOnly
+        sl_oid = sl_order.get("id", "") if isinstance(sl_order, dict) else ""
+        log.info(f"  ↳ SL @ {sl:.4f} | order_id={sl_oid}")
+
+        tp1_oid = ""
+        tp2_oid = ""
+
+        # 3) Server-side TP1 — TAKE_PROFIT_MARKET, yarı boyut, reduceOnly. If
+        # TP placement fails after SL succeeds, keep local tracking rather than
+        # orphaning a protected exchange position.
+        try:
             tp1_order = self.client.exchange.create_order(
                 ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, half_size,
                 params={"stopPrice": tp1, "reduceOnly": True}
             )
-            tp1_oid = tp1_order.get("id", "")
+            tp1_oid = tp1_order.get("id", "") if isinstance(tp1_order, dict) else ""
             log.info(f"  ↳ TP1 @ {tp1:.4f} (size={half_size:.4f}) | order_id={tp1_oid}")
-
-            # 4) Server-side TP2 — kalan yarı
-            tp2_order = self.client.exchange.create_order(
-                ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, size - half_size,
-                params={"stopPrice": tp2, "reduceOnly": True}
+        except Exception as e:
+            log.warning(
+                "order_manager.tp_placement_failed_after_sl: %s %s tp_leg=TP1 "
+                "entry_order_id=%s sl_order_id=%s error=%s",
+                symbol,
+                direction,
+                oid,
+                sl_oid,
+                e,
+                exc_info=True,
+                extra={
+                    "event": "order_manager.tp_placement_failed_after_sl",
+                    "symbol": symbol,
+                    "direction": direction,
+                    "tp_leg": "TP1",
+                    "entry_order_id": oid,
+                    "sl_order_id": sl_oid,
+                    "error": str(e),
+                },
             )
-            tp2_oid = tp2_order.get("id", "")
-            log.info(f"  ↳ TP2 @ {tp2:.4f} (size={size - half_size:.4f}) | order_id={tp2_oid}")
-
             pos = Position(
                 symbol=symbol, direction=direction, entry=actual_entry,
                 sl=sl, tp1=tp1, tp2=tp2, size=size,
@@ -335,11 +462,50 @@ class OrderManager:
             self._emit("position_opened", pos)
             return pos
 
+        # 4) Server-side TP2 — kalan yarı. Same policy as TP1: SL-protected
+        # positions must remain tracked even when optional TP placement fails.
+        try:
+            tp2_order = self.client.exchange.create_order(
+                ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, size - half_size,
+                params={"stopPrice": tp2, "reduceOnly": True}
+            )
+            tp2_oid = tp2_order.get("id", "") if isinstance(tp2_order, dict) else ""
+            log.info(f"  ↳ TP2 @ {tp2:.4f} (size={size - half_size:.4f}) | order_id={tp2_oid}")
         except Exception as e:
-            log.error(f"Order failed for {symbol}: {e}", exc_info=True)
-            # Best-effort cleanup: market order başarılı olduysa pozisyon açılmış demektir,
-            # ama SL/TP order'ları başarısız olduysa bot pozisyonu izlemez. Manual kapatma gerekir.
-            return None
+            log.warning(
+                "order_manager.tp_placement_failed_after_sl: %s %s tp_leg=TP2 "
+                "entry_order_id=%s sl_order_id=%s tp1_order_id=%s error=%s",
+                symbol,
+                direction,
+                oid,
+                sl_oid,
+                tp1_oid,
+                e,
+                exc_info=True,
+                extra={
+                    "event": "order_manager.tp_placement_failed_after_sl",
+                    "symbol": symbol,
+                    "direction": direction,
+                    "tp_leg": "TP2",
+                    "entry_order_id": oid,
+                    "sl_order_id": sl_oid,
+                    "tp1_order_id": tp1_oid,
+                    "error": str(e),
+                },
+            )
+
+        pos = Position(
+            symbol=symbol, direction=direction, entry=actual_entry,
+            sl=sl, tp1=tp1, tp2=tp2, size=size,
+            order_id=oid, sl_order_id=sl_oid,
+            tp1_order_id=tp1_oid, tp2_order_id=tp2_oid,
+            opened_at=pd.Timestamp.now(tz="UTC").isoformat(),
+            trace_id=trace_id, bar_ts_ms=bar_ts_ms,
+        )
+        self.positions.append(pos)
+        self._persist()
+        self._emit("position_opened", pos)
+        return pos
 
     # ─────────────────────────────────────────────────────────────
     # Reconciliation — primary source of truth for closes
