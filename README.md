@@ -1,134 +1,226 @@
-# Efloud SMC Trade Bot v2.1
+# Efloud SMC Bot
 
-Çok-coinli, güvenli, Efloud Price Action kurallı algoritmik trade botu.
-Binance futures üzerinde çalışır; önce testnet + dry_run, sonra mainnet.
+Binance USDT-M futures üzerinde çalışan Efloud SMC (Smart Money Concepts) trade botu.
+Güncel odak: **Ualgo Telegram sinyal entegrasyonu + canlı operasyon güvenliği**.
 
-## Özellikler
+- **Bugün:** Binance futures / crypto execution
+- **Yakın dönem:** dashboard, test coverage, daily brief ve ops kalitesi
+- **Roadmap:** pluggable exchange adapter ile MT5/OANDA forex desteği
+- **Rafta:** U2algo_bot (u2Algo.com içerik paylaşım botu)
 
-- **10 coin takibi**: Sabit çekirdek (BTC/ETH/SOL/BNB/XRP/RENDER) + dinamik top-volume
-- **Efloud SMC analizi**: CHoCH/BOS, Order Block, FVG, SFP, OTE, Range
-- **Multi-timeframe**: HTF bias → MTF onay → Entry TF giriş
-- **Confluence scoring**: Minimum %80 (sıkı filtre — kalite > miktar)
-- **R:R ≥ 2**: Her sinyal minimum 1:2 oranı sağlamalı
-- **5 katmanlı güvenlik**:
-  - Circuit breaker (daily loss, weekly DD halt, consecutive loss)
-  - Regime detector (trending/ranging/volatile)
-  - Position guards (size cap, exposure, tight-SL rejection)
-  - State persistence (crash recovery)
-  - Mainnet guard (yanlışlıkla canlıya çıkmaya karşı)
-- **Yaşayan pozisyon yönetimi**: Partial TP, piramit ekleme, hedge pozisyonlar
-- **Efloud tarzı rapor**: Her cycle markdown rapor (pozisyon durumu, senaryolar, öneri)
+> Production canlıdır. Risk, mainnet, deploy ve açık pozisyonları etkileyen değişiklikler
+> Hermes/Utku onayı olmadan yapılmaz.
 
-## Hızlı Başlangıç
+---
+
+## Current Status
+
+- Production: Hetzner VPS + `docker-compose.prod.yml`
+- Aktif çalışma alanı: **Ualgo_bot + Efloud-bot**
+- PR-B daily brief audit tamamlandı; günlük brifing lifecycle state, WEAKNESS count ve GitHub özetini kullanır.
+- Test altyapısı root-level pytest discovery + regression guard testleriyle güncellendi.
+- UI tarafında destructive controls (Stop / Kill Switch) erişilebilirlik ve güvenlik iyileştirmeleri yapıldı.
+
+### Recent Changes
+
+- **PR #30** — WEAKNESS churn guard + `log_audit` JSONB serialization fix
+- **PR #31** — `CLAUDE.md` project memory + temel Claude agents/skills
+- **PR #32** — opsiyonel Claude extras (explorer, UI/UX audit, forex research, `/review` command)
+- **PR #33** — root-level `test_*.py` dosyalarını pytest collection'a dahil etme
+- **PR #34** — `test_safety.py` helper rename; pytest fixture confusion fix
+- **PR #35** — lifecycle/audit/reconcile/breaker regression guard testleri
+- **PR #36** — Stop / Kill Switch UI accessibility & safety improvements
+
+---
+
+## What It Does
+
+- Efloud SMC sinyal üretimi: CHoCH/BOS, Order Block, FVG, SFP, OTE, range context
+- Multi-timeframe karar akışı: HTF bias → MTF onay → entry timeframe
+- Confluence scoring + regime detection
+- Binance futures execution via CCXT / Binance API
+- Server-side SL/TP ve reduce-only order yönetimi
+- Position lifecycle: TP1/TP2, break-even SL, WEAKNESS partial exits, reconcile
+- Safety layer: circuit breaker, position guard, mainnet guard, state persistence
+- FastAPI backend + Next.js dashboard
+- Telegram alerter, audit log, daily reports / morning brief
+
+---
+
+## Architecture
+
+```text
+main.py
+  └── SafeOrchestrator (engine/__init__.py)
+        ├── SymbolUniverse (engine/universe.py)
+        ├── SMCEngine + signal pipeline (engine/smc.py, engine/signals.py)
+        ├── Regime detector (engine/regimes/)
+        ├── Confluence scoring (engine/confluence.py)
+        ├── PositionLifecycle (engine/lifecycle.py)
+        ├── Safety layer (engine/safety/)
+        └── BinanceClient + OrderManager (exchange/__init__.py)
+
+backend/             → FastAPI, WebSocket, DB, migrations, notifications
+frontend/            → Next.js dashboard (static export)
+ops/                 → Telegram alerter, daily reports
+backtest/            → walk-forward/backtest engine
+configs/             → strategy profiles
+state*/              → runtime state volumes / local state directories
+```
+
+Useful entry points:
+
+- `main.py` — bot startup
+- `engine/safe_orchestrator.py` / `engine/__init__.py` — main cycle orchestration
+- `exchange/__init__.py` — Binance client, order manager, reconcile path
+- `engine/lifecycle.py` — position lifecycle and WEAKNESS handling
+- `engine/safety/breaker.py` — circuit breaker
+- `backend/api.py` — dashboard/backend API
+- `backend/migrate.py` — migration runner
+- `frontend/` — dashboard UI
+
+Line numbers in docs are approximate; verify with `rg`, `grep`, or by reading the file before editing.
+
+---
+
+## Live Ops Guardrails
+
+**Production is live. Treat this as a trading system, not a demo script.**
+
+- Live deploy, VPS/SSH operations, risk parameter changes, mainnet/dry_run/testnet changes require Hermes/Utku approval.
+- `EFLOUD_ALLOW_MAINNET=1` is required for intentional mainnet use.
+- Keep `dry_run: true` unless a live trading rollout has been explicitly approved.
+- Secrets live in env files or platform secrets — never commit API keys or tokens.
+
+### Docker Compose env changes
+
+`docker restart` or `docker compose restart` does **not** reload changed env vars.
+
+Use recreate instead:
 
 ```bash
-# 1. Paket aç
-tar -xzf efloud-bot-v2.1.tar.gz
-cd efloud-bot
-
-# 2. Bağımlılıklar
-pip install -r requirements.txt
-
-# 3. API credentials (env var önerilir)
-export BINANCE_API_KEY="your_key"
-export BINANCE_API_SECRET="your_secret"
-
-# 4. Offline testleri çalıştır
-python test_safety.py       # güvenlik katmanları
-python test_regime.py       # rejim tespiti
-python test_offline.py       # orchestrator smoke test
-
-# 5. Backtest (synthetic data)
-python test_backtest.py
-python test_backtest_multi.py
-
-# 6. Testnet'te canlı — dry run
-python main.py
-
-# 7. MAINNET LIVE (dikkatli!):
-export EFLOUD_ALLOW_MAINNET=1
-# config.yaml'da testnet: false, dry_run: false yap
-python main.py
+cd /opt/efloud-bot
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-## Config (Özet)
+### Database migrations
 
-```yaml
-symbols:
-  mode: hybrid                  # 6 fixed + 4 dynamic = 10 coin
-  fixed_core: [BTC/USDT, ETH/USDT, SOL/USDT, BNB/USDT, XRP/USDT, RENDER/USDT]
-  dynamic_top_n: 4
+Migration runner does not auto-run in production. After adding new `.sql` migrations:
 
-timeframes:
-  htf: 4h | mtf: 1h | entry: 15m
-
-risk:
-  min_confluence: 80           # Senin kuralın: %80+
-  min_rr: 2.0                   # Senin kuralın: 1:2
-  risk_per_trade_pct: 1.0
-
-safety:
-  max_position_notional_pct: 5.0  # 10 coin için dağılım
-  daily_loss_limit_pct: 3.0
-  weekly_drawdown_limit_pct: 8.0
+```bash
+docker exec efloud-bot python3 -m backend.migrate up
 ```
 
-## Mimari
+Copy the migration output into the PR/deploy notes.
 
+### Conditional order caveat
+
+`ccxt.fetch_open_orders()` may not show Binance conditional/algo TP/SL orders.
+For SL/TP/order reconcile checks, cross-check with Binance algo endpoints or the Binance UI.
+Do not assume “0 open orders” from `fetch_open_orders()` means there are no TP/SL orders.
+
+---
+
+## Configuration
+
+Primary config lives in `config.yaml` / `configs/` strategy profiles. Environment values override file config where implemented.
+
+Common env vars:
+
+- `BINANCE_API_KEY`
+- `BINANCE_API_SECRET`
+- `DATABASE_URL`
+- `EFLOUD_ALLOW_MAINNET`
+- `EFLOUD_TELEGRAM_TOKEN`
+- `EFLOUD_TELEGRAM_CHAT_ID`
+- SMTP vars for daily reports, if email reporting is enabled
+
+Risk and safety config changes must be reviewed as trading-risk changes, not ordinary config edits.
+
+---
+
+## Tests
+
+Default command:
+
+```bash
+python3 -m pytest
 ```
-main.py
-  └─ SafeOrchestrator (engine/safe_orchestrator.py)
-       ├─ SymbolUniverse (universe.py)         ← 10 coin resolver
-       ├─ SMCEngine (smc.py)                    ← swing/CHoCH/OB/FVG
-       ├─ LevelEngine (levels.py)               ← MO/WO/DO
-       ├─ IntentEngine (intent.py)              ← istekli alım
-       ├─ ScenarioPlanner (scenarios.py)        ← 3 senaryo
-       ├─ PositionLifecycle (lifecycle.py)      ← hedge/piramit
-       ├─ ReportEngine (report.py)              ← Efloud stil markdown
-       ├─ RegimeDetector (regimes/)             ← trending/ranging
-       └─ Safety Layer (safety/)
-            ├─ CircuitBreaker                   ← daily/weekly loss
-            ├─ PositionGuard                     ← size/SL/exposure
-            ├─ StateStore                        ← crash recovery
-            ├─ ExchangeGuard                     ← retry/rate-limit
-            └─ MainnetGuard                      ← canlı koruması
+
+Useful targeted examples:
+
+```bash
+python3 -m pytest tests/ backend/tests/ -q
+python3 -m pytest backend/tests/test_lifecycle_weakness_churn.py -q
+python3 -m pytest backend/tests/test_log_audit_jsonb_serialization.py -q
+python3 -m pytest backend/tests/test_reconcile_algo_orders_visibility.py -q
+python3 -m pytest test_safety.py -v
 ```
 
-## Testler
+Notes:
 
-| Test | Amaç | Durum |
-|---|---|---|
-| test_safety.py | Circuit breaker, state, position guards | ✅ 8/8 |
-| test_regime.py | Trending/Ranging/Volatile sınıflama | ✅ 3/3 |
-| test_offline.py | Orchestrator synthetic smoke test | ✅ |
-| test_backtest.py | Tek senaryo walk-forward backtest | ✅ |
-| test_backtest_multi.py | 7 farklı piyasa rejimi | ✅ (az sinyal — synthetic data beklenen) |
-| test_smoke.py | Network'lü ETH test (SSL var ortamda) | ⚠️ env bağlı |
-| test_real_data.py | Gerçek Binance datasıyla | ⚠️ API key gerek |
+- Pytest discovery includes root-level `test_*.py` files.
+- Some legacy/manual backtest scripts are intentionally ignored by pytest config.
+- Default tests must not require live Binance/Supabase/API credentials.
+- Live/integration tests should be opt-in and clearly named (for example `test_real_*`).
 
-## Risk Haritası
+---
 
-Bkz `RISK_MAP.md` — 30+ arıza senaryosunun tam analizi:
-- Piyasa rejimleri (choppy, blow-off, reversal, news spike)
-- Teknik arızalar (API 503, stale data, clock drift, crash)
-- Pozisyon riskleri (runaway loss, over-leverage, orphan hedge)
-- Veri kalitesi (timezone, volume NaN, rounding)
-- Operasyonel (secret leak, mainnet kazası, log spam)
+## Claude / Hermes Workflow
 
-## Canlıya Geçiş Kontrol Listesi
+This repo includes project memory and reusable Claude assets:
 
-- [ ] Min 1 hafta testnet + dry_run çalıştır, raporları okuyup onaylar
-- [ ] Reports klasöründeki markdown'ları gözden geçir
-- [ ] Circuit breaker trip senaryolarını simüle et (backtest'le)
-- [ ] `BINANCE_API_KEY` ve `BINANCE_API_SECRET` env var olarak ayarla (config'e asla yazma)
-- [ ] `EFLOUD_ALLOW_MAINNET=1` ayarla
-- [ ] Config'de `testnet: false`, `dry_run: true` bırak → 2-3 gün izle
-- [ ] Sonra `dry_run: false` yap, küçük bakiye ile başla
-- [ ] Weekly DD limit'e ulaşırsan HALT olur, manual reset gerek
+- `CLAUDE.md` — project memory: architecture, ops rules, current state
+- `.claude/agents/` — project-specific review/test/risk agents
+- `.claude/skills/` — bugfix, deploy-safety and trading-risk workflows
+- `.claude/commands/` — optional workflow commands
 
-## Uyarılar
+Role split:
 
-- Efloud kendisi de haftada 1-2 setup alır. `min_confluence: 80` ile bot da seçici — az trade normaldir
-- Synthetic data'da trade sayısı düşüktür (random walk'ta OB/FVG yapıları temiz oluşmaz)
-- Gerçek BTC/ETH datasında setup sayısı daha yüksek olur
-- İlk canlı kullanımdan önce `RISK_MAP.md`'yi mutlaka oku
+- **Hermes:** live ops, deploy, VPS/SSH, risk decisions, mainnet changes, incident response, final merge/deploy coordination.
+- **Claude Code:** docs, tests, refactor proposals, read-only research, PR preparation and code review support.
+
+Claude Code should not run production commands, change live risk config, merge/deploy, or bypass mainnet guards.
+
+---
+
+## Forex Roadmap
+
+Forex support is planned but not implemented yet.
+
+Current execution is Binance-bound. The intended path is a pluggable adapter interface:
+
+- `BinanceAdapter` — current crypto futures path
+- `MT5Adapter` — likely first forex candidate because of broker availability / practical usage
+- `OandaAdapter` — cleaner API-native option for later evaluation
+
+Key design questions before implementation:
+
+- Symbol mapping: `BTC/USDT` vs `EURUSD` / `XAUUSD`
+- Lot size, pip value, spread and market-hours handling
+- Server-side SL/TP behavior per broker
+- Position/reconcile semantics
+- Demo/paper validation before any live pilot
+
+Forex work should start with a separate design/spec PR before code changes.
+
+---
+
+## DON'T
+
+- Do not commit secrets, API keys, Telegram tokens or private SSH material.
+- Do not change `testnet`, `dry_run`, leverage, sizing or risk limits without explicit approval.
+- Do not deploy env changes with only `docker restart`.
+- Do not mix bugfix + refactor + feature in one PR.
+- Do not write default tests that hit live Binance/Supabase APIs.
+- Do not trust `ccxt.fetch_open_orders()` alone for conditional TP/SL visibility.
+- Do not edit active production config casually while live positions are open.
+
+---
+
+## Related Docs
+
+- `CLAUDE.md` — always-read project memory for Claude sessions
+- `RISK_MAP.md` — failure modes and risk analysis
+- `docs/` — plans, specs, runbooks and historical notes
+- `.claude/` — project-local Claude agents, skills and commands
