@@ -11,6 +11,10 @@ from .position_guard import (
     PositionGuard, PositionCheckResult, PauseConfig, PauseGateDecision,
     load_pause_config, cleanup_orphan_hedges,
 )
+from .orphan_protection import (
+    OrphanProtectionConfig, CoverageStatus, ProtectionAction,
+    OrphanProtector, load_orphan_protection_config,
+)
 
 __all__ = [
     "CircuitBreaker", "BreakerState", "BreakerStatus",
@@ -20,4 +24,6 @@ __all__ = [
     "MainnetGuard", "mask_secret",
     "PositionGuard", "PositionCheckResult", "PauseConfig", "PauseGateDecision",
     "load_pause_config", "cleanup_orphan_hedges",
+    "OrphanProtectionConfig", "CoverageStatus", "ProtectionAction",
+    "OrphanProtector", "load_orphan_protection_config",
 ]
