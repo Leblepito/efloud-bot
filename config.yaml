@@ -144,5 +144,18 @@ safety:
   # NOT `docker restart`). Production activation requires Hermes/Utku approval.
   pause_new_entries: false
 
+  # Orphan position protection (default off).
+  # When enabled, the bot can place close-position STOP_MARKET SL orders
+  # for orphan exchange positions (positions on the exchange not in local
+  # lifecycle state). This does NOT import orphans into local state.
+  # Activation requires Hermes/Utku approval in production.
+  orphan_protection:
+    enabled: false
+    mode: warn_only           # warn_only | place_missing_sl
+    default_sl_pct: 2.0
+    max_auto_protect_per_cycle: 1
+    min_distance_to_mark_pct: 0.5
+    require_tp_present: true
+
   # Per-symbol rate limiting
   min_seconds_between_symbol_fetches: 0.5   # 20 coin için daha sıkı ritim
