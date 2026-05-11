@@ -12,11 +12,107 @@ Check'ler:
 """
 
 import logging
+import os
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Any, Mapping, Optional, List
 from datetime import datetime, timedelta, timezone
 
 log = logging.getLogger("efloud.posguard")
+
+
+@dataclass(frozen=True)
+class PauseGateDecision:
+    """Result of the pause_new_entries hard gate for new market entries."""
+    allowed: bool
+    reason: Optional[str] = None
+    source: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class PauseConfig:
+    """Resolved pause configuration loaded once at process start.
+
+    Env changes require container recreation (`docker compose up -d`), not
+    `docker restart`. True runtime hot-flip belongs to a later API/state PR.
+    """
+    enabled: bool
+    source: str
+    config_value: Optional[bool]
+    env_override: Optional[str]
+
+
+_ENV_VAR_NAME = "EFLOUD_PAUSE_NEW_ENTRIES"
+_ENV_TRUE = {"1", "true", "yes", "on"}
+_ENV_FALSE = {"0", "false", "no", "off", ""}
+
+
+def _parse_env_bool(raw: Optional[str]) -> Optional[bool]:
+    if raw is None:
+        return None
+    norm = raw.strip().lower()
+    if norm in _ENV_TRUE:
+        return True
+    if norm in _ENV_FALSE:
+        return False
+    return None
+
+
+def load_pause_config(safety_cfg: Mapping[str, Any]) -> PauseConfig:
+    """Resolve pause_new_entries from env + config.
+
+    Precedence: EFLOUD_PAUSE_NEW_ENTRIES > safety.pause_new_entries > false.
+    Unknown env values are ignored with a warning and fall back to config.
+    """
+    config_raw = safety_cfg.get("pause_new_entries", None)
+    if config_raw is None:
+        config_value: Optional[bool] = None
+    elif isinstance(config_raw, bool):
+        config_value = config_raw
+    else:
+        log.warning(
+            "safety.pause_new_entries has unexpected type %s (value=%r); "
+            "treating as missing (default false).",
+            type(config_raw).__name__, config_raw,
+        )
+        config_value = None
+
+    env_raw = os.environ.get(_ENV_VAR_NAME)
+    env_parsed = _parse_env_bool(env_raw)
+    if env_raw is not None and env_parsed is None:
+        log.warning(
+            "%s has unrecognized value %r; expected true values %s or false values %s. "
+            "Ignoring env, falling back to config.",
+            _ENV_VAR_NAME, env_raw, sorted(_ENV_TRUE), sorted(_ENV_FALSE - {""}),
+        )
+
+    if env_parsed is not None:
+        enabled = env_parsed
+        source = "env"
+    elif config_value is not None:
+        enabled = config_value
+        source = "config"
+    else:
+        enabled = False
+        source = "default"
+
+    cfg = PauseConfig(
+        enabled=enabled,
+        source=source,
+        config_value=config_value,
+        env_override=env_raw,
+    )
+    log.info(
+        "pause_new_entries config loaded: effective=%s source=%s (config=%r, env=%r)",
+        enabled, source, config_value, env_raw,
+        extra={
+            "event": "position_guard.pause_config_loaded",
+            "effective": enabled,
+            "source": source,
+            "config_value": config_value,
+            "env_override": env_raw,
+        },
+    )
+    return cfg
 
 
 @dataclass
@@ -43,7 +139,8 @@ class PositionGuard:
                  min_sl_distance_atr: float = 0.5,
                  max_sl_distance_atr: float = 5.0,
                  reserve_balance: float = 0.0,
-                 max_open_positions: int = 999):
+                 max_open_positions: int = 999,
+                 pause_config: PauseConfig | None = None):
         self.max_size_pct = max_notional_pct_of_balance / 100
         self.max_exposure = max_total_exposure_multiplier
         self.max_hold = max_holding_hours
@@ -54,6 +151,46 @@ class PositionGuard:
         # Default 999 = effectively unlimited (back-compat for tests/configs that
         # don't set this). Real configs cap at 1-10.
         self.max_open_positions = max_open_positions
+        self._pause = pause_config or PauseConfig(
+            enabled=False,
+            source="default",
+            config_value=None,
+            env_override=None,
+        )
+
+    def is_new_entry_allowed(self, signal) -> PauseGateDecision:
+        """Return whether a new market entry may proceed past pause gate.
+
+        This gate only blocks new entries. Reconcile, lifecycle, SL/TP
+        management, breaker updates, and notifications remain independent.
+        """
+        if not self._pause.enabled:
+            return PauseGateDecision(allowed=True)
+
+        source_attribution = (
+            "EFLOUD_PAUSE_NEW_ENTRIES"
+            if self._pause.source == "env"
+            else "safety.pause_new_entries"
+        )
+        symbol = getattr(signal, "symbol", None)
+        side = getattr(signal, "side", None)
+        is_pyramid = bool(getattr(signal, "is_pyramid", False) is True)
+        log.info(
+            "gate blocked: pause_new_entries active",
+            extra={
+                "event": "position_guard.gate_blocked",
+                "symbol": symbol,
+                "side": side,
+                "is_pyramid": is_pyramid,
+                "reason": "pause_new_entries",
+                "source": source_attribution,
+            },
+        )
+        return PauseGateDecision(
+            allowed=False,
+            reason="pause_new_entries",
+            source=source_attribution,
+        )
 
     def can_open_position(self,
                             balance: float,
