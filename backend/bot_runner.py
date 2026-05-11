@@ -22,7 +22,7 @@ from backend.notifications import TelegramNotifier
 from engine import SafeOrchestrator
 from engine.notifications import NotificationManager
 from engine.permissions import PermissionManager
-from engine.safety import MainnetGuard
+from engine.safety import MainnetGuard, OrphanProtector, load_orphan_protection_config
 from engine.universe import SymbolUniverse
 from exchange import BinanceClient, OrderManager, Position
 from main import resolve_credentials, validate_config
@@ -164,6 +164,9 @@ class BotRunner:
         notif_mgr = NotificationManager(channels=["log"])  # WS push üzerinden ayrıca yapılır
         state_dir = self.cfg["operation"].get("state_dir", "./state")
 
+        orphan_cfg = load_orphan_protection_config(self.cfg.get("safety", {}))
+        orphan_protector = OrphanProtector(orphan_cfg, self.client)
+
         # OrderManager FIRST — orchestrator'a inject edilecek.
         # state_dir same as orchestrator's so restart restores order_mgr.positions
         # (prevents duplicate SL+TP1+TP2 stacking on Binance — 2026-05-08 bug).
@@ -171,6 +174,7 @@ class BotRunner:
             self.client, dry_run=self.cfg["operation"]["dry_run"],
             on_position_change=self._on_position_change,
             state_dir=state_dir,
+            orphan_protector=orphan_protector,
         )
 
         self.orch = SafeOrchestrator(

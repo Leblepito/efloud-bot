@@ -27,6 +27,7 @@ from .report import ReportEngine
 from .regimes import RegimeDetector, RegimeAnalysis
 from .safety import (
     CircuitBreaker, StateStore, PositionGuard, load_pause_config,
+    OrphanProtector, load_orphan_protection_config,
     validate_kline_freshness, validate_kline_integrity,
     StaleDataError, cleanup_orphan_hedges
 )
@@ -198,6 +199,10 @@ class SafeOrchestrator:
             max_open_positions=self.config.get("risk", {}).get("max_open_positions", 999),
             pause_config=pause_config,
         )
+        orphan_cfg = load_orphan_protection_config(safety)
+        self.orphan_protector = OrphanProtector(orphan_cfg, self.client) if self.client is not None else None
+        if self.order_manager is not None and getattr(self.order_manager, "orphan_protector", None) is None:
+            self.order_manager.orphan_protector = self.orphan_protector
         self.store = StateStore(state_dir)
 
         # Signal deduplication cache — {(symbol, direction, entry): timestamp}

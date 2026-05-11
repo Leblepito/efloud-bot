@@ -68,3 +68,11 @@ def test_bot_runner_wires_order_manager_into_orchestrator():
         "bot_runner.start() SafeOrchestrator'a order_mgr göndermeli "
         "— yoksa borsaya emir gitmez (paper-trade bug)"
     )
+
+
+def test_bot_runner_wires_orphan_protector_into_order_manager():
+    """Production wiring: OrderManager orphan_protector almalı."""
+    import inspect
+    from backend import bot_runner as runner_mod
+    src = inspect.getsource(runner_mod.BotRunner.start)
+    assert "orphan_protector=orphan_protector" in src
