@@ -13,6 +13,67 @@ Güncel odak: **Ualgo Telegram sinyal entegrasyonu + canlı operasyon güvenliğ
 
 ---
 
+## Pausing new entries
+
+The bot supports pausing **new market entries** while keeping existing position
+protection active.
+
+### What it does
+
+- Blocks new entries before exchange order submission.
+- Keeps reconcile running.
+- Keeps lifecycle/SL/TP management running.
+- Keeps breaker/equity updates running.
+- Keeps notifications and status reporting running.
+
+### What it does not do
+
+- Does not close existing positions.
+- Does not cancel existing SL/TP orders.
+- Does not stop the bot.
+- Does not replace `dry_run`.
+- Does not provide runtime hot-flip without container recreate.
+
+### Config activation
+
+```yaml
+safety:
+  pause_new_entries: true
+```
+
+Production activation requires Hermes/Utku approval.
+
+### Env override
+
+```bash
+EFLOUD_PAUSE_NEW_ENTRIES=true
+```
+
+Env has precedence over config. Accepted true values: `1`, `true`, `yes`, `on`.
+Accepted false values: `0`, `false`, `no`, `off`, and empty string.
+Unknown env values are ignored with a warning and the config value is used.
+
+Important: Docker env changes require container recreate:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d efloud-bot
+```
+
+Do **not** use `docker restart` for env/config pickup.
+
+### Verification
+
+Startup logs include the effective value and source:
+
+```text
+pause_new_entries config loaded: effective=True source=env (config=False, env='true')
+```
+
+Blocked signals log `reason=pause_new_entries` and the source
+(`EFLOUD_PAUSE_NEW_ENTRIES` or `safety.pause_new_entries`).
+
+---
+
 ## Current Status
 
 - Production: Hetzner VPS + `docker-compose.prod.yml`

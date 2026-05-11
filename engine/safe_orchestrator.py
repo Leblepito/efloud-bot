@@ -26,7 +26,7 @@ from .lifecycle import PositionLifecycle
 from .report import ReportEngine
 from .regimes import RegimeDetector, RegimeAnalysis
 from .safety import (
-    CircuitBreaker, StateStore, PositionGuard,
+    CircuitBreaker, StateStore, PositionGuard, load_pause_config,
     validate_kline_freshness, validate_kline_integrity,
     StaleDataError, cleanup_orphan_hedges
 )
@@ -186,6 +186,7 @@ class SafeOrchestrator:
             emergency_balance_threshold=safety.get("emergency_balance_threshold", None),
             reserve_balance=safety.get("reserve_balance", 0.0),
         )
+        pause_config = load_pause_config(safety)
         self.pos_guard = PositionGuard(
             max_notional_pct_of_balance=safety.get("max_position_notional_pct", 20),
             max_total_exposure_multiplier=safety.get("max_total_exposure", 5.0),
@@ -195,6 +196,7 @@ class SafeOrchestrator:
             max_sl_distance_atr=safety.get("max_sl_atr", 5.0),
             reserve_balance=safety.get("reserve_balance", 0.0),
             max_open_positions=self.config.get("risk", {}).get("max_open_positions", 999),
+            pause_config=pause_config,
         )
         self.store = StateStore(state_dir)
 
@@ -574,59 +576,74 @@ class SafeOrchestrator:
                         leverage=self.config["exchange"].get("leverage", 1),
                     )
 
-                    if guard_check.allowed:
-                        # ── 0) Trace ID for log correlation across orchestrator → DB ──
-                        trace_id = new_trace_id()
-                        set_trace_id(trace_id)
-                        log.info(
-                            "signal_promoted_to_trade",
-                            extra={"symbol": symbol, "direction": latest.direction,
-                                   "confluence": latest.confluence},
-                        )
-
-                        # ── 1) Borsaya gerçek emir gönder (varsa) ──
-                        exchange_ok = True
-                        if self.order_manager is not None:
-                            try:
-                                exchange_pos = self.order_manager.open_position(
-                                    symbol, latest.direction, size,
-                                    latest.entry, latest.sl, latest.tp1, latest.tp2,
-                                    trace_id=trace_id,
-                                )
-                            except Exception as e:
-                                log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
-                                exchange_pos = None
-
-                            if exchange_pos is None:
-                                log.warning(
-                                    f"🚫 [{symbol}] Exchange order failed — "
-                                    f"local position NOT opened (no logical state mismatch)"
-                                )
-                                warnings.append(
-                                    f"Order failed for {symbol}: exchange rejected"
-                                )
-                                exchange_ok = False
-
-                        # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──
-                        if exchange_ok:
-                            pos = self.lifecycle.open_position(
-                                symbol, latest.direction, latest.entry, size,
-                                latest.sl, latest.tp1, latest.tp2
-                            )
-                            log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
-                                     f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
-                                     f"TP2={latest.tp2:.4f} Conf={latest.confluence}")
-                            if self.notification_mgr:
-                                self.notification_mgr.position_opened(
-                                    symbol, latest.direction, latest.entry,
-                                    size, latest.sl, latest.tp1, latest.confluence
-                                )
-                            actions.append(f"Opened {latest.direction} @ {latest.entry:.2f} "
-                                           f"(size={size:.4f})")
-                            warnings.extend(guard_check.warnings)
-                    else:
+                    if not guard_check.allowed:
                         log.warning(f"🚫 Position blocked: {guard_check.reason}")
                         warnings.append(f"Signal rejected: {guard_check.reason}")
+                    else:
+                        pause_signal = type("PauseSignal", (), {
+                            "symbol": symbol,
+                            "side": latest.direction.lower(),
+                        })()
+                        pause_decision = self.pos_guard.is_new_entry_allowed(pause_signal)
+                        if not pause_decision.allowed:
+                            log.warning(
+                                f"🚫 Position blocked: {pause_decision.reason} "
+                                f"source={pause_decision.source}"
+                            )
+                            warnings.append(f"Signal rejected: {pause_decision.reason}")
+                            # Pause is operator-driven; surface it in actions/telemetry.
+                            # Routine risk-math rejections stay warnings-only.
+                            actions.append(f"Signal rejected: {pause_decision.reason}")
+                        else:
+                            # ── 0) Trace ID for log correlation across orchestrator → DB ──
+                            trace_id = new_trace_id()
+                            set_trace_id(trace_id)
+                            log.info(
+                                "signal_promoted_to_trade",
+                                extra={"symbol": symbol, "direction": latest.direction,
+                                       "confluence": latest.confluence},
+                            )
+
+                            # ── 1) Borsaya gerçek emir gönder (varsa) ──
+                            exchange_ok = True
+                            if self.order_manager is not None:
+                                try:
+                                    exchange_pos = self.order_manager.open_position(
+                                        symbol, latest.direction, size,
+                                        latest.entry, latest.sl, latest.tp1, latest.tp2,
+                                        trace_id=trace_id,
+                                    )
+                                except Exception as e:
+                                    log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
+                                    exchange_pos = None
+
+                                if exchange_pos is None:
+                                    log.warning(
+                                        f"🚫 [{symbol}] Exchange order failed — "
+                                        f"local position NOT opened (no logical state mismatch)"
+                                    )
+                                    warnings.append(
+                                        f"Order failed for {symbol}: exchange rejected"
+                                    )
+                                    exchange_ok = False
+
+                            # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──
+                            if exchange_ok:
+                                pos = self.lifecycle.open_position(
+                                    symbol, latest.direction, latest.entry, size,
+                                    latest.sl, latest.tp1, latest.tp2
+                                )
+                                log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
+                                         f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
+                                         f"TP2={latest.tp2:.4f} Conf={latest.confluence}")
+                                if self.notification_mgr:
+                                    self.notification_mgr.position_opened(
+                                        symbol, latest.direction, latest.entry,
+                                        size, latest.sl, latest.tp1, latest.confluence
+                                    )
+                                actions.append(f"Opened {latest.direction} @ {latest.entry:.2f} "
+                                               f"(size={size:.4f})")
+                                warnings.extend(guard_check.warnings)
 
         # ═══ STEP 7: Scenario-based Piramit ═══
         if can_trade:
@@ -656,14 +673,26 @@ class SafeOrchestrator:
                     max_notional_pct=max_notional,
                 )
 
-                # Add guard
+                # Add guard first so pause_new_entries does not mask real rejection reasons.
                 add_check = self.pos_guard.can_add_to_position(existing, add_size, current_price)
-                if add_check.allowed:
-                    self.lifecycle.add_to_position(existing, mid, add_size, "scenario_add")
-                    actions.append(f"Added to {existing.id} via scenario {scen.id}")
-                    warnings.extend(add_check.warnings)
-                else:
+                if not add_check.allowed:
                     warnings.append(f"Add rejected: {add_check.reason}")
+                    continue
+
+                pause_pyramid_decision = self.pos_guard.is_new_entry_allowed(
+                    type("PauseSignal", (), {
+                        "symbol": symbol,
+                        "side": existing.direction.lower(),
+                        "is_pyramid": True,
+                    })()
+                )
+                if not pause_pyramid_decision.allowed:
+                    warnings.append(f"Add rejected: {pause_pyramid_decision.reason}")
+                    continue
+
+                self.lifecycle.add_to_position(existing, mid, add_size, "scenario_add")
+                actions.append(f"Added to {existing.id} via scenario {scen.id}")
+                warnings.extend(add_check.warnings)
 
         # ═══ STEP 8: State Persistence ═══
         try:

@@ -137,5 +137,12 @@ safety:
   emergency_balance_threshold: null  # null = devre dışı (testnet)
   reserve_balance: 0                  # testnet: 0
 
+  # Pause NEW market entries while keeping reconcile, lifecycle, SL/TP
+  # management, breaker updates, and notifications active. Default false.
+  # Operator override: EFLOUD_PAUSE_NEW_ENTRIES=true|false (read at startup;
+  # container recreate required to apply env changes — `docker compose up -d`,
+  # NOT `docker restart`). Production activation requires Hermes/Utku approval.
+  pause_new_entries: false
+
   # Per-symbol rate limiting
   min_seconds_between_symbol_fetches: 0.5   # 20 coin için daha sıkı ritim

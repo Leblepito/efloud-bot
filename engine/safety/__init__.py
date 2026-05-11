@@ -7,7 +7,10 @@ from .guard import (
     validate_kline_freshness, validate_kline_integrity, StaleDataError,
     MainnetGuard, mask_secret,
 )
-from .position_guard import PositionGuard, PositionCheckResult, cleanup_orphan_hedges
+from .position_guard import (
+    PositionGuard, PositionCheckResult, PauseConfig, PauseGateDecision,
+    load_pause_config, cleanup_orphan_hedges,
+)
 
 __all__ = [
     "CircuitBreaker", "BreakerState", "BreakerStatus",
@@ -15,5 +18,6 @@ __all__ = [
     "retry_with_backoff", "RateLimiter", "RetryExhausted",
     "validate_kline_freshness", "validate_kline_integrity", "StaleDataError",
     "MainnetGuard", "mask_secret",
-    "PositionGuard", "PositionCheckResult", "cleanup_orphan_hedges",
+    "PositionGuard", "PositionCheckResult", "PauseConfig", "PauseGateDecision",
+    "load_pause_config", "cleanup_orphan_hedges",
 ]
