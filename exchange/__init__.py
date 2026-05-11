@@ -222,12 +222,14 @@ class OrderManager:
     """
 
     def __init__(self, client: BinanceClient, dry_run: bool = True,
-                 on_position_change=None, state_dir: Optional[str] = None):
+                 on_position_change=None, state_dir: Optional[str] = None,
+                 orphan_protector=None):
         self.client = client
         self.dry_run = dry_run
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
+        self.orphan_protector = orphan_protector
 
         # Persistence — state_dir=None disables it (keeps old test fixtures working).
         # When set, self.positions is mirrored to a JSON file after every state
@@ -409,6 +411,7 @@ class OrderManager:
         # order_manager_positions.json` injection was needed.
         local_symbols = {p.symbol for p in self.positions}
         orphan_symbols = bn_open_symbols - local_symbols
+        detected_orphans: list = []
         if orphan_symbols:
             for orphan in sorted(orphan_symbols):
                 # Find the matching exchange position payload to enrich the warning.
@@ -419,6 +422,7 @@ class OrderManager:
                     None,
                 )
                 if ex_pos:
+                    detected_orphans.append(ex_pos)
                     side = ex_pos.get("side", "?")
                     qty = ex_pos.get("contracts", 0)
                     entry_p = ex_pos.get("entryPrice", 0)
@@ -431,6 +435,18 @@ class OrderManager:
                     )
                 else:
                     log.warning(f"⚠️  ORPHAN POSITION DETECTED: {orphan} — details unavailable")
+
+        if self.orphan_protector is not None and detected_orphans:
+            try:
+                actions = self.orphan_protector.protect_cycle(detected_orphans, algo_orders if 'algo_orders' in locals() else [])
+                for act in actions:
+                    log.info(
+                        f"orphan_protect[{act.symbol}]: {act.action}"
+                        + (f" sl={act.sl_price}" if act.sl_price else "")
+                        + (f" error={act.error}" if act.error else "")
+                    )
+            except Exception as e:
+                log.warning(f"orphan_protector failed during reconcile: {e}", exc_info=True)
 
         closed_now: List[Position] = []
 

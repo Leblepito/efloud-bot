@@ -72,6 +72,52 @@ pause_new_entries config loaded: effective=True source=env (config=False, env='t
 Blocked signals log `reason=pause_new_entries` and the source
 (`EFLOUD_PAUSE_NEW_ENTRIES` or `safety.pause_new_entries`).
 
+## Orphan position auto-protection
+
+When the bot detects an exchange position that is not in local lifecycle state
+(an orphan), it can optionally place a close-position `STOP_MARKET` stop-loss so
+the position is protected even though the bot cannot manage the full lifecycle.
+
+### What this does not do
+
+- Does not import the orphan into lifecycle state.
+- Does not place take-profit orders.
+- Does not cancel any existing orders.
+- Does not auto-fix wrong-direction or non-reduceOnly SL orders; those produce
+  critical warnings only.
+
+### Modes
+
+- `warn_only` (default): observe and log, no orders placed.
+- `place_missing_sl`: place `closePosition=true STOP_MARKET reduceOnly=true` SL
+  for unprotected orphan positions.
+
+### Activation
+
+Start with observation only:
+
+```yaml
+safety:
+  orphan_protection:
+    enabled: true
+    mode: warn_only
+```
+
+Then recreate the container; do not use `docker restart` for config pickup:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d efloud-bot
+```
+
+Observe one full cycle of `orphan_protection.warn_only` logs. If clean, switch
+`mode` to `place_missing_sl` and recreate again. Production activation requires
+Hermes/Utku approval.
+
+### Why no env override
+
+Auto-placing orders is not an emergency hot-flip. It requires deliberate operator
+review, so this feature intentionally uses config only.
+
 ---
 
 ## Current Status
