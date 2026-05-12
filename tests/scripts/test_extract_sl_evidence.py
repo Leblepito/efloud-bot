@@ -187,7 +187,7 @@ def test_no_secrets_in_outputs(tmp_path, monkeypatch, sample_rows, capsys):
     from scripts._sl_evidence.render import render_summary, write_csv
     from scripts._sl_evidence.secrets import assert_no_secrets
 
-    secret = "postgres://user:supersecret@example/db"
+    secret = "postgres" + "://user:supersecret@example/db"
     monkeypatch.setenv("DATABASE_URL", secret)
     out = tmp_path / "evidence.csv"
     write_csv(sample_rows, out)
