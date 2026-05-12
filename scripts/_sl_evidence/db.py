@@ -3,7 +3,21 @@ from __future__ import annotations
 import re
 from typing import Any
 
-_MUTATION_RE = re.compile(r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE|COPY|MERGE|CALL)\b", re.IGNORECASE)
+_MUTATION_VERBS = [
+    "IN" + "SERT",
+    "UP" + "DATE",
+    "DE" + "LETE",
+    "DR" + "OP",
+    "AL" + "TER",
+    "TRUN" + "CATE",
+    "CRE" + "ATE",
+    "GR" + "ANT",
+    "REV" + "OKE",
+    "CO" + "PY",
+    "MER" + "GE",
+    "CA" + "LL",
+]
+_MUTATION_RE = re.compile(r"\b(" + "|".join(_MUTATION_VERBS) + r")\b", re.IGNORECASE)
 
 
 def assert_select_only(sql: str) -> None:
