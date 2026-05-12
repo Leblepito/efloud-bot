@@ -122,7 +122,9 @@ def test_sql_uses_bound_parameters_and_select_only_guard():
 def test_csv_null_handling_and_column_order(tmp_path, sample_rows):
     from scripts._sl_evidence.render import CSV_COLUMNS, write_csv
 
-    rows = [dict(sample_rows[0], atr14=None, mae_pct=None, mfe_pct=None, journal_present=False)]
+    base = dict(sample_rows[0])
+    base["notes"] = {}
+    rows = [dict(base, atr14=None, mae_pct=None, mfe_pct=None, journal_present=False)]
     out = tmp_path / "evidence.csv"
     write_csv(rows, out)
 
