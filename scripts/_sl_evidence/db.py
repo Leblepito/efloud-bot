@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any
 
 _MUTATION_VERBS = [
@@ -63,11 +64,16 @@ def build_trade_query(since: str, symbols: list[str]) -> tuple[str, list[Any]]:
     return sql, [since, symbols]
 
 
+def parse_since(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 async def fetch_rows(database_url: str, since: str, symbols: list[str]) -> list[dict[str, Any]]:
     """Fetch evidence rows using asyncpg without ever echoing database_url."""
     import asyncpg
 
     sql, args = build_trade_query(since, symbols)
+    args[0] = parse_since(since)
     conn = None
     try:
         conn = await asyncpg.connect(database_url)
