@@ -384,7 +384,9 @@ class SafeOrchestrator:
         Must be called AFTER lifecycle.close_position has appended the
         Exit — realized_pnl is read from pos.realized_pnl (sum of exits).
         No-op when self.trade_journal is None. bars_held is 0 in this PR;
-        per-bar tracking + MAE/MFE arrive in a follow-up.
+        per-bar bar-count tracking is a follow-up. MAE/MFE pass through
+        from pos.mae_pct / pos.mfe_pct populated by update_excursion()
+        each cycle.
         """
         if self.trade_journal is None:
             return
@@ -395,6 +397,8 @@ class SafeOrchestrator:
                 exit_reason=reason,
                 realized_pnl=pos.realized_pnl,
                 bars_held=0,
+                mfe_pct=pos.mfe_pct,
+                mae_pct=pos.mae_pct,
             )
         except Exception as e:
             log.warning(f"trade_journal.record_exit failed for {pos.id}: {e}")
@@ -435,6 +439,16 @@ class SafeOrchestrator:
             log.warning("📛 Stale/invalid data detected — analysis only, NO TRADING")
 
         current_price = float(df_entry["close"].iloc[-1])
+        bar_high = float(df_entry["high"].iloc[-1])
+        bar_low = float(df_entry["low"].iloc[-1])
+
+        # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
+        # Update excursion for every open position in this symbol before any
+        # downstream decision (breaker, regime, close, open). MAE/MFE flow
+        # into TradeJournal at close-time, enabling Phase 0 to separate H2
+        # (SL too tight: MAE ≤ sl_distance) from H3 (price ran far: MAE >>).
+        for _pos in self.lifecycle.open_positions(symbol):
+            _pos.update_excursion(bar_high, bar_low)
 
         # ═══ STEP 1: Circuit Breaker ═══
         # Sync breaker's current_balance with live exchange equity BEFORE check.
