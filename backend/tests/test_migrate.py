@@ -68,3 +68,19 @@ async def test_run_pending_no_database_url_returns_silently(monkeypatch, caplog)
     from backend.migrate import run_pending
     # Should not raise
     await run_pending()
+
+
+def test_migration_006_enables_rls_on_trade_audits():
+    """Migration 006 must be present in the repo and must enable RLS on
+    public.trade_audits — closes the Supabase advisor warning that
+    flagged this table as anon-readable after migration 005 created it
+    but missed the migration-004 RLS lockdown."""
+    from backend.migrate import discover_migrations
+    migrations = discover_migrations(Path("backend/migrations"))
+    versions = [v for v, _ in migrations]
+    assert "006_enable_trade_audits_rls" in versions, (
+        "006_enable_trade_audits_rls.sql is missing from backend/migrations/"
+    )
+    sql = next(s for v, s in migrations if v == "006_enable_trade_audits_rls").upper()
+    assert "ENABLE ROW LEVEL SECURITY" in sql
+    assert "TRADE_AUDITS" in sql
