@@ -9,6 +9,13 @@ from pathlib import Path
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field, asdict
 
+# TradeJournal imported lazily inside OrderManager to avoid a hard import
+# cycle (engine.journal stays optional for unit tests that don't need it).
+# A TYPE_CHECKING-only import keeps the type hint readable.
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from engine.journal import TradeJournal
+
 log = logging.getLogger("efloud.exchange")
 
 
@@ -223,13 +230,21 @@ class OrderManager:
 
     def __init__(self, client: BinanceClient, dry_run: bool = True,
                  on_position_change=None, state_dir: Optional[str] = None,
-                 orphan_protector=None):
+                 orphan_protector=None,
+                 trade_journal: "Optional[TradeJournal]" = None):
         self.client = client
         self.dry_run = dry_run
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
         self.orphan_protector = orphan_protector
+        # Trade journal — writes a full TradeSnapshot (entry+exit atomically)
+        # per closed trade in _record_close. None = no-op (backwards-compat for
+        # backtest / unit-test paths). See PR fix/production-trade-journal +
+        # feat/journal-order-manager-hook stack: this hook captures the bulk
+        # of real production closes (TP1/TP2/SL/RECONCILED) that go through
+        # OrderManager.reconcile() rather than SafeOrchestrator.
+        self.trade_journal = trade_journal
 
         # Persistence — state_dir=None disables it (keeps old test fixtures working).
         # When set, self.positions is mirrored to a JSON file after every state
@@ -707,7 +722,51 @@ class OrderManager:
         )
 
         self.closed_positions.append(pos)
+        self._journal_record_close(pos, exit_price, reason)
         self._emit("position_closed", pos)
+
+    def _journal_record_close(self, pos: Position, exit_price: float, reason: str) -> None:
+        """Write a full TradeSnapshot (entry+exit atomically) to TradeJournal.
+
+        No-op when self.trade_journal is None. trade_id derives from the
+        exchange order_id (or a symbol-timestamp fallback when missing).
+        bars_held is 0 here; per-bar tracking arrives in a follow-up PR.
+        MAE/MFE likewise. Wrapped in try/except so journal failures degrade
+        to a log warning — never break the close flow.
+        """
+        if self.trade_journal is None:
+            return
+        # Lazy import to keep engine.journal a soft dependency.
+        from engine.journal import TradeSnapshot
+
+        trade_id = pos.order_id or f"{pos.symbol}-{pos.opened_at}"
+        try:
+            snap = TradeSnapshot(
+                trade_id=trade_id,
+                symbol=pos.symbol,
+                direction=pos.direction,
+                timeframe="",
+                entry_timestamp=pos.opened_at,
+                entry_price=pos.entry,
+                sl_initial=pos.sl,
+                tp1_initial=pos.tp1,
+                tp2_initial=pos.tp2,
+                position_size=pos.size,
+                htf_bias="",
+                intent_score_entry=0,
+                intent_label_entry="",
+                confluence_score=0,
+            )
+            self.trade_journal.record_entry(snap)
+            self.trade_journal.record_exit(
+                trade_id=trade_id,
+                exit_price=exit_price,
+                exit_reason=reason,
+                realized_pnl=pos.pnl_usdt,
+                bars_held=0,
+            )
+        except Exception as e:
+            log.warning(f"trade_journal write failed for {pos.symbol} {trade_id}: {e}")
 
     # ─────────────────────────────────────────────────────────────
     # Backup polling (network/order issues fallback)

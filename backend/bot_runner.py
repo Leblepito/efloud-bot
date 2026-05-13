@@ -20,6 +20,7 @@ from backend.db import db
 from backend.events import bus
 from backend.notifications import TelegramNotifier
 from engine import SafeOrchestrator
+from engine.journal import TradeJournal
 from engine.notifications import NotificationManager
 from engine.permissions import PermissionManager
 from engine.safety import MainnetGuard, OrphanProtector, load_orphan_protection_config
@@ -167,6 +168,12 @@ class BotRunner:
         orphan_cfg = load_orphan_protection_config(self.cfg.get("safety", {}))
         orphan_protector = OrphanProtector(orphan_cfg, self.client)
 
+        # Shared TradeJournal so OrderManager (TP1/TP2/SL/RECONCILED closes)
+        # and SafeOrchestrator (manual force-close + entry hooks) write to
+        # the same JSONL file. State volume already mounts state_dir on the
+        # VPS.
+        trade_journal = TradeJournal(str(Path(state_dir) / "trade_journal.jsonl"))
+
         # OrderManager FIRST — orchestrator'a inject edilecek.
         # state_dir same as orchestrator's so restart restores order_mgr.positions
         # (prevents duplicate SL+TP1+TP2 stacking on Binance — 2026-05-08 bug).
@@ -175,12 +182,14 @@ class BotRunner:
             on_position_change=self._on_position_change,
             state_dir=state_dir,
             orphan_protector=orphan_protector,
+            trade_journal=trade_journal,
         )
 
         self.orch = SafeOrchestrator(
             self.cfg, state_dir=state_dir,
             permission_mgr=permission_mgr, notification_mgr=notif_mgr,
             order_manager=self.order_mgr,  # ← borsaya gerçek emir göndermek için
+            trade_journal=trade_journal,
         )
 
         # Capture the running loop so executor-thread callbacks can schedule DB writes

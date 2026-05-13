@@ -501,7 +501,8 @@ def main():
                               notification_mgr=notif_mgr,
                               trade_journal=trade_journal)
 
-    order_mgr = OrderManager(client, dry_run=cfg["operation"]["dry_run"])
+    order_mgr = OrderManager(client, dry_run=cfg["operation"]["dry_run"],
+                              trade_journal=trade_journal)
     rate_limiter = RateLimiter(max_per_minute=1000)
 
     shutdown = GracefulShutdown()
