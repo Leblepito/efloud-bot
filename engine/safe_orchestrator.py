@@ -22,7 +22,8 @@ from .levels import LevelEngine
 from .intent import IntentEngine
 from .signals import generate_signals
 from .scenarios import ScenarioPlanner
-from .lifecycle import PositionLifecycle
+from .lifecycle import PositionLifecycle, Position
+from .journal import TradeJournal, TradeSnapshot
 from .report import ReportEngine
 from .regimes import RegimeDetector, RegimeAnalysis
 from .safety import (
@@ -129,7 +130,8 @@ class SafeOrchestrator:
                   order_manager=None,
                   *,
                   freshness_check: bool = True,
-                  persist: bool = True):
+                  persist: bool = True,
+                  trade_journal: Optional[TradeJournal] = None):
         """
         permission_mgr: PermissionManager instance (opsiyonel)
         notification_mgr: NotificationManager instance (opsiyonel)
@@ -137,11 +139,15 @@ class SafeOrchestrator:
                        None ise sadece lifecycle (paper-trade / test mode).
         freshness_check: False ise validate_kline_freshness çağrılmaz (backtest mode).
         persist: False ise _persist_state disk'e yazmaz (backtest mode).
+        trade_journal: TradeJournal instance — pozisyon entry/exit'lerini
+                       trade_journal.jsonl'a yazar. None ise no-op
+                       (backwards-compat, backtest/unit-test).
         """
         self.config = config
         self.permission_mgr = permission_mgr
         self.notification_mgr = notification_mgr
         self.order_manager = order_manager
+        self.trade_journal = trade_journal
         # Convenience reference to BinanceClient for sizing helpers (PR #24).
         # PR #24 introduced `self.client` references in _calc_size paths but
         # forgot to set the attribute in __init__, causing AttributeError on
@@ -332,6 +338,67 @@ class SafeOrchestrator:
         except Exception as e:
             log.warning(f"Could not persist processed_signals: {e}")
 
+    # ── Trade journal hooks ───────────────────────────────────────────────
+
+    def _journal_record_entry(self, pos: Position) -> None:
+        """Record a freshly-opened position to the trade journal.
+
+        No-op when self.trade_journal is None (backwards-compat for backtest
+        and unit-test paths that don't wire a journal). Snapshot enrichment
+        (htf_bias, intent_score, confluence) is intentionally minimal here;
+        a follow-up PR will feed those from the signal context. The
+        minimum-viable snapshot is enough to make Phase 0 evidence
+        extraction return journal_rows > 0.
+        """
+        if self.trade_journal is None:
+            return
+        if not pos.entries:
+            return
+        entry = pos.entries[0]
+        snap = TradeSnapshot(
+            trade_id=pos.id,
+            symbol=pos.symbol,
+            direction=pos.direction,
+            timeframe="",
+            entry_timestamp=entry.timestamp,
+            entry_price=entry.price,
+            sl_initial=pos.initial_sl,
+            tp1_initial=pos.tp1,
+            tp2_initial=pos.tp2,
+            position_size=entry.size,
+            htf_bias="",
+            intent_score_entry=0,
+            intent_label_entry="",
+            confluence_score=0,
+            scenario_name=pos.scenario_id,
+        )
+        try:
+            self.trade_journal.record_entry(snap)
+        except Exception as e:
+            log.warning(f"trade_journal.record_entry failed for {pos.id}: {e}")
+
+    def _journal_record_exit(self, pos: Position, exit_price: float,
+                              reason: str) -> None:
+        """Record a closed position to the trade journal.
+
+        Must be called AFTER lifecycle.close_position has appended the
+        Exit — realized_pnl is read from pos.realized_pnl (sum of exits).
+        No-op when self.trade_journal is None. bars_held is 0 in this PR;
+        per-bar tracking + MAE/MFE arrive in a follow-up.
+        """
+        if self.trade_journal is None:
+            return
+        try:
+            self.trade_journal.record_exit(
+                trade_id=pos.id,
+                exit_price=exit_price,
+                exit_reason=reason,
+                realized_pnl=pos.realized_pnl,
+                bars_held=0,
+            )
+        except Exception as e:
+            log.warning(f"trade_journal.record_exit failed for {pos.id}: {e}")
+
     def run_cycle(
         self,
         symbol: str,
@@ -475,6 +542,7 @@ class SafeOrchestrator:
             if not hold_check.allowed:
                 log.warning(f"⏰ Force-closing {pos.id}: {hold_check.reason}")
                 self.lifecycle.close_position(pos, current_price, "MANUAL")
+                self._journal_record_exit(pos, exit_price=current_price, reason="MANUAL")
                 actions.append(f"Force-closed {pos.id} (max holding time)")
             warnings.extend(hold_check.warnings)
 
@@ -638,6 +706,7 @@ class SafeOrchestrator:
                                     symbol, latest.direction, latest.entry, size,
                                     latest.sl, latest.tp1, latest.tp2
                                 )
+                                self._journal_record_entry(pos)
                                 log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
                                          f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
                                          f"TP2={latest.tp2:.4f} Conf={latest.confluence}")

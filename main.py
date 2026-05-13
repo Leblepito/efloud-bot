@@ -33,6 +33,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 from engine import SafeOrchestrator
+from engine.journal import TradeJournal
 from engine.safety import (
     MainnetGuard, mask_secret, retry_with_backoff,
     RateLimiter, validate_kline_integrity,
@@ -491,9 +492,14 @@ def main():
     # SafeOrchestrator (tüm güvenlik + analiz katmanları)
     # Permission ve Notification manager'ları geç
     state_dir = cfg["operation"].get("state_dir", "./state")
+    # Trade journal writes one JSONL line per closed trade into the same
+    # state volume the bot already mounts. Pre-fix this was never wired,
+    # producing journal_rows=0 in production (Phase 0 smoke confirmed).
+    trade_journal = TradeJournal(str(Path(state_dir) / "trade_journal.jsonl"))
     orch = SafeOrchestrator(cfg, state_dir=state_dir,
                               permission_mgr=permission_mgr,
-                              notification_mgr=notif_mgr)
+                              notification_mgr=notif_mgr,
+                              trade_journal=trade_journal)
 
     order_mgr = OrderManager(client, dry_run=cfg["operation"]["dry_run"])
     rate_limiter = RateLimiter(max_per_minute=1000)
