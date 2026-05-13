@@ -340,15 +340,25 @@ class SafeOrchestrator:
 
     # ── Trade journal hooks ───────────────────────────────────────────────
 
-    def _journal_record_entry(self, pos: Position) -> None:
+    def _journal_record_entry(self, pos: Position,
+                                signal=None,
+                                htf_bias: str = "",
+                                intent=None,
+                                timeframe: str = "") -> None:
         """Record a freshly-opened position to the trade journal.
 
-        No-op when self.trade_journal is None (backwards-compat for backtest
-        and unit-test paths that don't wire a journal). Snapshot enrichment
-        (htf_bias, intent_score, confluence) is intentionally minimal here;
-        a follow-up PR will feed those from the signal context. The
-        minimum-viable snapshot is enough to make Phase 0 evidence
-        extraction return journal_rows > 0.
+        No-op when self.trade_journal is None.
+
+        Optional enrichment parameters (all default to PR #51 stub values
+        so existing callers continue to work):
+          - signal:    engine.signals.Signal — confluence/reasons/zone/flags.
+          - htf_bias:  "BULL" | "BEAR" | "RANGING" — htf trend at entry.
+          - intent:    engine.intent.IntentScore — score + label.
+          - timeframe: entry-TF label ("15m" / "1h" / ...).
+
+        getattr-with-default lets callers pass None or omit context fields
+        without raising; the snapshot falls back to the empty/zero defaults
+        defined on TradeSnapshot.
         """
         if self.trade_journal is None:
             return
@@ -359,17 +369,22 @@ class SafeOrchestrator:
             trade_id=pos.id,
             symbol=pos.symbol,
             direction=pos.direction,
-            timeframe="",
+            timeframe=timeframe,
             entry_timestamp=entry.timestamp,
             entry_price=entry.price,
             sl_initial=pos.initial_sl,
             tp1_initial=pos.tp1,
             tp2_initial=pos.tp2,
             position_size=entry.size,
-            htf_bias="",
-            intent_score_entry=0,
-            intent_label_entry="",
-            confluence_score=0,
+            htf_bias=htf_bias,
+            intent_score_entry=int(getattr(intent, "score", 0) or 0),
+            intent_label_entry=str(getattr(intent, "label", "") or ""),
+            confluence_score=int(getattr(signal, "confluence", 0) or 0),
+            confluence_reasons=list(getattr(signal, "reasons", []) or []),
+            in_ote=bool(getattr(signal, "in_ote", False)),
+            in_ob=bool(getattr(signal, "in_ob", False)),
+            has_sfp=bool(getattr(signal, "has_sfp", False)),
+            zone_at_entry=str(getattr(signal, "zone", "") or ""),
             scenario_name=pos.scenario_id,
         )
         try:
@@ -720,7 +735,13 @@ class SafeOrchestrator:
                                     symbol, latest.direction, latest.entry, size,
                                     latest.sl, latest.tp1, latest.tp2
                                 )
-                                self._journal_record_entry(pos)
+                                self._journal_record_entry(
+                                    pos,
+                                    signal=latest,
+                                    htf_bias=htf_bias,
+                                    intent=intent_score,
+                                    timeframe=tf.get("entry", ""),
+                                )
                                 log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
                                          f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
                                          f"TP2={latest.tp2:.4f} Conf={latest.confluence}")
