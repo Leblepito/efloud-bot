@@ -86,6 +86,15 @@ class Position:
     opened_at: str = ""
     closed_at: Optional[str] = None
 
+    # Per-bar excursion tracking (updated by orchestrator each cycle).
+    # mae_pct = max % the bar's worst price went against avg_entry.
+    # mfe_pct = max % the bar's best price went in favor of avg_entry.
+    # Both are monotonic — once raised, never decrease for this position.
+    # Surfaced to TradeJournal at close so Phase 0 evidence can separate
+    # H2 (SL too tight: MAE ≤ sl_distance) from H3 (price ran far: MAE >>).
+    mae_pct: float = 0.0
+    mfe_pct: float = 0.0
+
     @property
     def is_open(self) -> bool:
         return self.remaining_size > 0.0001
@@ -121,6 +130,29 @@ class Position:
         avg = self.avg_entry_price
         diff = (current_price - avg) if self.direction == "LONG" else (avg - current_price)
         return diff * self.remaining_size
+
+    def update_excursion(self, high: float, low: float) -> None:
+        """Update mae_pct/mfe_pct from this bar's price extremes.
+
+        LONG: adverse = bar low below avg; favorable = bar high above avg.
+        SHORT: adverse = bar high above avg; favorable = bar low below avg.
+
+        Monotonic max: once raised, mae_pct/mfe_pct never decrease for this
+        position. Zero or negative inputs are silently ignored.
+        """
+        avg = self.avg_entry_price
+        if avg <= 0 or high <= 0 or low <= 0:
+            return
+        if self.direction == "LONG":
+            adverse = max(0.0, (avg - low) / avg * 100.0)
+            favorable = max(0.0, (high - avg) / avg * 100.0)
+        else:  # SHORT
+            adverse = max(0.0, (high - avg) / avg * 100.0)
+            favorable = max(0.0, (avg - low) / avg * 100.0)
+        if adverse > self.mae_pct:
+            self.mae_pct = adverse
+        if favorable > self.mfe_pct:
+            self.mfe_pct = favorable
 
     def to_dict(self) -> dict:
         """Compact summary (counts of entries/exits) — used by report/UI snapshots."""
