@@ -187,11 +187,20 @@ class Position:
             "last_weakness_ts": self.last_weakness_ts,
             "hedge_id": self.hedge_id, "scenario_id": self.scenario_id,
             "opened_at": self.opened_at, "closed_at": self.closed_at,
+            # Per-bar excursion (PR #57) — must survive restarts so
+            # restart-spanning trades don't reset MAE/MFE to 0 and
+            # underreport Phase 0 evidence.
+            "mae_pct": self.mae_pct, "mfe_pct": self.mfe_pct,
         }
 
     @classmethod
     def from_full_dict(cls, d: dict) -> "Position":
-        """Inverse of to_full_dict."""
+        """Inverse of to_full_dict.
+
+        Backwards-compat: pre-PR-E state files may not contain mae_pct /
+        mfe_pct keys; default to 0.0 so a state-volume upgrade does not
+        crash.
+        """
         return cls(
             id=d["id"], symbol=d["symbol"], direction=d["direction"],
             entries=[Entry(**e) for e in d.get("entries", [])],
@@ -207,6 +216,8 @@ class Position:
             scenario_id=d.get("scenario_id"),
             opened_at=d.get("opened_at", ""),
             closed_at=d.get("closed_at"),
+            mae_pct=d.get("mae_pct", 0.0),
+            mfe_pct=d.get("mfe_pct", 0.0),
         )
 
 
