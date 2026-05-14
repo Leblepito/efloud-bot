@@ -349,6 +349,19 @@ def _scan_one(symbol, orch, client, order_mgr, rate_limiter, cfg):
     if not cfg["operation"]["dry_run"]:
         sync_orders(orch, order_mgr, symbol, log)
 
+    # Per-bar MAE/MFE update for live exchange-side positions.
+    # Mirrors engine.lifecycle.Position contract so journal writes from
+    # OrderManager._record_close carry non-zero MAE/MFE.
+    try:
+        last = df_entry.iloc[-1]
+        bar_high = float(last.get("high", 0.0))
+        bar_low = float(last.get("low", 0.0))
+        for pos in order_mgr.positions:
+            if pos.symbol == symbol:
+                pos.update_excursion(bar_high, bar_low)
+    except Exception as e:
+        log.warning(f"[{symbol}] excursion update failed: {e}")
+
     save_report(result, cfg.get("operation", {}).get("reports_dir", "./reports"))
 
 
