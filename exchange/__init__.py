@@ -218,6 +218,33 @@ class Position:
     trace_id: Optional[str] = None       # log correlation across orchestrator → DB
     bar_ts_ms: Optional[int] = None      # bar-aligned timestamp (UTC ms epoch)
 
+    # Per-bar excursion tracking — mirrors engine.lifecycle.Position contract:
+    # positive monotonic-max %, never decreasing. Surfaced to TradeJournal at
+    # close so Phase 0 evidence can separate H2 (SL too tight) from H3 (price ran far).
+    mae_pct: float = 0.0
+    mfe_pct: float = 0.0
+
+    def update_excursion(self, high: float, low: float) -> None:
+        """Update mae_pct/mfe_pct from this bar's price extremes.
+
+        Same contract as engine.lifecycle.Position.update_excursion:
+        LONG: adverse = bar low below entry; favorable = bar high above entry.
+        SHORT: adverse = bar high above entry; favorable = bar low below entry.
+        Monotonic max — values only grow. Zero or negative inputs ignored.
+        """
+        if self.entry <= 0 or high <= 0 or low <= 0:
+            return
+        if self.direction == "LONG":
+            adverse = max(0.0, (self.entry - low) / self.entry * 100.0)
+            favorable = max(0.0, (high - self.entry) / self.entry * 100.0)
+        else:  # SHORT
+            adverse = max(0.0, (high - self.entry) / self.entry * 100.0)
+            favorable = max(0.0, (self.entry - low) / self.entry * 100.0)
+        if adverse > self.mae_pct:
+            self.mae_pct = adverse
+        if favorable > self.mfe_pct:
+            self.mfe_pct = favorable
+
 
 class OrderManager:
     """Pozisyon açma + server-side TP/SL + reconciliation.
@@ -764,6 +791,8 @@ class OrderManager:
                 exit_reason=reason,
                 realized_pnl=pos.pnl_usdt,
                 bars_held=0,
+                mfe_pct=pos.mfe_pct,
+                mae_pct=pos.mae_pct,
             )
         except Exception as e:
             log.warning(f"trade_journal write failed for {pos.symbol} {trade_id}: {e}")
