@@ -11,15 +11,25 @@ In scope (Step 4):
 
 Out of scope (Step 4b follow-up):
     position.stuck_over_6h, exchange.error_burst, balance.unexpected_change
+
+Overseer-watchdog (added Task E):
+    overseer.heartbeat_stale  — file-mtime driven (no payload dependency)
 """
 from __future__ import annotations
 
+import json
+import os
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 # Healthz consecutive-failure threshold: 15 minutes
 UNHEALTHY_15MIN_THRESHOLD_SEC = 15 * 60
+
+# Overseer-heartbeat staleness threshold — 10 min matches the overseer
+# RULE_EVAL_INTERVAL_SEC (10s) × 60 = plenty of grace before flagging stale.
+OVERSEER_HEARTBEAT_STALE_THRESHOLD_SEC = 10 * 60
 
 
 @dataclass
@@ -254,6 +264,92 @@ class TradeClosedRule(Rule):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Overseer watchdog (file-mtime driven)
+# ─────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class OverseerHeartbeatStaleRule(Rule):
+    """Watches the overseer sidecar from inside the alerter.
+
+    Reads EFLOUD_OVERSEER_HEARTBEAT_FILE every healthz tick and CRITICAL-
+    alerts when the file is missing OR its embedded `ts` (or legacy
+    `alerter_heartbeat_ts`) is older than OVERSEER_HEARTBEAT_STALE_THRESHOLD_SEC.
+
+    Why piggy-back on match_health(): the alerter already calls
+    match_health(payload, history) on every 30s healthz poll, so a
+    file-mtime rule that returns from inside match_health() inherits the
+    existing dispatch cadence + dedup + rate limiting for free — no new
+    polling loop required.
+
+    Env var must be configured for the rule to do anything; missing env →
+    silent no-op so a partial rollout (alerter deployed, overseer not yet)
+    doesn't page on every healthz tick.
+    """
+    alert_key: str = "overseer.heartbeat_stale"
+    severity: str = "CRITICAL"
+    # 10 min dedup window — same as the stale threshold so we fire at most
+    # once per bucket. (Operator gets one CRITICAL, then silence until either
+    # overseer recovers or the window rolls over.)
+    dedup_window_sec: int = 10 * 60
+
+    def match_health(self, payload: dict, history: dict) -> Optional[str]:
+        path_str = os.environ.get("EFLOUD_OVERSEER_HEARTBEAT_FILE", "")
+        if not path_str:
+            # No env → overseer not deployed; rule is a no-op (don't page).
+            return None
+        path = Path(path_str)
+        now = int(time.time())
+
+        if not path.exists():
+            return (
+                f"🚨 <b>Overseer heartbeat stale</b> (file missing)\n"
+                f"Path: {path_str}\n"
+                f"Investigate the overseer sidecar — it may be crashed or "
+                f"disk-volume unmounted."
+            )
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            # Unreadable / malformed file — treat as stale.
+            return (
+                f"🚨 <b>Overseer heartbeat stale</b> (unreadable)\n"
+                f"Path: {path_str}"
+            )
+
+        # Accept both schemas: {"ts": ...} (overseer.state) and
+        # {"alerter_heartbeat_ts": ...} (legacy alerter heartbeat).
+        ts_raw = data.get("ts")
+        if ts_raw is None:
+            ts_raw = data.get("alerter_heartbeat_ts")
+        if ts_raw is None:
+            return (
+                f"🚨 <b>Overseer heartbeat stale</b> (no ts in payload)\n"
+                f"Path: {path_str}"
+            )
+        try:
+            ts = int(ts_raw)
+        except (TypeError, ValueError):
+            return (
+                f"🚨 <b>Overseer heartbeat stale</b> (bad ts payload)\n"
+                f"Path: {path_str}"
+            )
+
+        age = now - ts
+        if age <= OVERSEER_HEARTBEAT_STALE_THRESHOLD_SEC:
+            return None
+        age_min = age // 60
+        # Format last-update as ISO for the human reader.
+        last_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+        return (
+            f"🚨 <b>Overseer heartbeat stale</b> (&gt;10min)\n"
+            f"Last update: {last_iso} ({age_min}m ago)\n"
+            f"Investigate."
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Exported list — alerter main loop iterates this
 # ─────────────────────────────────────────────────────────────────────
 
@@ -266,4 +362,5 @@ RULES: list[Rule] = [
     TradeOpenedRule(),
     TP1HitRule(),
     TradeClosedRule(),
+    OverseerHeartbeatStaleRule(),
 ]
