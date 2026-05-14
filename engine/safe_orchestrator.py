@@ -203,6 +203,7 @@ class SafeOrchestrator:
             max_sl_distance_atr=safety.get("max_sl_atr", 5.0),
             reserve_balance=safety.get("reserve_balance", 0.0),
             max_open_positions=self.config.get("risk", {}).get("max_open_positions", 999),
+            reverse_min_profit_pct=safety.get("reverse_min_profit_pct", 0.2),
             pause_config=pause_config,
         )
         orphan_cfg = load_orphan_protection_config(safety)
@@ -402,6 +403,69 @@ class SafeOrchestrator:
             )
         except Exception as e:
             log.warning(f"trade_journal.record_exit failed for {pos.id}: {e}")
+
+    def _handle_reverse(self, opposite_pos, symbol: str, current_price: float) -> bool:
+        """Close the opposite-direction position so a reverse-direction signal
+        can open cleanly afterwards.
+
+        Caller invariant: reconcile and run_cycle must not interleave —
+        the bot runs a single event loop, so this _handle_reverse executes
+        atomically against reconcile()'s self.positions mutation.
+
+        Returns True if the close path completed (caller may proceed to open
+        the new direction). False means exchange close failed — caller must
+        abort the reverse; _fallback_close already cancels the opposite's
+        TP/SL orders so no orphan SL/TP remains on Binance even when the
+        close itself raises mid-flight (the cancel block runs before the
+        market close call).
+        """
+        log.info(
+            f"🔄 [{symbol}] REVERSE: closing {opposite_pos.direction} "
+            f"{opposite_pos.id} @ {current_price:.4f}"
+        )
+        exchange_close_ran = False
+        if self.order_manager is not None:
+            exchange_pos = next(
+                (p for p in self.order_manager.positions
+                 if p.symbol == symbol and p.direction == opposite_pos.direction),
+                None,
+            )
+            if exchange_pos is not None:
+                try:
+                    self.order_manager._fallback_close(
+                        exchange_pos, current_price, "REVERSE"
+                    )
+                    exchange_close_ran = True
+                except Exception as e:
+                    log.error(
+                        f"⛔ [{symbol}] REVERSE exchange close failed: {e}",
+                        exc_info=True,
+                    )
+                    if self.notification_mgr is not None:
+                        try:
+                            self.notification_mgr.alert(
+                                f"REVERSE close failed for {symbol}: {e}. "
+                                f"Manual intervention required."
+                            )
+                        except Exception:
+                            pass
+                    return False
+
+        self.lifecycle.close_position(opposite_pos, current_price, "REVERSE")
+        # Journal-write avoidance: when exchange_close_ran is True, the
+        # OrderManager path already wrote a TradeSnapshot via its own
+        # _journal_record_close (keyed on exchange_pos.order_id). The
+        # orchestrator-side _journal_record_exit would key on opposite_pos.id
+        # — a DIFFERENT trade_id, so the rows would NOT collide, but they
+        # would describe the same REVERSE event twice from two perspectives.
+        # Skip the orchestrator write here to keep one row per close event;
+        # only fall back when no exchange path ran (dry-run or unmatched
+        # exchange-side position).
+        if not exchange_close_ran:
+            self._journal_record_exit(
+                opposite_pos, exit_price=current_price, reason="REVERSE"
+            )
+        return True
 
     def run_cycle(
         self,
@@ -663,6 +727,70 @@ class SafeOrchestrator:
                         leverage=self.config["exchange"].get("leverage", 1),
                     )
 
+                    # Reverse-on-profit branch: an opposite-direction position
+                    # blocks can_open_position. Re-evaluate with the live price
+                    # — if currently profitable beyond the buffer threshold,
+                    # close the existing side and let the open flow continue.
+                    reversed_from: Optional[str] = None
+                    if (not guard_check.allowed
+                        and guard_check.reason.startswith("OPPOSITE_DIRECTION_EXISTS")):
+                        opposite = next(
+                            (p for p in self.lifecycle.positions
+                             if p.is_open and p.symbol == symbol
+                             and p.direction != latest.direction
+                             and p.scenario_id is None),
+                            None,
+                        )
+                        if opposite is None:
+                            log.warning(
+                                f"[{symbol}] OPPOSITE_DIRECTION_EXISTS but no "
+                                f"matching open position — race; rejecting."
+                            )
+                        else:
+                            reverse_check = self.pos_guard.can_reverse_position(
+                                opposite, current_price
+                            )
+                            if not reverse_check.allowed:
+                                log.info(
+                                    f"🚫 [{symbol}] Reverse rejected: "
+                                    f"{reverse_check.reason}"
+                                )
+                                warnings.append(
+                                    f"Reverse blocked: {reverse_check.reason}"
+                                )
+                            else:
+                                log.info(
+                                    f"🔄 [{symbol}] Reverse approved: "
+                                    f"{reverse_check.reason}"
+                                )
+                                if self._handle_reverse(opposite, symbol, current_price):
+                                    reversed_from = opposite.direction
+                                    actions.append(
+                                        f"Reversed {opposite.direction} → "
+                                        f"{latest.direction} ({reverse_check.reason})"
+                                    )
+                                    # Re-evaluate the guard now that opposite is gone.
+                                    guard_check = self.pos_guard.can_open_position(
+                                        balance=actual_balance,
+                                        entry=latest.entry, size=size, sl=latest.sl,
+                                        atr=atr,
+                                        direction=latest.direction, symbol=symbol,
+                                        existing_positions=self.lifecycle.positions,
+                                        leverage=self.config["exchange"].get("leverage", 1),
+                                    )
+                                else:
+                                    warnings.append(
+                                        f"Reverse close failed for {symbol} — "
+                                        f"open aborted"
+                                    )
+                                    # Drop the dedup entry so the next cycle can retry.
+                                    # Persist immediately: a SIGKILL between here and
+                                    # the cycle's natural _persist_state would leave
+                                    # the cache still claiming this signal was processed,
+                                    # blocking the retry on restart.
+                                    self._processed_signals.pop(sig_key, None)
+                                    self._persist_state()
+
                     if not guard_check.allowed:
                         log.warning(f"🚫 Position blocked: {guard_check.reason}")
                         warnings.append(f"Signal rejected: {guard_check.reason}")
@@ -709,9 +837,25 @@ class SafeOrchestrator:
                                         f"🚫 [{symbol}] Exchange order failed — "
                                         f"local position NOT opened (no logical state mismatch)"
                                     )
-                                    warnings.append(
-                                        f"Order failed for {symbol}: exchange rejected"
-                                    )
+                                    if reversed_from is not None:
+                                        # Reverse close succeeded but open failed —
+                                        # the symbol is intentionally flat. Trader
+                                        # must know they're sitting on no exposure
+                                        # so they can decide whether to retry manually.
+                                        flat_msg = (
+                                            f"Reverse close succeeded but open failed "
+                                            f"for {symbol} — symbol flat, awaiting next signal"
+                                        )
+                                        warnings.append(flat_msg)
+                                        if self.notification_mgr is not None:
+                                            try:
+                                                self.notification_mgr.alert(flat_msg)
+                                            except Exception:
+                                                pass
+                                    else:
+                                        warnings.append(
+                                            f"Order failed for {symbol}: exchange rejected"
+                                        )
                                     exchange_ok = False
 
                             # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──
