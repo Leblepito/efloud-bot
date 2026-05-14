@@ -166,6 +166,16 @@ def validate_config(cfg: dict) -> bool:
     if not 0 < risk_pct <= 5.0:
         raise ValueError(f"risk_per_trade_pct {risk_pct}% outside sane bounds (0,5]")
 
+    # 4b. reverse_min_profit_pct sane bounds — reverse-on-profit guard threshold.
+    # 0 disables the buffer (any positive PnL triggers reverse). >5% would make
+    # reverse practically unreachable in normal market moves.
+    safety_cfg = cfg.get("safety", {})
+    reverse_threshold = safety_cfg.get("reverse_min_profit_pct", 0.2)
+    if not isinstance(reverse_threshold, (int, float)) or reverse_threshold < 0 or reverse_threshold > 5.0:
+        raise ValueError(
+            f"reverse_min_profit_pct {reverse_threshold}% outside sane bounds [0,5]"
+        )
+
     # 5. Opt-in reverse-from-risk validation
     if risk_cfg.get("position_size_calculation") == "reverse_from_risk":
         max_loss = risk_cfg.get("max_loss_per_trade_usdt")

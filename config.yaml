@@ -133,6 +133,13 @@ safety:
   min_sl_atr: 0.5
   max_sl_atr: 5.0
 
+  # Reverse-on-profit guard: when an opposite-direction signal arrives on a
+  # symbol that already has an open position, only allow flipping if the
+  # current unrealized PnL is above this threshold (net %, fee+slippage
+  # buffer). Below threshold (or in loss) the signal is rejected — TP or
+  # SL must fire first. Default 0.2 ~= taker 0.04% × 2 + slippage 0.1%.
+  reverse_min_profit_pct: 0.2
+
   # ── v2.2.0 yeni alanları ──
   emergency_balance_threshold: null  # null = devre dışı (testnet)
   reserve_balance: 0                  # testnet: 0

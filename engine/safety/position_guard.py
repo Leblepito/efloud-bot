@@ -8,6 +8,8 @@ Check'ler:
   - Max holding time (default 48h)
   - Max pyramid adds (default 2)
   - Duplicate direction (same sym + same dir = reject)
+  - Opposite direction (sym + opposite dir = reject; orchestrator
+    re-checks via can_reverse_position to decide reverse-on-profit)
   - Minimum SL distance (ATR tabanlı, whipsaw'dan kaçınmak için)
 """
 
@@ -140,6 +142,7 @@ class PositionGuard:
                  max_sl_distance_atr: float = 5.0,
                  reserve_balance: float = 0.0,
                  max_open_positions: int = 999,
+                 reverse_min_profit_pct: float = 0.2,
                  pause_config: PauseConfig | None = None):
         self.max_size_pct = max_notional_pct_of_balance / 100
         self.max_exposure = max_total_exposure_multiplier
@@ -151,6 +154,11 @@ class PositionGuard:
         # Default 999 = effectively unlimited (back-compat for tests/configs that
         # don't set this). Real configs cap at 1-10.
         self.max_open_positions = max_open_positions
+        # Reverse-on-profit threshold: only allow flipping LONG↔SHORT on the
+        # same symbol when current unrealized PnL exceeds this % (fee+slippage
+        # buffer, default 0.2% net). Below threshold the opposite signal is
+        # rejected — TP or SL must fire first.
+        self.reverse_min_profit_pct = reverse_min_profit_pct
         self._pause = pause_config or PauseConfig(
             enabled=False,
             source="default",
@@ -271,6 +279,19 @@ class PositionGuard:
                     f"Already {direction} open on {symbol} (pos {p.id})"
                 )
 
+        # 4b. Opposite direction check — orchestrator re-evaluates via
+        # can_reverse_position to decide whether to flip on profit.
+        # Without this branch Binance auto-flip (isolated + hedge off)
+        # would close the existing position whenever the bot sent an
+        # opposite-side order — bypassing the bot's TP/SL discipline.
+        for p in existing_positions:
+            if (p.is_open and p.symbol == symbol and p.direction != direction
+                and p.scenario_id is None):
+                return PositionCheckResult(
+                    False,
+                    f"OPPOSITE_DIRECTION_EXISTS: {p.direction} open on {symbol} (pos {p.id})"
+                )
+
         # 5. SL distance sanity (ATR tabanlı)
         if atr > 0:
             sl_dist = abs(entry - sl)
@@ -297,6 +318,51 @@ class PositionGuard:
             )
 
         return PositionCheckResult(True, warnings=warnings)
+
+    def can_reverse_position(self,
+                              existing_position,
+                              current_price: float,
+                              min_profit_pct: Optional[float] = None
+                              ) -> PositionCheckResult:
+        """Karda olan açık pozisyonun ters yöne çevrilmesine izin var mı?
+
+        Çağrılması beklenen yer: orchestrator can_open_position
+        OPPOSITE_DIRECTION_EXISTS reddi aldıktan sonra. Onay verirse caller
+        eski pozisyonu close + yeni yönde open zinciri yürütür.
+
+        Reddetme şartları:
+          - Pozisyon zaten kapalıysa.
+          - Partial close olmuşsa (exits listesi dolu) — TP1 sonrası trail
+            risksiz, dokunma.
+          - Unrealized PnL eşiğin altındaysa (default 0.2%, fee+slippage buffer).
+        """
+        threshold = self.reverse_min_profit_pct if min_profit_pct is None else min_profit_pct
+
+        if not existing_position.is_open:
+            return PositionCheckResult(False, "REVERSE_BLOCKED_POSITION_CLOSED")
+
+        if existing_position.exits:
+            return PositionCheckResult(False, "REVERSE_BLOCKED_PARTIAL_CLOSED")
+
+        avg = existing_position.avg_entry_price
+        if avg <= 0 or current_price <= 0:
+            return PositionCheckResult(False, "REVERSE_BLOCKED_INVALID_PRICE")
+
+        if existing_position.direction == "LONG":
+            pnl_pct = (current_price - avg) / avg * 100.0
+        else:  # SHORT
+            pnl_pct = (avg - current_price) / avg * 100.0
+
+        if pnl_pct < threshold:
+            return PositionCheckResult(
+                False,
+                f"REVERSE_BLOCKED_NOT_PROFITABLE pnl={pnl_pct:.3f}% < min {threshold:.3f}%"
+            )
+
+        return PositionCheckResult(
+            True,
+            f"REVERSE_OK pnl={pnl_pct:.3f}% >= min {threshold:.3f}%"
+        )
 
     def can_add_to_position(self,
                               position,
