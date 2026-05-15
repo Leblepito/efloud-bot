@@ -26,6 +26,9 @@ def serialize_trade(p) -> dict:
         "tp1": float(p.tp1),
         "tp2": float(p.tp2),
         "sl_moved_to_be": bool(getattr(p, "sl_moved_to_be", False)),
+        # MAE/MFE — populated by per-bar update_excursion calls in backtest engine
+        "mae_pct": float(getattr(p, "mae_pct", 0.0)),
+        "mfe_pct": float(getattr(p, "mfe_pct", 0.0)),
     }
 
 

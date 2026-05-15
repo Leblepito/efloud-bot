@@ -139,6 +139,21 @@ def run_backtest(
                     continue
                 current_prices[symbol] = float(e_slice["close"].iloc[-1])
 
+            # MAE/MFE excursion update on bar i for all open positions — mirrors
+            # main.py _scan_one update_excursion call so trade records carry
+            # non-zero mae_pct/mfe_pct (needed by T2 bug retrospective pipeline).
+            for pos in orch.lifecycle.positions:
+                if not pos.is_open:
+                    continue
+                sym_data = data.get(pos.symbol)
+                if sym_data is None:
+                    continue
+                bar_data = sym_data[entry_tf_name].iloc[i]
+                pos.update_excursion(
+                    float(bar_data["high"]),
+                    float(bar_data["low"]),
+                )
+
             # Intrabar fill check on next bar (i+1) for any open positions
             # TODO(Chunk 5): add run_backtest-level test triggering actual SL fill on synthetic data.
             # Currently the helper composition is unit-tested but the engine wiring is implicit.
