@@ -86,9 +86,12 @@ def test_returns_503_when_fatal_exception_set(state: RuntimeState):
     assert "fatal_exception" in payload["failures"]
 
 
-def test_returns_503_when_breaker_halted(state: RuntimeState):
+def test_returns_200_suspended_when_breaker_halted(state: RuntimeState):
+    """HALTED must return 200 suspended — autoheal cannot fix it, restarting would
+    crash-loop (weekly DD still exceeded after restart). Operator must manual_reset."""
     now_ms = 10_000_000
     _make_clean(state, now_ms)
     code, payload = evaluate_healthz(state, breaker_halted=True, now_ms=now_ms)
-    assert code == 503
+    assert code == 200
+    assert payload["status"] == "suspended"
     assert "breaker_halted" in payload["failures"]
