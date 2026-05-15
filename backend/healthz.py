@@ -1,12 +1,24 @@
 """Health-aware /healthz endpoint.
 
-Returns 200 only when ALL conditions hold:
+Returns 200 when ALL conditions hold, OR when the bot is intentionally
+suspended (breaker HALTED or crash-loop suspended):
   - last_loop_tick_ms within last 90s (bot's main loop is alive)
   - last_exchange_ping_ms within last 60s (exchange is reachable)
   - fatal_exception_state is False (no recent uncaught cycle exception)
-  - breaker not in HALTED state (a halted bot is not "healthy")
 
-Returns 503 otherwise. Reads in-memory only — no disk I/O on the hot path.
+Returns 200 with status "suspended" and a failures list when:
+  - crash-loop suspension is active (too many rapid restarts)
+  - breaker is in HALTED state (operator must manually reset)
+
+Returns 503 (truly unhealthy) only for transient failures — things autoheal
+can actually fix by restarting (stale loop tick, stale exchange ping, fatal exception).
+
+HALTED is intentional state, not a transient fault — returning 503 would cause
+autoheal to restart-loop the container even though restarts can't clear the HALTED
+condition (weekly DD threshold still exceeded). The alerter keys off the failures
+field to notify the operator.
+
+Reads in-memory only — no disk I/O on the hot path.
 Latency target: <50ms even on a slow disk.
 
 Spec parent: docs/superpowers/specs/2026-05-07-asama-2-self-maintenance-observability-design.md §4.1
@@ -41,9 +53,10 @@ def evaluate_healthz(
     Outcomes:
       - (200, {status:"ok"})        — all checks pass
       - (200, {status:"suspended", failures:["crash_loop_suspended"]})
-                                    — crash-loop suspension active (NOT 503;
-                                      see plan §"Spec deviations" for why)
-      - (503, {status:"unhealthy"}) — at least one normal check failed
+                                    — crash-loop suspension active; autoheal must NOT restart
+      - (200, {status:"suspended", failures:["breaker_halted"]})
+                                    — breaker HALTED; requires operator manual_reset; autoheal must NOT restart
+      - (503, {status:"unhealthy"}) — transient fault autoheal can fix by restarting
 
     Args:
         state: RuntimeState instance (read-only — caller takes a snapshot inside).
@@ -52,9 +65,8 @@ def evaluate_healthz(
     """
     snap = state.snapshot()
 
-    # Suspension branch — takes precedence over normal checks.
-    # See plan §"Spec deviations" — returning 200 here keeps the autoheal sidecar
-    # from restart-looping us; alerter (Step 4) keys off the 'failures' field.
+    # Suspension branches — return 200 so autoheal does NOT restart.
+    # Autoheal can't fix these; only operator action (manual_reset / wait) can.
     if state.is_in_crash_loop():
         return (200, {
             "status": "suspended",
@@ -63,7 +75,15 @@ def evaluate_healthz(
             "failures": ["crash_loop_suspended"],
         })
 
-    # Normal 4-condition health check (Step 2 contract).
+    if breaker_halted:
+        return (200, {
+            "status": "suspended",
+            "checks": snap,
+            "now_ms": now_ms,
+            "failures": ["breaker_halted"],
+        })
+
+    # Transient-fault checks — these autoheal CAN fix by restarting.
     failures: list[str] = []
 
     if snap["last_loop_tick_ms"] is None:
@@ -82,9 +102,6 @@ def evaluate_healthz(
 
     if snap["fatal_exception_state"]:
         failures.append("fatal_exception")
-
-    if breaker_halted:
-        failures.append("breaker_halted")
 
     payload = {
         "status": "ok" if not failures else "unhealthy",
