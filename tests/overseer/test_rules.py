@@ -43,8 +43,7 @@ def test_rule_bot_unhealthy_fires_on_3_consecutive_failures():
     alert = rule_bot_unhealthy(s)
     assert alert is not None
     assert alert.severity == "CRITICAL"
-    assert "3" in alert.dedup_key
-    assert "bot_unhealthy" in alert.dedup_key
+    assert alert.dedup_key == "bot_unhealthy"  # static key — dedup must work across consecutive counts
     assert "healthcheck" in alert.text.lower() or "healthz" in alert.text.lower()
 
 

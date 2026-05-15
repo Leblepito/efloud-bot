@@ -26,6 +26,12 @@ import os
 import time
 from typing import Any, Callable, Optional
 
+def _elapsed_or_first(last_ts: Optional[float], interval_sec: float) -> bool:
+    """Return True if enough time has elapsed since last_ts, or last_ts is None (first run)."""
+    if last_ts is None:
+        return True
+    return (time.monotonic() - last_ts) >= interval_sec
+
 from ops.overseer.dedup import OverseerDedup
 from ops.overseer.ingestors.healthz_poller import HealthzPoller
 from ops.overseer.ingestors.journal_tail import JournalTail
@@ -77,6 +83,14 @@ class OverseerWatch:
         # Default sleep between ticks; tests shrink this for fast loops.
         self.tick_sleep_sec: float = RULE_EVAL_INTERVAL_SEC
 
+        # Cadence tracking — monotonic timestamps of last ingestor run.
+        self._last_log_ts: Optional[float] = None
+        self._last_healthz_ts: Optional[float] = None
+        self._last_journal_ts: Optional[float] = None
+        self._last_heartbeat_ts: Optional[float] = None
+        # Cached journal result so rules see the last read even between refreshes.
+        self._journal_cache: list[dict] = []
+
     async def tick(self) -> dict[str, Any]:
         """One full pass: ingest → state → rules → dispatch. Returns counters
         + error list so tests (and operators tailing logs) can assert behaviour.
@@ -92,17 +106,21 @@ class OverseerWatch:
             "errors": [],
         }
 
-        # 1. Poll ingestors. read_new() advances the log cursor; we discard the
-        #    return value because rules consume the buffered read_recent() view.
-        try:
-            self.log_tail.read_new()
-        except Exception as e:
-            stats["errors"].append(f"log_tail: {e}")
+        # 1. Poll ingestors — each only runs at its own cadence.
+        now_mono = time.monotonic()
+        if _elapsed_or_first(self._last_log_ts, LOG_TAIL_INTERVAL_SEC):
+            try:
+                self.log_tail.read_new()
+                self._last_log_ts = now_mono
+            except Exception as e:
+                stats["errors"].append(f"log_tail: {e}")
 
-        try:
-            self.healthz_poller.poll_once()
-        except Exception as e:
-            stats["errors"].append(f"healthz_poll: {e}")
+        if _elapsed_or_first(self._last_healthz_ts, HEALTHZ_POLL_INTERVAL_SEC):
+            try:
+                self.healthz_poller.poll_once()
+                self._last_healthz_ts = now_mono
+            except Exception as e:
+                stats["errors"].append(f"healthz_poll: {e}")
 
         # 2. Assemble state dict per rules.py docstring contract.
         try:
@@ -117,11 +135,13 @@ class OverseerWatch:
             healthz_state = {}
             stats["errors"].append(f"healthz_state: {e}")
 
-        try:
-            journal_recent = self.journal_tail.read_recent()
-        except Exception as e:
-            journal_recent = []
-            stats["errors"].append(f"journal_tail: {e}")
+        if _elapsed_or_first(self._last_journal_ts, JOURNAL_TAIL_INTERVAL_SEC):
+            try:
+                self._journal_cache = self.journal_tail.read_recent()
+                self._last_journal_ts = now_mono
+            except Exception as e:
+                stats["errors"].append(f"journal_tail: {e}")
+        journal_recent = self._journal_cache
 
         state_dict: dict[str, Any] = {
             "now_ts": int(time.time()),

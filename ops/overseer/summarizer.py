@@ -28,6 +28,11 @@ from __future__ import annotations
 
 import json
 import logging
+
+# Input size caps — prevent unbounded token usage on large log buffers.
+MAX_LOG_LINES_HOURLY = 100
+MAX_JOURNAL_ENTRIES_HOURLY = 20
+MAX_TRADES_DAILY = 50
 import os
 from typing import Any, Optional, Protocol
 
@@ -270,14 +275,16 @@ class Summarizer:
 
         We use JSON (with default=str) so any timestamp/Decimal sneaks
         through without throwing — the model reads it fine."""
+        capped_lines = recent_log_lines[-MAX_LOG_LINES_HOURLY:]
+        capped_journal = journal_recent[-MAX_JOURNAL_ENTRIES_HOURLY:]
         try:
-            lines_json = json.dumps(recent_log_lines, ensure_ascii=False, default=str)
+            lines_json = json.dumps(capped_lines, ensure_ascii=False, default=str)
         except Exception:
-            lines_json = str(recent_log_lines)
+            lines_json = str(capped_lines)
         try:
-            journal_json = json.dumps(journal_recent, ensure_ascii=False, default=str)
+            journal_json = json.dumps(capped_journal, ensure_ascii=False, default=str)
         except Exception:
-            journal_json = str(journal_recent)
+            journal_json = str(capped_journal)
         return (
             "Son 1 saatlik bot davranışını özetle.\n\n"
             "## Recent log lines (JSON):\n"
@@ -292,10 +299,11 @@ class Summarizer:
         key_metrics: dict,
     ) -> str:
         """Serialize closed-trades + metrics into the daily user message."""
+        capped_trades = closed_trades_24h[-MAX_TRADES_DAILY:]
         try:
-            trades_json = json.dumps(closed_trades_24h, ensure_ascii=False, default=str)
+            trades_json = json.dumps(capped_trades, ensure_ascii=False, default=str)
         except Exception:
-            trades_json = str(closed_trades_24h)
+            trades_json = str(capped_trades)
         try:
             metrics_json = json.dumps(key_metrics, ensure_ascii=False, default=str)
         except Exception:
