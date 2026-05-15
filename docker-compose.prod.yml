@@ -23,7 +23,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      # 600s window gives the operator time to open the dashboard and press Start
+      # when the deploy lands with EFLOUD_AUTOSTART=0 (incident recovery posture).
+      # See docs/superpowers/specs/2026-05-15-autostart-friendly-compose-design.md.
+      start_period: 600s
     logging:
       driver: json-file
       options:
@@ -44,7 +47,11 @@ services:
       - caddy_config:/config
     depends_on:
       efloud-bot:
-        condition: service_healthy
+        # Use service_started (not service_healthy) so Caddy comes up even when
+        # the bot is intentionally idle (EFLOUD_AUTOSTART=0), making the dashboard
+        # reachable so the operator can press Start. See
+        # docs/superpowers/specs/2026-05-15-autostart-friendly-compose-design.md.
+        condition: service_started
     logging:
       driver: json-file
       options:
@@ -57,7 +64,7 @@ services:
     restart: always
     environment:
       - AUTOHEAL_INTERVAL=60        # check unhealthy containers every 60s
-      - AUTOHEAL_START_PERIOD=120   # match efloud-bot start_period; ignore unhealthy during this window
+      - AUTOHEAL_START_PERIOD=600   # matches efloud-bot start_period (10-min warmup)
       - AUTOHEAL_CONTAINER_LABEL=autoheal  # only restart containers tagged autoheal=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
