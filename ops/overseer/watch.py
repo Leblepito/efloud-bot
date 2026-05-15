@@ -74,8 +74,20 @@ class OverseerWatch:
         self.healthz_poller: Any = HealthzPoller(healthz_url)
         self.journal_tail: Any = JournalTail(journal_path)
 
+        # Per-ingestor last-run timestamps (seconds since epoch).
+        # Each ingestor only runs when its cadence interval has elapsed.
+        self._last_log_poll: float = 0.0
+        self._last_healthz_poll: float = 0.0
+        self._last_journal_poll: float = 0.0
+
         # Default sleep between ticks; tests shrink this for fast loops.
         self.tick_sleep_sec: float = RULE_EVAL_INTERVAL_SEC
+
+    def _elapsed_or_first(self, last_run: float, interval: float) -> bool:
+        """True when last_run is 0.0 (first call) or interval has fully elapsed."""
+        if last_run == 0.0:
+            return True
+        return (time.monotonic() - last_run) >= interval
 
     async def tick(self) -> dict[str, Any]:
         """One full pass: ingest → state → rules → dispatch. Returns counters
@@ -92,17 +104,35 @@ class OverseerWatch:
             "errors": [],
         }
 
-        # 1. Poll ingestors. read_new() advances the log cursor; we discard the
-        #    return value because rules consume the buffered read_recent() view.
-        try:
-            self.log_tail.read_new()
-        except Exception as e:
-            stats["errors"].append(f"log_tail: {e}")
+        # 1. Poll ingestors respecting cadence. read_new() advances the log
+        #    cursor; we discard the return value because rules consume the
+        #    buffered read_recent() view.
+        # Log tail: every tick (1s interval)
+        if self._elapsed_or_first(self._last_log_poll, LOG_TAIL_INTERVAL_SEC):
+            try:
+                self.log_tail.read_new()
+            except Exception as e:
+                stats["errors"].append(f"log_tail: {e}")
+            self._last_log_poll = time.monotonic()
 
-        try:
-            self.healthz_poller.poll_once()
-        except Exception as e:
-            stats["errors"].append(f"healthz_poll: {e}")
+        # Healthz: every 30s
+        if self._elapsed_or_first(self._last_healthz_poll, HEALTHZ_POLL_INTERVAL_SEC):
+            try:
+                self.healthz_poller.poll_once()
+            except Exception as e:
+                stats["errors"].append(f"healthz_poll: {e}")
+            self._last_healthz_poll = time.monotonic()
+
+        # Journal: every 60s — only read when interval elapsed; otherwise
+        # reuse the result from last elapsed poll to avoid double-reads.
+        journal_result: list[dict] = []
+        if self._elapsed_or_first(self._last_journal_poll, JOURNAL_TAIL_INTERVAL_SEC):
+            try:
+                journal_result = self.journal_tail.read_recent()
+            except Exception as e:
+                stats["errors"].append(f"journal_tail: {e}")
+                journal_result = []
+            self._last_journal_poll = time.monotonic()
 
         # 2. Assemble state dict per rules.py docstring contract.
         try:
@@ -117,17 +147,14 @@ class OverseerWatch:
             healthz_state = {}
             stats["errors"].append(f"healthz_state: {e}")
 
-        try:
-            journal_recent = self.journal_tail.read_recent()
-        except Exception as e:
-            journal_recent = []
-            stats["errors"].append(f"journal_tail: {e}")
-
         state_dict: dict[str, Any] = {
             "now_ts": int(time.time()),
             "log_lines": log_lines,
             "healthz": healthz_state,
-            "journal_recent": journal_recent,
+            # Use the fresh result from the cadence poll when available;
+            # otherwise the journal_tail has an internal buffer (see class doc)
+            # that read_recent() refreshes from the file regardless.
+            "journal_recent": journal_result or [],
             # audit_recent: wired in Task D; for now graceful None so the
             # audit_score_dropping rule short-circuits silently.
             "audit_recent": None,

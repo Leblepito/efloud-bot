@@ -93,7 +93,7 @@ def rule_bot_unhealthy(state: dict[str, Any]) -> Optional[Alert]:
     return Alert(
         text=text,
         severity="CRITICAL",
-        dedup_key=f"bot_unhealthy:{consecutive}",
+        dedup_key="bot_unhealthy",
         rule_name="bot_unhealthy",
     )
 

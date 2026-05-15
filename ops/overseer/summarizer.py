@@ -57,6 +57,13 @@ class AnthropicClient(Protocol):
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_MAX_TOKENS = 600
 DEFAULT_DAILY_CAP = 500
+# Input truncation guards: prevent unbounded JSON payloads from
+# consuming the entire token budget. Logs are capped at the ring buffer
+# size (1000) but in practice the last ~100 lines / ~20 journal entries
+# give enough context without hammering the 8K input window.
+MAX_LOG_LINES_HOURLY = 100
+MAX_JOURNAL_ENTRIES_HOURLY = 20
+MAX_TRADES_DAILY = 50
 
 # System prompts kept here (not module-level constants we import elsewhere)
 # so a future tweak doesn't accidentally drift between the two flows.
@@ -269,15 +276,31 @@ class Summarizer:
         """Serialize recent context into a single user message.
 
         We use JSON (with default=str) so any timestamp/Decimal sneaks
-        through without throwing — the model reads it fine."""
+        through without throwing — the model reads it fine.
+
+        Input truncation guards are applied before serialisation so we
+        never send unbounded payloads — even if the caller passes the
+        full ring buffer contents.
+        """
+        # Cap log lines and journal entries to guard against runaway input.
+        capped_logs = (
+            recent_log_lines[-MAX_LOG_LINES_HOURLY:]
+            if len(recent_log_lines) > MAX_LOG_LINES_HOURLY
+            else recent_log_lines
+        )
+        capped_journal = (
+            journal_recent[-MAX_JOURNAL_ENTRIES_HOURLY:]
+            if len(journal_recent) > MAX_JOURNAL_ENTRIES_HOURLY
+            else journal_recent
+        )
         try:
-            lines_json = json.dumps(recent_log_lines, ensure_ascii=False, default=str)
+            lines_json = json.dumps(capped_logs, ensure_ascii=False, default=str)
         except Exception:
-            lines_json = str(recent_log_lines)
+            lines_json = str(capped_logs)
         try:
-            journal_json = json.dumps(journal_recent, ensure_ascii=False, default=str)
+            journal_json = json.dumps(capped_journal, ensure_ascii=False, default=str)
         except Exception:
-            journal_json = str(journal_recent)
+            journal_json = str(capped_journal)
         return (
             "Son 1 saatlik bot davranışını özetle.\n\n"
             "## Recent log lines (JSON):\n"
@@ -291,11 +314,20 @@ class Summarizer:
         closed_trades_24h: list[dict],
         key_metrics: dict,
     ) -> str:
-        """Serialize closed-trades + metrics into the daily user message."""
+        """Serialize closed-trades + metrics into the daily user message.
+
+        Input truncation guards applied so we never blow the token budget.
+        """
+        # Cap trades to MAX_TRADES_DAILY most recent entries.
+        capped_trades = (
+            closed_trades_24h[-MAX_TRADES_DAILY:]
+            if len(closed_trades_24h) > MAX_TRADES_DAILY
+            else closed_trades_24h
+        )
         try:
-            trades_json = json.dumps(closed_trades_24h, ensure_ascii=False, default=str)
+            trades_json = json.dumps(capped_trades, ensure_ascii=False, default=str)
         except Exception:
-            trades_json = str(closed_trades_24h)
+            trades_json = str(capped_trades)
         try:
             metrics_json = json.dumps(key_metrics, ensure_ascii=False, default=str)
         except Exception:
