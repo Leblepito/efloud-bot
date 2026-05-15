@@ -172,8 +172,12 @@ def test_trade_closed_rule_does_not_match_tp1_prefix():
     assert TradeClosedRule().match_log(rec) is None
 
 
-def test_rules_list_contains_8_in_scope_rules():
-    """Sanity: the exported RULES list has all 8 events."""
+def test_rules_list_contains_in_scope_rules():
+    """Sanity: the exported RULES list has all in-scope events.
+
+    Updated in Task E (overseer): adds 'overseer.heartbeat_stale' watchdog so
+    the alerter pages CRITICAL if the overseer sidecar stops heartbeating.
+    """
     keys = [r.alert_key for r in RULES]
     expected = {
         "breaker.tripped.daily",
@@ -184,5 +188,6 @@ def test_rules_list_contains_8_in_scope_rules():
         "trade.opened",
         "trade.tp1",
         "trade.closed",
+        "overseer.heartbeat_stale",
     }
     assert set(keys) == expected, f"got {set(keys)}"

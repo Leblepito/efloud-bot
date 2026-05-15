@@ -108,6 +108,81 @@ services:
         max-size: "2m"
         max-file: "3"
 
+  # ─────────────────────────────────────────────────────────────────
+  # Overseer agent (Track 3) — sidecar that observes the bot,
+  # writes heartbeat + LLM-usage state, and (Week 2+) sends summaries.
+  # Week 1 default: EFLOUD_OVERSEER_DRY_RUN=1 → log-only; Hermes
+  # manually flips to 0 once the rollout stabilises.
+  # ─────────────────────────────────────────────────────────────────
+  overseer:
+    image: efloud-bot:latest
+    container_name: efloud-overseer
+    restart: unless-stopped
+    command: python -m ops.overseer watch
+    env_file:
+      - .env.production
+    environment:
+      - EFLOUD_LOG_FILE=/app/logs/efloud_bot.log
+      - EFLOUD_HEALTHZ_URL=http://efloud-bot:8080/healthz
+      - EFLOUD_OVERSEER_DEDUP_DB=/app/state/overseer_dedup.sqlite
+      - EFLOUD_OVERSEER_HEARTBEAT_FILE=/app/state/overseer_heartbeat.json
+      - EFLOUD_OVERSEER_JOURNAL_PATH=/app/state_aggressive/trade_journal.jsonl
+      - EFLOUD_OVERSEER_STATE_DB=/app/state/overseer_state.sqlite
+      - EFLOUD_OVERSEER_LLM_DAILY_CAP=500
+      - EFLOUD_OVERSEER_DRY_RUN=1     # Week 1: log-only; Week 2+ Hermes flips to 0
+      - ANTHROPIC_MODEL=claude-haiku-4-5-20251001
+    volumes:
+      - efloud_logs:/app/logs:ro
+      - efloud_state_aggressive:/app/state_aggressive:ro
+      - efloud_state:/app/state
+    depends_on:
+      efloud-bot:
+        condition: service_started
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  overseer-phase0:
+    profiles: [overseer-scheduled]    # cron triggers via `docker compose run`
+    image: efloud-bot:latest
+    container_name: efloud-overseer-phase0
+    command: python -m ops.overseer extract-phase0
+    env_file:
+      - .env.production
+    environment:
+      - EFLOUD_OVERSEER_STATE_DB=/app/state/overseer_state.sqlite
+    volumes:
+      - efloud_state_aggressive:/app/state_aggressive:ro
+      - efloud_state:/app/state
+      - efloud_reports:/app/reports
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "3"
+
+  overseer-daily-report:
+    profiles: [overseer-scheduled]
+    image: efloud-bot:latest
+    container_name: efloud-overseer-daily-report
+    command: python -m ops.overseer report
+    env_file:
+      - .env.production
+    environment:
+      - EFLOUD_OVERSEER_STATE_DB=/app/state/overseer_state.sqlite
+      - ANTHROPIC_MODEL=claude-haiku-4-5-20251001
+    volumes:
+      - efloud_state_aggressive:/app/state_aggressive:ro
+      - efloud_state:/app/state
+      - efloud_reports:/app/reports
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "3"
+
 volumes:
   efloud_state:
   efloud_state_1k:

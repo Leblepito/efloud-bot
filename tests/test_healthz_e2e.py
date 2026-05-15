@@ -58,8 +58,12 @@ def test_full_lifecycle_loop_tick_to_healthz(tmp_path: Path):
     assert code == 200, f"expected recovery to 200, got {code}: {payload}"
 
     # T+10min: still ticking, breaker halts (operator manual halt or weekly DD)
+    # HALTED returns 200 "suspended" — autoheal must NOT restart a halted bot;
+    # restarts can't clear the HALTED state (weekly DD still exceeded).
+    # Operator must call /api/breaker/reset after acknowledging the condition.
     rs.update_loop_tick()
     rs.update_exchange_ping()
     code, payload = evaluate_healthz(rs, breaker_halted=True, now_ms=now)
-    assert code == 503
+    assert code == 200, "HALTED must return 200 to prevent autoheal restart loop"
+    assert payload["status"] == "suspended"
     assert "breaker_halted" in payload["failures"]
