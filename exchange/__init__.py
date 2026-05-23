@@ -661,7 +661,16 @@ class OrderManager:
         for pos in self.positions[:]:
             if pos.symbol not in bn_open_symbols:
                 # Pozisyon Binance'de kapanmış — TP2 / SL / manual close
+                # IMPORTANT: _estimate_exit_price MUST run before
+                # _cancel_position_siblings. The exit price inference relies on
+                # which order ID is missing from bn_orders_raw to attribute the
+                # trigger (TP1/TP2/SL). Cancelling first would invalidate that
+                # signal.
                 exit_price = self._estimate_exit_price(pos, bn_orders_raw)
+                # Cancel orphan sibling reduceOnly orders before dropping local state
+                if not self.dry_run:
+                    ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
+                    self._cancel_position_siblings(pos, ccxt_sym, reason="RECONCILED")
                 self._record_close(pos, exit_price, reason="RECONCILED")
                 closed_now.append(pos)
                 self.positions.remove(pos)
