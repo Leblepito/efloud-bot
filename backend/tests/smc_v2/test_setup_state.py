@@ -336,3 +336,45 @@ class TestCorruptionRecovery:
         assert store.candidates == []
         archives = [p for p in tmp_path.iterdir() if ".corrupt." in p.name]
         assert len(archives) == 1
+
+
+class TestFileSizeCap:
+    """Files larger than max_file_bytes are rejected on load.
+    Pathologically large files (~thousands of candidates) indicate
+    a bug in the orchestrator — refuse to load, log ERROR, start empty.
+    Do NOT archive (we don't want to encourage repeated triggering).
+    """
+
+    def test_oversized_file_refused(self, tmp_path):
+        import json
+        from engine.smc_v2.setup_state import SetupStateStore, SCHEMA_VERSION
+        path = tmp_path / "state.json"
+        # Write a file larger than our cap
+        cap = 1000
+        bulk = "x" * (cap + 1)
+        path.write_text(json.dumps({
+            "version": SCHEMA_VERSION,
+            "candidates": [],
+            "_padding": bulk,
+        }))
+        assert path.stat().st_size > cap
+
+        store = SetupStateStore(path, max_file_bytes=cap)
+        store.load()
+
+        # Refused: empty list, file NOT moved (operator must investigate)
+        assert store.candidates == []
+        assert path.exists()  # NOT archived
+
+    def test_under_cap_loads_normally(self, tmp_path):
+        import json
+        from engine.smc_v2.setup_state import SetupStateStore, SCHEMA_VERSION
+        path = tmp_path / "state.json"
+        path.write_text(json.dumps({
+            "version": SCHEMA_VERSION,
+            "candidates": [],
+        }))
+        store = SetupStateStore(path, max_file_bytes=1_000_000)
+        store.load()
+        assert store.candidates == []
+        assert path.exists()  # still there
