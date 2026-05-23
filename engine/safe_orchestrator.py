@@ -11,11 +11,14 @@ Safe Orchestrator v2.1 — Güvenlik Katmanları Entegre
   - Exchange reconciliation
 """
 
-import pandas as pd
+import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 from dataclasses import dataclass
+
+import pandas as pd
 
 if TYPE_CHECKING:
     from engine.smc_v2.setup_state import SetupStateStore
@@ -1253,8 +1256,17 @@ class SafeOrchestrator:
         # tp_calc / sizing. v2 candidate state machine still runs upstream
         # (consumes the setup); only execution is gated.
         engine_cfg = self.config.get("engine", {})
-        whitelist = engine_cfg.get("smc_v2_symbols", [])
-        if "*" not in whitelist and cand.symbol not in whitelist:
+        whitelist_raw = engine_cfg.get("smc_v2_symbols", [])
+        # Defensive: tolerate operator YAML typo (string instead of list) by
+        # rejecting non-list values. Per risk-ops review feedback — substring
+        # `in` semantics on a string would otherwise produce surprise matches.
+        if not isinstance(whitelist_raw, list):
+            log.warning(
+                f"[v2 reject] {cand.symbol}: engine.smc_v2_symbols must be a list, "
+                f"got {type(whitelist_raw).__name__}={whitelist_raw!r}"
+            )
+            return None
+        if "*" not in whitelist_raw and cand.symbol not in whitelist_raw:
             log.info(f"[v2 reject] {cand.symbol}: not in smc_v2_symbols whitelist")
             return None
 
@@ -1437,9 +1449,6 @@ class SafeOrchestrator:
         Best-effort: I/O failures logged at WARNING but never raised — must
         not affect tick loop or order flow.
         """
-        import json
-        from pathlib import Path
-        from datetime import datetime, timezone
         log_dir = Path("logs")
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
@@ -1465,7 +1474,7 @@ class SafeOrchestrator:
         }
         try:
             with (log_dir / "smc_v2_shadow.log").open("a", encoding="utf-8") as f:
-                f.write(json.dumps(payload, default=str) + "\n")
+                f.write(json.dumps(payload) + "\n")
         except OSError as e:
             log.warning(f"[shadow] write failed: {e}")
 

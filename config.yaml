@@ -23,7 +23,9 @@ exchange:
 # smc_v2_symbols=["ETH/USDT","BTC/USDT",...] for phased rollout.
 engine:
   smc_version: v1               # "v1" | "v2"
-  smc_v2_symbols: []            # whitelist; ["*"] = all, [] = none (no v2 fires)
+  # Whitelist gates EXECUTION only — v2 state machine still runs upstream
+  # when smc_version=v2, but no order is placed unless symbol is whitelisted.
+  smc_v2_symbols: []            # ["*"] = all symbols, [] = no execution
   smc_v2_shadow: false          # true = log v2 signal, skip order placement
 
 # ── SMC v2 tunables (PR #S6) ──

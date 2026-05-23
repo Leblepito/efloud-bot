@@ -120,6 +120,23 @@ def test_whitelist_other_symbol_rejected(tmp_path):
         assert result is None
 
 
+def test_whitelist_non_list_rejected_defensively(tmp_path):
+    """YAML operator typo: smc_v2_symbols: "ETH/USDT" (string) instead of
+    smc_v2_symbols: ["ETH/USDT"] (list). Defensive guard from risk-ops review
+    rejects non-list values — substring `in` semantics would otherwise produce
+    surprise matches (e.g., `"ET" in "ETH/USDT"` is True)."""
+    cfg = _cfg(["ETH/USDT"])
+    cfg["engine"]["smc_v2_symbols"] = "ETH/USDT"  # operator typo: string
+    store = SetupStateStore(tmp_path / "s.json")
+    orc = SafeOrchestrator(cfg, state_dir=str(tmp_path), persist=False,
+                            setup_state_store=store, order_manager=_make_om())
+    with patch.object(orc.order_manager, "open_position") as spy:
+        result = orc._place_v2_entry_order(_make_cand("ETH/USDT"),
+                                            current_price=105.0, entry_price=105.0)
+        assert result is None
+        assert spy.call_count == 0
+
+
 def test_whitelist_runs_before_safety_gates(tmp_path):
     """Whitelist gate is FIRST — rejection happens without touching breaker,
     pos_guard, or tp_calc."""
