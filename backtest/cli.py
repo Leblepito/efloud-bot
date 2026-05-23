@@ -165,7 +165,44 @@ def cmd_grid(args):
         print(f"   WARNING: {error_count} configs failed (see configs/ for details)")
 
 
-def main():
+def cmd_compare(args):
+    """Run v1 vs v2 SMC backtest comparison (spec §8.2)."""
+    from backtest.comparison import run_v1_v2_comparison
+
+    with open(args.config, encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
+    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+    data = _load_data_for_period(symbols, tfs, args.period_days)
+
+    run_id = uuid.uuid4().hex[:8]
+    out_dir = Path(
+        f"reports/backtests/{time.strftime('%Y-%m-%d')}_"
+        f"compare_{len(symbols)}sym_{args.period_days}d_{run_id}"
+    )
+    capture_provenance(out_dir)
+
+    report = run_v1_v2_comparison(
+        symbols=symbols, data=data, config=cfg, initial_balance=args.balance,
+    )
+    (out_dir / "comparison.json").write_text(json.dumps(report, indent=2, default=str))
+    print(f"OK Compare backtest: {out_dir}")
+    print(
+        f"   v1 trades={report['v1']['total_trades']}  "
+        f"v2 trades={report['v2']['total_trades']}"
+    )
+    for metric, verdict in report["gates"].items():
+        marker = {"pass": "[PASS]", "warn": "[WARN]", "hard_reject": "[REJECT]"}.get(
+            verdict, "[?]"
+        )
+        print(
+            f"   {marker} {metric}: v1={report['v1'].get(metric)} "
+            f"v2={report['v2'].get(metric)}"
+        )
+
+
+def build_parser():
+    """Build the argparse parser. Extracted from main() so tests can introspect."""
     p = argparse.ArgumentParser(prog="backtest")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -191,7 +228,18 @@ def main():
     p_grid.add_argument("--workers", type=int, default=4)
     p_grid.set_defaults(func=cmd_grid)
 
-    args = p.parse_args()
+    p_cmp = sub.add_parser("compare", help="Run v1 vs v2 SMC backtest comparison")
+    p_cmp.add_argument("--symbols", required=True, help="comma-separated, e.g. BTC/USDT,ETH/USDT")
+    p_cmp.add_argument("--period-days", type=int, default=30)
+    p_cmp.add_argument("--config", default="configs/config.phase2_1k.yaml")
+    p_cmp.add_argument("--balance", type=float, default=2000.0)
+    p_cmp.set_defaults(func=cmd_compare)
+
+    return p
+
+
+def main():
+    args = build_parser().parse_args()
     args.func(args)
 
 
