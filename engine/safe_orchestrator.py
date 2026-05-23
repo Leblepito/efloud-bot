@@ -999,6 +999,70 @@ class SafeOrchestrator:
         """
         return (False, None)
 
+    def _advance_setup_state_tick(
+        self,
+        symbol: str,
+        current_price: float,
+        current_bar_ts: int,
+        pullback_timeout_bars: int = 8,
+    ) -> None:
+        """Advance pending SMC v2 setup candidates for `symbol` by one tick.
+
+        Per spec §4.3 step 2 (advance phase only — trigger phase is PR #S3):
+          For each pending candidate matching symbol:
+            1. bars_waited += 1
+            2. If bars_waited > pullback_timeout_bars → state = EXPIRED
+            3. Elif state == AWAITING_PULLBACK and price ∈ zone → state = IN_ZONE
+            4. If state == IN_ZONE → call confirm_entry; if True → state = CONFIRMED
+               (PR #S2b stub returns False; real impl in PR #S3)
+
+        Inert when `self.setup_state_store is None` — short-circuits with no
+        side effects. This is the load-bearing invariant for v1 safety.
+
+        Other-symbol candidates are untouched (operation is scoped to `symbol`).
+        Terminal states (CONFIRMED, EXPIRED) are skipped — they wait for the
+        next save() call to be pruned.
+        """
+        # Inert default — no v1 behavior change
+        if self.setup_state_store is None:
+            return
+
+        # Local import to avoid module-level circular dependency on smc_v2
+        from engine.smc_v2.zones import is_price_in_zone
+        from engine.smc_v2.setup_state import PERSISTED_STATES
+
+        for cand in self.setup_state_store.candidates:
+            if cand.symbol != symbol:
+                continue
+            if cand.state not in PERSISTED_STATES:
+                # CONFIRMED or EXPIRED — terminal, skip
+                continue
+
+            cand.bars_waited += 1
+
+            if cand.bars_waited > pullback_timeout_bars:
+                cand.state = "EXPIRED"
+                continue
+
+            if cand.state == "AWAITING_PULLBACK" and is_price_in_zone(
+                current_price, cand.target_zone
+            ):
+                cand.state = "IN_ZONE"
+
+            if cand.state == "IN_ZONE":
+                # confirm_entry stub returns (False, None) in PR #S2b
+                # Real impl in PR #S3 uses df_15m to detect LTF CHoCH/engulfing
+                confirmed, entry_px = self.confirm_entry(
+                    df_15m=None,  # PR #S3 will pass the real DataFrame
+                    zone=cand.target_zone,
+                    direction=cand.direction,
+                    since_ts=cand.trigger_bar_ts,
+                )
+                if confirmed:
+                    cand.state = "CONFIRMED"
+                    # Entry order placement also lands in PR #S3
+                    # (signals.py → OrderManager.open_position dispatch)
+
     @staticmethod
     def _build_safety_section(breaker, regime, stale, warnings) -> str:
         lines = ["## Güvenlik Durumu", ""]
