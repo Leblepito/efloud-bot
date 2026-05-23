@@ -124,11 +124,13 @@ class TestAdvanceSetupStateTick:
     def test_inert_when_store_is_none(self, minimal_config, tmp_path):
         """Default-inert: with no store, the method short-circuits with no error."""
         orc = SafeOrchestrator(minimal_config, state_dir=str(tmp_path), persist=False)
+        # Explicit precondition: the inert path requires setup_state_store=None
+        assert orc.setup_state_store is None
         # Should NOT raise even though setup_state_store is None
         orc._advance_setup_state_tick(
             symbol="BTC/USDT", current_price=96500.0, current_bar_ts=1700000060000,
         )
-        # No state to inspect — just verify no exception
+        # Method short-circuited cleanly (no exception, no state mutation)
 
     def test_bars_waited_increments(self, minimal_config, tmp_path, store_with_pending):
         orc = SafeOrchestrator(

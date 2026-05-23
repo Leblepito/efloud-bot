@@ -975,6 +975,12 @@ class SafeOrchestrator:
         # SMC v2 — persist setup state if wired (gated, inert when None).
         # Save errors logged but do NOT abort the cycle — persistence failure
         # must not break trading.
+        #
+        # MAINTENANCE NOTE: this save() MUST remain ABOVE the return below.
+        # Future early-return branches added above this point would silently
+        # skip persistence and lose a tick's state changes. If you add a new
+        # early-exit branch above, also call self.setup_state_store.save()
+        # within the same gated try/except in that branch.
         if self.setup_state_store is not None:
             try:
                 self.setup_state_store.save()
