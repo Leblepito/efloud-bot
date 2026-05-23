@@ -87,6 +87,8 @@ def run_backtest(
     with tempfile.TemporaryDirectory(prefix="bt_") as state_dir:
         setup_state_store = None
         if smc_version == "v2":
+            # Lazy import: v1 path must not import engine.smc_v2 (preserves the
+            # inert invariant — v1 runtime carries no v2 module-level side effects).
             from engine.smc_v2.setup_state import SetupStateStore
             setup_state_store = SetupStateStore(
                 path=Path(state_dir) / "setup_candidates.json",

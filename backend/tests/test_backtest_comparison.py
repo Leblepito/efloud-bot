@@ -14,6 +14,7 @@ import yaml
 
 from backtest.comparison import (
     DEFAULT_GATES,
+    _avg_realized_rr,
     compute_deltas,
     evaluate_gates,
     run_v1_v2_comparison,
@@ -162,3 +163,32 @@ def test_deltas_skips_non_numeric():
     d = compute_deltas(v1, v2)
     assert "trades" not in d
     assert "name" not in d
+
+
+def test_avg_realized_rr_basic():
+    """Direct unit: LONG win + SHORT loss + degenerate trade (skipped)."""
+    trades = [
+        # LONG win: entry=100, sl=95 (risk=5), exit=110 (gain=10) → RR=+2.0
+        {"entry": 100.0, "sl": 95.0, "exit": 110.0, "pnl": 10.0},
+        # SHORT loss: entry=100, sl=105 (risk=5), exit=105 (loss=5) → RR=-1.0
+        {"entry": 100.0, "sl": 105.0, "exit": 105.0, "pnl": -5.0},
+        # Degenerate: entry == sl → skipped (zero risk)
+        {"entry": 100.0, "sl": 100.0, "exit": 110.0, "pnl": 10.0},
+    ]
+    rr = _avg_realized_rr(trades)
+    # Average of (+2.0, -1.0) = +0.5
+    assert rr == pytest.approx(0.5)
+
+
+def test_avg_realized_rr_empty_returns_zero():
+    assert _avg_realized_rr([]) == 0.0
+
+
+def test_evaluate_gates_zero_v1_branch():
+    """When v1 metric is 0, ratio division is avoided. v2>=0 passes,
+    v2<0 hard_rejects (for higher-is-better)."""
+    v1 = {"sharpe_like": 0.0}
+    gates = evaluate_gates(v1, {"sharpe_like": 0.0}, {"sharpe_like": DEFAULT_GATES["sharpe_like"]})
+    assert gates["sharpe_like"] == "pass"
+    gates = evaluate_gates(v1, {"sharpe_like": -0.5}, {"sharpe_like": DEFAULT_GATES["sharpe_like"]})
+    assert gates["sharpe_like"] == "hard_reject"

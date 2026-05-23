@@ -18,6 +18,11 @@ from backtest.metrics import compute_stop_hunt_rate
 #   "v2_max_vs_v1" — lower is better; v2/v1 ratio threshold
 #   "v2_min_abs"   — absolute floor regardless of v1
 #   "hard_reject_*" companions define the drop-dead line
+#
+# NOTE: spec §8.2 lists 6 gates; the 6th — "setup_rejection_rate" — requires a
+# producer counter (REJECT_REASON over total_setup_candidates) that does not yet
+# exist in engine.smc_v2. PR #S5 (lifecycle telemetry) will add the producer and
+# enable that gate. Not gating on a metric we cannot yet compute.
 DEFAULT_GATES = {
     "win_rate":         {"v2_min_vs_v1": 1.0,  "hard_reject_vs_v1": 0.95},
     "avg_realized_rr":  {"v2_min_abs":   1.5,  "hard_reject_abs":   1.2},
@@ -95,6 +100,12 @@ def _avg_realized_rr(trades: list[dict]) -> float:
     Approximation: |exit - entry| / |entry - sl|, signed by pnl direction.
     Trades with degenerate risk (entry == sl) are skipped. Returns 0.0
     when no usable trades exist.
+
+    LIMITATION: serialize_trade emits only the last exit price. For multi-exit
+    trades (e.g. v1 TP1-partial then BE-SL), `exit ≈ entry` collapses RR
+    toward 0 even though the trade was profitable. Correct for v2 single-target
+    mode (full close at TP1). PR #S5 (lifecycle telemetry) will expose realized
+    PnL / notional_at_entry for a precise calculation.
     """
     rrs = []
     for t in trades:
