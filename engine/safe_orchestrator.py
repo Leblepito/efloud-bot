@@ -1377,6 +1377,17 @@ class SafeOrchestrator:
             f"tp2={tp_tags.get('tp2_source')})"
         )
 
+        # SMC v2 telemetry (PR #S5) — derive from candidate + tp_calc output.
+        # ZoneSpec.source is "HTF_FVG" or "OTE"; map to entry_setup_source values
+        # defined in spec §6 (FVG_PULLBACK / OTE_RETRACE).
+        zone_source = cand.target_zone.source
+        if zone_source == "HTF_FVG":
+            entry_setup_source = "FVG_PULLBACK"
+        elif zone_source == "OTE":
+            entry_setup_source = "OTE_RETRACE"
+        else:
+            entry_setup_source = None  # forward-compat for unknown ZoneSpec sources
+
         return self.order_manager.open_position(
             symbol=cand.symbol,
             direction=cand.direction,
@@ -1385,6 +1396,10 @@ class SafeOrchestrator:
             sl=sl,
             tp1=tp1,
             tp2=tp2,
+            entry_setup_source=entry_setup_source,
+            tp1_target_type=tp_tags.get("tp1_source"),
+            tp2_target_type=tp_tags.get("tp2_source"),
+            bars_to_pullback=cand.bars_waited,
         )
 
     @staticmethod

@@ -65,7 +65,10 @@ class Position:
 
     sl: float = 0.0
     tp1: float = 0.0
-    tp2: float = 0.0
+    # tp2 = None signals single-target mode (SMC v2). v1 always sets a numeric tp2.
+    # Lifecycle's partial_close TP1 branch checks `pos.tp2 is None` to trigger
+    # a full close instead of the legacy 50% partial + BE-SL move (spec §6).
+    tp2: Optional[float] = 0.0
     initial_sl: float = 0.0   # Original SL set at open time — never modified (sl can move to BE)
 
     # Lifecycle flags
@@ -94,6 +97,14 @@ class Position:
     # H2 (SL too tight: MAE ≤ sl_distance) from H3 (price ran far: MAE >>).
     mae_pct: float = 0.0
     mfe_pct: float = 0.0
+
+    # SMC v2 telemetry (PR #S5) — populated by v2 entry path, None for v1.
+    # Surfaced to DB trades table for post-mortem analysis (which entry doctrine
+    # fired, what target type drove TP1/TP2, how long the pullback waited).
+    entry_setup_source: Optional[str] = None   # "FVG_PULLBACK" | "OTE_RETRACE" | "V1_LEGACY" | None
+    tp1_target_type:    Optional[str] = None   # "LIQUIDITY"    | "FVG_NEAR"    | "RR_PROJECTION" | None
+    tp2_target_type:    Optional[str] = None   # "FVG_FAR"      | "FIB_EXT"     | "NONE"          | None
+    bars_to_pullback:   Optional[int] = None   # bars elapsed AWAITING_PULLBACK → IN_ZONE
 
     @property
     def is_open(self) -> bool:
@@ -191,6 +202,11 @@ class Position:
             # restart-spanning trades don't reset MAE/MFE to 0 and
             # underreport Phase 0 evidence.
             "mae_pct": self.mae_pct, "mfe_pct": self.mfe_pct,
+            # SMC v2 telemetry (PR #S5) — None for v1-opened positions.
+            "entry_setup_source": self.entry_setup_source,
+            "tp1_target_type": self.tp1_target_type,
+            "tp2_target_type": self.tp2_target_type,
+            "bars_to_pullback": self.bars_to_pullback,
         }
 
     @classmethod
@@ -218,6 +234,11 @@ class Position:
             closed_at=d.get("closed_at"),
             mae_pct=d.get("mae_pct", 0.0),
             mfe_pct=d.get("mfe_pct", 0.0),
+            # SMC v2 telemetry (PR #S5) — None when restoring pre-PR-#S5 state files.
+            entry_setup_source=d.get("entry_setup_source"),
+            tp1_target_type=d.get("tp1_target_type"),
+            tp2_target_type=d.get("tp2_target_type"),
+            bars_to_pullback=d.get("bars_to_pullback"),
         )
 
 
@@ -234,9 +255,19 @@ class PositionLifecycle:
 
     def open_position(self, symbol: str, direction: Direction,
                        entry_price: float, size: float,
-                       sl: float, tp1: float, tp2: float,
-                       scenario_id: Optional[str] = None) -> Position:
-        """İlk giriş ile yeni pozisyon aç."""
+                       sl: float, tp1: float, tp2: Optional[float],
+                       scenario_id: Optional[str] = None,
+                       *,
+                       entry_setup_source: Optional[str] = None,
+                       tp1_target_type: Optional[str] = None,
+                       tp2_target_type: Optional[str] = None,
+                       bars_to_pullback: Optional[int] = None) -> Position:
+        """İlk giriş ile yeni pozisyon aç.
+
+        SMC v2 telemetry kwargs (PR #S5) are keyword-only to keep the positional
+        signature stable for existing v1 callers. v1 path passes none of them.
+        `tp2` accepts None for single-target setups (v2 may produce these).
+        """
         now = datetime.utcnow().isoformat()
         pos_id = str(uuid.uuid4())[:8]
 
@@ -244,13 +275,18 @@ class PositionLifecycle:
         pos = Position(
             id=pos_id, symbol=symbol, direction=direction,
             entries=[entry],
-            sl=sl, tp1=tp1, tp2=tp2,
+            sl=sl, tp1=tp1, tp2=tp2,           # tp2=None preserves single-target marker
             initial_sl=sl,         # snapshot at open — preserves zone for reporting
             scenario_id=scenario_id,
             opened_at=now,
+            entry_setup_source=entry_setup_source,
+            tp1_target_type=tp1_target_type,
+            tp2_target_type=tp2_target_type,
+            bars_to_pullback=bars_to_pullback,
         )
         self.positions.append(pos)
-        log.info(f"🟢 OPEN {direction} {symbol} size={size:.4f} @ {entry_price:.2f} | SL={sl:.2f} TP1={tp1:.2f} TP2={tp2:.2f}")
+        tp2_str = f"{tp2:.2f}" if tp2 is not None else "NONE(single-target)"
+        log.info(f"🟢 OPEN {direction} {symbol} size={size:.4f} @ {entry_price:.2f} | SL={sl:.2f} TP1={tp1:.2f} TP2={tp2_str}")
         return pos
 
     # ── Piramit ekleme ──
@@ -281,9 +317,20 @@ class PositionLifecycle:
         """
         Pozisyonun bir kısmını kapat.
         size_pct: 0.5 = %50, 0.25 = %25
+
+        Single-target branch (SMC v2, PR #S5): when `pos.tp2 is None` and
+        reason is "TP1", close 100% of the position instead of a 50% partial
+        followed by a BE-SL move. Inert under v1 (v1 always sets numeric tp2).
         """
         if not pos.is_open:
             return False
+
+        if reason == "TP1" and pos.tp2 is None:
+            # Mark TP1 hit before delegating to close_position so downstream
+            # consumers (DB persistence, reconcile, notifications) see the same
+            # tp1_hit=True flag they would see in the legacy two-target path.
+            pos.tp1_hit = True
+            return self.close_position(pos, price, "TP1")
 
         size = pos.remaining_size * size_pct
         now = datetime.utcnow().isoformat()
@@ -394,10 +441,11 @@ class PositionLifecycle:
                 self.close_position(pos, price, "SL")
                 continue
 
-            # TP2 check (full close)
-            if (is_long and price >= pos.tp2) or (not is_long and price <= pos.tp2):
-                self.close_position(pos, price, "TP2")
-                continue
+            # TP2 check (full close) — skip in single-target mode (SMC v2)
+            if pos.tp2 is not None:
+                if (is_long and price >= pos.tp2) or (not is_long and price <= pos.tp2):
+                    self.close_position(pos, price, "TP2")
+                    continue
 
             # TP1 check (%50 close + BE)
             if not pos.tp1_hit:

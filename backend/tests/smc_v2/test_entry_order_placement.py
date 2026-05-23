@@ -104,6 +104,12 @@ class TestOrderPlacementOnConfirmed:
         because empty htf inputs only return RR_PROJECTION tp1 with
         tp2=None — which the helper now rejects (PR #S3c-2 fix:
         tp2_none deferred to PR #S5 single-target lifecycle).
+
+        Also asserts SMC v2 telemetry kwargs (PR #S5) flow through:
+        - entry_setup_source derived from cand.target_zone.source
+          (HTF_FVG → FVG_PULLBACK, OTE → OTE_RETRACE)
+        - tp1_target_type / tp2_target_type from calc_tp_targets tags
+        - bars_to_pullback from cand.bars_waited
         """
         order_mgr = _make_mock_order_manager()
         store = SetupStateStore(tmp_path / "state.json")
@@ -114,12 +120,12 @@ class TestOrderPlacementOnConfirmed:
             cfg, state_dir=str(tmp_path), persist=False,
             setup_state_store=store, order_manager=order_mgr,
         )
-        cand = _make_in_zone_candidate()
+        cand = _make_in_zone_candidate()  # source=HTF_FVG, bars_waited=2
 
         # Patch tp_calc to return both tp1 and tp2 (real fib_ext fallback)
         with patch.object(order_mgr, "open_position") as spy_open, \
              patch("engine.smc_v2.tp_calc.calc_tp_targets") as tp_spy:
-            tp_spy.return_value = (95.0, 90.0, {"tp1_source": "RR_PROJECTION", "tp2_source": "FIB_EXT"})
+            tp_spy.return_value = (95.0, 90.0, {"tp1_source": "LIQUIDITY", "tp2_source": "FVG_FAR"})
             spy_open.return_value = MagicMock()
             result = orc._place_v2_entry_order(
                 cand, current_price=105.0, entry_price=105.0,
@@ -133,7 +139,45 @@ class TestOrderPlacementOnConfirmed:
             assert kwargs["tp1"] < 105.0  # SHORT TP below entry
             assert kwargs["tp2"] < kwargs["tp1"]  # SHORT TP2 below TP1
             assert kwargs["size"] > 0
+
+            # SMC v2 telemetry (PR #S5)
+            assert kwargs["entry_setup_source"] == "FVG_PULLBACK"
+            assert kwargs["tp1_target_type"] == "LIQUIDITY"
+            assert kwargs["tp2_target_type"] == "FVG_FAR"
+            assert kwargs["bars_to_pullback"] == 2
+
             assert result is not None
+
+    def test_place_v2_entry_order_ote_zone_telemetry(self, tmp_path):
+        """OTE zone → entry_setup_source = OTE_RETRACE (PR #S5)."""
+        order_mgr = _make_mock_order_manager()
+        store = SetupStateStore(tmp_path / "state.json")
+        cfg = _minimal_config()
+        cfg["exchange"] = {"leverage": 1}
+        orc = SafeOrchestrator(
+            cfg, state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, order_manager=order_mgr,
+        )
+        cand = SetupCandidate(
+            symbol="BTC/USDT", direction="SHORT",
+            trigger_bar_ts=2_500,
+            trigger_price=100.0, htf_bias="BEAR",
+            target_zone=ZoneSpec(low=100.0, high=110.0, source="OTE"),
+            htf_swing_anchor=115.0, bars_waited=5,
+            state="IN_ZONE",
+            confluence_score=75, reasons=[],
+        )
+
+        with patch.object(order_mgr, "open_position") as spy_open, \
+             patch("engine.smc_v2.tp_calc.calc_tp_targets") as tp_spy:
+            tp_spy.return_value = (95.0, 90.0, {"tp1_source": "FVG_NEAR", "tp2_source": "FIB_EXT"})
+            spy_open.return_value = MagicMock()
+            orc._place_v2_entry_order(cand, current_price=105.0, entry_price=105.0)
+            kwargs = spy_open.call_args.kwargs
+            assert kwargs["entry_setup_source"] == "OTE_RETRACE"
+            assert kwargs["tp1_target_type"] == "FVG_NEAR"
+            assert kwargs["tp2_target_type"] == "FIB_EXT"
+            assert kwargs["bars_to_pullback"] == 5
 
     def test_no_order_when_tp2_none(self, tmp_path):
         """Single-target mode (tp2=None) → reject until PR #S5 lifecycle support."""
