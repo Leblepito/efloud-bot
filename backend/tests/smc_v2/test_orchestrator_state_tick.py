@@ -215,17 +215,25 @@ class TestAdvanceSetupStateTick:
     def test_in_zone_calls_confirm_entry(
         self, minimal_config, tmp_path, store_with_pending
     ):
-        """When state advances to IN_ZONE, confirm_entry is called.
-        The stub returns (False, None) so state stays IN_ZONE."""
+        """When state advances to IN_ZONE AND df_15m is provided,
+        confirm_entry is called. PR #S3b added the df_15m-None skip;
+        this test provides a fake df_15m so the spy assertion still holds.
+        Patched confirm_entry returns (False, None) so state stays IN_ZONE."""
+        import pandas as pd
         orc = SafeOrchestrator(
             minimal_config, state_dir=str(tmp_path), persist=False,
             setup_state_store=store_with_pending,
+        )
+        # Provide a non-None df_15m so PR #S3b's df_15m-None skip doesn't trigger
+        fake_df = pd.DataFrame(
+            {"open": [1.0], "high": [1.0], "low": [1.0], "close": [1.0]},
+            index=pd.to_datetime([1_700_000_060_000], unit="ms", utc=True),
         )
         # Patch confirm_entry to spy on the call
         with patch.object(orc, "confirm_entry", return_value=(False, None)) as spy:
             orc._advance_setup_state_tick(
                 symbol="BTC/USDT", current_price=96500.0,
-                current_bar_ts=1700000060000,
+                current_bar_ts=1700000060000, df_15m=fake_df,
             )
             assert spy.call_count == 1
             call_kwargs = spy.call_args.kwargs
