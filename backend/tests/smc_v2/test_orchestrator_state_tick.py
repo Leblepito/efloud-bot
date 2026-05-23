@@ -286,3 +286,59 @@ class TestAdvanceSetupStateTick:
         cand = store.candidates[0]
         assert cand.bars_waited == 5  # untouched
         assert cand.state == "CONFIRMED"
+
+
+class TestRunCycleAdvanceCall:
+    """run_cycle calls _advance_setup_state_tick when store is wired.
+    When store is None (default), the method is NOT called (inert path
+    must remain truly inert — no overhead even from spying)."""
+
+    def _make_df(self, length=50, base_price=95000.0):
+        """Construct a minimal valid OHLCV DataFrame for run_cycle.
+        Real shape: DatetimeIndex (UTC), columns [open,high,low,close,volume]."""
+        import pandas as pd
+        from datetime import datetime, timezone, timedelta
+        idx = pd.date_range(
+            end=datetime.now(timezone.utc), periods=length, freq="15min", tz="UTC",
+        )
+        df = pd.DataFrame({
+            "open": [base_price] * length,
+            "high": [base_price * 1.001] * length,
+            "low": [base_price * 0.999] * length,
+            "close": [base_price] * length,
+            "volume": [1000.0] * length,
+        }, index=idx)
+        return df
+
+    def test_advance_called_when_store_wired(self, minimal_config, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            minimal_config, state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, freshness_check=False,
+        )
+        df = self._make_df()
+        with patch.object(orc, "_advance_setup_state_tick") as spy:
+            orc.run_cycle(
+                symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+                balance=10000.0,
+            )
+            assert spy.call_count == 1
+            # Called with current price (last close of df_entry)
+            assert spy.call_args.kwargs["symbol"] == "BTC/USDT"
+            assert spy.call_args.kwargs["current_price"] == 95000.0
+
+    def test_advance_not_called_when_store_none(self, minimal_config, tmp_path):
+        """Inert default: no spy call, no overhead, no v1 behavior change."""
+        orc = SafeOrchestrator(
+            minimal_config, state_dir=str(tmp_path), persist=False,
+            freshness_check=False,
+        )
+        df = self._make_df()
+        with patch.object(orc, "_advance_setup_state_tick") as spy:
+            orc.run_cycle(
+                symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+                balance=10000.0,
+            )
+            # When store is None, run_cycle must NOT call the advance method
+            assert spy.call_count == 0

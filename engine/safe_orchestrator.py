@@ -519,6 +519,17 @@ class SafeOrchestrator:
         bar_high = float(df_entry["high"].iloc[-1])
         bar_low = float(df_entry["low"].iloc[-1])
 
+        # SMC v2 setup state advance — opt-in, inert when store is None.
+        # Must run BEFORE breaker check so EXPIRE transitions get recorded
+        # even on no-trade ticks (operator observability).
+        if self.setup_state_store is not None:
+            current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
+            self._advance_setup_state_tick(
+                symbol=symbol,
+                current_price=current_price,
+                current_bar_ts=current_bar_ts,
+            )
+
         # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
         # Update excursion for every open position in this symbol before any
         # downstream decision (breaker, regime, close, open). MAE/MFE flow
