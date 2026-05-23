@@ -65,3 +65,33 @@ class TestCancelPositionSiblings:
         assert sorted(result["cancelled"]) == ["SL", "TP1", "TP2"]
         assert result["failed"] == []
         assert result["missing"] == []
+
+    def test_skips_empty_order_ids(self, mgr, mock_client):
+        """A Position with only SL+TP1 (no TP2) should only attempt 2 cancels."""
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+            sl_order_id="SL-1", tp1_order_id="TP1-1", tp2_order_id="",
+        )
+
+        result = mgr._cancel_position_siblings(pos, "BTC/USDT:USDT", reason="TEST")
+
+        # Only 2 cancel_order calls
+        assert mock_client.exchange.cancel_order.call_count == 2
+        assert sorted(result["cancelled"]) == ["SL", "TP1"]
+        assert result["missing"] == ["TP2"]
+        assert result["failed"] == []
+
+    def test_all_missing_when_no_order_ids(self, mgr, mock_client):
+        """A bare Position with no order IDs results in 0 cancel calls."""
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+        )
+
+        result = mgr._cancel_position_siblings(pos, "BTC/USDT:USDT", reason="TEST")
+
+        assert mock_client.exchange.cancel_order.call_count == 0
+        assert result["cancelled"] == []
+        assert result["failed"] == []
+        assert sorted(result["missing"]) == ["SL", "TP1", "TP2"]
