@@ -95,3 +95,23 @@ class TestCancelPositionSiblings:
         assert result["cancelled"] == []
         assert result["failed"] == []
         assert sorted(result["missing"]) == ["SL", "TP1", "TP2"]
+
+    def test_swallows_order_not_found(
+        self, mgr, mock_client, position_with_all_orders
+    ):
+        """If an order was already cancelled or filled, OrderNotFound must be silent."""
+        # SL cancel succeeds; TP1 raises OrderNotFound; TP2 succeeds
+        mock_client.exchange.cancel_order.side_effect = [
+            None,
+            ccxt.OrderNotFound("Order does not exist"),
+            None,
+        ]
+
+        result = mgr._cancel_position_siblings(
+            position_with_all_orders, "BTC/USDT:USDT", reason="TEST"
+        )
+
+        assert mock_client.exchange.cancel_order.call_count == 3
+        assert sorted(result["cancelled"]) == ["SL", "TP2"]
+        assert result["missing"] == ["TP1"]
+        assert result["failed"] == []
