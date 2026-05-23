@@ -386,6 +386,13 @@ class BotRunner:
                         size=pos.size, binance_order_id=pos.order_id or None,
                         trace_id=getattr(pos, "trace_id", None),
                         bar_ts_ms=getattr(pos, "bar_ts_ms", None),
+                        # SMC v2 telemetry (PR #S5) — defensive getattr so legacy
+                        # in-flight Position instances at deploy-time still
+                        # serialize cleanly; v1 callers pass None throughout.
+                        entry_setup_source=getattr(pos, "entry_setup_source", None),
+                        tp1_target_type=getattr(pos, "tp1_target_type", None),
+                        tp2_target_type=getattr(pos, "tp2_target_type", None),
+                        bars_to_pullback=getattr(pos, "bars_to_pullback", None),
                     ),
                     self.loop,
                 )
