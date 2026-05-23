@@ -922,8 +922,11 @@ class OrderManager:
                 self._fallback_close(pos, price, "SL_POLL")
                 continue
 
-            # TP2 fallback
-            if (is_long and price >= pos.tp2) or (not is_long and price <= pos.tp2):
+            # TP2 fallback — guard against single-target Position (tp2=None).
+            # Mirrors engine/lifecycle.py:on_tick TP2 guard added in PR #S5.
+            if pos.tp2 is not None and (
+                (is_long and price >= pos.tp2) or (not is_long and price <= pos.tp2)
+            ):
                 log.warning(f"Polling TP2 hit detected for {pos.symbol} (server-side missed?)")
                 self._fallback_close(pos, price, "TP2_POLL")
 

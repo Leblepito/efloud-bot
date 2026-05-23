@@ -77,6 +77,53 @@ def test_order_manager_live_path_skips_tp2_when_none():
     assert tp1_call_size == 1.0
 
 
+def test_check_position_fallback_skips_tp2_when_none():
+    """OrderManager._check_positions_fallback polling: `price >= pos.tp2` with
+    pos.tp2=None raises TypeError. PR #S5.5 guards this consumer.
+
+    Symmetric to engine/lifecycle.py:on_tick TP2 guard added in PR #S5.
+    """
+    mock_client = MagicMock()
+    mock_client.get_price = MagicMock(return_value=105.0)
+    mock_client.to_ccxt_symbol.side_effect = lambda s: f"{s}:USDT"
+
+    om = OrderManager(client=mock_client, dry_run=False)
+    # Inject a single-target Position directly (bypass open_position)
+    single_target_pos = Position(
+        symbol="ETH/USDT", direction="LONG", entry=100.0,
+        sl=95.0, tp1=110.0, tp2=None, size=1.0,
+        sl_order_id="sl_x", tp1_order_id="tp1_x",
+        opened_at="2025-01-01T00:00:00",
+    )
+    om.positions = [single_target_pos]
+
+    # Should NOT raise TypeError on price >= None
+    om.check_positions()
+    # Position must still be present (no SL hit at 105, no TP2 check fired)
+    assert single_target_pos in om.positions
+
+
+def test_estimate_exit_price_returns_none_for_single_target_when_tp2_id_missing():
+    """_estimate_exit_price line 821 (`return pos.tp2`): defensive guard
+    means a single-target pos with no tp2_order_id (because TP2 was skipped)
+    will never enter that branch."""
+    mock_client = MagicMock()
+    mock_client.get_price = MagicMock(return_value=105.0)
+
+    om = OrderManager(client=mock_client, dry_run=False)
+    single_target_pos = Position(
+        symbol="ETH/USDT", direction="LONG", entry=100.0,
+        sl=95.0, tp1=110.0, tp2=None, size=1.0,
+        sl_order_id="sl_x", tp1_order_id="tp1_x",
+        tp2_order_id="",  # tp2 placement skipped, so no order id
+        opened_at="2025-01-01T00:00:00",
+    )
+    # bn_orders contains SL but not TP1 → TP1 hit
+    bn_orders = [{"id": "sl_x"}]
+    exit_price = om._estimate_exit_price(single_target_pos, bn_orders)
+    assert exit_price == 110.0  # TP1
+
+
 def test_order_manager_live_path_two_target_unchanged():
     """Regression: when tp2 is numeric (v1 path), both TP1+TP2 placed at
     half_size each. PR #S5.5 must not change v1 behavior."""
