@@ -291,7 +291,11 @@ class SafeOrchestrator:
                         )],
                         sl=float(d.get("sl") or 0.0),
                         tp1=float(d.get("tp1") or 0.0),
-                        tp2=float(d.get("tp2") or 0.0),
+                        # tp2=None signals single-target mode (SMC v2). The
+                        # `... or 0.0` pattern coerces None → 0.0, silently
+                        # downgrading single-target Positions on restart. Use
+                        # explicit None check so None survives the roundtrip.
+                        tp2=float(d["tp2"]) if d.get("tp2") is not None else None,
                         tp1_hit=bool(d.get("tp1_hit", False)),
                         scenario_id=d.get("scenario_id"),
                         opened_at=str(d.get("opened_at", "")),
