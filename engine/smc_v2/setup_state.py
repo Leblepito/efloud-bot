@@ -79,6 +79,14 @@ class SetupStateStore:
         max_pending_per_symbol: int = DEFAULT_MAX_PENDING_PER_SYMBOL,
         max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
     ) -> None:
+        if max_pending_per_symbol <= 0:
+            raise ValueError(
+                f"max_pending_per_symbol must be > 0 (got {max_pending_per_symbol})"
+            )
+        if max_file_bytes <= 0:
+            raise ValueError(
+                f"max_file_bytes must be > 0 (got {max_file_bytes})"
+            )
         self.path = Path(path)
         self.max_pending_per_symbol = max_pending_per_symbol
         self.max_file_bytes = max_file_bytes
@@ -140,16 +148,24 @@ class SetupStateStore:
             )
             return
 
+        # Read + parse separately so transient OS errors don't quarantine
+        # a valid file as "corrupt". JSONDecodeError → real corruption;
+        # OSError → transient (disk busy, lock, etc.) → start empty, no archive.
         try:
-            with open(self.path, "r", encoding="utf-8") as f:
-                payload = json.load(f)
-        except (json.JSONDecodeError, OSError) as e:
+            raw_text = self.path.read_text(encoding="utf-8")
+        except OSError as e:
+            log.error(f"setup_state read failed (transient): {e}; starting empty")
+            return
+        try:
+            payload = json.loads(raw_text)
+        except json.JSONDecodeError as e:
             self._archive(f"corrupt.{int(time.time())}", reason=f"parse error: {e}")
             return
 
         ver = payload.get("version")
         if ver != SCHEMA_VERSION:
-            self._archive(f"v{ver}", reason=f"schema version mismatch (got {ver})")
+            suffix = f"v{ver}" if ver is not None else "v_missing"
+            self._archive(suffix, reason=f"schema version mismatch (got {ver})")
             return
 
         raw = payload.get("candidates", [])
@@ -161,13 +177,30 @@ class SetupStateStore:
                     f"(symbol={item.get('symbol')})"
                 )
                 continue
-            zone_raw = item.get("target_zone", {})
-            zone = ZoneSpec(
-                low=zone_raw.get("low"),
-                high=zone_raw.get("high"),
-                source=zone_raw.get("source"),
-            )
+            # Validate target_zone shape before constructing ZoneSpec — a
+            # malformed zone (missing keys, wrong source enum) would silently
+            # poison the in-memory list and crash the orchestrator later.
+            zone_raw = item.get("target_zone") or {}
+            required_zone_keys = {"low", "high", "source"}
+            if not required_zone_keys.issubset(zone_raw):
+                log.warning(
+                    f"setup_state load: dropping candidate with malformed "
+                    f"target_zone (missing keys) — symbol={item.get('symbol')}"
+                )
+                continue
+            if zone_raw["source"] not in {"HTF_FVG", "OTE"}:
+                log.warning(
+                    f"setup_state load: dropping candidate with invalid "
+                    f"target_zone.source={zone_raw['source']!r} — "
+                    f"symbol={item.get('symbol')}"
+                )
+                continue
             try:
+                zone = ZoneSpec(
+                    low=zone_raw["low"],
+                    high=zone_raw["high"],
+                    source=zone_raw["source"],
+                )
                 self.candidates.append(SetupCandidate(
                     symbol=item["symbol"],
                     direction=item["direction"],
@@ -181,7 +214,7 @@ class SetupStateStore:
                     confluence_score=item["confluence_score"],
                     reasons=item.get("reasons", []),
                 ))
-            except (KeyError, TypeError) as e:
+            except (KeyError, TypeError, ValueError) as e:
                 log.warning(
                     f"setup_state load: dropping malformed candidate ({e}): {item}"
                 )

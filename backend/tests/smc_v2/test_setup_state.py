@@ -265,6 +265,18 @@ class TestPerSymbolCap:
         assert store.add(self._make("BTC/USDT")) is True
         assert store.add(self._make("BTC/USDT")) is False
 
+    def test_zero_cap_rejected_at_construction(self, tmp_path):
+        """max_pending_per_symbol=0 is a nonsense value (rejects everything
+        silently). Reject at construction so callers get a clear error."""
+        from engine.smc_v2.setup_state import SetupStateStore
+        with pytest.raises(ValueError, match="max_pending_per_symbol"):
+            SetupStateStore(tmp_path / "state.json", max_pending_per_symbol=0)
+
+    def test_negative_cap_rejected_at_construction(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        with pytest.raises(ValueError):
+            SetupStateStore(tmp_path / "state.json", max_pending_per_symbol=-1)
+
 
 class TestVersionArchival:
     """On schema version mismatch, the old file is archived to
@@ -301,8 +313,8 @@ class TestVersionArchival:
         store.load()
         assert store.candidates == []
         assert not path.exists()
-        # Archived with version "None" suffix
-        assert any(p.name.startswith("state.vNone.bak") for p in tmp_path.iterdir())
+        # Archived with explicit "v_missing" suffix (clearer than "vNone")
+        assert any(p.name.startswith("state.v_missing.bak") for p in tmp_path.iterdir())
 
 
 class TestCorruptionRecovery:
@@ -378,3 +390,91 @@ class TestFileSizeCap:
         store.load()
         assert store.candidates == []
         assert path.exists()  # still there
+
+
+class TestMalformedZoneOnLoad:
+    """A candidate with a malformed target_zone (missing keys or invalid
+    source enum) is dropped on load with a warning. Downstream consumers
+    (PR #S2b orchestrator) would crash on a None-valued ZoneSpec.
+    """
+
+    def _payload_with_zone(self, zone_dict):
+        from engine.smc_v2.setup_state import SCHEMA_VERSION
+        return {
+            "version": SCHEMA_VERSION,
+            "candidates": [
+                {
+                    "symbol": "BTC/USDT", "direction": "SHORT",
+                    "trigger_bar_ts": 1700000000000, "trigger_price": 100.0,
+                    "htf_bias": "BEAR",
+                    "target_zone": zone_dict,
+                    "htf_swing_anchor": 115.0, "bars_waited": 0,
+                    "state": "AWAITING_PULLBACK", "confluence_score": 70,
+                    "reasons": [],
+                },
+            ],
+        }
+
+    def test_missing_zone_low_dropped(self, tmp_path):
+        import json
+        from engine.smc_v2.setup_state import SetupStateStore
+        path = tmp_path / "state.json"
+        path.write_text(json.dumps(self._payload_with_zone(
+            {"high": 110.0, "source": "HTF_FVG"}  # no `low`
+        )))
+        store = SetupStateStore(path)
+        store.load()
+        assert store.candidates == []
+
+    def test_invalid_zone_source_enum_dropped(self, tmp_path):
+        import json
+        from engine.smc_v2.setup_state import SetupStateStore
+        path = tmp_path / "state.json"
+        path.write_text(json.dumps(self._payload_with_zone(
+            {"low": 105.0, "high": 110.0, "source": "SOMETHING_BAD"}
+        )))
+        store = SetupStateStore(path)
+        store.load()
+        assert store.candidates == []
+
+    def test_null_zone_dropped(self, tmp_path):
+        import json
+        from engine.smc_v2.setup_state import SetupStateStore
+        path = tmp_path / "state.json"
+        # target_zone is JSON null
+        path.write_text(json.dumps(self._payload_with_zone(None)))
+        store = SetupStateStore(path)
+        store.load()
+        assert store.candidates == []
+
+
+class TestTransientReadErrorVsCorruption:
+    """OSError on file read (transient — disk busy, lock) must NOT be treated
+    as corruption (which would quarantine a valid file). Only JSONDecodeError
+    is corruption.
+    """
+
+    def test_transient_oserror_does_not_archive(self, tmp_path, monkeypatch):
+        from engine.smc_v2.setup_state import SetupStateStore
+        path = tmp_path / "state.json"
+        path.write_text('{"version": 1, "candidates": []}')  # valid file
+
+        # Force read_text to raise OSError as if disk briefly unavailable
+        original_read_text = type(path).read_text
+        call_count = {"n": 0}
+
+        def flaky_read(self, *args, **kwargs):
+            call_count["n"] += 1
+            raise OSError("Resource temporarily unavailable")
+
+        monkeypatch.setattr(type(path), "read_text", flaky_read)
+
+        store = SetupStateStore(path)
+        store.load()
+
+        # Empty list, but file NOT archived (operator can retry next tick)
+        assert store.candidates == []
+        assert path.exists()
+        # No archive created
+        assert not any(".corrupt." in p.name for p in tmp_path.iterdir())
+        assert not any(".bak." in p.name for p in tmp_path.iterdir())
