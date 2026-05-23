@@ -1107,8 +1107,49 @@ class SafeOrchestrator:
                 )
                 if confirmed:
                     cand.state = "CONFIRMED"
-                    # Entry order placement lands in PR #S3c
+                    # Entry order placement lands in PR #S3c-2
                     # (signals.py → OrderManager.open_position dispatch)
+
+    def _emit_setup_candidates(
+        self,
+        symbol: str,
+        htf_bias: str,
+        ltf_structure_breaks: list,
+        htf_swings: dict,
+        htf_bars: list,
+        htf_fvgs: list,
+        ote_band: tuple,
+        ltf_trigger_idx_min: int,
+    ) -> None:
+        """Trigger phase: detect new CHoCH events and emit SetupCandidates.
+
+        Per spec §4.3 step 3. Calls engine.smc_v2.triggers.generate_setup_candidates
+        and appends each candidate to self.setup_state_store via store.add()
+        (which enforces per-symbol cap; over-cap candidates silently dropped).
+
+        Inert when self.setup_state_store is None — short-circuits.
+        """
+        if self.setup_state_store is None:
+            return
+
+        # Local import to avoid circular dep with smc_v2 package
+        from engine.smc_v2.triggers import generate_setup_candidates
+
+        new_candidates = generate_setup_candidates(
+            symbol=symbol,
+            htf_bias=htf_bias,
+            ltf_structure_breaks=ltf_structure_breaks,
+            htf_swings=htf_swings,
+            htf_bars=htf_bars,
+            htf_fvgs=htf_fvgs,
+            ote_band=ote_band,
+            ltf_trigger_idx_min=ltf_trigger_idx_min,
+        )
+        for cand in new_candidates:
+            # add() returns False if per-symbol cap reached — silently dropped
+            # (matches spec §6 setup_cap rejection counter; orchestrator
+            # could log this in a future patch if operator visibility wanted)
+            self.setup_state_store.add(cand)
 
     @staticmethod
     def _build_safety_section(breaker, regime, stale, warnings) -> str:
