@@ -894,13 +894,8 @@ class OrderManager:
             except Exception as e:
                 log.error(f"Fallback close failed: {e}")
 
-            # Pending order cleanup
-            for oid in [pos.sl_order_id, pos.tp1_order_id, pos.tp2_order_id]:
-                if oid:
-                    try:
-                        self.client.exchange.cancel_order(oid, ccxt_sym)
-                    except Exception:
-                        pass
+            # Pending order cleanup — DRY via shared helper
+            self._cancel_position_siblings(pos, ccxt_sym, reason=f"FALLBACK_{reason}")
 
         self._record_close(pos, price, reason)
         self.positions.remove(pos)

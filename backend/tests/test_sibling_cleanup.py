@@ -257,3 +257,39 @@ class TestReconcileFullClose:
         # No exchange interaction at all
         assert mock_client.get_open_positions.call_count == 0
         assert mock_client.exchange.cancel_order.call_count == 0
+
+
+class TestFallbackCloseRefactor:
+    """_fallback_close must continue to cancel all siblings after the
+    refactor that replaces its inline loop with the new helper.
+
+    This test pins the behavior so the refactor cannot silently change it.
+    """
+
+    def test_fallback_close_cancels_all_siblings(self, mgr, mock_client):
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+            sl_order_id="SL-1", tp1_order_id="TP1-1", tp2_order_id="TP2-1",
+        )
+        mgr.positions = [pos]
+
+        # Market close succeeds
+        mock_client.exchange.create_order.return_value = {"id": "CLOSE-1"}
+
+        mgr._fallback_close(pos, price=94500, reason="SL_POLL")
+
+        # Position removed
+        assert pos not in mgr.positions
+
+        # Market close was placed
+        market_calls = [
+            c for c in mock_client.exchange.create_order.call_args_list
+            if c.args[1] == "market"
+        ]
+        assert len(market_calls) == 1
+
+        # All 3 sibling cancels attempted
+        cancel_calls = mock_client.exchange.cancel_order.call_args_list
+        cancelled_ids = [c.args[0] for c in cancel_calls]
+        assert sorted(cancelled_ids) == ["SL-1", "TP1-1", "TP2-1"]
