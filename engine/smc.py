@@ -324,10 +324,10 @@ class SMCEngine:
         def _cluster(swings: list, kind: str) -> List["EqLevel"]:
             if len(swings) < 2:
                 return []
-            # Group swings into clusters where every member is within eq_thr
-            # of the cluster's running average. Greedy linear pass — works
-            # because swings are already in time order; price-proximity is
-            # the only grouping signal we need.
+            # Greedy linear pass over price-sorted swings: each swing joins
+            # the first cluster whose running average is within eq_thr. Ties
+            # (a swing equidistant from two clusters) are broken by first-match
+            # in the price-ascending order — deterministic and stable.
             sorted_swings = sorted(swings, key=lambda s: s.price)
             clusters: List[List[Swing]] = []
             for sw in sorted_swings:

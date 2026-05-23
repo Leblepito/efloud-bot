@@ -59,8 +59,11 @@ def build_pullback_zones(
             if f.direction == "BEAR" and f.top < trigger_price
         ]
         if candidates:
-            # Nearest = smallest distance from FVG top to trigger
-            nearest = max(candidates, key=lambda f: f.top)
+            # Nearest = smallest distance from FVG top to trigger.
+            # `max(f.top - trigger_price)` == `max(f.top)` since trigger_price
+            # is constant — kept in this form for visual symmetry with the
+            # SHORT branch above (`min(f.bot - trigger_price)`).
+            nearest = max(candidates, key=lambda f: f.top - trigger_price)
             return ZoneSpec(low=nearest.bot, high=nearest.top, source="HTF_FVG")
     # Fallback
     return ZoneSpec(low=ote_band[0], high=ote_band[1], source="OTE")

@@ -107,6 +107,23 @@ class TestCalcSLShort:
         assert exc.value.max_dist == pytest.approx(50.0, rel=1e-6)
 
 
+    def test_zero_atr_rejects_via_max_clamp(self):
+        """Degenerate ATR=0 → min_dist=max_dist=0, any non-zero structural
+        stop_dist exceeds max → REJECT. Locks in the contract for the
+        zero-ATR edge case (could happen in dead-market low-vol periods).
+        """
+        from engine.smc_v2.sl_calc import calc_sl
+        with pytest.raises(SLTooFarError):
+            calc_sl(
+                direction="SHORT",
+                entry_price=100.0,
+                zone=ZoneSpec(low=99.0, high=101.0, source="HTF_FVG"),
+                htf_swing_anchor=102.0,
+                atr_15m=0.0,
+                config=FakeSafetyConfig(),
+            )
+
+
 class TestCalcSLLong:
     """LONG SL = below entry; structural side is zone.low or htf_swing_anchor (min)."""
 

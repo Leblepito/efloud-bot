@@ -29,7 +29,10 @@ class RiskConfigLike(Protocol):
 
 # Explicit source precedence — guards against float-equality misattribution.
 # Lower number = higher priority on a tie.
+# Unknown sources fall back to 99 (lowest priority) so future callers adding
+# new source labels degrade gracefully instead of KeyError-crashing.
 _SOURCE_PRIORITY = {"LIQUIDITY": 0, "FVG_NEAR": 1}
+_UNKNOWN_PRIORITY = 99
 
 
 def calc_tp_targets(
@@ -57,7 +60,9 @@ def calc_tp_targets(
         # Dedup by price with explicit precedence
         seen = {}
         for p, src in labeled:
-            if p not in seen or _SOURCE_PRIORITY[src] < _SOURCE_PRIORITY[seen[p]]:
+            if (p not in seen
+                    or _SOURCE_PRIORITY.get(src, _UNKNOWN_PRIORITY)
+                       < _SOURCE_PRIORITY.get(seen[p], _UNKNOWN_PRIORITY)):
                 seen[p] = src
         candidates = sorted(seen.items(), key=lambda x: x[0])  # ascending
 
@@ -92,7 +97,9 @@ def calc_tp_targets(
                     if f.direction == "BULL" and f.top < entry_price]
         seen = {}
         for p, src in labeled:
-            if p not in seen or _SOURCE_PRIORITY[src] < _SOURCE_PRIORITY[seen[p]]:
+            if (p not in seen
+                    or _SOURCE_PRIORITY.get(src, _UNKNOWN_PRIORITY)
+                       < _SOURCE_PRIORITY.get(seen[p], _UNKNOWN_PRIORITY)):
                 seen[p] = src
         candidates = sorted(seen.items(), key=lambda x: x[0], reverse=True)  # descending
 
