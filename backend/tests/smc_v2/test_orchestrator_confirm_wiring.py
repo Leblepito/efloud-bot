@@ -151,3 +151,156 @@ class TestAdvanceWithRealConfirmation:
         )
         cand = store.candidates[0]
         assert cand.state == "IN_ZONE"
+
+
+class TestTriggerPhaseInert:
+    """PR #S3c-1: orchestrator emits SetupCandidates only when
+    setup_state_store is wired. v1 path (store=None) unchanged."""
+
+    def test_inert_when_store_none(self, tmp_path):
+        """No store → no _emit_setup_candidates side effect."""
+        orc = SafeOrchestrator(_minimal_config(), state_dir=str(tmp_path), persist=False)
+        orc._emit_setup_candidates(
+            symbol="BTC/USDT",
+            htf_bias="BEAR",
+            ltf_structure_breaks=[],
+            htf_swings={"swing_highs": [], "swing_lows": []},
+            htf_bars=[],
+            htf_fvgs=[],
+            ote_band=(0.0, 0.0),
+            ltf_trigger_idx_min=0,
+        )
+
+    def test_emits_to_store_when_wired(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        from engine.smc import StructBreak, Swing, FVG
+        from dataclasses import dataclass
+
+        @dataclass
+        class FakeBar:
+            ordinal: int
+            high: float
+            low: float
+
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            setup_state_store=store,
+        )
+        ltf_brks = [
+            StructBreak(kind="CHoCH", direction="BEAR", price=100.0,
+                        idx=25, ts="t25", broken_level=95.0),
+        ]
+        orc._emit_setup_candidates(
+            symbol="BTC/USDT",
+            htf_bias="BEAR",
+            ltf_structure_breaks=ltf_brks,
+            htf_swings={"swing_highs": [Swing(120.0, 10, "t10", True)],
+                        "swing_lows": []},
+            htf_bars=[FakeBar(ordinal=15, high=115, low=100)],
+            htf_fvgs=[FVG(top=115.0, bot=110.0, idx=12, ts="t12", direction="BULL")],
+            ote_band=(105.0, 108.0),
+            ltf_trigger_idx_min=20,
+        )
+        assert len(store.candidates) == 1
+        assert store.candidates[0].symbol == "BTC/USDT"
+        assert store.candidates[0].direction == "SHORT"
+        assert store.candidates[0].state == "AWAITING_PULLBACK"
+
+    def test_per_symbol_cap_respected(self, tmp_path):
+        """If store cap is reached, additional candidates are silently dropped."""
+        from engine.smc_v2.setup_state import SetupStateStore, SetupCandidate
+        from engine.smc import StructBreak, Swing, FVG
+        from dataclasses import dataclass
+
+        @dataclass
+        class FakeBar:
+            ordinal: int
+            high: float
+            low: float
+
+        store = SetupStateStore(tmp_path / "state.json", max_pending_per_symbol=1)
+        store.add(SetupCandidate(
+            symbol="BTC/USDT", direction="SHORT", trigger_bar_ts=10,
+            trigger_price=99.0, htf_bias="BEAR",
+            target_zone=ZoneSpec(low=100.0, high=110.0, source="HTF_FVG"),
+            htf_swing_anchor=120.0, bars_waited=0,
+            state="AWAITING_PULLBACK", confluence_score=0, reasons=[],
+        ))
+
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            setup_state_store=store,
+        )
+        ltf_brks = [
+            StructBreak(kind="CHoCH", direction="BEAR", price=100.0,
+                        idx=25, ts="t25", broken_level=95.0),
+        ]
+        orc._emit_setup_candidates(
+            symbol="BTC/USDT",
+            htf_bias="BEAR",
+            ltf_structure_breaks=ltf_brks,
+            htf_swings={"swing_highs": [Swing(120.0, 10, "t10", True)],
+                        "swing_lows": []},
+            htf_bars=[FakeBar(ordinal=15, high=115, low=100)],
+            htf_fvgs=[FVG(top=115.0, bot=110.0, idx=12, ts="t12", direction="BULL")],
+            ote_band=(105.0, 108.0),
+            ltf_trigger_idx_min=20,
+        )
+        # Cap was 1; pre-existing 1 candidate → new one dropped
+        assert len(store.candidates) == 1
+
+
+class TestRunCycleTriggerPhase:
+    """run_cycle invokes _emit_setup_candidates after advance, before save."""
+
+    def _make_df(self, length=50, base_price=95000.0):
+        import pandas as pd
+        from datetime import datetime, timezone
+        idx = pd.date_range(
+            end=datetime.now(timezone.utc), periods=length, freq="15min", tz="UTC",
+        )
+        return pd.DataFrame({
+            "open": [base_price] * length,
+            "high": [base_price * 1.001] * length,
+            "low": [base_price * 0.999] * length,
+            "close": [base_price] * length,
+            "volume": [1000.0] * length,
+        }, index=idx)
+
+    def test_run_cycle_calls_emit_when_store_wired(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        from unittest.mock import patch
+
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, freshness_check=False,
+        )
+        df = self._make_df()
+        with patch.object(orc, "_emit_setup_candidates") as spy:
+            orc.run_cycle(
+                symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+                balance=10000.0,
+            )
+            assert spy.call_count == 1
+            kwargs = spy.call_args.kwargs
+            assert kwargs["symbol"] == "BTC/USDT"
+            assert "ltf_structure_breaks" in kwargs
+            assert "htf_swings" in kwargs
+
+    def test_run_cycle_emit_not_called_when_store_none(self, tmp_path):
+        """Inert: no store → _emit_setup_candidates not called."""
+        from unittest.mock import patch
+
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            freshness_check=False,
+        )
+        df = self._make_df()
+        with patch.object(orc, "_emit_setup_candidates") as spy:
+            orc.run_cycle(
+                symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+                balance=10000.0,
+            )
+            assert spy.call_count == 0

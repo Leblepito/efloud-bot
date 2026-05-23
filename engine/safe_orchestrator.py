@@ -531,6 +531,52 @@ class SafeOrchestrator:
                 df_15m=df_entry,
             )
 
+            # SMC v2 trigger phase: detect new CHoCH → emit SetupCandidates.
+            # Per spec §4.3 step 3. Runs AFTER advance (existing candidates
+            # progress first) and BEFORE save (new candidates persisted).
+            #
+            # Inputs derived from SMC engine analyze() result and ltf.structure().
+            # For PR #S3c-1 we compute them inline here. Future PR may
+            # refactor to share with the v1 signals path.
+            htf_analysis = self.smc.analyze(df_htf)
+            ltf_swings_h, ltf_swings_l = self.smc.swings(df_entry)
+            ltf_brks = self.smc.structure(df_entry, ltf_swings_h, ltf_swings_l)
+
+            # Build htf_bars from df_htf rows (ordinal axis for swing_anchor).
+            # HtfBar dataclass hoisted to engine.smc_v2.triggers to keep
+            # run_cycle hot-path clean (avoid re-defining the class each tick).
+            from engine.smc_v2.triggers import HtfBar
+
+            htf_bars = [
+                HtfBar(ordinal=i, high=float(row["high"]), low=float(row["low"]))
+                for i, (_, row) in enumerate(df_htf.iterrows())
+            ]
+
+            # Recency cutoff: only consider LTF breaks in last N bars
+            recency = self.config.get("risk", {}).get("recency_bars", 40)
+            ltf_trigger_idx_min = max(0, len(df_entry) - 1 - recency)
+
+            # OTE band: from htf_analysis if available, else degenerate
+            ote_obj = htf_analysis.get("ote")
+            if ote_obj is not None:
+                ote_low, ote_high = min(ote_obj.bot, ote_obj.top), max(ote_obj.bot, ote_obj.top)
+            else:
+                ote_low, ote_high = 0.0, 0.0
+
+            self._emit_setup_candidates(
+                symbol=symbol,
+                htf_bias=htf_analysis.get("trend", "UNDEF"),
+                ltf_structure_breaks=ltf_brks,
+                htf_swings={
+                    "swing_highs": htf_analysis.get("swing_highs", []),
+                    "swing_lows": htf_analysis.get("swing_lows", []),
+                },
+                htf_bars=htf_bars,
+                htf_fvgs=htf_analysis.get("active_fvgs", []),
+                ote_band=(ote_low, ote_high),
+                ltf_trigger_idx_min=ltf_trigger_idx_min,
+            )
+
         # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
         # Update excursion for every open position in this symbol before any
         # downstream decision (breaker, regime, close, open). MAE/MFE flow
@@ -1107,8 +1153,49 @@ class SafeOrchestrator:
                 )
                 if confirmed:
                     cand.state = "CONFIRMED"
-                    # Entry order placement lands in PR #S3c
+                    # Entry order placement lands in PR #S3c-2
                     # (signals.py → OrderManager.open_position dispatch)
+
+    def _emit_setup_candidates(
+        self,
+        symbol: str,
+        htf_bias: str,
+        ltf_structure_breaks: list,
+        htf_swings: dict,
+        htf_bars: list,
+        htf_fvgs: list,
+        ote_band: tuple,
+        ltf_trigger_idx_min: int,
+    ) -> None:
+        """Trigger phase: detect new CHoCH events and emit SetupCandidates.
+
+        Per spec §4.3 step 3. Calls engine.smc_v2.triggers.generate_setup_candidates
+        and appends each candidate to self.setup_state_store via store.add()
+        (which enforces per-symbol cap; over-cap candidates silently dropped).
+
+        Inert when self.setup_state_store is None — short-circuits.
+        """
+        if self.setup_state_store is None:
+            return
+
+        # Local import to avoid circular dep with smc_v2 package
+        from engine.smc_v2.triggers import generate_setup_candidates
+
+        new_candidates = generate_setup_candidates(
+            symbol=symbol,
+            htf_bias=htf_bias,
+            ltf_structure_breaks=ltf_structure_breaks,
+            htf_swings=htf_swings,
+            htf_bars=htf_bars,
+            htf_fvgs=htf_fvgs,
+            ote_band=ote_band,
+            ltf_trigger_idx_min=ltf_trigger_idx_min,
+        )
+        for cand in new_candidates:
+            # add() returns False if per-symbol cap reached — silently dropped
+            # (matches spec §6 setup_cap rejection counter; orchestrator
+            # could log this in a future patch if operator visibility wanted)
+            self.setup_state_store.add(cand)
 
     @staticmethod
     def _build_safety_section(breaker, regime, stale, warnings) -> str:
