@@ -303,3 +303,36 @@ class TestVersionArchival:
         assert not path.exists()
         # Archived with version "None" suffix
         assert any(p.name.startswith("state.vNone.bak") for p in tmp_path.iterdir())
+
+
+class TestCorruptionRecovery:
+    """On JSON parse error, the file is archived to
+    setup_candidates.corrupt.{ts}.bak.json before starting empty.
+    """
+
+    def test_invalid_json_archives_and_starts_empty(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        path = tmp_path / "state.json"
+        path.write_text("{ this is not valid JSON !!! ")
+
+        store = SetupStateStore(path)
+        store.load()
+
+        assert store.candidates == []
+        assert not path.exists()
+        # Some .corrupt.{ts}.bak.json file in the dir
+        archives = [p for p in tmp_path.iterdir() if ".corrupt." in p.name]
+        assert len(archives) == 1
+        assert archives[0].read_text() == "{ this is not valid JSON !!! "
+
+    def test_empty_file_treated_as_corrupt(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        path = tmp_path / "state.json"
+        path.write_text("")  # zero-byte file → JSON parse error
+
+        store = SetupStateStore(path)
+        store.load()
+
+        assert store.candidates == []
+        archives = [p for p in tmp_path.iterdir() if ".corrupt." in p.name]
+        assert len(archives) == 1
