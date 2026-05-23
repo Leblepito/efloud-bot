@@ -48,9 +48,12 @@ def confirm_entry(
     # Iterate bars in time order, checking each (prior, current) pair.
     opens = df_15m["open"].values
     closes = df_15m["close"].values
-    # tz-aware DatetimeIndex.astype('int64') on Python 3.14 returns microseconds
-    # for tz-aware indices (vs nanoseconds for tz-naive). Use per-element
-    # .timestamp() * 1000 for reliable ms-epoch conversion across versions.
+    # ms-epoch conversion: per-element Timestamp.timestamp() works reliably
+    # across Python versions and tz-aware/naive variants. The vectorized
+    # .view('int64') / .astype('int64') idioms are NOT portable on Python
+    # 3.14 + tz-aware DatetimeIndex (returns microseconds, not nanoseconds).
+    # Loop is O(n) but n is bounded by the LTF DataFrame size (typically
+    # < 500 bars per setup), so the Python-loop overhead is negligible.
     timestamps_ms = [int(t.timestamp() * 1000) for t in df_15m.index]
 
     for i in range(1, len(df_15m)):

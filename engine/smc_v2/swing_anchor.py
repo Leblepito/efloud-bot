@@ -10,9 +10,19 @@ Per spec §10 #1:
   Returns the swing's price (float), or None if no unbroken swing exists.
   When None, the caller raises SLTooFarError (setup rejected per spec).
 
-Pure function — no I/O, no logging. Input bars are abstract (anything with
-`ts`, `high`, `low` attributes), so tests can use lightweight FakeBar
-fixtures and production can pass HTF OHLC DataFrame rows.
+API contract (load-bearing for PR #S3b):
+  The function operates entirely on the **ordinal-bar-position axis**, NOT
+  on a timestamp axis. Both `trigger_idx` (the trigger bar's ordinal) and
+  every `bar.ordinal` MUST be integers from the same DataFrame's position
+  range (e.g. produced via `df.reset_index().index.tolist()` or by enumerating
+  `df.itertuples()`).
+
+  Callers (PR #S3b orchestrator wiring) must coerce their HTF OHLC rows into
+  a sequence of `BarLike` objects with `.ordinal: int`, `.high: float`,
+  `.low: float`. Passing raw ms-epoch timestamps as `.ordinal` will silently
+  produce wrong results because `Swing.idx` is always a small int (0..N-1).
+
+Pure function — no I/O, no logging.
 """
 from typing import Optional
 
@@ -20,20 +30,23 @@ from typing import Optional
 def select_htf_swing_anchor(
     htf_swings: dict,
     direction: str,
-    trigger_ts: int,
+    trigger_idx: int,
     htf_bars: list,
 ) -> Optional[float]:
     """Select the most-recent-unbroken HTF swing on the trade's wrong side.
 
     Args:
         htf_swings: {"swing_highs": [Swing, ...], "swing_lows": [Swing, ...]}
-            Each Swing has `.price` (float) and `.idx` (int — bar position).
+            Each Swing has `.price` (float) and `.idx` (int — bar ordinal).
             Per `SMCEngine.swings()` in engine/smc.py:130-140.
         direction: "LONG" or "SHORT"
-        trigger_ts: int — only consider swings with idx < trigger_ts
+        trigger_idx: int — ordinal of the CHoCH trigger bar in the HTF
+            DataFrame. Only swings with `idx < trigger_idx` are considered
             (we don't anchor SL on future structure).
-        htf_bars: list of objects with `.ts`, `.high`, `.low` attributes
-            (HTF OHLC bars — DataFrame rows or FakeBar fixtures).
+        htf_bars: list of objects with `.ordinal: int`, `.high: float`,
+            `.low: float`. Both production HTF OHLC rows and test FakeBar
+            fixtures must use the same ordinal axis as `Swing.idx`.
+            **Must be sorted by ordinal ascending.**
 
     Returns:
         Swing price (float) if unbroken anchor exists, else None.
@@ -50,17 +63,13 @@ def select_htf_swing_anchor(
     sorted_candidates = sorted(candidates, key=lambda s: s.idx, reverse=True)
 
     for swing in sorted_candidates:
-        if swing.idx >= trigger_ts:
-            continue  # formed after trigger — not yet known at decision time
+        if swing.idx >= trigger_idx:
+            continue  # formed at/after trigger — not yet known at decision time
 
-        # Check unbroken: no bar AFTER the swing's idx has traded through it
+        # Check unbroken: no bar with ordinal > swing.idx has traded through.
         broken = False
         for bar in htf_bars:
-            # `bar.ts` is treated as the bar's ordinal index for this check
-            # (matches the simple time-monotonic test fixture). In production
-            # the caller passes a DataFrame slice where row ts maps to
-            # monotonic order; we only need post-swing bars.
-            if bar.ts <= swing.idx:
+            if bar.ordinal <= swing.idx:
                 continue
             if direction == "SHORT":
                 if bar.high > swing.price:
