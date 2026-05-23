@@ -14,8 +14,12 @@ Safe Orchestrator v2.1 — Güvenlik Katmanları Entegre
 import pandas as pd
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from engine.smc_v2.setup_state import SetupStateStore
+    from engine.smc_v2.zones import ZoneSpec
 
 from .smc import SMCEngine
 from .levels import LevelEngine
@@ -131,7 +135,8 @@ class SafeOrchestrator:
                   *,
                   freshness_check: bool = True,
                   persist: bool = True,
-                  trade_journal: Optional[TradeJournal] = None):
+                  trade_journal: Optional[TradeJournal] = None,
+                  setup_state_store: Optional["SetupStateStore"] = None):
         """
         permission_mgr: PermissionManager instance (opsiyonel)
         notification_mgr: NotificationManager instance (opsiyonel)
@@ -142,12 +147,20 @@ class SafeOrchestrator:
         trade_journal: TradeJournal instance — pozisyon entry/exit'lerini
                        trade_journal.jsonl'a yazar. None ise no-op
                        (backwards-compat, backtest/unit-test).
+        setup_state_store: SMC v2 SetupStateStore instance for pullback-setup
+                           state tracking. **Default None → fully inert** (v1
+                           behavior unchanged). When passed, the orchestrator
+                           advances pending candidates each tick. Used by the
+                           PR #S6 feature flag dispatch to opt into v2.
         """
         self.config = config
         self.permission_mgr = permission_mgr
         self.notification_mgr = notification_mgr
         self.order_manager = order_manager
         self.trade_journal = trade_journal
+        # SMC v2 SetupStateStore — None when v1 flag is active (inert default).
+        # See PR #S2b + spec §4.3 for the advance/trigger/save data flow.
+        self.setup_state_store = setup_state_store
         # Convenience reference to BinanceClient for sizing helpers (PR #24).
         # PR #24 introduced `self.client` references in _calc_size paths but
         # forgot to set the attribute in __init__, causing AttributeError on
