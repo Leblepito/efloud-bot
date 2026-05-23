@@ -1,6 +1,8 @@
 """Backtest metrics aggregation."""
 from __future__ import annotations
+
 import numpy as np
+import pandas as pd
 
 # Profit factor sentinel: used when there are wins but zero losses (perfect trader).
 # Plain 999.0 is JSON-serializable; float("inf") is not. Consumers should treat
@@ -75,3 +77,46 @@ def aggregate_metrics(
         ),
         "sharpe_like": round(sharpe, 2),
     }
+
+
+def compute_stop_hunt_rate(
+    trades: list[dict],
+    data: dict,
+    entry_tf: str = "15m",
+    lookback_bars: int = 4,
+) -> float:
+    """Fraction of SL exits where price subsequently reached the original tp1.
+
+    A stop-hunt is when an SL fires and price reaches the originally-planned
+    tp1 within `lookback_bars` bars after the exit timestamp. This proxies
+    the spec §8.2 metric: "SL hit, then price moves to original target within 1h"
+    (1h = 4 × 15m bars at the default entry TF).
+
+    Returns 0.0 if there are no SL exits among `trades`.
+
+    Direction semantics:
+        LONG  → stop-hunt if any high in next N bars >= tp1
+        SHORT → stop-hunt if any low  in next N bars <= tp1
+    """
+    sl_trades = [t for t in trades if t.get("exit_reason") == "SL"]
+    if not sl_trades:
+        return 0.0
+    hunt_count = 0
+    for t in sl_trades:
+        sym = t["symbol"]
+        sym_data = data.get(sym)
+        if sym_data is None or entry_tf not in sym_data:
+            continue
+        df = sym_data[entry_tf]
+        closed_at = pd.Timestamp(t["closed_at"])
+        after = df.loc[df.index > closed_at].iloc[:lookback_bars]
+        if after.empty:
+            continue
+        tp1 = float(t["tp1"])
+        if t["direction"] == "LONG":
+            if (after["high"] >= tp1).any():
+                hunt_count += 1
+        else:  # SHORT
+            if (after["low"] <= tp1).any():
+                hunt_count += 1
+    return hunt_count / len(sl_trades)
