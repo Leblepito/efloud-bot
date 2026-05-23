@@ -264,3 +264,42 @@ class TestPerSymbolCap:
         store = SetupStateStore(tmp_path / "state.json", max_pending_per_symbol=1)
         assert store.add(self._make("BTC/USDT")) is True
         assert store.add(self._make("BTC/USDT")) is False
+
+
+class TestVersionArchival:
+    """On schema version mismatch, the old file is archived to
+    setup_candidates.v{N}.bak.json before starting empty.
+    Silent data loss is worse than archival.
+    """
+
+    def test_unknown_version_archives_and_starts_empty(self, tmp_path):
+        import json
+        from engine.smc_v2.setup_state import SetupStateStore
+        path = tmp_path / "state.json"
+        # File from a hypothetical future version 99
+        path.write_text(json.dumps({"version": 99, "candidates": []}))
+
+        store = SetupStateStore(path)
+        store.load()
+
+        # In-memory empty
+        assert store.candidates == []
+        # Original file moved out of the way
+        assert not path.exists()
+        # Archived file exists
+        archive = path.with_suffix(".v99.bak.json")
+        assert archive.exists()
+        assert json.loads(archive.read_text()) == {"version": 99, "candidates": []}
+
+    def test_missing_version_treated_as_mismatch(self, tmp_path):
+        """A file with no `version` key is also a mismatch — archived."""
+        import json
+        from engine.smc_v2.setup_state import SetupStateStore
+        path = tmp_path / "state.json"
+        path.write_text(json.dumps({"candidates": []}))  # no version
+        store = SetupStateStore(path)
+        store.load()
+        assert store.candidates == []
+        assert not path.exists()
+        # Archived with version "None" suffix
+        assert any(p.name.startswith("state.vNone.bak") for p in tmp_path.iterdir())
