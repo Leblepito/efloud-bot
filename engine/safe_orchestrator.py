@@ -1213,34 +1213,54 @@ class SafeOrchestrator:
         """Place entry order for a CONFIRMED SetupCandidate.
 
         Per spec §5: computes SL via calc_sl, TP via calc_tp_targets,
-        size via risk.calc_position_size, then OrderManager.open_position.
+        size via risk.calc_position_size with v1-parity args (leverage +
+        max_notional_pct), explicit pos_guard.can_open_position and
+        breaker gates, then OrderManager.open_position.
 
-        Safety gates (all preserved from v1 signals.py path):
+        Safety gates (full parity with v1 signals.py path):
         - order_manager is None → skip (test/paper mode)
+        - breaker.check.can_trade is False → skip (HALTED/TRIPPED)
+        - pos_guard.can_open_position is False → skip (notional / exposure /
+          holding-hours / pyramid / SL ATR distance / max-open / opposite-direction)
+        - pos_guard.is_new_entry_allowed is False → skip (pause guard)
         - dry_run enforced inside OrderManager.open_position
         - mainnet_guard enforced inside BinanceClient
         - SLTooFarError / InsufficientTPDistanceError from calculators → setup rejected
         - size <= 0 → skip
-        - Position guard / max_notional / breaker enforced inside OrderManager
 
         Returns the new Position (or None on rejection).
 
         DELIBERATE SIMPLIFICATIONS for PR #S3c-2 (follow-up PRs):
-        - ATR proxy (max(entry*0.01, zone_width)) instead of real ATR from df_15m
-        - Empty htf_swings/htf_fvgs/eq_levels → RR_PROJECTION TP fallback
-        Both produce conservative SL/TP under-estimates; real wiring is a
-        post-S3c-2 cleanup PR alongside ATR/HTF data threading.
+        - ATR proxy: max(entry*0.01, zone_width). Real ATR threading is
+          follow-up. Effect: larger ATR → wider SL (not safer for trader,
+          but harder for setup to be accepted via max_sl_atr clamp).
+        - Empty htf_swings/htf_fvgs/eq_levels → RR_PROJECTION TP fallback.
+          Real HTF data threading is follow-up.
+        - Reverse-on-profit branch (v1 has it) NOT replicated here;
+          opposite-direction setups will be rejected by pos_guard like v1.
         """
         if self.order_manager is None:
             # Test/paper mode — no order placement
             return None
 
+        # Breaker gate (MUST match v1 — breaker.HALTED must block v2 too)
+        try:
+            breaker_status = self.breaker.check(now=None)
+            if not breaker_status.can_trade:
+                log.info(f"[v2 reject] {cand.symbol}: breaker {breaker_status.state.value}")
+                return None
+        except Exception as e:
+            log.warning(f"[v2 reject] {cand.symbol}: breaker check failed ({e})")
+            return None
+
         from engine.smc_v2.sl_calc import calc_sl
         from engine.smc_v2.tp_calc import calc_tp_targets
         from engine.smc_v2.exceptions import SLTooFarError, InsufficientTPDistanceError
+        from types import SimpleNamespace
 
         safety_cfg = self.config.get("safety", {})
         risk_cfg = self.config.get("risk", {})
+        exchange_cfg = self.config.get("exchange", {})
 
         # ATR proxy — see DELIBERATE SIMPLIFICATIONS in docstring.
         atr_15m = max(entry_price * 0.01,
@@ -1253,11 +1273,11 @@ class SafeOrchestrator:
                 zone=cand.target_zone,
                 htf_swing_anchor=cand.htf_swing_anchor,
                 atr_15m=atr_15m,
-                config=type("SafetyConfigLike", (), {
-                    "sl_atr_buffer": safety_cfg.get("sl_atr_buffer", 0.5),
-                    "min_sl_atr": safety_cfg.get("min_sl_atr", 0.5),
-                    "max_sl_atr": safety_cfg.get("max_sl_atr", 5.0),
-                }),
+                config=SimpleNamespace(
+                    sl_atr_buffer=safety_cfg.get("sl_atr_buffer", 0.5),
+                    min_sl_atr=safety_cfg.get("min_sl_atr", 0.5),
+                    max_sl_atr=safety_cfg.get("max_sl_atr", 5.0),
+                ),
             )
         except SLTooFarError as e:
             log.info(f"[v2 reject] {cand.symbol}: sl_too_far ({e})")
@@ -1271,31 +1291,40 @@ class SafeOrchestrator:
                 htf_swings={"swing_highs": [], "swing_lows": []},
                 htf_fvgs=[],
                 eq_levels=[],
-                config=type("RiskConfigLike", (), {
-                    "min_rr": risk_cfg.get("min_rr", 1.8),
-                    "fib_ext": self.config.get("fibonacci", {}).get("ext_tp2", 1.618),
-                }),
+                config=SimpleNamespace(
+                    min_rr=risk_cfg.get("min_rr", 1.8),
+                    fib_ext=self.config.get("fibonacci", {}).get("ext_tp2", 1.618),
+                ),
             )
         except InsufficientTPDistanceError as e:
             log.info(f"[v2 reject] {cand.symbol}: tp1_too_close ({e})")
             return None
 
-        # tp2 may be None (spec §4.2 single-target mode); current OrderManager
-        # requires both. Use tp1 as fallback until lifecycle change (PR #S5).
-        tp2_eff = tp2 if tp2 is not None else tp1
+        # tp2 may be None (spec §4.2 single-target mode). Reject the setup
+        # rather than fold into a zero-distance double-fill — folding would
+        # cause OrderManager to send two TAKE_PROFIT_MARKET at the same
+        # stopPrice. Single-target lifecycle support lands in PR #S5.
+        if tp2 is None:
+            log.info(f"[v2 reject] {cand.symbol}: tp2_none (single-target mode, deferred to PR #S5)")
+            return None
 
-        # Position size via existing risk helper
+        # Position size — v1 parity: pass leverage + max_notional_pct
+        # (calc_position_size respects both caps; ignoring them would
+        # produce strictly-larger positions than v1 would on the same setup)
         try:
             from risk import calc_position_size
-            balance = (self.order_manager.client.get_balance()
-                       if self.order_manager.client else 10000.0)
+            leverage = exchange_cfg.get("leverage", 1)
+            max_notional = safety_cfg.get("max_position_notional_pct")
+            balance = self.order_manager.client.get_balance()
             size = calc_position_size(
                 balance=balance,
                 risk_pct=risk_cfg.get("risk_per_trade_pct", 0.75),
                 entry=entry_price,
                 sl=sl,
+                leverage=leverage,
+                max_notional_pct=max_notional,
             )
-        except Exception as e:
+        except (TypeError, ValueError, ZeroDivisionError, AttributeError) as e:
             log.warning(f"[v2 reject] {cand.symbol}: sizing failed ({e})")
             return None
 
@@ -1303,9 +1332,47 @@ class SafeOrchestrator:
             log.info(f"[v2 reject] {cand.symbol}: size <= 0 ({size})")
             return None
 
+        # Position guard (MUST match v1 — notional/exposure/holding/pyramid/
+        # SL-ATR/max-open/opposite-direction enforcement)
+        try:
+            guard_check = self.pos_guard.can_open_position(
+                balance=balance,
+                entry=entry_price,
+                size=size,
+                sl=sl,
+                atr=atr_15m,
+                direction=cand.direction,
+                symbol=cand.symbol,
+                existing_positions=self.lifecycle.positions,
+                leverage=exchange_cfg.get("leverage", 1),
+            )
+            if not guard_check.allowed:
+                log.info(f"[v2 reject] {cand.symbol}: pos_guard ({guard_check.reason})")
+                return None
+        except Exception as e:
+            log.warning(f"[v2 reject] {cand.symbol}: pos_guard check failed ({e})")
+            return None
+
+        # Pause guard (MUST match v1 — operator-toggled new-entry pause).
+        # PositionGuard.is_new_entry_allowed needs a signal-like object with
+        # `symbol`, `side`, `is_pyramid` attributes (SimpleNamespace works).
+        try:
+            pause_signal = SimpleNamespace(
+                symbol=cand.symbol,
+                side="buy" if cand.direction == "LONG" else "sell",
+                is_pyramid=False,
+            )
+            pause_decision = self.pos_guard.is_new_entry_allowed(pause_signal)
+            if not pause_decision.allowed:
+                log.info(f"[v2 reject] {cand.symbol}: pause_guard (new entries paused)")
+                return None
+        except Exception as e:
+            log.warning(f"[v2 reject] {cand.symbol}: pause check failed ({e})")
+            return None
+
         log.info(
             f"[v2] {cand.direction} {cand.symbol} entry={entry_price:.4f} "
-            f"sl={sl:.4f} tp1={tp1:.4f} tp2={tp2_eff:.4f} size={size:.6f} "
+            f"sl={sl:.4f} tp1={tp1:.4f} tp2={tp2:.4f} size={size:.6f} "
             f"(zone={cand.target_zone.source}, tp1={tp_tags.get('tp1_source')}, "
             f"tp2={tp_tags.get('tp2_source')})"
         )
@@ -1317,7 +1384,7 @@ class SafeOrchestrator:
             entry=entry_price,
             sl=sl,
             tp1=tp1,
-            tp2=tp2_eff,
+            tp2=tp2,
         )
 
     @staticmethod

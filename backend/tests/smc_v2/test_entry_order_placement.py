@@ -98,15 +98,28 @@ class TestOrderPlacementOnConfirmed:
     order is placed via OrderManager.open_position()."""
 
     def test_place_v2_entry_order_calls_open_position(self, tmp_path):
+        """Happy path: all safety gates pass → open_position called.
+
+        Requires patching tp_calc to return a valid (tp1, tp2) pair
+        because empty htf inputs only return RR_PROJECTION tp1 with
+        tp2=None — which the helper now rejects (PR #S3c-2 fix:
+        tp2_none deferred to PR #S5 single-target lifecycle).
+        """
         order_mgr = _make_mock_order_manager()
         store = SetupStateStore(tmp_path / "state.json")
+        # Set a deeper pocket config so pos_guard doesn't reject on notional
+        cfg = _minimal_config()
+        cfg["exchange"] = {"leverage": 1}
         orc = SafeOrchestrator(
-            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            cfg, state_dir=str(tmp_path), persist=False,
             setup_state_store=store, order_manager=order_mgr,
         )
         cand = _make_in_zone_candidate()
 
-        with patch.object(order_mgr, "open_position") as spy_open:
+        # Patch tp_calc to return both tp1 and tp2 (real fib_ext fallback)
+        with patch.object(order_mgr, "open_position") as spy_open, \
+             patch("engine.smc_v2.tp_calc.calc_tp_targets") as tp_spy:
+            tp_spy.return_value = (95.0, 90.0, {"tp1_source": "RR_PROJECTION", "tp2_source": "FIB_EXT"})
             spy_open.return_value = MagicMock()
             result = orc._place_v2_entry_order(
                 cand, current_price=105.0, entry_price=105.0,
@@ -118,8 +131,27 @@ class TestOrderPlacementOnConfirmed:
             assert kwargs["entry"] == 105.0
             assert kwargs["sl"] > 105.0   # SHORT SL above entry
             assert kwargs["tp1"] < 105.0  # SHORT TP below entry
+            assert kwargs["tp2"] < kwargs["tp1"]  # SHORT TP2 below TP1
             assert kwargs["size"] > 0
             assert result is not None
+
+    def test_no_order_when_tp2_none(self, tmp_path):
+        """Single-target mode (tp2=None) → reject until PR #S5 lifecycle support."""
+        order_mgr = _make_mock_order_manager()
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, order_manager=order_mgr,
+        )
+        cand = _make_in_zone_candidate()
+        # Empty htf inputs in _place_v2_entry_order → calc_tp_targets
+        # returns tp2=None (RR_PROJECTION only). Helper rejects.
+        with patch.object(order_mgr, "open_position") as spy_open:
+            result = orc._place_v2_entry_order(
+                cand, current_price=105.0, entry_price=105.0,
+            )
+            assert spy_open.call_count == 0
+            assert result is None
 
     def test_no_order_when_sl_too_far(self, tmp_path):
         """SLTooFarError from calc_sl → setup rejected, no order."""
@@ -144,6 +176,80 @@ class TestOrderPlacementOnConfirmed:
                 cand, current_price=105.0, entry_price=105.0,
             )
             assert spy_open.call_count == 0
+            assert result is None
+
+
+class TestSafetyGates:
+    """v2 path MUST go through the same safety gates as v1 (PR #S3c-2 fix
+    after risk-ops review flagged bypass risk):
+    - breaker.check.can_trade
+    - pos_guard.can_open_position
+    - pos_guard.is_new_entry_allowed
+    """
+
+    def test_no_order_when_breaker_halted(self, tmp_path):
+        order_mgr = _make_mock_order_manager()
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, order_manager=order_mgr,
+        )
+        cand = _make_in_zone_candidate()
+
+        # Patch breaker to return HALTED
+        with patch.object(orc.breaker, "check") as breaker_spy, \
+             patch.object(order_mgr, "open_position") as open_spy:
+            mock_status = MagicMock()
+            mock_status.can_trade = False
+            mock_status.state.value = "HALTED"
+            breaker_spy.return_value = mock_status
+            result = orc._place_v2_entry_order(
+                cand, current_price=105.0, entry_price=105.0,
+            )
+            assert open_spy.call_count == 0
+            assert result is None
+
+    def test_no_order_when_pos_guard_rejects(self, tmp_path):
+        order_mgr = _make_mock_order_manager()
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, order_manager=order_mgr,
+        )
+        cand = _make_in_zone_candidate()
+
+        # Patch pos_guard to reject
+        with patch.object(orc.pos_guard, "can_open_position") as guard_spy, \
+             patch.object(order_mgr, "open_position") as open_spy:
+            mock_guard_result = MagicMock()
+            mock_guard_result.allowed = False
+            mock_guard_result.reason = "MAX_OPEN_REACHED"
+            guard_spy.return_value = mock_guard_result
+            result = orc._place_v2_entry_order(
+                cand, current_price=105.0, entry_price=105.0,
+            )
+            assert open_spy.call_count == 0
+            assert result is None
+
+    def test_no_order_when_pause_guard_blocks(self, tmp_path):
+        order_mgr = _make_mock_order_manager()
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, order_manager=order_mgr,
+        )
+        cand = _make_in_zone_candidate()
+
+        # is_new_entry_allowed returns a PauseGateDecision with allowed=False
+        mock_pause_decision = MagicMock()
+        mock_pause_decision.allowed = False
+        with patch.object(orc.pos_guard, "is_new_entry_allowed",
+                          return_value=mock_pause_decision), \
+             patch.object(order_mgr, "open_position") as open_spy:
+            result = orc._place_v2_entry_order(
+                cand, current_price=105.0, entry_price=105.0,
+            )
+            assert open_spy.call_count == 0
             assert result is None
 
 
