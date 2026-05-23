@@ -4,7 +4,8 @@ from __future__ import annotations
 import logging
 import tempfile
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 import pandas as pd
 
@@ -59,6 +60,7 @@ def run_backtest(
     warmup_bars: int = 200,
     step_every_n_bars: int = 1,
     smc_window_bars: int = _DEFAULT_SMC_WINDOW,
+    smc_version: Literal["v1", "v2"] = "v1",
 ) -> dict[str, Any]:
     """Run a walk-forward backtest. No I/O.
 
@@ -83,12 +85,25 @@ def run_backtest(
 
     # Use a temp state_dir — persist=False means no disk writes but orch __init__ needs a dir
     with tempfile.TemporaryDirectory(prefix="bt_") as state_dir:
+        setup_state_store = None
+        if smc_version == "v2":
+            # Lazy import: v1 path must not import engine.smc_v2 (preserves the
+            # inert invariant — v1 runtime carries no v2 module-level side effects).
+            from engine.smc_v2.setup_state import SetupStateStore
+            setup_state_store = SetupStateStore(
+                path=Path(state_dir) / "setup_candidates.json",
+                max_pending_per_symbol=int(
+                    config.get("smc_v2", {}).get("max_pending_per_symbol", 3)
+                ),
+            )
+
         orch = SafeOrchestrator(
             config,
             state_dir=state_dir,
             notification_mgr=NullNotificationManager(),
             freshness_check=False,
             persist=False,
+            setup_state_store=setup_state_store,
         )
         balance = float(initial_balance)
         peak_balance = balance
@@ -211,6 +226,7 @@ def run_backtest(
             "symbols": symbols,
             "skipped_cycles": skipped_cycles,
             "max_drawdown_pct": round(max_drawdown_pct, 2),
+            "smc_version": smc_version,
             **agg,
         }
 
