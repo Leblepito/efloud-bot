@@ -8,11 +8,16 @@
 - `engine/signals.py` (current v1 entry/SL/TP logic, line 89, 268-353)
 - `engine/smc.py` (SMC indicators)
 - `engine/lifecycle.py:58` (`Position` dataclass)
-- `exchange/__init__.py:200, 346, 380, 659-668, 686-710, 830-848` (OrderManager + reconcile loop)
+- `exchange/__init__.py:200, 346, 381, 659-668, 686-710, 830-848` (OrderManager + reconcile loop)
 - `engine/safe_orchestrator.py:407, 730-792` (orchestrator + reverse handler)
 - `engine/safety/position_guard.py:296-309, 322` (SL clamp + reverse guard)
 - `config.yaml:60-160` (timeframes, risk, safety blocks)
 - `backend/db.py:60-150` (trades schema)
+
+**Spec revision history:**
+
+- v1 (2026-05-23): initial draft
+- v2 (2026-05-23): incorporated review feedback (state-machine re-entry rule, state file pruning, concurrent setup cap, single-target cleanup branch, swing anchor algorithm, TP source attribution fix, S2 split into S2a+S2b)
 
 ---
 
@@ -89,6 +94,13 @@ User wants a **full SMC rework** of entry, SL, and TP logic, and a clean fix for
             │  15m CHoCH/OB-tap confirmation│
             │  inside the zone              │
             │  → state: IN_ZONE → CONFIRMED │
+            │                               │
+            │  NOTE: IN_ZONE is sticky.     │
+            │  Price exiting zone does NOT  │
+            │  roll back to AWAITING_       │
+            │  PULLBACK. Confirmation       │
+            │  search window stays open     │
+            │  until pullback_timeout_bars. │
             └───────────────┬───────────────┘
                             │
                 ┌───────────┴───────────────────┐
@@ -167,7 +179,15 @@ class SetupCandidate:
     reasons: list[str]
 ```
 
-Persistence: `./state/setup_candidates.json` (atomic write via `tempfile + os.replace`, mirrors `positions.json` pattern at `exchange/__init__.py:283`). Schema versioned (`{"version": 1, "candidates": [...]}`). On load failure (corruption, schema mismatch), log warning and start empty (graceful degradation).
+**Persistence rules:**
+
+- Path: `./state/setup_candidates.json` (atomic write via `tempfile + os.replace`, mirrors `positions.json` pattern at `exchange/__init__.py:283`).
+- Schema: `{"version": 1, "candidates": [...]}`.
+- **Pruning invariant**: the persisted file contains ONLY candidates with `state ∈ {AWAITING_PULLBACK, IN_ZONE}`. `CONFIRMED` and `EXPIRED` candidates are removed from the in-memory list before save (see §4.3 step 4). On load, any candidate with `state ∉ {AWAITING_PULLBACK, IN_ZONE}` is discarded with a warning log (handles legacy/corrupted entries).
+- **File size cap**: if file exceeds 1 MB on load (~10k candidates — pathologically large), abort load with ERROR log and start empty. Operator must investigate manually.
+- **Version mismatch handling**: on `version != 1`, archive the existing file to `setup_candidates.v{N}.bak.json` (preserving forensics) before starting empty. Silent data loss is worse than archival.
+- **Corruption handling**: on JSON parse error or schema validation error, archive to `setup_candidates.corrupt.{timestamp}.bak.json` and start empty.
+- **Per-symbol cap**: `max_pending_per_symbol = 3` (config: `smc_v2.max_pending_per_symbol`). Trigger phase rejects new SetupCandidate emission if existing pending count for that symbol reaches the cap. Logged as `reject_setup_cap` counter (added to §6 rejection catalogue).
 
 #### `engine/smc_v2/zones.py`
 Pure functions, no I/O.
@@ -270,47 +290,73 @@ def calc_tp_targets(
     risk = abs(entry_price - sl_price)
     min_rr = config.min_rr
 
+    # Build (price, source) tuples to avoid float-equality misattribution
+    # (a liquidity price equal to an FVG bottom would otherwise be ambiguous).
     if direction == "LONG":
-        # Liquidity above entry, in ascending order
-        liq = [e.price for e in eq_levels if e.kind == "EQH" and e.price > entry_price]
-        liq += [s.price for s in htf_swings["swing_highs"] if s.price > entry_price]
-        fvg_near = [f.bot for f in htf_fvgs if f.direction == "BEAR" and f.bot > entry_price]
-        candidates = sorted(set(liq + fvg_near))
-        tp1 = next((p for p in candidates if (p - entry_price) >= min_rr * risk), None)
-        if tp1 is None and candidates:
-            raise InsufficientTPDistanceError(nearest=candidates[0], required=min_rr * risk)
-        if tp1 is None:
-            tp1 = entry_price + min_rr * risk  # no structural target — projection fallback
-        # TP2 must be strictly beyond TP1
+        # Liquidity above entry, ascending order
+        labeled = [(e.price, "LIQUIDITY") for e in eq_levels
+                   if e.kind == "EQH" and e.price > entry_price]
+        labeled += [(s.price, "LIQUIDITY") for s in htf_swings["swing_highs"]
+                    if s.price > entry_price]
+        labeled += [(f.bot, "FVG_NEAR") for f in htf_fvgs
+                    if f.direction == "BEAR" and f.bot > entry_price]
+        # Dedup by price keeping first source seen (liquidity wins over FVG on tie)
+        seen = {}
+        for p, src in labeled:
+            seen.setdefault(p, src)
+        candidates = sorted(seen.items(), key=lambda x: x[0])  # ascending price
+
+        tp1_pair = next(((p, s) for p, s in candidates
+                         if (p - entry_price) >= min_rr * risk), None)
+        if tp1_pair is None and candidates:
+            raise InsufficientTPDistanceError(nearest=candidates[0][0], required=min_rr * risk)
+        if tp1_pair is None:
+            tp1, tp1_source = entry_price + min_rr * risk, "RR_PROJECTION"
+        else:
+            tp1, tp1_source = tp1_pair
+
+        # TP2: HTF FVG far edge beyond TP1, fallback fib_ext (invariant: TP2 > TP1)
         fvg_far = [f.top for f in htf_fvgs if f.direction == "BEAR" and f.top > tp1]
         if fvg_far:
-            tp2 = min(fvg_far)
+            tp2, tp2_source = min(fvg_far), "FVG_FAR"
         else:
             fib_tp2 = entry_price + config.fib_ext * risk
-            tp2 = fib_tp2 if fib_tp2 > tp1 else None  # invariant: TP2 > TP1
+            if fib_tp2 > tp1:
+                tp2, tp2_source = fib_tp2, "FIB_EXT"
+            else:
+                tp2, tp2_source = None, "NONE"
+
     else:  # SHORT — mirror
-        liq = [e.price for e in eq_levels if e.kind == "EQL" and e.price < entry_price]
-        liq += [s.price for s in htf_swings["swing_lows"] if s.price < entry_price]
-        fvg_near = [f.top for f in htf_fvgs if f.direction == "BULL" and f.top < entry_price]
-        candidates = sorted(set(liq + fvg_near), reverse=True)
-        tp1 = next((p for p in candidates if (entry_price - p) >= min_rr * risk), None)
-        if tp1 is None and candidates:
-            raise InsufficientTPDistanceError(nearest=candidates[0], required=min_rr * risk)
-        if tp1 is None:
-            tp1 = entry_price - min_rr * risk
+        labeled = [(e.price, "LIQUIDITY") for e in eq_levels
+                   if e.kind == "EQL" and e.price < entry_price]
+        labeled += [(s.price, "LIQUIDITY") for s in htf_swings["swing_lows"]
+                    if s.price < entry_price]
+        labeled += [(f.top, "FVG_NEAR") for f in htf_fvgs
+                    if f.direction == "BULL" and f.top < entry_price]
+        seen = {}
+        for p, src in labeled:
+            seen.setdefault(p, src)
+        candidates = sorted(seen.items(), key=lambda x: x[0], reverse=True)  # descending
+
+        tp1_pair = next(((p, s) for p, s in candidates
+                         if (entry_price - p) >= min_rr * risk), None)
+        if tp1_pair is None and candidates:
+            raise InsufficientTPDistanceError(nearest=candidates[0][0], required=min_rr * risk)
+        if tp1_pair is None:
+            tp1, tp1_source = entry_price - min_rr * risk, "RR_PROJECTION"
+        else:
+            tp1, tp1_source = tp1_pair
+
         fvg_far = [f.bot for f in htf_fvgs if f.direction == "BULL" and f.bot < tp1]
         if fvg_far:
-            tp2 = max(fvg_far)
+            tp2, tp2_source = max(fvg_far), "FVG_FAR"
         else:
             fib_tp2 = entry_price - config.fib_ext * risk
-            tp2 = fib_tp2 if fib_tp2 < tp1 else None
+            if fib_tp2 < tp1:
+                tp2, tp2_source = fib_tp2, "FIB_EXT"
+            else:
+                tp2, tp2_source = None, "NONE"
 
-    tp1_source = ("LIQUIDITY" if tp1 in liq
-                  else "FVG_NEAR" if tp1 in fvg_near
-                  else "RR_PROJECTION")
-    tp2_source = ("FVG_FAR" if tp2 in fvg_far
-                  else "FIB_EXT" if tp2 is not None
-                  else "NONE")
     return tp1, tp2, {"tp1_source": tp1_source, "tp2_source": tp2_source}
 ```
 
@@ -325,7 +371,7 @@ def calc_tp_targets(
 | `engine/lifecycle.py` (close handling) | Single-target mode: if `pos.tp2 is None`, on TP1 fill close 100% of position (skip `_move_sl_to_breakeven`) | Support TP2-less setups |
 | `backend/db.py:60` `trades` schema | Add columns: `entry_setup_source TEXT NULL`, `tp1_target_type TEXT NULL`, `tp2_target_type TEXT NULL`, `bars_to_pullback INT NULL`. Migration via `backend/migrations/NNN_smc_v2_telemetry.sql` | RR distribution analysis |
 | `engine/smc.py` | Add `liquidity_pools(df, eq_threshold) -> list[EqLevel]` building on existing `equal_levels()`. Returns clustered equal highs/lows with cluster strength (count of touches) | TP1 liquidity source |
-| `backtest/engine.py` | Branch on `config.engine.smc_version` to run v1 or v2 path. v2 path must construct an in-memory SetupCandidate state (no disk) since walk-forward runs many years per second | Backtest parity |
+| `backtest/engine.py` | Branch on `config.engine.smc_version` to run v1 or v2 path. v2 path uses an in-memory `dict[symbol → list[SetupCandidate]]` state container (no disk I/O — walk-forward runs many years per second). **State reset**: instantiated fresh per symbol per walk-forward window (no cross-symbol or cross-window leakage). State persistence rules from §4.1 apply only to the live orchestrator path | Backtest parity |
 
 ### 4.3 Data Flow (per orchestrator tick)
 
@@ -338,7 +384,14 @@ TICK n:
        - if state == AWAITING_PULLBACK and is_price_in_zone(current_price, zone):
            state = IN_ZONE
        - if state == IN_ZONE:
-           confirmed, entry_px = confirm_entry(df_15m, zone, direction, trigger_ts)
+           # NOTE: IN_ZONE is sticky — does NOT roll back to AWAITING_PULLBACK if
+           # price exits the zone. The state machine is one-way forward.
+           # bars_waited keeps incrementing regardless of price oscillation in/out
+           # of the zone. Setup expires only on pullback_timeout_bars.
+           # confirm_entry's search window is [trigger_bar_ts, now], so a price
+           # path of "enter zone → exit → re-enter" is naturally captured: when
+           # a confirming bar prints during the second re-entry, it's found.
+           confirmed, entry_px = confirm_entry(df_15m, zone, direction, trigger_bar_ts)
            if confirmed:
                try:
                    sl = calc_sl(...)
@@ -351,8 +404,14 @@ TICK n:
                    state = CONFIRMED, drop
   3. Trigger phase on current 15m bar:
        - Detect new CHoCH/BoS aligned with HTF bias
-       - For each: build_pullback_zones → SetupCandidate(AWAITING_PULLBACK) appended
-  4. Save state: setup_candidates.json (atomic write)
+       - For each new trigger:
+           if count(existing candidates for sym in {AWAITING_PULLBACK, IN_ZONE}) >= max_pending_per_symbol:
+               reject_setup_cap += 1; log; skip
+           else:
+               build_pullback_zones → SetupCandidate(AWAITING_PULLBACK) appended
+  4. Prune CONFIRMED and EXPIRED candidates from in-memory list
+  5. Save state: setup_candidates.json (atomic write) — file contains ONLY
+     candidates with state ∈ {AWAITING_PULLBACK, IN_ZONE}
 ```
 
 ### 4.4 Test Isolation Strategy
@@ -414,10 +473,13 @@ Invariant: `|tp2 - entry| > |tp1 - entry|` always (or `tp2 is None`).
 ### 5.3 ETH SHORT worked example (from user's 15m/1h/4h charts, 22-23 May 2026)
 
 **Market state**:
+
 - 4h bias: BEAR (3-day downtrend, 22 May sweep of $2120, 23 May 03:00 sweep of $2055)
 - 1h bear leg: 22 May 21:00 - 23 May 01:00, $2120 → $2055
-- 1h unmitigated FVG (formed during bear leg): ~$2102 - $2118 (BULL-style FVG that price left behind going down — a counter-direction gap that price tends to retrace into)
+- 1h unmitigated FVG (formed during bear leg): ~$2102 - $2118
 - 15m: $2055 bounce → $2070
+
+> **Reader legend — FVG direction**: An FVG's `direction` field describes the *imbalance candle's color* (BULL FVG = gap formed between two bullish candles around a strong bullish move), not the trade direction it serves. A SHORT setup looks for **BULL FVGs above current price** as pullback targets (price retraces UP into the bullish gap, then resumes DOWN). Likewise a LONG setup looks for BEAR FVGs below current price.
 
 **v1 behaviour (what the bot does today)**:
 ```
@@ -493,8 +555,9 @@ Each rejection reason gets its own counter, logged in the per-symbol breakdown (
 |---|---|---|
 | `pullback_timeout` | `bars_waited > pullback_timeout_bars` and price never entered zone | smc_v2 state machine |
 | `no_confirmation` | Price entered zone but no LTF CHoCH/engulfing within remaining bars | confirmation.py |
-| `sl_too_far` | Structural SL distance > `max_sl_atr × ATR` | sl_calc.py SLTooFarError |
+| `sl_too_far` | Structural SL distance > `max_sl_atr × ATR` (or no unbroken HTF swing anchor) | sl_calc.py SLTooFarError |
 | `tp1_too_close` | Nearest liquidity exists but closer than `min_rr × risk` | tp_calc.py InsufficientTPDistanceError |
+| `setup_cap` | Symbol already has `max_pending_per_symbol` active candidates (default 3) | smc_v2 trigger phase |
 | `tp2_invalid` | No FVG far-edge AND fib_ext projection ≤ TP1 — degraded to single-target | (not a rejection — logged for telemetry) |
 | `confluence_low` | Existing — score below threshold | signals.py (unchanged) |
 | `daily_filter` | Existing — strict mode, daily opposite direction | signals.py (unchanged) |
@@ -555,7 +618,12 @@ def _cancel_position_siblings(
 
 2. **`_fallback_close`** (`exchange/__init__.py:842-848`): replace existing inline loop with `self._cancel_position_siblings(pos, ccxt_sym, reason="FALLBACK_CLOSE")`. Behaviour preserved (was already correct).
 
-3. **`_move_sl_to_breakeven`** (`exchange/__init__.py:686-710`): **DO NOT** use the new helper. By design TP2 stays open after TP1 partial — only the old SL is cancelled and re-placed at entry. Leave existing code untouched.
+3. **`_move_sl_to_breakeven`** (`exchange/__init__.py:686-710`): two branches now exist.
+
+   - **Two-target mode** (`pos.tp2 is not None`): existing behaviour — by design TP2 stays open after TP1 partial fill; only the old SL is cancelled and re-placed at entry. **Do not** use the new helper here.
+   - **Single-target mode** (`pos.tp2 is None`, introduced by SMC v2 §4.2): on TP1 fill the position is 100% closed. `_move_sl_to_breakeven` must be **skipped entirely** for this branch; instead, the caller invokes `self._cancel_position_siblings(pos, ccxt_sym, reason='TP1_FULL_CLOSE')` to cancel the orphan SL. There is no TP2 to preserve.
+
+   The branch decision lives in the TP1-fill handler in `engine/lifecycle.py` (the call site that today triggers BE move). Spec §4.2 already says "Single-target mode: if `pos.tp2 is None`, on TP1 fill close 100% of position (skip `_move_sl_to_breakeven`)" — this clarifies the cleanup path: skip BE move, call cleanup helper instead.
 
 ### 7.3 Tests (TDD: red first)
 
@@ -596,11 +664,19 @@ PR #S1: smc_v2 pure-function modules
         - 100% unit test coverage
         - no integration yet
 ─────────────────────────────────────────────
-PR #S2: smc_v2 SetupCandidate state
+PR #S2a: smc_v2 SetupCandidate state module (pure)
         - engine/smc_v2/setup_state.py
         - persistence + atomic write
-        - corruption recovery tests
-        - orchestrator state tick wiring (still v1 emit-path)
+        - pruning + cap + version archival + corruption recovery
+        - 100% unit test coverage
+        - NOT yet imported by orchestrator
+        - no risk-ops review gate (pure module)
+PR #S2b: orchestrator state tick wiring
+        - engine/safe_orchestrator.py:730-792 (load/advance/save pending candidates)
+        - feature-gated: state container only populated when smc_version == "v2"
+        - v1 path unaffected
+        - integration tests (multi-tick state transitions)
+        - risk-ops review gate (orchestrator touched)
 ─────────────────────────────────────────────
 PR #S3: smc_v2 confirmation + signals dispatch
         - engine/smc_v2/confirmation.py
@@ -634,7 +710,9 @@ PR #S7: production rollout (config-only)
 
 ### 8.2 Backtest validation criteria
 
-Walk-forward 6 months (2025-11 → 2026-04), 7 symbols (ETH, BTC, SOL, BNB, ADA, LINK, AVAX):
+Walk-forward 6 months (2025-11 → 2026-04), 7 symbols (ETH, BTC, SOL, BNB, ADA, LINK, AVAX).
+
+**Prerequisite step (part of PR #S4)**: before computing v2 acceptance metrics, compute v1 baseline numbers (win rate, avg realized RR, max drawdown, stop-hunt rate, Sharpe) using the same 6-month walk-forward harness applied to current `engine/signals.py`. Baseline numbers are committed alongside PR #S4 as `docs/backtest/v1_baseline_2025-11_to_2026-04.json`. v2 acceptance gates then reference these concrete numbers, not vibes.
 
 | Metric | v1 baseline | v2 acceptance | Hard reject |
 |---|---|---|---|
@@ -654,9 +732,12 @@ If any "hard reject" criterion fires, v2 goes back for redesign — no shadow ro
 - Every tick: v1 signal vs v2 signal logged side-by-side to `logs/smc_v2_shadow.log` with hypothetical outcome (computed from forward bars)
 - Operator daily review: what did v2 reject? what did v2 trigger that v1 missed? hypothetical PnL difference?
 
+**Hindsight window definition**: for any v2 signal (triggered or rejected), the hindsight outcome is computed over the next 48 hours of price action (192 × 15m bars). The setup is hindsight-winning if price reaches the computed TP1 before reaching the computed SL within the window; hindsight-losing if SL hit first; hindsight-neutral if neither hit (rare given the time budget). This window applies to both the "v2 setup hit rate" metric below and the "rejected setups' hindsight" comparison.
+
 Pass criteria (1 week):
+
 - 0 critical errors (NaN, division by zero, JSON corruption, exception propagation killing tick)
-- v2 setup hit rate (TP1 reached before SL) ≥ 50%
+- v2 setup hit rate (TP1 reached before SL within 48h window) ≥ 50%
 - v2 rejected setups' hindsight win rate ≤ v2 triggered setups' hindsight win rate (i.e. rejections were correctly negative-EV)
 
 ### 8.4 Production rollout (Hermes approval gate)
@@ -685,6 +766,7 @@ smc_v2:
   fvg_priority: true             # FVG before OTE
   ote_band: [0.618, 0.786]       # OTE fib levels for fallback zone
   require_confirmation: true     # require 15m CHoCH/engulfing inside zone
+  max_pending_per_symbol: 3      # cap of concurrent SetupCandidates per symbol
 ```
 
 Existing keys activated by v2 (already in `config.yaml`, currently unused in signals.py):
@@ -701,12 +783,43 @@ safety:
 
 ## 10. Open Questions / Risks
 
-1. **HTF swing anchor selection** — spec says "last HTF swing on the wrong side", but multiple candidates exist. Need a tie-breaker: most recent? highest-volume? Highest-touch? Initial: most recent unbroken swing. Revisit after backtest.
+1. **HTF swing anchor selection** — defined algorithm (initial; revisit after backtest):
+
+   ```python
+   def select_htf_swing_anchor(htf_swings, direction, trigger_ts, htf_bars):
+       """
+       Return the most recent unbroken HTF swing on the 'wrong side' of the trade.
+       'Unbroken' means: no HTF bar after the swing's formation has traded
+       through the swing's price level.
+       """
+       candidates = htf_swings["swing_highs"] if direction == "SHORT" else htf_swings["swing_lows"]
+       # Iterate most-recent-first
+       for swing in reversed(candidates):
+           if swing.ts >= trigger_ts:
+               continue   # ignore swings formed after the trigger
+           bars_after = [b for b in htf_bars if b.ts > swing.ts]
+           if direction == "SHORT":
+               if not any(b.high > swing.price for b in bars_after):
+                   return swing.price
+           else:
+               if not any(b.low < swing.price for b in bars_after):
+                   return swing.price
+       # No unbroken swing — return None; caller raises SLTooFarError (REJECT setup)
+       return None
+   ```
+
+   If no unbroken HTF swing exists, `calc_sl` raises `SLTooFarError` (no structural anchor available).
 2. **Equal-level cluster threshold** — `engine/smc.py` `equal_levels()` uses `eq_threshold_pct: 0.1`. For TP1 liquidity, do we want a stricter cluster (e.g. require ≥2 touches)? Initial: use same `equal_levels()` output as-is; tighten if backtest shows TP1 hitting non-significant levels.
 3. **OTE band reference points** — OTE 0.618-0.786 of which leg? Initial: most recent HTF impulse (4h CHoCH-to-extremum leg). May need refinement.
 4. **Concurrent setups on same symbol** — Can a symbol have multiple pending SetupCandidates? Spec says yes (e.g. one LONG pending pullback + one SHORT just emitted). Position cap (`max_open_positions: 7`) only applies at entry, not at setup state. Risk: state file grows. Mitigation: cap pending candidates per symbol at 3.
 5. **Telegram notification volume** — v2 will reject more setups (40-60% vs 30%). Operator may get notification spam. Initial: don't notify on rejection in production (already current behaviour); only log.
-6. **Live position migration** — when v2 ships, existing v1-opened positions remain managed by v1 lifecycle (TP1+TP2 with fib_ext). New positions use v2. No migration needed because Position dataclass changes are additive (nullable fields).
+6. **Live position migration + rollback invariant** — when v2 ships, existing v1-opened positions remain managed by v1 lifecycle (TP1+TP2 with fib_ext). New positions use v2. No migration needed because Position dataclass changes are additive (nullable fields).
+
+   **Forward-compatibility invariant**: lifecycle code changes are forward-compatible — v1 rollback is config-flag-only (`smc_version: v2 → v1`), **no code revert**. After rollback:
+
+   - v1 continues to produce two-target Positions (`tp2` always set); v1 never produces `tp2=None`.
+   - Any v2-opened single-target Position still open at rollback time continues to use the new `tp2 is None` branch in `_move_sl_to_breakeven` (calls `_cancel_position_siblings('TP1_FULL_CLOSE')`). The branch stays in the code permanently; it's harmless under v1 because v1 never triggers it.
+   - Telemetry fields (`entry_setup_source`, etc.) remain nullable; v1 writes them as `None` / `'V1_LEGACY'`.
 
 ---
 
