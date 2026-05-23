@@ -206,3 +206,61 @@ class TestPruning:
         assert len(store.candidates) == 1
         assert store.candidates[0].symbol == "ETH/USDT"
         assert store.candidates[0].state == "IN_ZONE"
+
+
+class TestPerSymbolCap:
+    """add(c) returns False (and does not append) when the per-symbol cap
+    of active candidates is reached. Default cap is 3."""
+
+    def _make(self, symbol, state="AWAITING_PULLBACK"):
+        from engine.smc_v2.setup_state import SetupCandidate
+        return SetupCandidate(
+            symbol=symbol, direction="SHORT", trigger_bar_ts=1700000000000,
+            trigger_price=100.0, htf_bias="BEAR",
+            target_zone=ZoneSpec(low=105.0, high=110.0, source="HTF_FVG"),
+            htf_swing_anchor=115.0, bars_waited=0,
+            state=state, confluence_score=70, reasons=[],
+        )
+
+    def test_add_under_cap_returns_true(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        assert store.add(self._make("BTC/USDT")) is True
+        assert store.add(self._make("BTC/USDT")) is True
+        assert store.add(self._make("BTC/USDT")) is True
+        # Cap reached; 4th rejected
+        assert store.add(self._make("BTC/USDT")) is False
+        assert len(store.candidates) == 3
+
+    def test_cap_is_per_symbol_not_global(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        # 3 each for two symbols → 6 total, all accepted
+        for _ in range(3):
+            assert store.add(self._make("BTC/USDT")) is True
+        for _ in range(3):
+            assert store.add(self._make("ETH/USDT")) is True
+        assert len(store.candidates) == 6
+        # But a 4th for BTC fails
+        assert store.add(self._make("BTC/USDT")) is False
+
+    def test_cap_counts_only_active_states(self, tmp_path):
+        """If 2 BTC candidates are CONFIRMED/EXPIRED, a new AWAITING_PULLBACK
+        for BTC should be accepted (cap counts only AWAITING_PULLBACK + IN_ZONE)."""
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        store.add(self._make("BTC/USDT", state="AWAITING_PULLBACK"))
+        # Inject terminal-state candidates directly (orchestrator would set state)
+        store.candidates.append(self._make("BTC/USDT", state="CONFIRMED"))
+        store.candidates.append(self._make("BTC/USDT", state="EXPIRED"))
+        # 1 active + 2 terminal = 3 total, but cap counts 1 active → 2 more allowed
+        assert store.add(self._make("BTC/USDT")) is True
+        assert store.add(self._make("BTC/USDT")) is True
+        # Now 3 active → 4th rejected
+        assert store.add(self._make("BTC/USDT")) is False
+
+    def test_custom_cap_via_constructor(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json", max_pending_per_symbol=1)
+        assert store.add(self._make("BTC/USDT")) is True
+        assert store.add(self._make("BTC/USDT")) is False
