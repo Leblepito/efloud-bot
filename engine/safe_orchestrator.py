@@ -528,6 +528,7 @@ class SafeOrchestrator:
                 symbol=symbol,
                 current_price=current_price,
                 current_bar_ts=current_bar_ts,
+                df_15m=df_entry,
             )
 
         # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
@@ -1012,18 +1013,25 @@ class SafeOrchestrator:
         direction: str,
         since_ts: int,
     ) -> tuple:
-        """LTF entry confirmation for SMC v2 setups — placeholder.
+        """LTF entry confirmation for SMC v2 setups.
 
-        Spec §4.1 confirmation.py: look at 15m bars since `since_ts` that are
-        inside `zone`; return (True, entry_price) when a counter-direction
-        CHoCH or engulfing close confirms; else (False, None).
+        Thin proxy to `engine.smc_v2.confirmation.confirm_entry` (spec §4.1).
+        Detects bearish engulfing (SHORT) or bullish engulfing (LONG) inside
+        the pullback zone, with close inside the zone, after `since_ts`.
 
-        **PR #S2b ships the stub returning (False, None).**
-        Real implementation lands in PR #S3 (`engine/smc_v2/confirmation.py`).
-        The stub exists so `_advance_setup_state_tick` can call it without
-        AttributeError in tests.
+        Returns: (True, entry_price) on first confirmation; (False, None) else.
+
+        Wired in PR #S3b. Previously a placeholder returning (False, None)
+        from PR #S2b — the real implementation now lives in
+        engine/smc_v2/confirmation.py (PR #S3a / #68).
         """
-        return (False, None)
+        # Local import to keep the orchestrator module import-light when
+        # v2 is not active. Matches the existing pattern in
+        # _advance_setup_state_tick.
+        from engine.smc_v2.confirmation import confirm_entry as _confirm
+        return _confirm(
+            df_15m=df_15m, zone=zone, direction=direction, since_ts=since_ts,
+        )
 
     def _advance_setup_state_tick(
         self,
@@ -1031,19 +1039,30 @@ class SafeOrchestrator:
         current_price: float,
         current_bar_ts: int,
         pullback_timeout_bars: int = 8,
+        df_15m=None,
     ) -> None:
         """Advance pending SMC v2 setup candidates for `symbol` by one tick.
 
-        Per spec §4.3 step 2 (advance phase only — trigger phase is PR #S3):
+        Per spec §4.3 step 2 (advance phase only — trigger phase is PR #S3c):
           For each pending candidate matching symbol:
             1. bars_waited += 1
             2. If bars_waited > pullback_timeout_bars → state = EXPIRED
             3. Elif state == AWAITING_PULLBACK and price ∈ zone → state = IN_ZONE
             4. If state == IN_ZONE → call confirm_entry; if True → state = CONFIRMED
-               (PR #S2b stub returns False; real impl in PR #S3)
 
         Inert when `self.setup_state_store is None` — short-circuits with no
         side effects. This is the load-bearing invariant for v1 safety.
+
+        Args:
+            symbol: trading pair
+            current_price: latest LTF (15m) close
+            current_bar_ts: latest LTF bar's ms-epoch timestamp
+            pullback_timeout_bars: max bars to wait for pullback (default 8 per spec §4.3)
+            df_15m: optional LTF DataFrame for confirmation lookup. Required
+                for IN_ZONE → CONFIRMED transition; if None, the
+                confirm_entry call is SKIPPED (state stays IN_ZONE).
+                run_cycle always passes df_entry; test paths exercising
+                only the state machine may omit it.
 
         Other-symbol candidates are untouched (operation is scoped to `symbol`).
         Terminal states (CONFIRMED, EXPIRED) are skipped — they wait for the
@@ -1076,17 +1095,19 @@ class SafeOrchestrator:
                 cand.state = "IN_ZONE"
 
             if cand.state == "IN_ZONE":
-                # confirm_entry stub returns (False, None) in PR #S2b
-                # Real impl in PR #S3 uses df_15m to detect LTF CHoCH/engulfing
+                # Skip confirmation when df_15m not provided (state-machine-
+                # only test paths). Real run_cycle always passes df_entry.
+                if df_15m is None:
+                    continue
                 confirmed, entry_px = self.confirm_entry(
-                    df_15m=None,  # PR #S3 will pass the real DataFrame
+                    df_15m=df_15m,
                     zone=cand.target_zone,
                     direction=cand.direction,
                     since_ts=cand.trigger_bar_ts,
                 )
                 if confirmed:
                     cand.state = "CONFIRMED"
-                    # Entry order placement also lands in PR #S3
+                    # Entry order placement lands in PR #S3c
                     # (signals.py → OrderManager.open_position dispatch)
 
     @staticmethod
