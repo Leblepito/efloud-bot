@@ -14,8 +14,12 @@ Safe Orchestrator v2.1 — Güvenlik Katmanları Entegre
 import pandas as pd
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from engine.smc_v2.setup_state import SetupStateStore
+    from engine.smc_v2.zones import ZoneSpec
 
 from .smc import SMCEngine
 from .levels import LevelEngine
@@ -131,7 +135,8 @@ class SafeOrchestrator:
                   *,
                   freshness_check: bool = True,
                   persist: bool = True,
-                  trade_journal: Optional[TradeJournal] = None):
+                  trade_journal: Optional[TradeJournal] = None,
+                  setup_state_store: Optional["SetupStateStore"] = None):
         """
         permission_mgr: PermissionManager instance (opsiyonel)
         notification_mgr: NotificationManager instance (opsiyonel)
@@ -142,12 +147,20 @@ class SafeOrchestrator:
         trade_journal: TradeJournal instance — pozisyon entry/exit'lerini
                        trade_journal.jsonl'a yazar. None ise no-op
                        (backwards-compat, backtest/unit-test).
+        setup_state_store: SMC v2 SetupStateStore instance for pullback-setup
+                           state tracking. **Default None → fully inert** (v1
+                           behavior unchanged). When passed, the orchestrator
+                           advances pending candidates each tick. Used by the
+                           PR #S6 feature flag dispatch to opt into v2.
         """
         self.config = config
         self.permission_mgr = permission_mgr
         self.notification_mgr = notification_mgr
         self.order_manager = order_manager
         self.trade_journal = trade_journal
+        # SMC v2 SetupStateStore — None when v1 flag is active (inert default).
+        # See PR #S2b + spec §4.3 for the advance/trigger/save data flow.
+        self.setup_state_store = setup_state_store
         # Convenience reference to BinanceClient for sizing helpers (PR #24).
         # PR #24 introduced `self.client` references in _calc_size paths but
         # forgot to set the attribute in __init__, causing AttributeError on
@@ -505,6 +518,17 @@ class SafeOrchestrator:
         current_price = float(df_entry["close"].iloc[-1])
         bar_high = float(df_entry["high"].iloc[-1])
         bar_low = float(df_entry["low"].iloc[-1])
+
+        # SMC v2 setup state advance — opt-in, inert when store is None.
+        # Must run BEFORE breaker check so EXPIRE transitions get recorded
+        # even on no-trade ticks (operator observability).
+        if self.setup_state_store is not None:
+            current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
+            self._advance_setup_state_tick(
+                symbol=symbol,
+                current_price=current_price,
+                current_bar_ts=current_bar_ts,
+            )
 
         # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
         # Update excursion for every open position in this symbol before any
@@ -948,6 +972,21 @@ class SafeOrchestrator:
                                                        stale, warnings)
         report_md = report_md.replace("## Öneri", safety_section + "\n## Öneri")
 
+        # SMC v2 — persist setup state if wired (gated, inert when None).
+        # Save errors logged but do NOT abort the cycle — persistence failure
+        # must not break trading.
+        #
+        # MAINTENANCE NOTE: this save() MUST remain ABOVE the return below.
+        # Future early-return branches added above this point would silently
+        # skip persistence and lose a tick's state changes. If you add a new
+        # early-exit branch above, also call self.setup_state_store.save()
+        # within the same gated try/except in that branch.
+        if self.setup_state_store is not None:
+            try:
+                self.setup_state_store.save()
+            except Exception as e:
+                log.error(f"setup_state save failed (continuing cycle): {e}")
+
         return SafeCycleResult(
             symbol=symbol, timeframe=tf["entry"],
             current_price=current_price, htf_bias=htf_bias,
@@ -961,6 +1000,94 @@ class SafeOrchestrator:
             scenarios=planner.active_scenarios(),
             report_md=report_md, actions_taken=actions,
         )
+
+    # ─────────────────────────────────────────────────────────────
+    # SMC v2 scaffolding (inert default, opt-in via setup_state_store)
+    # ─────────────────────────────────────────────────────────────
+
+    def confirm_entry(
+        self,
+        df_15m,
+        zone: "ZoneSpec",
+        direction: str,
+        since_ts: int,
+    ) -> tuple:
+        """LTF entry confirmation for SMC v2 setups — placeholder.
+
+        Spec §4.1 confirmation.py: look at 15m bars since `since_ts` that are
+        inside `zone`; return (True, entry_price) when a counter-direction
+        CHoCH or engulfing close confirms; else (False, None).
+
+        **PR #S2b ships the stub returning (False, None).**
+        Real implementation lands in PR #S3 (`engine/smc_v2/confirmation.py`).
+        The stub exists so `_advance_setup_state_tick` can call it without
+        AttributeError in tests.
+        """
+        return (False, None)
+
+    def _advance_setup_state_tick(
+        self,
+        symbol: str,
+        current_price: float,
+        current_bar_ts: int,
+        pullback_timeout_bars: int = 8,
+    ) -> None:
+        """Advance pending SMC v2 setup candidates for `symbol` by one tick.
+
+        Per spec §4.3 step 2 (advance phase only — trigger phase is PR #S3):
+          For each pending candidate matching symbol:
+            1. bars_waited += 1
+            2. If bars_waited > pullback_timeout_bars → state = EXPIRED
+            3. Elif state == AWAITING_PULLBACK and price ∈ zone → state = IN_ZONE
+            4. If state == IN_ZONE → call confirm_entry; if True → state = CONFIRMED
+               (PR #S2b stub returns False; real impl in PR #S3)
+
+        Inert when `self.setup_state_store is None` — short-circuits with no
+        side effects. This is the load-bearing invariant for v1 safety.
+
+        Other-symbol candidates are untouched (operation is scoped to `symbol`).
+        Terminal states (CONFIRMED, EXPIRED) are skipped — they wait for the
+        next save() call to be pruned.
+        """
+        # Inert default — no v1 behavior change
+        if self.setup_state_store is None:
+            return
+
+        # Local import to avoid module-level circular dependency on smc_v2
+        from engine.smc_v2.zones import is_price_in_zone
+        from engine.smc_v2.setup_state import PERSISTED_STATES
+
+        for cand in self.setup_state_store.candidates:
+            if cand.symbol != symbol:
+                continue
+            if cand.state not in PERSISTED_STATES:
+                # CONFIRMED or EXPIRED — terminal, skip
+                continue
+
+            cand.bars_waited += 1
+
+            if cand.bars_waited > pullback_timeout_bars:
+                cand.state = "EXPIRED"
+                continue
+
+            if cand.state == "AWAITING_PULLBACK" and is_price_in_zone(
+                current_price, cand.target_zone
+            ):
+                cand.state = "IN_ZONE"
+
+            if cand.state == "IN_ZONE":
+                # confirm_entry stub returns (False, None) in PR #S2b
+                # Real impl in PR #S3 uses df_15m to detect LTF CHoCH/engulfing
+                confirmed, entry_px = self.confirm_entry(
+                    df_15m=None,  # PR #S3 will pass the real DataFrame
+                    zone=cand.target_zone,
+                    direction=cand.direction,
+                    since_ts=cand.trigger_bar_ts,
+                )
+                if confirmed:
+                    cand.state = "CONFIRMED"
+                    # Entry order placement also lands in PR #S3
+                    # (signals.py → OrderManager.open_position dispatch)
 
     @staticmethod
     def _build_safety_section(breaker, regime, stale, warnings) -> str:
