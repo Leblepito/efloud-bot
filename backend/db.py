@@ -45,7 +45,7 @@ class Database:
 
     async def record_trade_open(
         self, symbol: str, direction: str, entry: float, sl: float,
-        tp1: float, tp2: float, size: float, confluence: Optional[int] = None,
+        tp1: float, tp2: Optional[float], size: float, confluence: Optional[int] = None,
         binance_order_id: Optional[str] = None,
         trace_id: Optional[str] = None,        # PR #57
         bar_ts_ms: Optional[int] = None,        # PR #57
