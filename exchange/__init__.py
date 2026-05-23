@@ -661,7 +661,19 @@ class OrderManager:
         for pos in self.positions[:]:
             if pos.symbol not in bn_open_symbols:
                 # Pozisyon Binance'de kapanmış — TP2 / SL / manual close
+                # Ordering note: _estimate_exit_price runs before
+                # _cancel_position_siblings as defense-in-depth. Currently safe
+                # either way because _estimate_exit_price reads `bn_orders_raw`
+                # captured once at the top of reconcile(), so cancellations
+                # don't mutate that local list. But if _estimate_exit_price is
+                # ever changed to live-fetch open orders, cancelling first would
+                # invalidate trigger attribution (TP1/TP2/SL is inferred from
+                # which order ID is missing). Keep this order.
                 exit_price = self._estimate_exit_price(pos, bn_orders_raw)
+                # Cancel orphan sibling reduceOnly orders before dropping local state
+                if not self.dry_run:
+                    ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
+                    self._cancel_position_siblings(pos, ccxt_sym, reason="RECONCILED")
                 self._record_close(pos, exit_price, reason="RECONCILED")
                 closed_now.append(pos)
                 self.positions.remove(pos)
@@ -682,6 +694,52 @@ class OrderManager:
         # state (closes removed from list, tp1_hit flags flipped, sl_order_id updated).
         self._persist()
         return closed_now
+
+    def _cancel_position_siblings(
+        self,
+        pos: "Position",
+        ccxt_sym: str,
+        reason: str,
+    ) -> dict:
+        """Best-effort cancel SL + TP1 + TP2 reduceOnly orders for a position.
+
+        Called from every full-close path (reconcile, fallback, kill switch).
+        Each cancel is independent: failure of one does not block the others.
+
+        Args:
+            pos: the Position whose sibling orders should be cancelled
+            ccxt_sym: CCXT futures symbol form (e.g. 'BTC/USDT:USDT')
+            reason: short tag for the log line (e.g. 'RECONCILED', 'FALLBACK_CLOSE')
+
+        Returns:
+            dict with keys 'cancelled', 'failed', 'missing' — each a list of
+            labels ('SL', 'TP1', 'TP2'). Useful for assertions and telemetry.
+        """
+        # `ccxt` is already imported at module scope (exchange/__init__.py:3)
+        result = {"cancelled": [], "failed": [], "missing": []}
+        for label, oid in [
+            ("SL", pos.sl_order_id),
+            ("TP1", pos.tp1_order_id),
+            ("TP2", pos.tp2_order_id),
+        ]:
+            if not oid:
+                result["missing"].append(label)
+                continue
+            try:
+                self.client.exchange.cancel_order(oid, ccxt_sym)
+                result["cancelled"].append(label)
+            except ccxt.OrderNotFound:
+                result["missing"].append(label)
+            except Exception as e:
+                log.warning(
+                    f"[cleanup] {pos.symbol}: failed to cancel {label} ({oid}): {e}"
+                )
+                result["failed"].append(label)
+        cancelled_str = "+".join(result["cancelled"]) or "none"
+        log.info(
+            f"[cleanup] {pos.symbol}: cancelled {cancelled_str} (reason={reason})"
+        )
+        return result
 
     def _move_sl_to_breakeven(self, pos: Position) -> None:
         """TP1 hit sonrası SL'i entry'ye kaydır (server-side cancel + new order)."""
@@ -839,13 +897,8 @@ class OrderManager:
             except Exception as e:
                 log.error(f"Fallback close failed: {e}")
 
-            # Pending order cleanup
-            for oid in [pos.sl_order_id, pos.tp1_order_id, pos.tp2_order_id]:
-                if oid:
-                    try:
-                        self.client.exchange.cancel_order(oid, ccxt_sym)
-                    except Exception:
-                        pass
+            # Pending order cleanup — DRY via shared helper
+            self._cancel_position_siblings(pos, ccxt_sym, reason=f"FALLBACK_{reason}")
 
         self._record_close(pos, price, reason)
         self.positions.remove(pos)
