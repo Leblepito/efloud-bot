@@ -224,6 +224,14 @@ class Position:
     mae_pct: float = 0.0
     mfe_pct: float = 0.0
 
+    # SMC v2 telemetry (PR #S5) — mirrors engine.lifecycle.Position. v1 callers
+    # leave these None; v2 entry path (PR #71 _place_v2_entry_order) populates them.
+    # Surfaced to DB trades table via bot_runner.position_opened wiring.
+    entry_setup_source: Optional[str] = None   # "FVG_PULLBACK" | "OTE_RETRACE" | "V1_LEGACY" | None
+    tp1_target_type:    Optional[str] = None   # "LIQUIDITY"    | "FVG_NEAR"    | "RR_PROJECTION" | None
+    tp2_target_type:    Optional[str] = None   # "FVG_FAR"      | "FIB_EXT"     | "NONE"          | None
+    bars_to_pullback:   Optional[int] = None   # bars elapsed AWAITING_PULLBACK → IN_ZONE
+
     def update_excursion(self, high: float, low: float) -> None:
         """Update mae_pct/mfe_pct from this bar's price extremes.
 
@@ -380,13 +388,22 @@ class OrderManager:
     def open_position(self, symbol: str, direction: str, size: float,
                       entry: float, sl: float, tp1: float, tp2: float,
                       trace_id: Optional[str] = None,
-                      bar_ts_ms: Optional[int] = None) -> Optional[Position]:
+                      bar_ts_ms: Optional[int] = None,
+                      *,
+                      entry_setup_source: Optional[str] = None,
+                      tp1_target_type: Optional[str] = None,
+                      tp2_target_type: Optional[str] = None,
+                      bars_to_pullback: Optional[int] = None) -> Optional[Position]:
         """Yeni pozisyon aç + server-side SL + TP1 (yarı) + TP2 (yarı) yerleştir.
 
         trace_id / bar_ts_ms: optional log-correlation + bar-alignment metadata
         forwarded into the Position dataclass; bot_runner persists them through
         the cross-thread DB callback. Both default to None for backwards compat
         (orchestrator paths that don't yet thread them through).
+
+        SMC v2 telemetry kwargs (PR #S5, keyword-only): forwarded into the
+        Position dataclass and persisted by bot_runner; default None preserves
+        v1 callers.
         """
         side = "buy" if direction == "LONG" else "sell"
         reverse_side = "sell" if direction == "LONG" else "buy"
@@ -397,7 +414,11 @@ class OrderManager:
                      f"SL={sl:.2f} TP1={tp1:.2f} TP2={tp2:.2f}")
             pos = Position(symbol, direction, entry, sl, tp1, tp2, size,
                            opened_at=pd.Timestamp.now(tz="UTC").isoformat(),
-                           trace_id=trace_id, bar_ts_ms=bar_ts_ms)
+                           trace_id=trace_id, bar_ts_ms=bar_ts_ms,
+                           entry_setup_source=entry_setup_source,
+                           tp1_target_type=tp1_target_type,
+                           tp2_target_type=tp2_target_type,
+                           bars_to_pullback=bars_to_pullback)
             self.positions.append(pos)
             self._persist()
             self._emit("position_opened", pos)
@@ -498,6 +519,10 @@ class OrderManager:
                 tp1_order_id=tp1_oid, tp2_order_id=tp2_oid,
                 opened_at=pd.Timestamp.now(tz="UTC").isoformat(),
                 trace_id=trace_id, bar_ts_ms=bar_ts_ms,
+                entry_setup_source=entry_setup_source,
+                tp1_target_type=tp1_target_type,
+                tp2_target_type=tp2_target_type,
+                bars_to_pullback=bars_to_pullback,
             )
             self.positions.append(pos)
             self._persist()
@@ -543,6 +568,10 @@ class OrderManager:
             tp1_order_id=tp1_oid, tp2_order_id=tp2_oid,
             opened_at=pd.Timestamp.now(tz="UTC").isoformat(),
             trace_id=trace_id, bar_ts_ms=bar_ts_ms,
+            entry_setup_source=entry_setup_source,
+            tp1_target_type=tp1_target_type,
+            tp2_target_type=tp2_target_type,
+            bars_to_pullback=bars_to_pullback,
         )
         self.positions.append(pos)
         self._persist()
