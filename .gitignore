@@ -43,3 +43,7 @@ desktop.ini
 # Local working dirs / venv variations
 .tmp/
 tmp/
+
+# Git worktrees (isolated workspaces for parallel work, never committed)
+.worktrees/
+worktrees/
