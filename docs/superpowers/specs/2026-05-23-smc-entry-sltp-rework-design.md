@@ -300,10 +300,13 @@ def calc_tp_targets(
                     if s.price > entry_price]
         labeled += [(f.bot, "FVG_NEAR") for f in htf_fvgs
                     if f.direction == "BEAR" and f.bot > entry_price]
-        # Dedup by price keeping first source seen (liquidity wins over FVG on tie)
+        # Dedup by price with explicit precedence (liquidity > fvg_near on tie).
+        # Explicit priority avoids silent flip if list-comp order is refactored later.
+        priority = {"LIQUIDITY": 0, "FVG_NEAR": 1}
         seen = {}
         for p, src in labeled:
-            seen.setdefault(p, src)
+            if p not in seen or priority[src] < priority[seen[p]]:
+                seen[p] = src
         candidates = sorted(seen.items(), key=lambda x: x[0])  # ascending price
 
         tp1_pair = next(((p, s) for p, s in candidates
@@ -333,9 +336,11 @@ def calc_tp_targets(
                     if s.price < entry_price]
         labeled += [(f.top, "FVG_NEAR") for f in htf_fvgs
                     if f.direction == "BULL" and f.top < entry_price]
+        # Same precedence rule as LONG branch
         seen = {}
         for p, src in labeled:
-            seen.setdefault(p, src)
+            if p not in seen or priority[src] < priority[seen[p]]:
+                seen[p] = src
         candidates = sorted(seen.items(), key=lambda x: x[0], reverse=True)  # descending
 
         tp1_pair = next(((p, s) for p, s in candidates
