@@ -56,3 +56,77 @@ class TestSetupCandidateDataclass:
         assert sc.target_zone.source == "OTE"
         assert sc.state == "IN_ZONE"
         assert sc.bars_waited == 2
+
+
+class TestSetupStateStoreRoundTrip:
+    """Save → load round-trip preserves SetupCandidate identity exactly."""
+
+    def _make_candidate(self, symbol="BTC/USDT", state="AWAITING_PULLBACK", bars=0):
+        from engine.smc_v2.setup_state import SetupCandidate
+        return SetupCandidate(
+            symbol=symbol,
+            direction="SHORT",
+            trigger_bar_ts=1700000000000,
+            trigger_price=95000.0,
+            htf_bias="BEAR",
+            target_zone=ZoneSpec(low=96000.0, high=97000.0, source="HTF_FVG"),
+            htf_swing_anchor=98000.0,
+            bars_waited=bars,
+            state=state,
+            confluence_score=75,
+            reasons=["HTF aligned"],
+        )
+
+    def test_save_then_load_single_candidate(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "setup_candidates.json")
+        sc = self._make_candidate()
+        store.add(sc)
+        store.save()
+
+        # Fresh store reads the same file
+        store2 = SetupStateStore(tmp_path / "setup_candidates.json")
+        store2.load()
+        assert len(store2.candidates) == 1
+        loaded = store2.candidates[0]
+        assert loaded.symbol == sc.symbol
+        assert loaded.direction == sc.direction
+        assert loaded.trigger_bar_ts == sc.trigger_bar_ts
+        assert loaded.trigger_price == sc.trigger_price
+        assert loaded.htf_bias == sc.htf_bias
+        assert loaded.target_zone.low == sc.target_zone.low
+        assert loaded.target_zone.high == sc.target_zone.high
+        assert loaded.target_zone.source == sc.target_zone.source
+        assert loaded.htf_swing_anchor == sc.htf_swing_anchor
+        assert loaded.bars_waited == sc.bars_waited
+        assert loaded.state == sc.state
+        assert loaded.confluence_score == sc.confluence_score
+        assert loaded.reasons == sc.reasons
+
+    def test_save_then_load_multiple_candidates(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "setup_candidates.json")
+        store.add(self._make_candidate(symbol="BTC/USDT"))
+        store.add(self._make_candidate(symbol="ETH/USDT", bars=2))
+        store.add(self._make_candidate(symbol="SOL/USDT", state="IN_ZONE", bars=4))
+        store.save()
+
+        store2 = SetupStateStore(tmp_path / "setup_candidates.json")
+        store2.load()
+        assert len(store2.candidates) == 3
+        symbols = sorted(c.symbol for c in store2.candidates)
+        assert symbols == ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+
+    def test_load_from_nonexistent_file_yields_empty(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "nonexistent.json")
+        store.load()
+        assert store.candidates == []
+
+    def test_save_creates_parent_dir(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        nested_path = tmp_path / "deep" / "nested" / "state.json"
+        store = SetupStateStore(nested_path)
+        store.add(self._make_candidate())
+        store.save()
+        assert nested_path.exists()
