@@ -115,3 +115,27 @@ class TestCancelPositionSiblings:
         assert sorted(result["cancelled"]) == ["SL", "TP2"]
         assert result["missing"] == ["TP1"]
         assert result["failed"] == []
+
+    def test_logs_and_continues_on_generic_exception(
+        self, mgr, mock_client, position_with_all_orders, caplog
+    ):
+        """Network/exchange errors on one cancel must not block the others."""
+        import logging
+        # SL succeeds; TP1 raises NetworkError; TP2 succeeds
+        mock_client.exchange.cancel_order.side_effect = [
+            None,
+            ccxt.NetworkError("Connection reset"),
+            None,
+        ]
+
+        with caplog.at_level(logging.WARNING):
+            result = mgr._cancel_position_siblings(
+                position_with_all_orders, "BTC/USDT:USDT", reason="TEST"
+            )
+
+        assert mock_client.exchange.cancel_order.call_count == 3
+        assert sorted(result["cancelled"]) == ["SL", "TP2"]
+        assert result["failed"] == ["TP1"]
+        # Warning logged for the failed cancel
+        warning_msgs = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("failed to cancel TP1" in m for m in warning_msgs)
