@@ -1153,8 +1153,15 @@ class SafeOrchestrator:
                 )
                 if confirmed:
                     cand.state = "CONFIRMED"
-                    # Entry order placement lands in PR #S3c-2
-                    # (signals.py → OrderManager.open_position dispatch)
+                    # PR #S3c-2: place entry order if order_manager is wired.
+                    # Inert when self.order_manager is None (test/paper).
+                    # All safety gates (dry_run, mainnet, REJECT, size)
+                    # enforced inside _place_v2_entry_order + OrderManager.
+                    self._place_v2_entry_order(
+                        cand,
+                        current_price=current_price,
+                        entry_price=entry_px,
+                    )
 
     def _emit_setup_candidates(
         self,
@@ -1196,6 +1203,122 @@ class SafeOrchestrator:
             # (matches spec §6 setup_cap rejection counter; orchestrator
             # could log this in a future patch if operator visibility wanted)
             self.setup_state_store.add(cand)
+
+    def _place_v2_entry_order(
+        self,
+        cand,
+        current_price: float,
+        entry_price: float,
+    ):
+        """Place entry order for a CONFIRMED SetupCandidate.
+
+        Per spec §5: computes SL via calc_sl, TP via calc_tp_targets,
+        size via risk.calc_position_size, then OrderManager.open_position.
+
+        Safety gates (all preserved from v1 signals.py path):
+        - order_manager is None → skip (test/paper mode)
+        - dry_run enforced inside OrderManager.open_position
+        - mainnet_guard enforced inside BinanceClient
+        - SLTooFarError / InsufficientTPDistanceError from calculators → setup rejected
+        - size <= 0 → skip
+        - Position guard / max_notional / breaker enforced inside OrderManager
+
+        Returns the new Position (or None on rejection).
+
+        DELIBERATE SIMPLIFICATIONS for PR #S3c-2 (follow-up PRs):
+        - ATR proxy (max(entry*0.01, zone_width)) instead of real ATR from df_15m
+        - Empty htf_swings/htf_fvgs/eq_levels → RR_PROJECTION TP fallback
+        Both produce conservative SL/TP under-estimates; real wiring is a
+        post-S3c-2 cleanup PR alongside ATR/HTF data threading.
+        """
+        if self.order_manager is None:
+            # Test/paper mode — no order placement
+            return None
+
+        from engine.smc_v2.sl_calc import calc_sl
+        from engine.smc_v2.tp_calc import calc_tp_targets
+        from engine.smc_v2.exceptions import SLTooFarError, InsufficientTPDistanceError
+
+        safety_cfg = self.config.get("safety", {})
+        risk_cfg = self.config.get("risk", {})
+
+        # ATR proxy — see DELIBERATE SIMPLIFICATIONS in docstring.
+        atr_15m = max(entry_price * 0.01,
+                      abs(cand.target_zone.high - cand.target_zone.low))
+
+        try:
+            sl = calc_sl(
+                direction=cand.direction,
+                entry_price=entry_price,
+                zone=cand.target_zone,
+                htf_swing_anchor=cand.htf_swing_anchor,
+                atr_15m=atr_15m,
+                config=type("SafetyConfigLike", (), {
+                    "sl_atr_buffer": safety_cfg.get("sl_atr_buffer", 0.5),
+                    "min_sl_atr": safety_cfg.get("min_sl_atr", 0.5),
+                    "max_sl_atr": safety_cfg.get("max_sl_atr", 5.0),
+                }),
+            )
+        except SLTooFarError as e:
+            log.info(f"[v2 reject] {cand.symbol}: sl_too_far ({e})")
+            return None
+
+        try:
+            tp1, tp2, tp_tags = calc_tp_targets(
+                direction=cand.direction,
+                entry_price=entry_price,
+                sl_price=sl,
+                htf_swings={"swing_highs": [], "swing_lows": []},
+                htf_fvgs=[],
+                eq_levels=[],
+                config=type("RiskConfigLike", (), {
+                    "min_rr": risk_cfg.get("min_rr", 1.8),
+                    "fib_ext": self.config.get("fibonacci", {}).get("ext_tp2", 1.618),
+                }),
+            )
+        except InsufficientTPDistanceError as e:
+            log.info(f"[v2 reject] {cand.symbol}: tp1_too_close ({e})")
+            return None
+
+        # tp2 may be None (spec §4.2 single-target mode); current OrderManager
+        # requires both. Use tp1 as fallback until lifecycle change (PR #S5).
+        tp2_eff = tp2 if tp2 is not None else tp1
+
+        # Position size via existing risk helper
+        try:
+            from risk import calc_position_size
+            balance = (self.order_manager.client.get_balance()
+                       if self.order_manager.client else 10000.0)
+            size = calc_position_size(
+                balance=balance,
+                risk_pct=risk_cfg.get("risk_per_trade_pct", 0.75),
+                entry=entry_price,
+                sl=sl,
+            )
+        except Exception as e:
+            log.warning(f"[v2 reject] {cand.symbol}: sizing failed ({e})")
+            return None
+
+        if size <= 0:
+            log.info(f"[v2 reject] {cand.symbol}: size <= 0 ({size})")
+            return None
+
+        log.info(
+            f"[v2] {cand.direction} {cand.symbol} entry={entry_price:.4f} "
+            f"sl={sl:.4f} tp1={tp1:.4f} tp2={tp2_eff:.4f} size={size:.6f} "
+            f"(zone={cand.target_zone.source}, tp1={tp_tags.get('tp1_source')}, "
+            f"tp2={tp_tags.get('tp2_source')})"
+        )
+
+        return self.order_manager.open_position(
+            symbol=cand.symbol,
+            direction=cand.direction,
+            size=size,
+            entry=entry_price,
+            sl=sl,
+            tp1=tp1,
+            tp2=tp2_eff,
+        )
 
     @staticmethod
     def _build_safety_section(breaker, regime, stale, warnings) -> str:
