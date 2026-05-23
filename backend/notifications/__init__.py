@@ -110,17 +110,23 @@ class TelegramNotifier:
         entry: float,
         sl: float,
         tp1: float,
-        tp2: float,
+        tp2: Optional[float],
         size: float,
     ) -> None:
-        """Fire-and-forget notification for a freshly opened position."""
+        """Fire-and-forget notification for a freshly opened position.
+
+        SMC v2 single-target setups (PR #S5) pass tp2=None; format that as
+        a `NONE` marker rather than crashing with TypeError. v1 numeric path
+        unchanged.
+        """
         if not self.enabled:
             return
         emoji = "🟢" if direction == "LONG" else "🔴"
+        tp2_str = f"`{tp2:.4f}`" if tp2 is not None else "`NONE` (single-target)"
         text = (
             f"{emoji} *Yeni pozisyon: {symbol} {direction}*\n"
             f"Entry: `{entry:.4f}`  Size: `{size}`\n"
-            f"SL: `{sl:.4f}`  TP1: `{tp1:.4f}`  TP2: `{tp2:.4f}`"
+            f"SL: `{sl:.4f}`  TP1: `{tp1:.4f}`  TP2: {tp2_str}"
         )
         self.send(text)
 
