@@ -87,6 +87,19 @@ class OTE:
     direction: str = "BULL"
 
 
+@dataclass
+class EqLevel:
+    """Clustered equal high / low (liquidity pool).
+
+    Used by smc_v2.tp_calc.calc_tp_targets as the primary TP1 source.
+    Created by SMCEngine.liquidity_pools() (v2) — distinct from the
+    dict-based output of equal_levels() which is kept for v1 callers.
+    """
+    price: float
+    kind: str          # "EQH" (equal highs) | "EQL" (equal lows)
+    touches: int = 2   # number of swings clustered (minimum 2)
+
+
 # ═══════════════════════════════════════════════
 # ENGINE
 # ═══════════════════════════════════════════════
@@ -291,6 +304,54 @@ class SMCEngine:
                     out.append({"price": (swings[i].price + swings[j].price) / 2,
                                 "type": "EQH" if swings[i].is_high else "EQL"})
         return out
+
+    def liquidity_pools(self, swings_high: list, swings_low: list) -> List["EqLevel"]:
+        """Cluster equal highs / lows into typed EqLevel records (v2).
+
+        Distinct from equal_levels() — that one returns dicts for legacy v1
+        callers and only considers adjacent pairs. liquidity_pools collapses
+        ALL pairwise-equal swings into single clusters with a touch count,
+        which is what tp_calc needs to rank liquidity targets by strength.
+
+        Args:
+            swings_high: list of Swing with is_high=True
+            swings_low:  list of Swing with is_high=False
+
+        Returns:
+            List of EqLevel sorted by price ascending. Each cluster contains
+            >= 2 touches by definition (singletons are not liquidity).
+        """
+        def _cluster(swings: list, kind: str) -> List["EqLevel"]:
+            if len(swings) < 2:
+                return []
+            # Greedy linear pass over price-sorted swings: each swing joins
+            # the first cluster whose running average is within eq_thr. Ties
+            # (a swing equidistant from two clusters) are broken by first-match
+            # in the price-ascending order — deterministic and stable.
+            sorted_swings = sorted(swings, key=lambda s: s.price)
+            clusters: List[List[Swing]] = []
+            for sw in sorted_swings:
+                placed = False
+                for cl in clusters:
+                    avg = sum(x.price for x in cl) / len(cl)
+                    if abs(sw.price - avg) / max(avg, 1e-10) <= self.eq_thr:
+                        cl.append(sw)
+                        placed = True
+                        break
+                if not placed:
+                    clusters.append([sw])
+            return [
+                EqLevel(
+                    price=sum(x.price for x in cl) / len(cl),
+                    kind=kind,
+                    touches=len(cl),
+                )
+                for cl in clusters
+                if len(cl) >= 2
+            ]
+
+        out = _cluster(swings_high, "EQH") + _cluster(swings_low, "EQL")
+        return sorted(out, key=lambda e: e.price)
 
     # ── Full Single-TF Analysis ──
 
