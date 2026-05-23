@@ -129,3 +129,44 @@ def test_partial_close_single_target_non_tp1_reason_unchanged():
     lc.partial_close(p, 103.0, 0.3, reason="WEAKNESS")
     assert p.is_open  # 70% remaining
     assert p.tp1_hit is False
+
+
+def test_on_tick_skips_tp2_check_when_single_target():
+    """on_tick TP2 check must be guarded — `price >= None` raises TypeError.
+
+    Code-review test-gap closure: ensures the `pos.tp2 is not None` guard at
+    engine/lifecycle.py:on_tick TP2 branch holds for single-target Positions.
+    """
+    lc = PositionLifecycle()
+    p = lc.open_position(
+        "ETH/USDT", "LONG", 100.0, 1.0, sl=95.0, tp1=110.0, tp2=None,
+    )
+    # Price between sl and tp1 — must traverse on_tick without exception.
+    lc.on_tick({"ETH/USDT": 105.0})
+    assert p.is_open
+
+
+def test_on_tick_single_target_sl_still_fires():
+    """SL must still fire on a single-target Position (no None comparison risk on sl)."""
+    lc = PositionLifecycle()
+    p = lc.open_position(
+        "ETH/USDT", "LONG", 100.0, 1.0, sl=95.0, tp1=110.0, tp2=None,
+    )
+    lc.on_tick({"ETH/USDT": 94.0})  # below SL
+    assert not p.is_open
+    assert p.exits[-1].reason == "SL"
+
+
+def test_on_tick_single_target_tp1_triggers_full_close():
+    """TP1 fill on single-target Position triggers full close via partial_close
+    single-target branch (not 50% + BE)."""
+    lc = PositionLifecycle()
+    p = lc.open_position(
+        "ETH/USDT", "LONG", 100.0, 1.0, sl=95.0, tp1=110.0, tp2=None,
+    )
+    lc.on_tick({"ETH/USDT": 110.0})  # hit TP1
+    assert not p.is_open
+    assert p.tp1_hit is True
+    assert len(p.exits) == 1
+    assert p.exits[0].reason == "TP1"
+    assert p.sl_moved_to_be is False

@@ -66,9 +66,9 @@ async def test_record_trade_open_telemetry_kwargs_default_none():
         tp1=110.0, tp2=120.0, size=1.0,
     )
     args = conn.fetchrow.call_args[0][1:]
-    # The 4 telemetry args should all be None — they appear at the end.
-    # Count Nones >= 4 (trace_id/bar_ts_ms may also be None in this v1 call).
-    assert sum(1 for a in args if a is None) >= 4
+    # The 4 telemetry args are the last 4 positional params (after $11=bar_ts_ms).
+    # Tight position-based assertion catches off-by-one in the SQL VALUES tuple.
+    assert args[-4:] == (None, None, None, None)
 
 
 @pytest.mark.asyncio
