@@ -975,6 +975,30 @@ class SafeOrchestrator:
             report_md=report_md, actions_taken=actions,
         )
 
+    # ─────────────────────────────────────────────────────────────
+    # SMC v2 scaffolding (inert default, opt-in via setup_state_store)
+    # ─────────────────────────────────────────────────────────────
+
+    def confirm_entry(
+        self,
+        df_15m,
+        zone: "ZoneSpec",
+        direction: str,
+        since_ts: int,
+    ) -> tuple:
+        """LTF entry confirmation for SMC v2 setups — placeholder.
+
+        Spec §4.1 confirmation.py: look at 15m bars since `since_ts` that are
+        inside `zone`; return (True, entry_price) when a counter-direction
+        CHoCH or engulfing close confirms; else (False, None).
+
+        **PR #S2b ships the stub returning (False, None).**
+        Real implementation lands in PR #S3 (`engine/smc_v2/confirmation.py`).
+        The stub exists so `_advance_setup_state_tick` can call it without
+        AttributeError in tests.
+        """
+        return (False, None)
+
     @staticmethod
     def _build_safety_section(breaker, regime, stale, warnings) -> str:
         lines = ["## Güvenlik Durumu", ""]

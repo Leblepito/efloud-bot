@@ -59,3 +59,34 @@ class TestSetupStateStoreParameter:
             setup_state_store=store,
         )
         assert orc.setup_state_store is store
+
+
+class TestConfirmEntryPlaceholder:
+    """confirm_entry is a stub in PR #S2b — always returns (False, None).
+    Real LTF CHoCH/engulfing detection lands in PR #S3.
+
+    The stub MUST exist so _advance_setup_state_tick can call it without
+    AttributeError. Tests pin the contract: signature, return type, no
+    side effects.
+    """
+
+    def test_returns_false_none_tuple(self, minimal_config, tmp_path):
+        from engine.smc_v2.zones import ZoneSpec
+        orc = SafeOrchestrator(minimal_config, state_dir=str(tmp_path), persist=False)
+        result = orc.confirm_entry(
+            df_15m=MagicMock(),
+            zone=ZoneSpec(low=100.0, high=110.0, source="HTF_FVG"),
+            direction="SHORT",
+            since_ts=1700000000000,
+        )
+        assert result == (False, None)
+
+    def test_does_not_mutate_inputs(self, minimal_config, tmp_path):
+        from engine.smc_v2.zones import ZoneSpec
+        orc = SafeOrchestrator(minimal_config, state_dir=str(tmp_path), persist=False)
+        zone = ZoneSpec(low=100.0, high=110.0, source="HTF_FVG")
+        orig_low, orig_high = zone.low, zone.high
+        orc.confirm_entry(df_15m=MagicMock(), zone=zone, direction="LONG",
+                          since_ts=1700000000000)
+        assert zone.low == orig_low
+        assert zone.high == orig_high
