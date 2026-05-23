@@ -1247,6 +1247,17 @@ class SafeOrchestrator:
             # Test/paper mode — no order placement
             return None
 
+        # Symbol whitelist gate (PR #S6): only fire for symbols explicitly
+        # opted-in via engine.smc_v2_symbols. ["*"] = all; [] (default) = none.
+        # First gate so non-whitelisted symbols don't incur cost of breaker /
+        # tp_calc / sizing. v2 candidate state machine still runs upstream
+        # (consumes the setup); only execution is gated.
+        engine_cfg = self.config.get("engine", {})
+        whitelist = engine_cfg.get("smc_v2_symbols", [])
+        if "*" not in whitelist and cand.symbol not in whitelist:
+            log.info(f"[v2 reject] {cand.symbol}: not in smc_v2_symbols whitelist")
+            return None
+
         # Breaker gate (MUST match v1 — breaker.HALTED must block v2 too)
         try:
             breaker_status = self.breaker.check(now=None)
