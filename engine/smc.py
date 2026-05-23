@@ -87,6 +87,19 @@ class OTE:
     direction: str = "BULL"
 
 
+@dataclass
+class EqLevel:
+    """Clustered equal high / low (liquidity pool).
+
+    Used by smc_v2.tp_calc.calc_tp_targets as the primary TP1 source.
+    Created by SMCEngine.liquidity_pools() (v2) — distinct from the
+    dict-based output of equal_levels() which is kept for v1 callers.
+    """
+    price: float
+    kind: str          # "EQH" (equal highs) | "EQL" (equal lows)
+    touches: int = 2   # number of swings clustered (minimum 2)
+
+
 # ═══════════════════════════════════════════════
 # ENGINE
 # ═══════════════════════════════════════════════
