@@ -972,6 +972,15 @@ class SafeOrchestrator:
                                                        stale, warnings)
         report_md = report_md.replace("## Öneri", safety_section + "\n## Öneri")
 
+        # SMC v2 — persist setup state if wired (gated, inert when None).
+        # Save errors logged but do NOT abort the cycle — persistence failure
+        # must not break trading.
+        if self.setup_state_store is not None:
+            try:
+                self.setup_state_store.save()
+            except Exception as e:
+                log.error(f"setup_state save failed (continuing cycle): {e}")
+
         return SafeCycleResult(
             symbol=symbol, timeframe=tf["entry"],
             current_price=current_price, htf_bias=htf_bias,

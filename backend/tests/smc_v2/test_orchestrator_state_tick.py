@@ -342,3 +342,68 @@ class TestRunCycleAdvanceCall:
             )
             # When store is None, run_cycle must NOT call the advance method
             assert spy.call_count == 0
+
+
+class TestRunCycleSaveState:
+    """After run_cycle advances candidates, the orchestrator MUST call
+    store.save() so state survives restart. Inert when store is None."""
+
+    def _make_df(self, length=50, base_price=95000.0):
+        import pandas as pd
+        from datetime import datetime, timezone
+        idx = pd.date_range(
+            end=datetime.now(timezone.utc), periods=length, freq="15min", tz="UTC",
+        )
+        return pd.DataFrame({
+            "open": [base_price] * length,
+            "high": [base_price * 1.001] * length,
+            "low": [base_price * 0.999] * length,
+            "close": [base_price] * length,
+            "volume": [1000.0] * length,
+        }, index=idx)
+
+    def test_save_called_when_store_wired(self, minimal_config, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            minimal_config, state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, freshness_check=False,
+        )
+        df = self._make_df()
+        with patch.object(store, "save") as spy:
+            orc.run_cycle(
+                symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+                balance=10000.0,
+            )
+            assert spy.call_count == 1
+
+    def test_save_not_called_when_store_none(self, minimal_config, tmp_path):
+        """Inert default: no save attempt (no AttributeError, no overhead)."""
+        orc = SafeOrchestrator(
+            minimal_config, state_dir=str(tmp_path), persist=False,
+            freshness_check=False,
+        )
+        df = self._make_df()
+        # Should complete without AttributeError (no store.save attempt)
+        orc.run_cycle(
+            symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+            balance=10000.0,
+        )
+
+    def test_save_called_even_on_no_candidates(self, minimal_config, tmp_path):
+        """Empty store still saves (writes empty file) — operator can confirm
+        the orchestrator is actively persisting."""
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        # No candidates added
+        orc = SafeOrchestrator(
+            minimal_config, state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, freshness_check=False,
+        )
+        df = self._make_df()
+        with patch.object(store, "save") as spy:
+            orc.run_cycle(
+                symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+                balance=10000.0,
+            )
+            assert spy.call_count == 1
