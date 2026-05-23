@@ -47,8 +47,15 @@ class Database:
         self, symbol: str, direction: str, entry: float, sl: float,
         tp1: float, tp2: float, size: float, confluence: Optional[int] = None,
         binance_order_id: Optional[str] = None,
-        trace_id: Optional[str] = None,        # NEW
-        bar_ts_ms: Optional[int] = None,        # NEW
+        trace_id: Optional[str] = None,        # PR #57
+        bar_ts_ms: Optional[int] = None,        # PR #57
+        *,
+        # SMC v2 telemetry (PR #S5) — keyword-only, default None so v1 callers
+        # unaffected. Migration 007 added these as nullable columns.
+        entry_setup_source: Optional[str] = None,
+        tp1_target_type: Optional[str] = None,
+        tp2_target_type: Optional[str] = None,
+        bars_to_pullback: Optional[int] = None,
     ) -> Optional[str]:
         """Insert trade with no exit yet. Returns trade UUID."""
         if not self.pool:
@@ -58,12 +65,17 @@ class Database:
                 row = await conn.fetchrow(
                     """
                     INSERT INTO trades (symbol, direction, entry, sl, tp1, tp2, size,
-                                        confluence, binance_order_id, trace_id, bar_ts_ms)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                                        confluence, binance_order_id, trace_id, bar_ts_ms,
+                                        entry_setup_source, tp1_target_type,
+                                        tp2_target_type, bars_to_pullback)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                            $12, $13, $14, $15)
                     RETURNING id::text
                     """,
                     symbol, direction, entry, sl, tp1, tp2, size,
                     confluence, binance_order_id, trace_id, bar_ts_ms,
+                    entry_setup_source, tp1_target_type,
+                    tp2_target_type, bars_to_pullback,
                 )
                 return row["id"] if row else None
         except Exception as e:
@@ -110,7 +122,9 @@ class Database:
                     """
                     SELECT id::text, symbol, direction, entry, exit, sl, tp1, tp2,
                            size, pnl_usdt, pnl_pct, reason, opened_at, closed_at,
-                           confluence
+                           confluence,
+                           entry_setup_source, tp1_target_type,
+                           tp2_target_type, bars_to_pullback
                     FROM trades
                     ORDER BY opened_at DESC LIMIT $1
                     """,
@@ -137,7 +151,9 @@ class Database:
                     """
                     SELECT id::text, symbol, direction, entry, exit, sl, tp1, tp2,
                            size, pnl_usdt, pnl_pct, reason, opened_at, closed_at,
-                           confluence
+                           confluence,
+                           entry_setup_source, tp1_target_type,
+                           tp2_target_type, bars_to_pullback
                     FROM trades
                     WHERE closed_at IS NOT NULL AND closed_at >= $1
                     ORDER BY closed_at DESC
