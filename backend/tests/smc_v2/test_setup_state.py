@@ -130,3 +130,79 @@ class TestSetupStateStoreRoundTrip:
         store.add(self._make_candidate())
         store.save()
         assert nested_path.exists()
+
+
+class TestPruning:
+    """Persisted file MUST contain only AWAITING_PULLBACK and IN_ZONE.
+    CONFIRMED and EXPIRED are dropped from the in-memory list before save
+    and never written to disk.
+    """
+
+    def _make(self, symbol, state, bars=0):
+        from engine.smc_v2.setup_state import SetupCandidate
+        return SetupCandidate(
+            symbol=symbol, direction="SHORT", trigger_bar_ts=1700000000000,
+            trigger_price=100.0, htf_bias="BEAR",
+            target_zone=ZoneSpec(low=105.0, high=110.0, source="HTF_FVG"),
+            htf_swing_anchor=115.0, bars_waited=bars,
+            state=state, confluence_score=70, reasons=[],
+        )
+
+    def test_save_prunes_confirmed_and_expired(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        store.add(self._make("BTC/USDT", "AWAITING_PULLBACK"))
+        # Manually inject CONFIRMED + EXPIRED (real orchestrator would set state)
+        store.candidates.append(self._make("ETH/USDT", "CONFIRMED"))
+        store.candidates.append(self._make("SOL/USDT", "EXPIRED"))
+        store.add(self._make("LINK/USDT", "IN_ZONE"))
+        store.save()
+
+        # In-memory list pruned too — invariant after save
+        assert len(store.candidates) == 2
+        states = sorted(c.state for c in store.candidates)
+        assert states == ["AWAITING_PULLBACK", "IN_ZONE"]
+
+        # Reload from disk: only the two active ones present
+        store2 = SetupStateStore(tmp_path / "state.json")
+        store2.load()
+        assert len(store2.candidates) == 2
+        symbols = sorted(c.symbol for c in store2.candidates)
+        assert symbols == ["BTC/USDT", "LINK/USDT"]
+
+    def test_load_drops_terminal_state_entries(self, tmp_path):
+        """If a legacy/corrupted file contains terminal-state entries,
+        they are dropped on load with a warning."""
+        from engine.smc_v2.setup_state import SetupStateStore, SCHEMA_VERSION
+        import json
+        # Hand-craft a file with terminal entries (simulating legacy data)
+        payload = {
+            "version": SCHEMA_VERSION,
+            "candidates": [
+                {
+                    "symbol": "BTC/USDT", "direction": "SHORT",
+                    "trigger_bar_ts": 1700000000000, "trigger_price": 100.0,
+                    "htf_bias": "BEAR",
+                    "target_zone": {"low": 105.0, "high": 110.0, "source": "HTF_FVG"},
+                    "htf_swing_anchor": 115.0, "bars_waited": 0,
+                    "state": "CONFIRMED", "confluence_score": 70, "reasons": [],
+                },
+                {
+                    "symbol": "ETH/USDT", "direction": "LONG",
+                    "trigger_bar_ts": 1700000000000, "trigger_price": 2400.0,
+                    "htf_bias": "BULL",
+                    "target_zone": {"low": 2380.0, "high": 2390.0, "source": "OTE"},
+                    "htf_swing_anchor": 2350.0, "bars_waited": 2,
+                    "state": "IN_ZONE", "confluence_score": 60, "reasons": [],
+                },
+            ],
+        }
+        path = tmp_path / "state.json"
+        path.write_text(json.dumps(payload))
+
+        store = SetupStateStore(path)
+        store.load()
+        # Only the IN_ZONE candidate survives
+        assert len(store.candidates) == 1
+        assert store.candidates[0].symbol == "ETH/USDT"
+        assert store.candidates[0].state == "IN_ZONE"
