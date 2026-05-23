@@ -203,7 +203,10 @@ class Position:
     entry: float
     sl: float
     tp1: float
-    tp2: float
+    # tp2 = None signals single-target mode (SMC v2, PR #S5.5). v1 always sets
+    # a numeric tp2; v2 single-target setups set None so lifecycle.partial_close
+    # TP1 branch full-closes and orchestrator cancels orphan SL.
+    tp2: Optional[float]
     size: float             # Kontrat sayısı (toplam — TP1 hit'ten sonra yarısı remaining)
     order_id: str = ""
     sl_order_id: str = ""
@@ -386,7 +389,8 @@ class OrderManager:
             return False
 
     def open_position(self, symbol: str, direction: str, size: float,
-                      entry: float, sl: float, tp1: float, tp2: float,
+                      entry: float, sl: float, tp1: float,
+                      tp2: Optional[float],
                       trace_id: Optional[str] = None,
                       bar_ts_ms: Optional[int] = None,
                       *,
@@ -407,11 +411,15 @@ class OrderManager:
         """
         side = "buy" if direction == "LONG" else "sell"
         reverse_side = "sell" if direction == "LONG" else "buy"
-        half_size = size / 2
+        # Single-target mode (tp2=None) gives TP1 the full size; no split.
+        is_single_target = tp2 is None
+        tp1_size = size if is_single_target else size / 2
+        tp2_size = 0.0 if is_single_target else size - tp1_size
 
         if self.dry_run:
+            tp2_str = "NONE(single-target)" if tp2 is None else f"{tp2:.2f}"
             log.info(f"[DRY] {direction} {symbol} size={size:.4f} @ {entry:.2f} | "
-                     f"SL={sl:.2f} TP1={tp1:.2f} TP2={tp2:.2f}")
+                     f"SL={sl:.2f} TP1={tp1:.2f} TP2={tp2_str}")
             pos = Position(symbol, direction, entry, sl, tp1, tp2, size,
                            opened_at=pd.Timestamp.now(tz="UTC").isoformat(),
                            trace_id=trace_id, bar_ts_ms=bar_ts_ms,
@@ -482,16 +490,16 @@ class OrderManager:
         tp1_oid = ""
         tp2_oid = ""
 
-        # 3) Server-side TP1 — TAKE_PROFIT_MARKET, yarı boyut, reduceOnly. If
-        # TP placement fails after SL succeeds, keep local tracking rather than
-        # orphaning a protected exchange position.
+        # 3) Server-side TP1 — TAKE_PROFIT_MARKET, half (or full for single-target),
+        # reduceOnly. If TP placement fails after SL succeeds, keep local tracking
+        # rather than orphaning a protected exchange position.
         try:
             tp1_order = self.client.exchange.create_order(
-                ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, half_size,
+                ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, tp1_size,
                 params={"stopPrice": tp1, "reduceOnly": True}
             )
             tp1_oid = tp1_order.get("id", "") if isinstance(tp1_order, dict) else ""
-            log.info(f"  ↳ TP1 @ {tp1:.4f} (size={half_size:.4f}) | order_id={tp1_oid}")
+            log.info(f"  ↳ TP1 @ {tp1:.4f} (size={tp1_size:.4f}) | order_id={tp1_oid}")
         except Exception as e:
             log.warning(
                 "order_manager.tp_placement_failed_after_sl: %s %s tp_leg=TP1 "
@@ -531,35 +539,40 @@ class OrderManager:
 
         # 4) Server-side TP2 — kalan yarı. Same policy as TP1: SL-protected
         # positions must remain tracked even when optional TP placement fails.
-        try:
-            tp2_order = self.client.exchange.create_order(
-                ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, size - half_size,
-                params={"stopPrice": tp2, "reduceOnly": True}
-            )
-            tp2_oid = tp2_order.get("id", "") if isinstance(tp2_order, dict) else ""
-            log.info(f"  ↳ TP2 @ {tp2:.4f} (size={size - half_size:.4f}) | order_id={tp2_oid}")
-        except Exception as e:
-            log.warning(
-                "order_manager.tp_placement_failed_after_sl: %s %s tp_leg=TP2 "
-                "entry_order_id=%s sl_order_id=%s tp1_order_id=%s error=%s",
-                symbol,
-                direction,
-                oid,
-                sl_oid,
-                tp1_oid,
-                e,
-                exc_info=True,
-                extra={
-                    "event": "order_manager.tp_placement_failed_after_sl",
-                    "symbol": symbol,
-                    "direction": direction,
-                    "tp_leg": "TP2",
-                    "entry_order_id": oid,
-                    "sl_order_id": sl_oid,
-                    "tp1_order_id": tp1_oid,
-                    "error": str(e),
-                },
-            )
+        # Single-target mode (tp2=None): skip TP2 placement entirely.
+        # tp2_oid stays "" so reconcile / cleanup helper find no order to cancel.
+        if tp2 is None:
+            log.info("  ↳ TP2 skipped (single-target setup)")
+        else:
+            try:
+                tp2_order = self.client.exchange.create_order(
+                    ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, tp2_size,
+                    params={"stopPrice": tp2, "reduceOnly": True}
+                )
+                tp2_oid = tp2_order.get("id", "") if isinstance(tp2_order, dict) else ""
+                log.info(f"  ↳ TP2 @ {tp2:.4f} (size={tp2_size:.4f}) | order_id={tp2_oid}")
+            except Exception as e:
+                log.warning(
+                    "order_manager.tp_placement_failed_after_sl: %s %s tp_leg=TP2 "
+                    "entry_order_id=%s sl_order_id=%s tp1_order_id=%s error=%s",
+                    symbol,
+                    direction,
+                    oid,
+                    sl_oid,
+                    tp1_oid,
+                    e,
+                    exc_info=True,
+                    extra={
+                        "event": "order_manager.tp_placement_failed_after_sl",
+                        "symbol": symbol,
+                        "direction": direction,
+                        "tp_leg": "TP2",
+                        "entry_order_id": oid,
+                        "sl_order_id": sl_oid,
+                        "tp1_order_id": tp1_oid,
+                        "error": str(e),
+                    },
+                )
 
         pos = Position(
             symbol=symbol, direction=direction, entry=actual_entry,
@@ -771,12 +784,26 @@ class OrderManager:
         return result
 
     def _move_sl_to_breakeven(self, pos: Position) -> None:
-        """TP1 hit sonrası SL'i entry'ye kaydır (server-side cancel + new order)."""
+        """TP1 hit sonrası SL'i entry'ye kaydır (server-side cancel + new order).
+
+        Single-target branch (SMC v2, PR #S5.5): when pos.tp2 is None, the
+        lifecycle has already done a full close on TP1 (no remaining size to
+        protect). Skip the BE move entirely and instead cancel orphan SL/TP2
+        reduceOnly orders on the exchange to prevent them lingering forever.
+        Inert under v1 (v1 always sets numeric tp2).
+        """
         if self.dry_run:
             pos.sl = pos.entry
             return
 
         ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
+
+        if pos.tp2 is None:
+            # Single-target mode: full close already done by lifecycle.
+            # Cancel orphan SL (TP1 already filled; TP2 was never placed).
+            self._cancel_position_siblings(pos, ccxt_sym, reason="TP1_FULL_CLOSE")
+            return
+
         try:
             if pos.sl_order_id:
                 try:
@@ -909,8 +936,11 @@ class OrderManager:
                 self._fallback_close(pos, price, "SL_POLL")
                 continue
 
-            # TP2 fallback
-            if (is_long and price >= pos.tp2) or (not is_long and price <= pos.tp2):
+            # TP2 fallback — guard against single-target Position (tp2=None).
+            # Mirrors engine/lifecycle.py:on_tick TP2 guard added in PR #S5.
+            if pos.tp2 is not None and (
+                (is_long and price >= pos.tp2) or (not is_long and price <= pos.tp2)
+            ):
                 log.warning(f"Polling TP2 hit detected for {pos.symbol} (server-side missed?)")
                 self._fallback_close(pos, price, "TP2_POLL")
 

@@ -131,7 +131,9 @@ class ReportEngine:
                     lines.append(f"  - Size: {p.remaining_size:.4f} / {p.total_size_entered:.4f} "
                                  f"({(p.remaining_size/p.total_size_entered)*100:.0f}% remaining)")
                     lines.append(f"  - Unrealized PnL: ${pnl:+.2f} ({pnl_pct:+.2f}%){realized}")
-                    lines.append(f"  - SL: {p.sl:,.2f} | TP1: {p.tp1:,.2f} | TP2: {p.tp2:,.2f}")
+                    # tp2=None is a valid SMC v2 single-target marker (PR #S5.5).
+                    tp2_str = "NONE(single-target)" if p.tp2 is None else f"{p.tp2:,.2f}"
+                    lines.append(f"  - SL: {p.sl:,.2f} | TP1: {p.tp1:,.2f} | TP2: {tp2_str}")
                     if p.sl_moved_to_be:
                         lines.append(f"  - 🛡 SL at break-even")
                     if p.hedge_id:

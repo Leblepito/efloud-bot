@@ -26,7 +26,9 @@ def serialize_trade(p) -> dict:
         # Zone fields — original SL/TP1/TP2 set at entry (not mutated post-open)
         "sl": float(initial_sl),
         "tp1": float(p.tp1),
-        "tp2": float(p.tp2),
+        # tp2=None is a valid SMC v2 single-target marker (PR #S5.5).
+        # JSON serializes None as null; downstream consumers must handle.
+        "tp2": float(p.tp2) if p.tp2 is not None else None,
         "sl_moved_to_be": bool(getattr(p, "sl_moved_to_be", False)),
         # MAE/MFE — populated by per-bar update_excursion calls in backtest engine
         "mae_pct": float(getattr(p, "mae_pct", 0.0)),
