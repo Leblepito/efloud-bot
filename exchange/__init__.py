@@ -683,6 +683,52 @@ class OrderManager:
         self._persist()
         return closed_now
 
+    def _cancel_position_siblings(
+        self,
+        pos: "Position",
+        ccxt_sym: str,
+        reason: str,
+    ) -> dict:
+        """Best-effort cancel SL + TP1 + TP2 reduceOnly orders for a position.
+
+        Called from every full-close path (reconcile, fallback, kill switch).
+        Each cancel is independent: failure of one does not block the others.
+
+        Args:
+            pos: the Position whose sibling orders should be cancelled
+            ccxt_sym: CCXT futures symbol form (e.g. 'BTC/USDT:USDT')
+            reason: short tag for the log line (e.g. 'RECONCILED', 'FALLBACK_CLOSE')
+
+        Returns:
+            dict with keys 'cancelled', 'failed', 'missing' — each a list of
+            labels ('SL', 'TP1', 'TP2'). Useful for assertions and telemetry.
+        """
+        # `ccxt` is already imported at module scope (exchange/__init__.py:3)
+        result = {"cancelled": [], "failed": [], "missing": []}
+        for label, oid in [
+            ("SL", pos.sl_order_id),
+            ("TP1", pos.tp1_order_id),
+            ("TP2", pos.tp2_order_id),
+        ]:
+            if not oid:
+                result["missing"].append(label)
+                continue
+            try:
+                self.client.exchange.cancel_order(oid, ccxt_sym)
+                result["cancelled"].append(label)
+            except ccxt.OrderNotFound:
+                result["missing"].append(label)
+            except Exception as e:
+                log.warning(
+                    f"[cleanup] {pos.symbol}: failed to cancel {label} ({oid}): {e}"
+                )
+                result["failed"].append(label)
+        cancelled_str = "+".join(result["cancelled"]) or "none"
+        log.info(
+            f"[cleanup] {pos.symbol}: cancelled {cancelled_str} (reason={reason})"
+        )
+        return result
+
     def _move_sl_to_breakeven(self, pos: Position) -> None:
         """TP1 hit sonrası SL'i entry'ye kaydır (server-side cancel + new order)."""
         if self.dry_run:
