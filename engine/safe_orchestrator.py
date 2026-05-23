@@ -531,6 +531,56 @@ class SafeOrchestrator:
                 df_15m=df_entry,
             )
 
+            # SMC v2 trigger phase: detect new CHoCH → emit SetupCandidates.
+            # Per spec §4.3 step 3. Runs AFTER advance (existing candidates
+            # progress first) and BEFORE save (new candidates persisted).
+            #
+            # Inputs derived from SMC engine analyze() result and ltf.structure().
+            # For PR #S3c-1 we compute them inline here. Future PR may
+            # refactor to share with the v1 signals path.
+            htf_analysis = self.smc.analyze(df_htf)
+            ltf_swings_h, ltf_swings_l = self.smc.swings(df_entry)
+            ltf_brks = self.smc.structure(df_entry, ltf_swings_h, ltf_swings_l)
+
+            # Build htf_bars from df_htf rows (ordinal axis for swing_anchor)
+            from dataclasses import dataclass as _dc
+
+            @_dc
+            class _HtfBar:
+                ordinal: int
+                high: float
+                low: float
+
+            htf_bars = [
+                _HtfBar(ordinal=i, high=float(row["high"]), low=float(row["low"]))
+                for i, (_, row) in enumerate(df_htf.iterrows())
+            ]
+
+            # Recency cutoff: only consider LTF breaks in last N bars
+            recency = self.config.get("risk", {}).get("recency_bars", 40)
+            ltf_trigger_idx_min = max(0, len(df_entry) - 1 - recency)
+
+            # OTE band: from htf_analysis if available, else degenerate
+            ote_obj = htf_analysis.get("ote")
+            if ote_obj is not None:
+                ote_low, ote_high = min(ote_obj.bot, ote_obj.top), max(ote_obj.bot, ote_obj.top)
+            else:
+                ote_low, ote_high = 0.0, 0.0
+
+            self._emit_setup_candidates(
+                symbol=symbol,
+                htf_bias=htf_analysis.get("trend", "UNDEF"),
+                ltf_structure_breaks=ltf_brks,
+                htf_swings={
+                    "swing_highs": htf_analysis.get("swing_highs", []),
+                    "swing_lows": htf_analysis.get("swing_lows", []),
+                },
+                htf_bars=htf_bars,
+                htf_fvgs=htf_analysis.get("active_fvgs", []),
+                ote_band=(ote_low, ote_high),
+                ltf_trigger_idx_min=ltf_trigger_idx_min,
+            )
+
         # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
         # Update excursion for every open position in this symbol before any
         # downstream decision (breaker, regime, close, open). MAE/MFE flow

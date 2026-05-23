@@ -249,3 +249,58 @@ class TestTriggerPhaseInert:
         )
         # Cap was 1; pre-existing 1 candidate → new one dropped
         assert len(store.candidates) == 1
+
+
+class TestRunCycleTriggerPhase:
+    """run_cycle invokes _emit_setup_candidates after advance, before save."""
+
+    def _make_df(self, length=50, base_price=95000.0):
+        import pandas as pd
+        from datetime import datetime, timezone
+        idx = pd.date_range(
+            end=datetime.now(timezone.utc), periods=length, freq="15min", tz="UTC",
+        )
+        return pd.DataFrame({
+            "open": [base_price] * length,
+            "high": [base_price * 1.001] * length,
+            "low": [base_price * 0.999] * length,
+            "close": [base_price] * length,
+            "volume": [1000.0] * length,
+        }, index=idx)
+
+    def test_run_cycle_calls_emit_when_store_wired(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        from unittest.mock import patch
+
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, freshness_check=False,
+        )
+        df = self._make_df()
+        with patch.object(orc, "_emit_setup_candidates") as spy:
+            orc.run_cycle(
+                symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+                balance=10000.0,
+            )
+            assert spy.call_count == 1
+            kwargs = spy.call_args.kwargs
+            assert kwargs["symbol"] == "BTC/USDT"
+            assert "ltf_structure_breaks" in kwargs
+            assert "htf_swings" in kwargs
+
+    def test_run_cycle_emit_not_called_when_store_none(self, tmp_path):
+        """Inert: no store → _emit_setup_candidates not called."""
+        from unittest.mock import patch
+
+        orc = SafeOrchestrator(
+            _minimal_config(), state_dir=str(tmp_path), persist=False,
+            freshness_check=False,
+        )
+        df = self._make_df()
+        with patch.object(orc, "_emit_setup_candidates") as spy:
+            orc.run_cycle(
+                symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+                balance=10000.0,
+            )
+            assert spy.call_count == 0
