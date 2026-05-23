@@ -1403,6 +1403,19 @@ class SafeOrchestrator:
         else:
             entry_setup_source = None  # forward-compat for unknown ZoneSpec sources
 
+        # Shadow mode gate (PR #S6): smc_v2_shadow=true → log the would-be
+        # signal to logs/smc_v2_shadow.log and return None instead of placing.
+        # All safety gates above still execute — operator sees rejections in
+        # main log; shadow log only captures ACCEPTED-but-not-executed signals.
+        if engine_cfg.get("smc_v2_shadow", False):
+            self._log_shadow_signal(
+                cand=cand, entry_price=entry_price, sl=sl, tp1=tp1, tp2=tp2,
+                size=size, tp_tags=tp_tags,
+                entry_setup_source=entry_setup_source,
+                reason="SHADOW_MODE",
+            )
+            return None
+
         return self.order_manager.open_position(
             symbol=cand.symbol,
             direction=cand.direction,
@@ -1416,6 +1429,45 @@ class SafeOrchestrator:
             tp2_target_type=tp_tags.get("tp2_source"),
             bars_to_pullback=cand.bars_waited,
         )
+
+    def _log_shadow_signal(self, *, cand, entry_price, sl, tp1, tp2, size,
+                            tp_tags, entry_setup_source, reason: str) -> None:
+        """Append one JSON line to logs/smc_v2_shadow.log (PR #S6).
+
+        Best-effort: I/O failures logged at WARNING but never raised — must
+        not affect tick loop or order flow.
+        """
+        import json
+        from pathlib import Path
+        from datetime import datetime, timezone
+        log_dir = Path("logs")
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            log.warning(f"[shadow] could not create logs/ dir: {e}")
+            return
+        payload = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "symbol": cand.symbol,
+            "direction": cand.direction,
+            "entry": float(entry_price),
+            "sl": float(sl),
+            "tp1": float(tp1),
+            "tp2": float(tp2) if tp2 is not None else None,
+            "size": float(size),
+            "entry_setup_source": entry_setup_source,
+            "tp1_target_type": tp_tags.get("tp1_source"),
+            "tp2_target_type": tp_tags.get("tp2_source"),
+            "bars_to_pullback": int(cand.bars_waited),
+            "confluence_score": int(cand.confluence_score),
+            "would_execute": False,
+            "reason": reason,
+        }
+        try:
+            with (log_dir / "smc_v2_shadow.log").open("a", encoding="utf-8") as f:
+                f.write(json.dumps(payload, default=str) + "\n")
+        except OSError as e:
+            log.warning(f"[shadow] write failed: {e}")
 
     @staticmethod
     def _build_safety_section(breaker, regime, stale, warnings) -> str:
