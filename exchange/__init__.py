@@ -784,12 +784,26 @@ class OrderManager:
         return result
 
     def _move_sl_to_breakeven(self, pos: Position) -> None:
-        """TP1 hit sonrası SL'i entry'ye kaydır (server-side cancel + new order)."""
+        """TP1 hit sonrası SL'i entry'ye kaydır (server-side cancel + new order).
+
+        Single-target branch (SMC v2, PR #S5.5): when pos.tp2 is None, the
+        lifecycle has already done a full close on TP1 (no remaining size to
+        protect). Skip the BE move entirely and instead cancel orphan SL/TP2
+        reduceOnly orders on the exchange to prevent them lingering forever.
+        Inert under v1 (v1 always sets numeric tp2).
+        """
         if self.dry_run:
             pos.sl = pos.entry
             return
 
         ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
+
+        if pos.tp2 is None:
+            # Single-target mode: full close already done by lifecycle.
+            # Cancel orphan SL (TP1 already filled; TP2 was never placed).
+            self._cancel_position_siblings(pos, ccxt_sym, reason="TP1_FULL_CLOSE")
+            return
+
         try:
             if pos.sl_order_id:
                 try:
