@@ -542,17 +542,13 @@ class SafeOrchestrator:
             ltf_swings_h, ltf_swings_l = self.smc.swings(df_entry)
             ltf_brks = self.smc.structure(df_entry, ltf_swings_h, ltf_swings_l)
 
-            # Build htf_bars from df_htf rows (ordinal axis for swing_anchor)
-            from dataclasses import dataclass as _dc
-
-            @_dc
-            class _HtfBar:
-                ordinal: int
-                high: float
-                low: float
+            # Build htf_bars from df_htf rows (ordinal axis for swing_anchor).
+            # HtfBar dataclass hoisted to engine.smc_v2.triggers to keep
+            # run_cycle hot-path clean (avoid re-defining the class each tick).
+            from engine.smc_v2.triggers import HtfBar
 
             htf_bars = [
-                _HtfBar(ordinal=i, high=float(row["high"]), low=float(row["low"]))
+                HtfBar(ordinal=i, high=float(row["high"]), low=float(row["low"]))
                 for i, (_, row) in enumerate(df_htf.iterrows())
             ]
 

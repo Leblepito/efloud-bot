@@ -12,12 +12,25 @@ to SetupStateStore — store.add() enforces per-symbol cap.
 Scope limited to CHoCH events (BOS deferred — matches v1 signals.py
 recency-tighter BOS handling, see signals.py:200-204).
 """
+from dataclasses import dataclass
 from typing import List, Tuple
 
 from engine.smc import StructBreak, Swing, FVG
 from engine.smc_v2.setup_state import SetupCandidate
 from engine.smc_v2.swing_anchor import select_htf_swing_anchor
 from engine.smc_v2.zones import build_pullback_zones
+
+
+@dataclass
+class HtfBar:
+    """Bar shape for select_htf_swing_anchor consumption.
+
+    Orchestrator wraps each HTF DataFrame row in this; tests use it directly.
+    `.ordinal` is an int bar position (NOT timestamp). See spec §10 #1 contract.
+    """
+    ordinal: int
+    high: float
+    low: float
 
 
 def generate_setup_candidates(
@@ -90,6 +103,13 @@ def generate_setup_candidates(
             direction=direction,
             trigger_price=brk.price,
         )
+
+        # Skip degenerate OTE fallback (e.g. ote_band=(0,0) when HTF analyze()
+        # has no OTE level). Such a zone has zero width, is_price_in_zone
+        # would never trigger, and the candidate would just sit in
+        # AWAITING_PULLBACK eating cap slots until timeout. Better to drop.
+        if zone.source == "OTE" and zone.low == zone.high:
+            continue
 
         out.append(SetupCandidate(
             symbol=symbol,
