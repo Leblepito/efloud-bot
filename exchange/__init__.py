@@ -661,11 +661,14 @@ class OrderManager:
         for pos in self.positions[:]:
             if pos.symbol not in bn_open_symbols:
                 # Pozisyon Binance'de kapanmış — TP2 / SL / manual close
-                # IMPORTANT: _estimate_exit_price MUST run before
-                # _cancel_position_siblings. The exit price inference relies on
-                # which order ID is missing from bn_orders_raw to attribute the
-                # trigger (TP1/TP2/SL). Cancelling first would invalidate that
-                # signal.
+                # Ordering note: _estimate_exit_price runs before
+                # _cancel_position_siblings as defense-in-depth. Currently safe
+                # either way because _estimate_exit_price reads `bn_orders_raw`
+                # captured once at the top of reconcile(), so cancellations
+                # don't mutate that local list. But if _estimate_exit_price is
+                # ever changed to live-fetch open orders, cancelling first would
+                # invalidate trigger attribution (TP1/TP2/SL is inferred from
+                # which order ID is missing). Keep this order.
                 exit_price = self._estimate_exit_price(pos, bn_orders_raw)
                 # Cancel orphan sibling reduceOnly orders before dropping local state
                 if not self.dry_run:

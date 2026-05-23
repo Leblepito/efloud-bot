@@ -231,6 +231,47 @@ class TestReconcileFullClose:
         # Attempted to cancel all 3
         assert mock_client.exchange.cancel_order.call_count == 3
 
+    def test_multiple_positions_all_closed_in_one_cycle(self, mgr, mock_client):
+        """If 3 positions all flip to closed in the same reconcile cycle,
+        every one of them must have its sibling orders cancelled.
+
+        Guards against a future loop-variable bug or batching shortcut that
+        would only clean up the first close.
+        """
+        pos_a = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+            sl_order_id="A-SL", tp1_order_id="A-TP1", tp2_order_id="A-TP2",
+        )
+        pos_b = Position(
+            symbol="ETH/USDT", direction="SHORT", entry=2400, sl=2440,
+            tp1=2360, tp2=2320, size=2.0,
+            sl_order_id="B-SL", tp1_order_id="B-TP1", tp2_order_id="B-TP2",
+        )
+        pos_c = Position(
+            symbol="SOL/USDT", direction="LONG", entry=150, sl=145,
+            tp1=160, tp2=170, size=10.0,
+            sl_order_id="C-SL", tp1_order_id="C-TP1", tp2_order_id="C-TP2",
+        )
+        mgr.positions = [pos_a, pos_b, pos_c]
+
+        # All three closed on Binance
+        mock_client.get_open_positions.return_value = []
+        mock_client.exchange.fetch_open_orders.return_value = []
+
+        closed = mgr.reconcile()
+
+        assert len(closed) == 3
+        assert mgr.positions == []
+
+        # 9 total cancel attempts (3 positions × 3 sibling orders each)
+        assert mock_client.exchange.cancel_order.call_count == 9
+        cancelled_ids = [c.args[0] for c in mock_client.exchange.cancel_order.call_args_list]
+        for expected in ["A-SL", "A-TP1", "A-TP2",
+                         "B-SL", "B-TP1", "B-TP2",
+                         "C-SL", "C-TP1", "C-TP2"]:
+            assert expected in cancelled_ids
+
     def test_dry_run_reconcile_skips_entirely(self, mock_client):
         """Dry-run reconcile returns [] without touching exchange or local state.
 
