@@ -104,10 +104,10 @@ class TestOrderPlacementOnConfirmed:
     def test_place_v2_entry_order_calls_open_position(self, tmp_path):
         """Happy path: all safety gates pass → open_position called.
 
-        Requires patching tp_calc to return a valid (tp1, tp2) pair
-        because empty htf inputs only return RR_PROJECTION tp1 with
-        tp2=None — which the helper now rejects (PR #S3c-2 fix:
-        tp2_none deferred to PR #S5 single-target lifecycle).
+        Patches tp_calc to return a two-target (tp1+tp2) pair so this test
+        exercises the legacy two-target path specifically. The single-target
+        (tp2=None) acceptance path is covered in test_single_target_entry.py
+        per PR #S6.5.
 
         Also asserts SMC v2 telemetry kwargs (PR #S5) flow through:
         - entry_setup_source derived from cand.target_zone.source
