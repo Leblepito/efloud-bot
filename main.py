@@ -47,6 +47,29 @@ from typing import Optional
 
 
 # ═══════════════════════════════════════════════
+# SMC v2 feature flag wiring (PR #S6)
+# ═══════════════════════════════════════════════
+
+def _build_setup_state_store(cfg: dict, state_dir: str):
+    """Instantiate SetupStateStore iff engine.smc_version == 'v2'.
+
+    Default (smc_version=v1 or engine block absent): returns None →
+    SafeOrchestrator inert per PR #67 contract.
+
+    When v2 active: returns SetupStateStore at {state_dir}/setup_candidates.json
+    with max_pending_per_symbol from smc_v2 block (default 3 per spec §9).
+    """
+    if cfg.get("engine", {}).get("smc_version") != "v2":
+        return None
+    from engine.smc_v2.setup_state import SetupStateStore
+    smc_v2_cfg = cfg.get("smc_v2", {})
+    return SetupStateStore(
+        path=Path(state_dir) / "setup_candidates.json",
+        max_pending_per_symbol=int(smc_v2_cfg.get("max_pending_per_symbol", 3)),
+    )
+
+
+# ═══════════════════════════════════════════════
 # .ENV LOADER (no external dependency)
 # ═══════════════════════════════════════════════
 
@@ -519,10 +542,15 @@ def main():
     # state volume the bot already mounts. Pre-fix this was never wired,
     # producing journal_rows=0 in production (Phase 0 smoke confirmed).
     trade_journal = TradeJournal(str(Path(state_dir) / "trade_journal.jsonl"))
+    # PR #S6 wiring: instantiate SetupStateStore when smc_version=v2.
+    # Inert default (smc_version=v1): setup_state_store=None → all v2 hooks
+    # short-circuit per PR #67 contract.
+    setup_state_store = _build_setup_state_store(cfg, state_dir)
     orch = SafeOrchestrator(cfg, state_dir=state_dir,
                               permission_mgr=permission_mgr,
                               notification_mgr=notif_mgr,
-                              trade_journal=trade_journal)
+                              trade_journal=trade_journal,
+                              setup_state_store=setup_state_store)
 
     order_mgr = OrderManager(client, dry_run=cfg["operation"]["dry_run"],
                               trade_journal=trade_journal)

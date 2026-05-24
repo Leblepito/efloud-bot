@@ -11,11 +11,14 @@ Safe Orchestrator v2.1 — Güvenlik Katmanları Entegre
   - Exchange reconciliation
 """
 
-import pandas as pd
+import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 from dataclasses import dataclass
+
+import pandas as pd
 
 if TYPE_CHECKING:
     from engine.smc_v2.setup_state import SetupStateStore
@@ -1247,6 +1250,26 @@ class SafeOrchestrator:
             # Test/paper mode — no order placement
             return None
 
+        # Symbol whitelist gate (PR #S6): only fire for symbols explicitly
+        # opted-in via engine.smc_v2_symbols. ["*"] = all; [] (default) = none.
+        # First gate so non-whitelisted symbols don't incur cost of breaker /
+        # tp_calc / sizing. v2 candidate state machine still runs upstream
+        # (consumes the setup); only execution is gated.
+        engine_cfg = self.config.get("engine", {})
+        whitelist_raw = engine_cfg.get("smc_v2_symbols", [])
+        # Defensive: tolerate operator YAML typo (string instead of list) by
+        # rejecting non-list values. Per risk-ops review feedback — substring
+        # `in` semantics on a string would otherwise produce surprise matches.
+        if not isinstance(whitelist_raw, list):
+            log.warning(
+                f"[v2 reject] {cand.symbol}: engine.smc_v2_symbols must be a list, "
+                f"got {type(whitelist_raw).__name__}={whitelist_raw!r}"
+            )
+            return None
+        if "*" not in whitelist_raw and cand.symbol not in whitelist_raw:
+            log.info(f"[v2 reject] {cand.symbol}: not in smc_v2_symbols whitelist")
+            return None
+
         # Breaker gate (MUST match v1 — breaker.HALTED must block v2 too)
         try:
             breaker_status = self.breaker.check(now=None)
@@ -1392,6 +1415,19 @@ class SafeOrchestrator:
         else:
             entry_setup_source = None  # forward-compat for unknown ZoneSpec sources
 
+        # Shadow mode gate (PR #S6): smc_v2_shadow=true → log the would-be
+        # signal to logs/smc_v2_shadow.log and return None instead of placing.
+        # All safety gates above still execute — operator sees rejections in
+        # main log; shadow log only captures ACCEPTED-but-not-executed signals.
+        if engine_cfg.get("smc_v2_shadow", False):
+            self._log_shadow_signal(
+                cand=cand, entry_price=entry_price, sl=sl, tp1=tp1, tp2=tp2,
+                size=size, tp_tags=tp_tags,
+                entry_setup_source=entry_setup_source,
+                reason="SHADOW_MODE",
+            )
+            return None
+
         return self.order_manager.open_position(
             symbol=cand.symbol,
             direction=cand.direction,
@@ -1405,6 +1441,42 @@ class SafeOrchestrator:
             tp2_target_type=tp_tags.get("tp2_source"),
             bars_to_pullback=cand.bars_waited,
         )
+
+    def _log_shadow_signal(self, *, cand, entry_price, sl, tp1, tp2, size,
+                            tp_tags, entry_setup_source, reason: str) -> None:
+        """Append one JSON line to logs/smc_v2_shadow.log (PR #S6).
+
+        Best-effort: I/O failures logged at WARNING but never raised — must
+        not affect tick loop or order flow.
+        """
+        log_dir = Path("logs")
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            log.warning(f"[shadow] could not create logs/ dir: {e}")
+            return
+        payload = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "symbol": cand.symbol,
+            "direction": cand.direction,
+            "entry": float(entry_price),
+            "sl": float(sl),
+            "tp1": float(tp1),
+            "tp2": float(tp2) if tp2 is not None else None,
+            "size": float(size),
+            "entry_setup_source": entry_setup_source,
+            "tp1_target_type": tp_tags.get("tp1_source"),
+            "tp2_target_type": tp_tags.get("tp2_source"),
+            "bars_to_pullback": int(cand.bars_waited),
+            "confluence_score": int(cand.confluence_score),
+            "would_execute": False,
+            "reason": reason,
+        }
+        try:
+            with (log_dir / "smc_v2_shadow.log").open("a", encoding="utf-8") as f:
+                f.write(json.dumps(payload) + "\n")
+        except OSError as e:
+            log.warning(f"[shadow] write failed: {e}")
 
     @staticmethod
     def _build_safety_section(breaker, regime, stale, warnings) -> str:

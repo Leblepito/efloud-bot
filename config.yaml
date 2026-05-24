@@ -15,6 +15,28 @@ exchange:
   leverage: 3
   margin_mode: ISOLATED    # ISOLATED zorunlu (cross likidasyon yayılmasını önler)
 
+# ── SMC v2 feature flag (PR #S6) ──
+# Inert default: smc_version=v1, smc_v2_symbols=[] → v1 path active, v2 dormant.
+# Shadow rollout: set smc_version=v2 + smc_v2_symbols=["*"] + smc_v2_shadow=true
+#   → v2 signals computed and logged to logs/smc_v2_shadow.log, NO orders placed.
+# Live v2 (Hermes-only): set smc_v2_shadow=false. Per-symbol opt-in via
+# smc_v2_symbols=["ETH/USDT","BTC/USDT",...] for phased rollout.
+engine:
+  smc_version: v1               # "v1" | "v2"
+  # Whitelist gates EXECUTION only — v2 state machine still runs upstream
+  # when smc_version=v2, but no order is placed unless symbol is whitelisted.
+  smc_v2_symbols: []            # ["*"] = all symbols, [] = no execution
+  smc_v2_shadow: false          # true = log v2 signal, skip order placement
+
+# ── SMC v2 tunables (PR #S6) ──
+# Active only when engine.smc_version == "v2". Defaults match parent spec §9.
+smc_v2:
+  pullback_timeout_bars: 8      # 15m bars (~2h until SetupCandidate expires)
+  fvg_priority: true            # FVG before OTE for zone selection
+  ote_band: [0.618, 0.786]      # OTE fib levels for fallback zone
+  require_confirmation: true    # 15m CHoCH/engulfing inside zone before entry
+  max_pending_per_symbol: 3     # SetupCandidate cap per symbol
+
 # ── Symbol universe ──
 # 20 coin SABIT liste — bot hep aynı coinler üzerinde öğrensin
 # Dinamik refresh kapalı, stabil karakter için.
