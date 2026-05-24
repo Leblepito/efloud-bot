@@ -104,10 +104,10 @@ class TestOrderPlacementOnConfirmed:
     def test_place_v2_entry_order_calls_open_position(self, tmp_path):
         """Happy path: all safety gates pass → open_position called.
 
-        Requires patching tp_calc to return a valid (tp1, tp2) pair
-        because empty htf inputs only return RR_PROJECTION tp1 with
-        tp2=None — which the helper now rejects (PR #S3c-2 fix:
-        tp2_none deferred to PR #S5 single-target lifecycle).
+        Patches tp_calc to return a two-target (tp1+tp2) pair so this test
+        exercises the legacy two-target path specifically. The single-target
+        (tp2=None) acceptance path is covered in test_single_target_entry.py
+        per PR #S6.5.
 
         Also asserts SMC v2 telemetry kwargs (PR #S5) flow through:
         - entry_setup_source derived from cand.target_zone.source
@@ -183,8 +183,11 @@ class TestOrderPlacementOnConfirmed:
             assert kwargs["tp2_target_type"] == "FIB_EXT"
             assert kwargs["bars_to_pullback"] == 5
 
-    def test_no_order_when_tp2_none(self, tmp_path):
-        """Single-target mode (tp2=None) → reject until PR #S5 lifecycle support."""
+    def test_tp2_none_accepted_as_single_target(self, tmp_path):
+        """PR #S6.5: tp2=None now ACCEPTED as single-target setup.
+        Empty htf inputs → calc_tp_targets returns tp2=None → flows through
+        to OrderManager.open_position with tp2=None. Lifecycle (PR #S5) and
+        exchange (PR #S5.5) handle the single-target path."""
         order_mgr = _make_mock_order_manager()
         store = SetupStateStore(tmp_path / "state.json")
         orc = SafeOrchestrator(
@@ -192,14 +195,17 @@ class TestOrderPlacementOnConfirmed:
             setup_state_store=store, order_manager=order_mgr,
         )
         cand = _make_in_zone_candidate()
-        # Empty htf inputs in _place_v2_entry_order → calc_tp_targets
-        # returns tp2=None (RR_PROJECTION only). Helper rejects.
         with patch.object(order_mgr, "open_position") as spy_open:
+            spy_open.return_value = MagicMock()
             result = orc._place_v2_entry_order(
                 cand, current_price=105.0, entry_price=105.0,
             )
-            assert spy_open.call_count == 0
-            assert result is None
+            # PR #S6.5: was rejected (call_count=0); now accepted (call_count=1)
+            assert spy_open.call_count == 1
+            assert result is not None
+            kwargs = spy_open.call_args.kwargs
+            assert kwargs["tp2"] is None
+            assert kwargs["tp2_target_type"] == "NONE"
 
     def test_no_order_when_sl_too_far(self, tmp_path):
         """SLTooFarError from calc_sl → setup rejected, no order."""
