@@ -1327,13 +1327,11 @@ class SafeOrchestrator:
             log.info(f"[v2 reject] {cand.symbol}: tp1_too_close ({e})")
             return None
 
-        # tp2 may be None (spec §4.2 single-target mode). Reject the setup
-        # rather than fold into a zero-distance double-fill — folding would
-        # cause OrderManager to send two TAKE_PROFIT_MARKET at the same
-        # stopPrice. Single-target lifecycle support lands in PR #S5.
-        if tp2 is None:
-            log.info(f"[v2 reject] {cand.symbol}: tp2_none (single-target mode, deferred to PR #S5)")
-            return None
+        # tp2=None signals single-target mode (spec §4.2). Lifecycle + exchange
+        # support shipped in PR #S5 / #S5.5 / #S5.6: OrderManager skips TP2
+        # placement and gives TP1 full size; partial_close TP1 branch full-closes;
+        # _move_sl_to_breakeven cancels orphan SL via _cancel_position_siblings.
+        # PR #S6.5 removed the early rejection here. tp2=None flows through.
 
         # Position size — v1 parity: pass leverage + max_notional_pct
         # (calc_position_size respects both caps; ignoring them would
@@ -1397,9 +1395,10 @@ class SafeOrchestrator:
             log.warning(f"[v2 reject] {cand.symbol}: pause check failed ({e})")
             return None
 
+        tp2_log = f"{tp2:.4f}" if tp2 is not None else "NONE"
         log.info(
             f"[v2] {cand.direction} {cand.symbol} entry={entry_price:.4f} "
-            f"sl={sl:.4f} tp1={tp1:.4f} tp2={tp2:.4f} size={size:.6f} "
+            f"sl={sl:.4f} tp1={tp1:.4f} tp2={tp2_log} size={size:.6f} "
             f"(zone={cand.target_zone.source}, tp1={tp_tags.get('tp1_source')}, "
             f"tp2={tp_tags.get('tp2_source')})"
         )

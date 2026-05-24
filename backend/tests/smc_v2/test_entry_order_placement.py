@@ -183,8 +183,11 @@ class TestOrderPlacementOnConfirmed:
             assert kwargs["tp2_target_type"] == "FIB_EXT"
             assert kwargs["bars_to_pullback"] == 5
 
-    def test_no_order_when_tp2_none(self, tmp_path):
-        """Single-target mode (tp2=None) → reject until PR #S5 lifecycle support."""
+    def test_tp2_none_accepted_as_single_target(self, tmp_path):
+        """PR #S6.5: tp2=None now ACCEPTED as single-target setup.
+        Empty htf inputs → calc_tp_targets returns tp2=None → flows through
+        to OrderManager.open_position with tp2=None. Lifecycle (PR #S5) and
+        exchange (PR #S5.5) handle the single-target path."""
         order_mgr = _make_mock_order_manager()
         store = SetupStateStore(tmp_path / "state.json")
         orc = SafeOrchestrator(
@@ -192,14 +195,17 @@ class TestOrderPlacementOnConfirmed:
             setup_state_store=store, order_manager=order_mgr,
         )
         cand = _make_in_zone_candidate()
-        # Empty htf inputs in _place_v2_entry_order → calc_tp_targets
-        # returns tp2=None (RR_PROJECTION only). Helper rejects.
         with patch.object(order_mgr, "open_position") as spy_open:
+            spy_open.return_value = MagicMock()
             result = orc._place_v2_entry_order(
                 cand, current_price=105.0, entry_price=105.0,
             )
-            assert spy_open.call_count == 0
-            assert result is None
+            # PR #S6.5: was rejected (call_count=0); now accepted (call_count=1)
+            assert spy_open.call_count == 1
+            assert result is not None
+            kwargs = spy_open.call_args.kwargs
+            assert kwargs["tp2"] is None
+            assert kwargs["tp2_target_type"] == "NONE"
 
     def test_no_order_when_sl_too_far(self, tmp_path):
         """SLTooFarError from calc_sl → setup rejected, no order."""
