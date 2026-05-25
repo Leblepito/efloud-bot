@@ -185,11 +185,27 @@ class BotRunner:
             trade_journal=trade_journal,
         )
 
+        # PR #S6 wiring (hotfix): instantiate SetupStateStore when smc_version=v2.
+        # Inert default (smc_version=v1 or engine block absent): setup_state_store=None
+        # → all v2 hooks short-circuit per PR #67 contract.
+        # Without this, FastAPI mode (production) never activated v2 regardless of
+        # config.yaml flags — CLI-only main.py had the wiring but bot_runner did not.
+        from main import _build_setup_state_store
+        setup_state_store = _build_setup_state_store(self.cfg, state_dir)
+        if setup_state_store is not None:
+            log.info(
+                "🟢 SMC v2 active: SetupStateStore initialized (max_pending_per_symbol=%d)",
+                setup_state_store.max_pending_per_symbol,
+            )
+        else:
+            log.info("SMC v2 inert (smc_version=v1 or engine block absent)")
+
         self.orch = SafeOrchestrator(
             self.cfg, state_dir=state_dir,
             permission_mgr=permission_mgr, notification_mgr=notif_mgr,
             order_manager=self.order_mgr,  # ← borsaya gerçek emir göndermek için
             trade_journal=trade_journal,
+            setup_state_store=setup_state_store,
         )
 
         # Capture the running loop so executor-thread callbacks can schedule DB writes
