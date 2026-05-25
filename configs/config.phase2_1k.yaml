@@ -35,6 +35,22 @@ exchange:
   leverage: 5              # 5x kaldıraç (orta-agresif, $2000 cüzdan için)
   margin_mode: ISOLATED    # Pozisyonlar birbirini etkilemez
 
+# ── SMC v2 feature flag (PR #S6 + cycle 4 hotfix) ──
+# Inert default: smc_version=v1, smc_v2_symbols=[] → v1 path active, v2 dormant.
+# Shadow rollout: set smc_version=v2 + smc_v2_symbols=["*"] + smc_v2_shadow=true
+#   → v2 signals computed and logged to logs/smc_v2_shadow.log, NO orders placed.
+# Live v2 (Hermes-only): set smc_v2_shadow=false. Per-symbol opt-in via
+# smc_v2_symbols=["ETH/USDT","BTC/USDT",...] for phased rollout.
+#
+# IMPORTANT: This is the production-active config (.env.production
+# EFLOUD_CONFIG_PATH=configs/config.phase2_1k.yaml). Root config.yaml is the
+# CLI default but bot_runner (FastAPI mode) does NOT read it. Always edit
+# THIS file for production changes.
+engine:
+  smc_version: v2               # "v1" | "v2"  — set to v2 for shadow rollout (2026-05-25)
+  smc_v2_symbols: ["*"]         # ["*"] = all symbols, [] = no execution
+  smc_v2_shadow: true           # true = log v2 signal, skip order placement
+
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:
   mode: fixed
