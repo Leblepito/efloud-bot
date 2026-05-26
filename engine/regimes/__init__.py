@@ -38,11 +38,15 @@ class RegimeAnalysis:
     atr_ratio: float             # current / avg
     trend_alignment: bool        # HTF ve MTF aynı yönde mi
     notes: list
+    allow_volatile_entries: bool = False
 
     @property
     def can_open_new_position(self) -> bool:
         """Yeni pozisyon açılabilir mi?"""
-        return self.regime in ("TRENDING", "REVERSAL")
+        allowed = ["TRENDING", "REVERSAL"]
+        if self.allow_volatile_entries:
+            allowed.append("VOLATILE")
+        return self.regime in allowed
 
     @property
     def should_tighten_stops(self) -> bool:
@@ -59,7 +63,8 @@ class RegimeDetector:
                  atr_period: int = 14,
                  volatile_atr_multiplier: float = 2.5,
                  bb_period: int = 20,
-                 bb_squeeze_threshold: float = 0.5):
+                 bb_squeeze_threshold: float = 0.5,
+                 allow_volatile_entries: bool = False):
         self.adx_period = adx_period
         self.adx_trend = adx_trending_threshold
         self.adx_range = adx_ranging_threshold
@@ -67,10 +72,17 @@ class RegimeDetector:
         self.vol_mult = volatile_atr_multiplier
         self.bb_period = bb_period
         self.bb_squeeze = bb_squeeze_threshold
+        self.allow_volatile_entries = allow_volatile_entries
 
     def analyze(self, df: pd.DataFrame,
                  df_htf: pd.DataFrame = None) -> RegimeAnalysis:
         """Piyasa rejimini tespit et."""
+        res = self._analyze_raw(df, df_htf)
+        res.allow_volatile_entries = self.allow_volatile_entries
+        return res
+
+    def _analyze_raw(self, df: pd.DataFrame,
+                  df_htf: pd.DataFrame = None) -> RegimeAnalysis:
         if len(df) < max(self.adx_period * 2, self.bb_period * 2):
             return RegimeAnalysis("UNKNOWN", 0, 0, 0, 0, False,
                                    ["Insufficient data"])

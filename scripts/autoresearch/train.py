@@ -1,6 +1,14 @@
 import sys
 import time
 from pathlib import Path
+import logging
+
+# Configure logging to console
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    stream=sys.stdout
+)
 
 # Add project root to path
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +23,25 @@ from scripts.autoresearch.prepare import prepare_optimization_data
 # This block is directly optimized by the autonomous AI strategy researcher.
 # ==============================================================================
 CONFIG = {
+    "engine": {
+        "smc_version": "v2",
+        "smc_v2_symbols": ["*"],
+        "smc_v2_shadow": False
+    },
+    "exchange": {
+        "name": "binance",
+        "market_type": "futures",
+        "testnet": True,
+        "leverage": 3,
+        "margin_mode": "ISOLATED"
+    },
+    "smc_v2": {
+        "pullback_timeout_bars": 8,
+        "fvg_priority": True,
+        "ote_band": [0.618, 0.786],
+        "require_confirmation": True,
+        "max_pending_per_symbol": 3
+    },
     "timeframes": {
         "htf": "4h",
         "mtf": "1h",
@@ -45,7 +72,7 @@ CONFIG = {
         "target_stop_distance_pct": 5
     },
     "operation": {
-        "watch_only": True
+        "watch_only": False
     },
     "safety": {
         "daily_loss_limit_pct": 10.0,
@@ -53,8 +80,9 @@ CONFIG = {
         "consecutive_loss_limit": 3,
         "consecutive_pause_min": 120,
         "starting_balance": 2000,
-        "adx_trend_threshold": 25,
-        "adx_range_threshold": 20,
+        "adx_trend_threshold": 10,
+        "adx_range_threshold": 0,
+        "allow_volatile_entries": True,
         "volatile_atr_mult": 2.5,
         "max_position_notional_pct": 2.0,
         "max_total_exposure": 1.0,

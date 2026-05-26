@@ -199,6 +199,7 @@ class SafeOrchestrator:
             adx_trending_threshold=safety.get("adx_trend_threshold", 25),
             adx_ranging_threshold=safety.get("adx_range_threshold", 20),
             volatile_atr_multiplier=safety.get("volatile_atr_mult", 2.5),
+            allow_volatile_entries=safety.get("allow_volatile_entries", False),
         )
         self.breaker = CircuitBreaker(
             daily_loss_pct_limit=safety.get("daily_loss_limit_pct", 3.0),
@@ -1271,9 +1272,6 @@ class SafeOrchestrator:
         - Reverse-on-profit branch (v1 has it) NOT replicated here;
           opposite-direction setups will be rejected by pos_guard like v1.
         """
-        if self.order_manager is None:
-            # Test/paper mode — no order placement
-            return None
 
         # Symbol whitelist gate (PR #S6): only fire for symbols explicitly
         # opted-in via engine.smc_v2_symbols. ["*"] = all; [] (default) = none.
@@ -1365,7 +1363,10 @@ class SafeOrchestrator:
             from risk import calc_position_size
             leverage = exchange_cfg.get("leverage", 1)
             max_notional = safety_cfg.get("max_position_notional_pct")
-            balance = self.order_manager.client.get_balance()
+            if self.order_manager is not None and self.order_manager.client is not None:
+                balance = self.order_manager.client.get_balance()
+            else:
+                balance = self.breaker.current_balance
             size = calc_position_size(
                 balance=balance,
                 risk_pct=risk_cfg.get("risk_per_trade_pct", 0.75),
@@ -1451,6 +1452,23 @@ class SafeOrchestrator:
                 reason="SHADOW_MODE",
             )
             return None
+
+        if self.order_manager is None:
+            # Paper-trade / backtest mode: open position in local lifecycle state directly
+            pos = self.lifecycle.open_position(
+                symbol=cand.symbol,
+                direction=cand.direction,
+                entry=entry_price,
+                size=size,
+                sl=sl,
+                tp1=tp1,
+                tp2=tp2,
+            )
+            # Record it in trade journal
+            self._journal_record_entry(pos)
+            log.info(f"✅ [v2 paper] [{cand.symbol}] Opened {cand.direction} @ {entry_price:.4f} "
+                     f"size={size:.6f} SL={sl:.4f} TP1={tp1:.4f} TP2={tp2_log}")
+            return pos
 
         return self.order_manager.open_position(
             symbol=cand.symbol,
