@@ -29,6 +29,7 @@
 | 2026-05-26 | Antigravity (Orchestrator) | engine/ai/sentiment.py | AI Sentiment Layer ve Next.js/FastAPI Entegrasyonu | ✅ | uzun | Gemini AI Sentiment Layer, RAM-based StateStore ve interaktif dark Next.js UI kartı eklendi. Testler 100% yeşil |
 | 2026-05-26 | Antigravity (Orchestrator) | Docker Compose Deploy | Hetzner VPS Remote Deploy & Verification | ✅ | orta | Hetzner VPS üzerinde Docker Compose baştan derlendi. SSL/Caddy yönlendirmesi ve API kimlik denetimi canlıda doğrulandı |
 | 2026-05-26 | Antigravity (Orchestrator) | TradingView Charts | Candlestick Terminal & Live Binance WebSockets | ✅ | uzun | TradingView Lightweight Charts v5 ile Binance REST + WS canlı fiyat akışı ve bot işlem seviyeleri overlays entegre edilerek VPS'te canlıya alındı |
+| 2026-05-26 | Antigravity (Orchestrator) | NotebookLMSkill & WrapUpSkill | Hafıza Senkronizasyonu & Oturum Wrap-Up | ✅ | kisa | Google Playwright Chromium tabanlı çerez yakalama sistemi ile NotebookLM kimlik doğrulaması yapıldı, 2026-05-26 oturum özeti "Utku's AI Brain" notebook'una yüklendi |
 
 ---
 
