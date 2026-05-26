@@ -28,6 +28,7 @@
 | 2026-05-26 | Antigravity (Flash) | scripts/sync_optimization_to_supabase.py | Supabase Entegrasyonu | ✅ | kisa | Supabase sync script implemented, unique constraint, unit tested (2/2 pass) |
 | 2026-05-26 | Antigravity (Orchestrator) | engine/ai/sentiment.py | AI Sentiment Layer ve Next.js/FastAPI Entegrasyonu | ✅ | uzun | Gemini AI Sentiment Layer, RAM-based StateStore ve interaktif dark Next.js UI kartı eklendi. Testler 100% yeşil |
 | 2026-05-26 | Antigravity (Orchestrator) | Docker Compose Deploy | Hetzner VPS Remote Deploy & Verification | ✅ | orta | Hetzner VPS üzerinde Docker Compose baştan derlendi. SSL/Caddy yönlendirmesi ve API kimlik denetimi canlıda doğrulandı |
+| 2026-05-26 | Antigravity (Orchestrator) | TradingView Charts | Candlestick Terminal & Live Binance WebSockets | ✅ | uzun | TradingView Lightweight Charts v5 ile Binance REST + WS canlı fiyat akışı ve bot işlem seviyeleri overlays entegre edilerek VPS'te canlıya alındı |
 
 ---
 
