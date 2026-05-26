@@ -79,10 +79,10 @@
 
 | # | Mekanizma | Detay |
 |---|---|---|
-| 4.1 | **Skill Feedback Loop** | Her skill kullanımından sonra ajan, skill'in etkinliğini `docs/skill_log.md` dosyasına not eder: hangi skill kullanıldı, ne kadar sürdü, sonuç başarılı mı. Zaman içinde düşük performanslı skill'ler revize edilir. |
-| 4.2 | **Prompt Evolution** | `.claude/agents/` altındaki ajan prompt'ları, `system_prompts_leaks` referanslarından öğrenilen best-practice'lerle periyodik olarak güncellenir. Her güncelleme `docs/prompt_changelog.md`'ye loglanır. |
-| 4.3 | **Backtest-Driven Config** | Faz 1 optimization script'inin sonuçları, Faz 2 Gemini sentiment layer'ının doğruluğu ile cross-validate edilir. Her ayın sonunda "config review" skill'i tetiklenir. |
-| 4.4 | **Graphify Otomatik Güncelleme** | Git hook ile her commit sonrası `graphify update .` çalıştırılarak bilgi grafiği güncel tutulur. Ajanlar her oturumda `graphify query` ile kod tabanını sorgular. |
+| ✅ 4.1 | **Skill Feedback Loop** | TAMAMLANDI — Her skill kullanımından sonra ajan, skill'in etkinliğini `docs/skill_log.md` dosyasına not eder. (2026-05-26) |
+| ✅ 4.2 | **Prompt Evolution** | TAMAMLANDI — `.claude/agents/` altındaki ajan prompt'ları, superpowers TDD ve leaked prompt best-practice'leri ile güncellenmiş ve `docs/prompt_changelog.md`'ye loglanmıştır. (2026-05-26) |
+| ✅ 4.3 | **Backtest-Driven Config** | TAMAMLANDI — Optimizasyon limitleri ve makro sentiment scoring parametreleri ile risk yapılandırması çapraz doğrulanmıştır. (2026-05-26) |
+| ✅ 4.4 | **Graphify Otomatik Güncelleme** | TAMAMLANDI — Git post-commit hook ile her commit sonrası AST bilgi grafiğinin API maliyetsiz asenkron güncellenmesi kurulmuştur. (2026-05-26) |
 
 ---
 
