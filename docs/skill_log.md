@@ -32,6 +32,7 @@
 | 2026-05-26 | Antigravity (Orchestrator) | NotebookLMSkill & WrapUpSkill | Hafıza Senkronizasyonu & Oturum Wrap-Up | ✅ | kisa | Google Playwright Chromium tabanlı çerez yakalama sistemi ile NotebookLM kimlik doğrulaması yapıldı, 2026-05-26 oturum özeti "Utku's AI Brain" notebook'una yüklendi |
 | 2026-05-26 | Antigravity (Orchestrator) | writing-plans | ML Regime Retraining Spec Planı | ✅ | kisa | ML rejim tespiti & automated retraining spec planı yazıldı |
 | 2026-05-26 | Antigravity (Orchestrator) | test-driven-development | ML Regime Classifier & Integration | ✅ | orta | TDD disipliniyle pure-NumPy model, train, ensembling ve orchestrator testleri kodlandı |
+| 2026-05-26 | Antigravity (Orchestrator) | test-driven-development | Hedge Mode & Cross Margin Integration | ✅ | orta | PositionGuard, OrderManager ve BotRunner entegrasyonu tamamlandı, 704/704 test yeşil |
 
 ---
 
