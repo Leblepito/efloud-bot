@@ -240,6 +240,9 @@ class SafeOrchestrator:
         self.sentiment_state = {}
         self.load_ai_sentiment()
 
+        # Machine Learning Regime Auto-Training Pipeline Integration
+        self.last_regime_training_time = None
+
     def _get_planner(self, symbol: str) -> ScenarioPlanner:
         """Sembol başına ScenarioPlanner — senaryolar karışmasın."""
         if symbol not in self._planners:
@@ -513,6 +516,26 @@ class SafeOrchestrator:
             )
         return True
 
+    def check_and_train_regime_model(self, symbol: str, df: pd.DataFrame):
+        """Her 24 saatte bir, BTC/USDT veya ETH/USDT üzerinden ML modelini otomatik eğitir."""
+        import datetime
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        if self.last_regime_training_time is None or (now_utc - self.last_regime_training_time).total_seconds() > 86400:
+            if symbol in ["BTC/USDT", "ETH/USDT"] and len(df) >= 100:
+                try:
+                    log.info(f"Starting Daily Automated Regime ML model retraining on {symbol}...")
+                    from engine.regimes.train import run_auto_train
+                    res = run_auto_train(df, weights_filename=str(self.regime.weights_path))
+                    if res["success"]:
+                        log.info(f"Regime ML model retrained successfully! Samples: {res['samples']}, Loss: {res['final_loss']:.4f}")
+                        self.last_regime_training_time = now_utc
+                        # Reload weights in detector
+                        self.regime._load_ml_model()
+                    else:
+                        log.warning(f"Regime ML auto-train skipped: {res.get('reason')}")
+                except Exception as e:
+                    log.error(f"Error during automated regime ML training: {e}")
+
     def run_cycle(
         self,
         symbol: str,
@@ -524,6 +547,9 @@ class SafeOrchestrator:
         now: Optional[datetime] = None,
     ) -> SafeCycleResult:
         """Safety check'li tam analiz cycle'ı."""
+        # Arka planda ML model eğitim kontrolünü yap
+        self.check_and_train_regime_model(symbol, df_entry)
+
         warnings = []
         actions = []
         tf = self.config["timeframes"]

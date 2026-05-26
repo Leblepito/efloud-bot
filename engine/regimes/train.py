@@ -78,7 +78,10 @@ def run_auto_train(df: pd.DataFrame, weights_filename: str = "regime_model_weigh
     
     final_loss = model.compute_loss(X, y)
     
-    weights_path = ROOT / "state" / weights_filename
+    if "/" in str(weights_filename) or "\\" in str(weights_filename):
+        weights_path = Path(weights_filename)
+    else:
+        weights_path = ROOT / "state" / weights_filename
     weights_path.parent.mkdir(parents=True, exist_ok=True)
     model.save_weights(str(weights_path))
     
