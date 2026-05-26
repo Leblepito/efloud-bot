@@ -6,6 +6,7 @@
 
 # Runtime
 state/
+!state/ai_sentiment_registry.json
 state_*/
 logs/
 reports/
