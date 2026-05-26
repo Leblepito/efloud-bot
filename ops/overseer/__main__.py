@@ -131,17 +131,74 @@ def _cmd_extract_phase0() -> int:
 
 
 def _cmd_summarize() -> int:
-    """Placeholder — Week 3+ will wire the Summarizer + emit hourly summary.
+    """One-shot hourly summary; prints to stdout.
 
-    Today: prints a stub so the cron schedule doesn't page on no-op runs.
+    Reads recent log + journal entries, calls Summarizer.hourly_summary
+    (Anthropic Haiku per DEFAULT_MODEL), writes the resulting markdown
+    to stdout. Cron-friendly: returns 0 on success or any
+    placeholder fallback (offline/cap/error — Summarizer never raises).
     """
-    sys.stdout.write("summarize subcommand placeholder\n")
+    log_file = os.environ.get("EFLOUD_LOG_FILE")
+    journal_path = os.environ.get("EFLOUD_OVERSEER_JOURNAL_PATH")
+    if not log_file or not journal_path:
+        sys.stderr.write(
+            "overseer summarize: missing required env: EFLOUD_LOG_FILE, "
+            "EFLOUD_OVERSEER_JOURNAL_PATH\n"
+        )
+        return 1
+
+    from ops.overseer.ingestors.journal_tail import JournalTail
+    from ops.overseer.ingestors.log_tail import JsonLogTail
+    from ops.overseer.state import OverseerState
+    from ops.overseer.summarizer import Summarizer
+
+    st = OverseerState(_state_db_path())
+    recent_logs = JsonLogTail(log_file).read_recent()
+    recent_journal = JournalTail(journal_path).read_recent()
+
+    cap = int(os.environ.get("EFLOUD_OVERSEER_LLM_DAILY_CAP", "500"))
+    summarizer = Summarizer(st, daily_cap=cap)
+    text = summarizer.hourly_summary(
+        recent_log_lines=recent_logs,
+        journal_recent=recent_journal,
+    )
+    sys.stdout.write(text + "\n")
     return 0
 
 
 def _cmd_report() -> int:
-    """Placeholder — Week 3+ will wire Summarizer + email + telegram sinks."""
-    sys.stdout.write("report subcommand placeholder\n")
+    """One-shot daily report; prints markdown to stdout.
+
+    Sink wiring (email + telegram) is deferred — operator pipes stdout to
+    the desired channel for now. Summarizer.daily_report uses Anthropic
+    Haiku per DEFAULT_MODEL; returns placeholder string on offline/cap/error.
+    """
+    journal_path = os.environ.get("EFLOUD_OVERSEER_JOURNAL_PATH")
+    if not journal_path:
+        sys.stderr.write(
+            "overseer report: missing required env: "
+            "EFLOUD_OVERSEER_JOURNAL_PATH\n"
+        )
+        return 1
+
+    from ops.overseer.ingestors.journal_tail import JournalTail
+    from ops.overseer.state import OverseerState
+    from ops.overseer.summarizer import Summarizer
+
+    st = OverseerState(_state_db_path())
+    # JournalTail.read_recent returns entries since last cursor; daily-report
+    # callers should run once per day so this approximates the 24h window.
+    # Future enhancement: explicit since=now-24h filter inside the tail.
+    closed_trades = JournalTail(journal_path).read_recent()
+    metrics: dict = {}  # phase0_runner populates state.db; LLM prompt tolerates {}.
+
+    cap = int(os.environ.get("EFLOUD_OVERSEER_LLM_DAILY_CAP", "500"))
+    summarizer = Summarizer(st, daily_cap=cap)
+    text = summarizer.daily_report(
+        closed_trades_24h=closed_trades,
+        key_metrics=metrics,
+    )
+    sys.stdout.write(text + "\n")
     return 0
 
 

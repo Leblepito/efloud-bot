@@ -89,20 +89,72 @@ def test_main_extract_phase0_dry_run_outputs_json(tmp_path, monkeypatch, capsys)
     assert payload["status"] == "dry_run"
 
 
-def test_main_summarize_subcommand_smoke(tmp_path, monkeypatch, capsys):
-    """`summarize` is a Week 3+ placeholder; today it must at least exit 0
-    so the cron schedule doesn't page on a deploy."""
+def test_main_summarize_missing_env_fails_loud(tmp_path, monkeypatch, capsys):
+    """`summarize` requires EFLOUD_LOG_FILE + EFLOUD_OVERSEER_JOURNAL_PATH.
+
+    Misconfig must fail with exit 1 so cron alerts on missing env rather
+    than silently no-opping.
+    """
     from ops.overseer.__main__ import main
 
     monkeypatch.setenv("EFLOUD_OVERSEER_STATE_DB", str(tmp_path / "state.sqlite"))
+    monkeypatch.delenv("EFLOUD_LOG_FILE", raising=False)
+    monkeypatch.delenv("EFLOUD_OVERSEER_JOURNAL_PATH", raising=False)
+    rc = main(["summarize"])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "EFLOUD_LOG_FILE" in captured.err
+    assert "EFLOUD_OVERSEER_JOURNAL_PATH" in captured.err
+
+
+def test_main_summarize_with_env_offline_succeeds(tmp_path, monkeypatch, capsys):
+    """With env set + LLM offline, summarize emits placeholder and exits 0.
+
+    `EFLOUD_OVERSEER_LLM_OFFLINE=1` makes Summarizer return `<LLM offline>`
+    without calling Anthropic — the test runs end-to-end with no SDK.
+    """
+    from ops.overseer.__main__ import main
+
+    log_path = tmp_path / "bot.log"
+    journal_path = tmp_path / "trade_journal.jsonl"
+    log_path.write_text("", encoding="utf-8")
+    journal_path.write_text("", encoding="utf-8")
+
+    monkeypatch.setenv("EFLOUD_OVERSEER_STATE_DB", str(tmp_path / "state.sqlite"))
+    monkeypatch.setenv("EFLOUD_LOG_FILE", str(log_path))
+    monkeypatch.setenv("EFLOUD_OVERSEER_JOURNAL_PATH", str(journal_path))
+    monkeypatch.setenv("EFLOUD_OVERSEER_LLM_OFFLINE", "1")
+
     rc = main(["summarize"])
     assert rc == 0
+    captured = capsys.readouterr()
+    assert "<LLM offline>" in captured.out
 
 
-def test_main_report_subcommand_smoke(tmp_path, monkeypatch, capsys):
-    """`report` is also a Week 3+ placeholder — exit 0 on smoke run."""
+def test_main_report_missing_env_fails_loud(tmp_path, monkeypatch, capsys):
+    """`report` requires EFLOUD_OVERSEER_JOURNAL_PATH. Misconfig → exit 1."""
     from ops.overseer.__main__ import main
 
     monkeypatch.setenv("EFLOUD_OVERSEER_STATE_DB", str(tmp_path / "state.sqlite"))
+    monkeypatch.delenv("EFLOUD_OVERSEER_JOURNAL_PATH", raising=False)
+    rc = main(["report"])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "EFLOUD_OVERSEER_JOURNAL_PATH" in captured.err
+
+
+def test_main_report_with_env_offline_succeeds(tmp_path, monkeypatch, capsys):
+    """With env set + LLM offline, report emits placeholder and exits 0."""
+    from ops.overseer.__main__ import main
+
+    journal_path = tmp_path / "trade_journal.jsonl"
+    journal_path.write_text("", encoding="utf-8")
+
+    monkeypatch.setenv("EFLOUD_OVERSEER_STATE_DB", str(tmp_path / "state.sqlite"))
+    monkeypatch.setenv("EFLOUD_OVERSEER_JOURNAL_PATH", str(journal_path))
+    monkeypatch.setenv("EFLOUD_OVERSEER_LLM_OFFLINE", "1")
+
     rc = main(["report"])
     assert rc == 0
+    captured = capsys.readouterr()
+    assert "<LLM offline>" in captured.out
