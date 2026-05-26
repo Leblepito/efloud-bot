@@ -8,6 +8,143 @@ import { useConfig } from "@/hooks/useConfig";
 import { useHistory } from "@/hooks/useHistory";
 import { n } from "@/lib/format";
 
+// TradingView-style Long/Short Position Drawing Overlay Primitive
+class PositionOverlayPrimitive {
+  private _series: any = null;
+  private _chart: any = null;
+  private _paneView: any;
+
+  constructor(
+    private entryPrice: number,
+    private slPrice: number,
+    private tpPrice: number,
+    private entryTime: number,
+    private isLong: boolean
+  ) {
+    this._paneView = {
+      update: () => {},
+      renderer: () => ({
+        draw: (target: any) => {
+          if (!this._series || !this._chart) return;
+
+          target.useMediaCoordinateSpace(({ context, mediaSize }: any) => {
+            const timeScale = this._chart.timeScale();
+            
+            const entryX = timeScale.timeToCoordinate(this.entryTime);
+            const entryY = this._series.priceToCoordinate(this.entryPrice);
+            
+            const slY = this.slPrice ? this._series.priceToCoordinate(this.slPrice) : null;
+            const tpY = this.tpPrice ? this._series.priceToCoordinate(this.tpPrice) : null;
+
+            if (entryX === null || entryY === null) return;
+
+            const rectWidth = mediaSize.width - entryX;
+            if (rectWidth <= 0) return;
+
+            let lossYStart = entryY;
+            let lossHeight = 0;
+            let profitYStart = entryY;
+            let profitHeight = 0;
+
+            if (this.isLong) {
+              if (slY !== null) {
+                lossHeight = slY - entryY;
+                lossYStart = entryY;
+              }
+              if (tpY !== null) {
+                profitHeight = entryY - tpY;
+                profitYStart = tpY;
+              }
+            } else {
+              if (slY !== null) {
+                lossHeight = entryY - slY;
+                lossYStart = slY;
+              }
+              if (tpY !== null) {
+                profitHeight = tpY - entryY;
+                profitYStart = entryY;
+              }
+            }
+
+            context.save();
+
+            // Loss Zone (Red Shading)
+            if (lossHeight > 0) {
+              context.fillStyle = "rgba(239, 68, 68, 0.15)";
+              context.fillRect(entryX, lossYStart, rectWidth, lossHeight);
+            }
+
+            // Profit Zone (Emerald Green Shading)
+            if (profitHeight > 0) {
+              context.fillStyle = "rgba(16, 185, 129, 0.15)";
+              context.fillRect(entryX, profitYStart, rectWidth, profitHeight);
+            }
+
+            context.lineWidth = 1;
+
+            // Border Line for Stop Loss (Red)
+            if (slY !== null) {
+              context.strokeStyle = "rgba(239, 68, 68, 0.4)";
+              context.beginPath();
+              context.moveTo(entryX, slY);
+              context.lineTo(mediaSize.width, slY);
+              context.stroke();
+            }
+
+            // Border Line for Take Profit (Green)
+            if (tpY !== null) {
+              context.strokeStyle = "rgba(16, 185, 129, 0.4)";
+              context.beginPath();
+              context.moveTo(entryX, tpY);
+              context.lineTo(mediaSize.width, tpY);
+              context.stroke();
+            }
+
+            // Border Line for Entry (Amber)
+            context.strokeStyle = "rgba(245, 158, 11, 0.5)";
+            context.beginPath();
+            context.moveTo(entryX, entryY);
+            context.lineTo(mediaSize.width, entryY);
+            context.stroke();
+
+            // Vertical dotted starting line at entryTime
+            context.strokeStyle = "rgba(161, 161, 170, 0.3)";
+            context.setLineDash([4, 4]);
+            context.beginPath();
+            context.moveTo(entryX, Math.min(lossYStart, profitYStart));
+            context.lineTo(entryX, Math.max(lossYStart + lossHeight, profitYStart + profitHeight));
+            context.stroke();
+
+            context.restore();
+          });
+        }
+      })
+    };
+  }
+
+  attached(param: any) {
+    this._series = param.series;
+    this._chart = param.chart;
+  }
+
+  detached() {
+    this._series = null;
+    this._chart = null;
+  }
+
+  paneViews() {
+    return [this._paneView];
+  }
+
+  priceAxisViews() {
+    return [];
+  }
+
+  timeAxisViews() {
+    return [];
+  }
+}
+
 type InteractiveChartProps = {
   selectedSymbol?: string;
   selectedTrade?: any;
@@ -232,6 +369,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
 
     // Reset/clear any previous price lines before drawing new ones
     const activeLines: any[] = [];
+    let positionPrimitive: any = null;
 
     // Find if we have an active position for the current symbol
     const activePos = positions?.find(
@@ -296,6 +434,22 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
         });
         activeLines.push(tp2Line);
       }
+
+      // Attach Position Overlay Primitive (Shaded rectangles)
+      const isLong = displayPos.direction === "LONG";
+      const entryTime = Math.floor(new Date(displayPos.opened_at).getTime() / 1000);
+      const targetTp = displayPos.tp2 || displayPos.tp1;
+
+      if (entryTime && displayPos.entry) {
+        positionPrimitive = new PositionOverlayPrimitive(
+          displayPos.entry,
+          displayPos.sl,
+          targetTp,
+          entryTime,
+          isLong
+        );
+        (candleSeries as any).attachPrimitive(positionPrimitive);
+      }
     }
 
     // Find and draw active open orders for the current symbol (Limit Orders)
@@ -326,6 +480,13 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
           // Safe fail if already cleaned up
         }
       });
+      if (positionPrimitive) {
+        try {
+          (candleSeries as any).detachPrimitive(positionPrimitive);
+        } catch (e) {
+          // Safe fail if already cleaned up
+        }
+      }
     };
   }, [positions, orders, activeSymbol, selectedTrade, isLoading]);
 
