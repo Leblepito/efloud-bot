@@ -188,3 +188,14 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## autoresearch
+
+This project has an autonomous trading strategy backtest optimizer at `scripts/autoresearch/` built on self-modifying parameters and backtest evaluation loop patterns.
+
+When the user types `/optimize` or requests strategy optimization:
+- Propose a branch `strategy-opt/<tag>` and run: `git checkout -b strategy-opt/<tag>`.
+- Read and follow all instructions under `scripts/autoresearch/program.md`.
+- Run the infinite self-optimizing training and backtest evaluation loop autonomously.
+- Log results in `scripts/autoresearch/results.tsv`.
+
