@@ -57,6 +57,7 @@ class BotRunner:
         self.running = False
         self.stopped = False
         self.last_error: Optional[str] = None
+        self.pubsub_task: Optional[asyncio.Task] = None  # Phase 3.1 Pub/Sub consumer
 
         # Healthz / crash-loop runtime state (Aşama 2 Step 2)
         from engine.safety.runtime_state import RuntimeState
@@ -230,8 +231,32 @@ class BotRunner:
         bus.publish("bot_started", config_path=cfg_path)
         await db.log_audit("bot_started", {"config_path": cfg_path})
 
+        # Phase 3.1: Start Pub/Sub consumer task (graceful no-op if not configured)
+        try:
+            from backend.pubsub_consumer import PubSubConsumer
+            self._pubsub_consumer = PubSubConsumer(
+                cfg=self.cfg,
+                orchestrator=self.orch,
+                order_manager=self.order_mgr,
+            )
+            self.pubsub_task = asyncio.create_task(
+                self._pubsub_consumer.run(), name="pubsub_consumer"
+            )
+            log.info("📡 Pub/Sub consumer task launched")
+        except Exception as e:
+            log.warning(f"Pub/Sub consumer failed to start (non-critical): {e}")
+
     async def stop(self) -> None:
         self.stopped = True
+        # Phase 3.1: stop Pub/Sub consumer
+        if self.pubsub_task and not self.pubsub_task.done():
+            try:
+                self._pubsub_consumer.stop()
+                await asyncio.wait_for(self.pubsub_task, timeout=5.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                self.pubsub_task.cancel()
+            except Exception as e:
+                log.warning(f"Pub/Sub consumer stop error: {e}")
         if self.task and not self.task.done():
             self.task.cancel()
             try:

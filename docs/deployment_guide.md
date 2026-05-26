@@ -105,3 +105,41 @@ Bu otonom döngü sayesinde:
 1. **Veri Güvenliği:** Backtest ve optimizasyon sonuçları asla kaybolmaz, Supabase'de tarihsel olarak arşivlenir.
 2. **Sıfır Risk:** Canlı bot (`Hetzner`) kesintiye uğramadan, tüm optimizasyon ve AI akıl yürütme yükü `Railway` üzerinde izole şekilde çalışır.
 3. **Maksimum Performans:** En iyi konfigürasyon adayı Supabase ve TSV üzerinde raporlandığında, Utku dashboard üzerinden tek tıkla onay vererek Hetzner'deki canlı botu güncelleyebilir.
+
+---
+
+## 📊 5. GCP BigQuery Warehouse Arşivleme & Cron Kurulumu (Phase 3.2 & Phase 3.4)
+
+Supabase veritabanındaki kapalı trade verilerini derinlemesine analizler yapmak üzere GCP BigQuery veri ambarına günlük toplu (batch) olarak arşivlemek için `scripts/bigquery_archive.py` entegrasyonu tamamlanmıştır.
+
+### 🔑 Gerekli Ortam Değişkenleri (.env)
+
+BigQuery sync işleminin sunucu üzerinde çalışabilmesi için şu environment değişkenlerinin VPS'te veya `.env.production` dosyasında tanımlanması gereklidir:
+
+```properties
+# GCP BigQuery Ayarları
+EFLOUD_BQ_PROJECT_ID="gcp-project-id"
+EFLOUD_BQ_DATASET_ID="efloud_warehouse"
+EFLOUD_BQ_TABLE_ID="trades"
+EFLOUD_BQ_LOCATION="US"
+
+# GCP Kimlik Bilgileri (Service Account JSON)
+EFLOUD_PUBSUB_SERVICE_ACCOUNT_JSON='{"type": "service_account", "project_id": "...", ...}'
+```
+
+### ⏰ Hetzner VPS Üzerinde Günlük Cron Kurulumu
+
+Archiver scriptini her gün gece yarısı (UTC 00:00) otomatik çalıştırmak için sunucu üzerinde şu adımları izleyin:
+
+1. VPS terminalinde crontab'i düzenleyin:
+   ```bash
+   crontab -e
+   ```
+
+2. Crontab dosyasına şu satırı ekleyin:
+   ```text
+   0 0 * * * cd /opt/efloud-bot && docker compose -f docker-compose.prod.yml exec -T efloud-bot python3 scripts/bigquery_archive.py >> /var/log/efloud_bq_archive.log 2>&1
+   ```
+
+Bu kurulum sayesinde, her gece kapalı işlemler Supabase'den çekilerek BigQuery veri ambarına aktarılır ve veri ambarı tamamen güncel tutulur.
+

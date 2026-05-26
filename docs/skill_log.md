@@ -33,6 +33,15 @@
 | 2026-05-26 | Antigravity (Orchestrator) | writing-plans | ML Regime Retraining Spec Planı | ✅ | kisa | ML rejim tespiti & automated retraining spec planı yazıldı |
 | 2026-05-26 | Antigravity (Orchestrator) | test-driven-development | ML Regime Classifier & Integration | ✅ | orta | TDD disipliniyle pure-NumPy model, train, ensembling ve orchestrator testleri kodlandı |
 | 2026-05-26 | Antigravity (Orchestrator) | test-driven-development | Hedge Mode & Cross Margin Integration | ✅ | orta | PositionGuard, OrderManager ve BotRunner entegrasyonu tamamlandı, 704/704 test yeşil |
+| 2026-05-26 | Antigravity (Orchestrator) | test-driven-development | Phase 3.2: Trade Warehouse DB Extension | ✅ | orta | `009_trade_warehouse_extension.sql`, `db.py` genişletmesi, `exchange/__init__.py` Position telemetri alanları. 8/8 test yeşil |
+| 2026-05-26 | Antigravity (Orchestrator) | test-driven-development | Phase 3.1: GCP Pub/Sub Signal Queue | ✅ | orta | `backend/pubsub_consumer.py` (PubSubSignal + emulator), `bot_runner.py` start/stop entegrasyonu. 12/12 test yeşil |
+| 2026-05-26 | Antigravity (Orchestrator) | test-driven-development | Phase 3.2: GCP BigQuery Trade Warehouse Archiver | ✅ | orta | `scripts/bigquery_archive.py` (idempotent sync, custom MockNotFound exception) ve `test_bigquery_archive.py` mock entegrasyonu. 5/5 test yeşil |
+| 2026-05-26 | Antigravity (Orchestrator) | NextJS Dashboard | Phase 3.3: Premium Trade Detail Panel | ✅ | orta | `TradeDetailPanel.tsx` (excursions MAE/MFE progress bars, telemetry and confluence metrics), wired in `page.tsx` with typecheck yeşil |
+| 2026-05-26 | Antigravity (Orchestrator) | test-driven-development | Phase 3.5: Pluggable Forex Exchange Adapter | ✅ | orta | `adapter.py` ExchangeAdapter PEP 544 Protocol, `mt5.py` and `oanda.py` concrete adapters with mock fallbacks, verified by 3/3 test suite |
+| 2026-05-26 | Antigravity (Orchestrator) | writing-plans | Phase 4: Self-Evolution Loop & VPS Deploy | ✅ | kisa | Phase 4 implementation plan & VPS deployment runbook created |
+| 2026-05-26 | Antigravity (Orchestrator) | prompt-evolution | Phase 4.2: Prompt Evolution | ✅ | orta | 4 agent templates evolved with superpowers TDD & AST Graphify constraints |
+| 2026-05-26 | Antigravity (Flash) | git-hooks | Phase 4.4: Graphify Auto-Update Git Hook | ✅ | kisa | `scripts/setup_git_hooks.py` created and post-commit hook successfully registered |
+
 
 ---
 

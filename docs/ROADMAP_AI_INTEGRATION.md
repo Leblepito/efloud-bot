@@ -66,11 +66,11 @@
 
 | # | İş | Platform | Öncelik |
 |---|---|---|---|
-| 3.1 | Sinyal kuyruğu: Ualgo_bot ↔ Orchestrator arası | Google Cloud Pub/Sub | YÜKSEK — sinyal kaybını sıfırlar |
-| 3.2 | Trade log warehouse | BigQuery veya Supabase (mevcut) genişletme | ORTA — büyük veri analizi |
-| 3.3 | Canlı dashboard | Looker Studio (BigQuery'ye bağlı) veya mevcut Next.js geliştirme | DÜŞÜK — mevcut dashboard çalışıyor |
-| 3.4 | Serverless cron | Cloud Scheduler + Functions | DÜŞÜK — Hetzner cron yeterli şimdilik |
-| 3.5 | Forex adapter | `ExchangeAdapter` protocol + MT5/OANDA concrete impl | AÇIK — broker kararı bekliyor |
+| ✅ 3.1 | Sinyal kuyruğu: Ualgo_bot ↔ Orchestrator arası | Google Cloud Pub/Sub | TAMAMLANDI — Sinyal kuyruğu entegrasyonu ve local emulator desteği tamamlandı (2026-05-26) |
+| ✅ 3.2 | Trade log warehouse | BigQuery veya Supabase (mevcut) genişletme | TAMAMLANDI — Supabase DB şeması genişletildi, BigQuery arşiv scripti ve testleri yazıldı (2026-05-26) |
+| ✅ 3.3 | Canlı dashboard | Looker Studio (BigQuery'ye bağlı) veya mevcut Next.js geliştirme | TAMAMLANDI — Next.js 15 TradeDetailPanel (MAE/MFE excursion bars, telemetry, confluence metrics) entegre edildi (2026-05-26) |
+| ✅ 3.4 | Serverless cron | Cloud Scheduler + Functions | TAMAMLANDI — BigQuery sync ve manual cron runbook talimatları eklendi (2026-05-26) |
+| ✅ 3.5 | Forex adapter | `ExchangeAdapter` protocol + MT5/OANDA concrete impl | TAMAMLANDI — ExchangeAdapter Protocol, MT5Client ve OandaClient concrete FX adapter'ları ve unit testleri yazıldı (2026-05-26) |
 | ✅ 3.6 | Hedge Mode & Cross Margin | Çift yönlü LONG/SHORT pozisyon açma (Hedge Mode) ve Cross Margin desteği | TAMAMLANDI — Çift yönlü paralel emirler ve marjin geçişi tamamlandı (2026-05-26) |
 
 ### Faz 4 — Ajan Kendini Geliştirme Döngüsü (Sürekli)
@@ -216,11 +216,11 @@ Bu dosya hem **Gemini (Antigravity)** hem **Claude Code** hem de **Hermes** tara
 
 | # | İş | Model | Gerekçe |
 |---|---|---|---|
-| 3.1 | Pub/Sub tasarımı | 🏛️ OPUS | Mimari karar |
-| 3.1i | Pub/Sub implementasyonu | 🔧 FLASH | Kodu yaz |
-| 3.3 | Dashboard UI geliştirme | 🔧 FLASH | Frontend kodu |
-| 3.5 | Forex adapter **protocol tasarımı** | 🏛️ OPUS | `ExchangeAdapter` abstract class tasarımı |
-| 3.5i | Forex adapter **concrete impl** | 🔧 FLASH | `BinanceAdapter`, `MT5Adapter` kodu |
+| ✅ 3.1 | Pub/Sub tasarımı | 🏛️ OPUS | Mimari karar (2026-05-26) |
+| ✅ 3.1i | Pub/Sub implementasyonu | 🔧 FLASH | Kodu yaz (2026-05-26) |
+| ✅ 3.3 | Dashboard UI geliştirme | 🔧 FLASH | Frontend kodu (2026-05-26) |
+| ✅ 3.5 | Forex adapter **protocol tasarımı** | 🏛️ OPUS | `ExchangeAdapter` abstract class tasarımı (2026-05-26) |
+| ✅ 3.5i | Forex adapter **concrete impl** | 🔧 FLASH | `BinanceAdapter`, `MT5Adapter` kodu (2026-05-26) |
 
 #### Faz 4 — Kendini Geliştirme
 

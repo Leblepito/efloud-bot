@@ -36,11 +36,18 @@
 
 ---
 
-## Planlanan Prompt İyileştirmeleri
+### 2026-05-26 — Phase 4.2 Prompt Evolution
+- **Dosyalar:** 
+  - `.claude/agents/efloud-test-engineer.md`
+  - `.claude/agents/efloud-code-reviewer.md`
+  - `.claude/agents/efloud-risk-ops-reviewer.md`
+  - `.claude/agents/efloud-explorer.md`
+- **Motivasyon:** Ajan ekosistemini TDD, AST Graphify, strict mainnet safeguards ve gelişmiş hata ayıklama yetenekleri ile donatarak canlı kapital güvenliğini artırmak.
+- **Referans:** `superpowers/skills/test-driven-development/`, `system_prompts_leaks/Google/gemini-3.5-flash.md`, `system_prompts_leaks/Anthropic/claude-opus-4.7.md`, `graphify/README.md`
+- **Önceki davranış:** Prompt'lar basic seviyedeydi, TDD demir kanunları ve AST Graphify entegrasyonu bulunmuyordu.
+- **Yeni davranış:**
+  - `efloud-test-engineer.md` artık TDD "Iron Law" (No production code without failing test) ve Red-Green-Refactor döngüsünü zorunlu kılmaktadır.
+  - `efloud-code-reviewer.md` artık atomik commit kurallarını ve AST Graphify ile caller/impact side-effect analizini zorunlu kılmaktadır.
+  - `efloud-risk-ops-reviewer.md` artık server-side conditional SL/TP emirlerini, isolated vs cross margin limitlerini ve geriye uyumlu DB migrations kurallarını doğrulamaktadır.
+  - `efloud-explorer.md` artık kod tespiti ve dosya aramalarında `graphify query` ve `graphify explain` CLI araçlarını öncelikli kılmaktadır.
 
-| Hedef Ajan | Planlanan Değişiklik | Kaynak Referans | Öncelik |
-|---|---|---|---|
-| efloud-code-reviewer | Superpowers TDD ve code-review skill'lerinden best-practice entegrasyonu | `superpowers/skills/requesting-code-review/` | ORTA |
-| efloud-test-engineer | RED-GREEN-REFACTOR döngüsünün zorunlu kılınması | `superpowers/skills/test-driven-development/` | YÜKSEK |
-| efloud-risk-ops-reviewer | Gemini 3.5 Flash ve Claude Opus 4.7 system prompt'larındaki güvenlik pattern'leri | `system_prompts_leaks/Google/gemini-3.5-flash.md`, `Anthropic/claude-opus-4.7.md` | ORTA |
-| efloud-explorer | Graphify bilgi grafiği sorgulama yeteneği eklenmesi | `graphify/README.md` | DÜŞÜK |

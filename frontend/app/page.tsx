@@ -11,6 +11,7 @@ import { OpenOrdersTable } from "@/components/OpenOrdersTable";
 import { TradesTable } from "@/components/TradesTable";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { LiveSync } from "@/components/LiveSync";
+import { TradeDetailPanel } from "@/components/TradeDetailPanel";
 
 export default function Dashboard() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
@@ -61,6 +62,7 @@ export default function Dashboard() {
         </footer>
       </main>
       <LiveSync />
+      <TradeDetailPanel trade={selectedTrade} onClose={() => setSelectedTrade(null)} />
     </div>
   );
 }

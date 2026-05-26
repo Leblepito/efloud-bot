@@ -954,12 +954,14 @@ class SafeOrchestrator:
                             exchange_ok = True
                             if self.order_manager is not None:
                                 try:
-                                    # Build confluence_details for DB warehouse from signal
+                                    # Phase 3.2: build confluence_details for DB warehouse
                                     _conf_details = {
                                         "score": latest.confluence,
                                         "reasons": getattr(latest, "reasons", []),
                                         "htf_bias": htf_bias,
                                         "regime": regime_analysis.regime,
+                                        "adx": float(regime_analysis.adx),
+                                        "atr_ratio": float(regime_analysis.atr_ratio),
                                     } if latest is not None else None
                                     exchange_pos = self.order_manager.open_position(
                                         symbol, latest.direction, size,
