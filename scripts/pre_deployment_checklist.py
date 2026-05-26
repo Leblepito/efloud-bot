@@ -201,7 +201,11 @@ class PreDeploymentChecker:
     def _check_api_connection(self) -> bool:
         """Binance API bağlantısı ve yetki kontrolü."""
         try:
-            client = BinanceClient(testnet=False)
+            client = BinanceClient(
+                api_key=os.getenv('BINANCE_API_KEY', ''),
+                api_secret=os.getenv('BINANCE_API_SECRET', ''),
+                testnet=False
+            )
 
             # Test connection
             exchange_info = client.exchange.fetch_markets()
@@ -275,7 +279,11 @@ class PreDeploymentChecker:
     def _check_permission_manager(self) -> bool:
         """Permission manager'ın API'den yetkileri doğru tespit ettiğini kontrol et."""
         try:
-            client = BinanceClient(testnet=False)
+            client = BinanceClient(
+                api_key=os.getenv('BINANCE_API_KEY', ''),
+                api_secret=os.getenv('BINANCE_API_SECRET', ''),
+                testnet=False
+            )
             perm_manager = PermissionManager(client)
 
             # Test symbol list
