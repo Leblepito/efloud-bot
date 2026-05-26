@@ -2,13 +2,19 @@
 
 import logging
 from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from .smc import SMCEngine
 from .confluence import calc_confluence
 import pandas as pd
+import httpx
+import os
+import json
+from utils.cache import SentimentCache
 
 log = logging.getLogger("efloud.signals")
 
+# Global cache for structure validations
+_struct_cache = SentimentCache()
 
 def _normalize_symbol(symbol: str) -> str:
     """Canonicalize symbol form to `BASE/QUOTE` (with slash).
@@ -86,6 +92,113 @@ class Signal:
         return asdict(self)
 
 
+def _df_to_compact_csv(df: pd.DataFrame, limit: int = 20) -> str:
+    """Format the last N bars of a DataFrame into a compact CSV string."""
+    if df is None or df.empty:
+        return "No data available."
+    sub_df = df.iloc[-limit:]
+    lines = ["Time,Open,High,Low,Close,Vol"]
+    for idx, row in sub_df.iterrows():
+        ts_str = idx.strftime("%m-%d %H:%M") if isinstance(idx, pd.Timestamp) else str(idx)
+        lines.append(f"{ts_str},{row['open']:.4f},{row['high']:.4f},{row['low']:.4f},{row['close']:.4f},{int(row.get('volume', 0))}")
+    return "\n".join(lines)
+
+
+def validate_signal_with_gemini(
+    symbol: str,
+    direction: str,
+    entry: float,
+    sl: float,
+    tp: float,
+    df_htf: pd.DataFrame,
+    df_mtf: pd.DataFrame,
+    df_entry: pd.DataFrame,
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Validate a trade signal's market structure using Gemini 1.5 Flash."""
+    if not api_key:
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        
+    if not api_key:
+        # Graceful degradation fallback if no API key is configured
+        log.warning("Gemini API key not found. Skipping structure validation (degrades gracefully).")
+        return {"valid": True, "confidence": 1.0, "reasoning": "Fallback due to missing API key."}
+
+    # Format timeframes
+    htf_csv = _df_to_compact_csv(df_htf, limit=20)
+    mtf_csv = _df_to_compact_csv(df_mtf, limit=20)
+    entry_csv = _df_to_compact_csv(df_entry, limit=20)
+
+    prompt = f"""
+You are a Senior Smart Money Concepts (SMC) Trading Expert.
+Analyze the market structure for {symbol} to validate a potential {direction} setup:
+- Entry Price: {entry}
+- Stop Loss: {sl}
+- Take Profit: {tp}
+
+Timeframe Data (last 20 candles):
+HTF (4h):
+{htf_csv}
+
+MTF (1h):
+{mtf_csv}
+
+Entry TF (15m):
+{entry_csv}
+
+SMC Validation Criteria:
+1. Verify if the recent Break of Structure (BOS) or Change of Character (CHoCH) represents true institutional order flow (smart money entering) or if it is just a retail trap / liquidity sweep.
+2. Confirm if the Stop Loss level is placed safely below/above key order blocks or liquidity pools.
+3. Confirm if the overall higher-timeframe (4h) bias supports this entry direction.
+
+Output ONLY a raw JSON structure matching exactly this template:
+{{"valid": true, "confidence": 0.85, "reasoning": "Explain your key structural observation briefly (1-2 sentences)"}}
+Do not include any markdown backticks or extra text, just the raw JSON.
+"""
+
+    # Check cache
+    cached = _struct_cache.get(prompt)
+    if cached:
+        return cached
+
+    # Synchronous HTTPX request to eliminate complex loop collisions
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ]
+    }
+
+    try:
+        resp = httpx.post(url, headers=headers, json=payload, timeout=10.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            
+            # Clean markdown JSON wraps
+            if raw_text.startswith("```"):
+                lines = raw_text.split("\n")
+                raw_text = "\n".join([line for line in lines if not line.startswith("```")])
+            
+            result = json.loads(raw_text)
+            
+            # Cache the parsed result
+            _struct_cache.set(prompt, result)
+            return result
+        else:
+            log.warning(f"Gemini API returned error status {resp.status_code}: {resp.text}")
+    except Exception as e:
+        log.warning(f"Exception during Gemini signal structure validation: {e}")
+
+    # Fallback to keep signal on API failure / timeout
+    return {"valid": True, "confidence": 1.0, "reasoning": "Fallback due to API failure or timeout."}
+
+
 def generate_signals(
     engine: SMCEngine,
     df_htf: pd.DataFrame,
@@ -101,7 +214,7 @@ def generate_signals(
     symbol_confluence_overrides: Optional[Dict[str, int]] = None,  # NEW
 ) -> List[Signal]:
     """
-    4-Timeframe Efloud setup akışı:
+    4-Timeframe Efloud akışı:
     1. Daily (1d) → makro yön filtresi (opsiyonel, +confluence puanı)
     2. HTF (4h)  → bias + POI
     3. MTF (1h)  → CHoCH onay
@@ -192,14 +305,12 @@ def generate_signals(
 
     for brk in e_brks:
         # CHoCH (reversal) + BOS (continuation) — both must align with HTF bias.
-        # See docs/superpowers/specs/2026-05-08-bull-aware-signal-trigger-design.md
         if brk.kind not in ("CHoCH", "BOS") or brk.direction != htf_bias:
             continue
         if brk.idx < recent_cutoff:
             continue
         # BOS events fire far more often than CHoCH; tighten the recency
-        # window so we don't enter on stale continuation breaks (e.g. a
-        # BOS from 6h ago whose breakout move is already exhausted).
+        # window so we don't enter on stale continuation breaks.
         if brk.kind == "BOS" and brk.idx < (last_bar_idx - recency_bars // 2):
             continue
         aligned_triggers += 1
@@ -266,18 +377,10 @@ def generate_signals(
             continue
 
         # SL / TP
-        # LONG CHoCH (yukarı kırılım):
-        #   SL  = en son swing low (kırılım'dan önceki, aşağıda)
-        #   TP1 = öncelikli ulaşılmamış HTF direnç veya risk × 2 projeksiyon
-        # SHORT CHoCH (aşağı kırılım):
-        #   SL  = en son swing high (kırılım'dan önceki, yukarıda)
-        #   TP1 = öncelikli ulaşılmamış HTF destek veya risk × 2 projeksiyon
         if is_long:
             sl_c = [s for s in e_sl if s.idx < brk.idx]
             sl = sl_c[-1].price if sl_c else price * 0.99
             risk_tmp = abs(price - sl)
-            # TP1: fiyatın üstündeki HTF hedefi, ama min_rr'yi sağlamalı.
-            # Yakın HTF resistance R:R'yi boğmasın diye min_rr × risk eşiği üstündekileri al.
             min_tp_long = price + risk_tmp * min_rr
             htf_above_targets = [f.top for f in htf_fvgs
                                    if f.direction == "BULL" and f.top >= min_tp_long]
@@ -326,6 +429,30 @@ def generate_signals(
             in_ote=in_ote, in_ob=in_ob, has_sfp=has_sfp,
             zone="DISCOUNT" if e_range.discount else "PREMIUM"
         )
+        
+        # SMC Structure Validation Layer (Phase 2.2)
+        if symbol:
+            val_res = validate_signal_with_gemini(
+                symbol=symbol,
+                direction=sig.direction,
+                entry=sig.entry,
+                sl=sig.sl,
+                tp=sig.tp1,
+                df_htf=df_htf,
+                df_mtf=df_mtf,
+                df_entry=df_entry
+            )
+            
+            confidence = val_res.get("confidence", 1.0)
+            is_valid = val_res.get("valid", True)
+            reasoning = val_res.get("reasoning", "")
+            
+            log.info(f"SMC Structure Validation [{symbol}]: valid={is_valid}, confidence={confidence:.2f}, reasoning='{reasoning}'")
+            
+            if not is_valid or confidence < 0.70:
+                log.info(f"❌ Signal {sig.direction} @ {sig.entry} rejected by Gemini Structure Validation Layer (confidence={confidence:.2f})")
+                continue
+
         signals.append(sig)
         log.info(f"Signal: {sig.direction} @ {sig.entry} | Conf={sig.confluence} | R:R={sig.rr1}/{sig.rr2}")
 
