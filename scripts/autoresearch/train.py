@@ -60,7 +60,7 @@ CONFIG = {
         "ext_tp2": 1.618
     },
     "risk": {
-        "risk_per_trade_pct": 1.5,
+        "risk_per_trade_pct": 2.0,
         "max_open_positions": 10,
         "min_rr": 1.5,
         "min_confluence": 50,
@@ -84,7 +84,7 @@ CONFIG = {
         "adx_range_threshold": 0,
         "allow_volatile_entries": True,
         "volatile_atr_mult": 2.5,
-        "max_position_notional_pct": 3.0,
+        "max_position_notional_pct": 4.0,
         "max_total_exposure": 1.0,
         "max_holding_hours": 24,
         "max_pyramid_adds": 0,
