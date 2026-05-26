@@ -19,6 +19,7 @@ class PositionOverlayPrimitive {
     private slPrice: number,
     private tpPrice: number,
     private entryTime: number,
+    private exitTime: number | null,
     private isLong: boolean
   ) {
     this._paneView = {
@@ -38,8 +39,13 @@ class PositionOverlayPrimitive {
 
             if (entryX === null || entryY === null) return;
 
-            const rectWidth = mediaSize.width - entryX;
-            if (rectWidth <= 0) return;
+            const exitX = this.exitTime ? timeScale.timeToCoordinate(this.exitTime) : null;
+            const rectEndX = exitX !== null ? exitX : mediaSize.width;
+            
+            // If the entire box is off-screen to the left or right, do not draw
+            if (rectEndX < 0 || entryX > mediaSize.width) return;
+
+            const rectWidth = rectEndX - entryX;
 
             let lossYStart = entryY;
             let lossHeight = 0;
@@ -68,6 +74,7 @@ class PositionOverlayPrimitive {
 
             context.save();
 
+            // 1. Draw Shaded Regions
             // Loss Zone (Red Shading)
             if (lossHeight > 0) {
               context.fillStyle = "rgba(239, 68, 68, 0.15)";
@@ -80,40 +87,135 @@ class PositionOverlayPrimitive {
               context.fillRect(entryX, profitYStart, rectWidth, profitHeight);
             }
 
+            // 2. Draw Clean Border/Level Lines (Only within start and end coordinates)
             context.lineWidth = 1;
 
-            // Border Line for Stop Loss (Red)
+            const lossPct = this.entryPrice ? Math.abs(((this.slPrice - this.entryPrice) / this.entryPrice) * 100) : 0;
+            const profitPct = this.entryPrice ? Math.abs(((this.tpPrice - this.entryPrice) / this.entryPrice) * 100) : 0;
+
+            const labelEndX = Math.min(rectEndX, mediaSize.width);
+
+            const drawPriceTag = (y: number, text: string, bgColor: string) => {
+              context.save();
+              context.font = "bold 9px var(--font-geist-mono), monospace";
+              const textWidth = context.measureText(text).width;
+              const tagW = textWidth + 8;
+              const tagH = 14;
+              // Make sure the tag fits within the canvas horizontally
+              const tagX = Math.max(0, labelEndX - tagW);
+              const tagY = y - tagH / 2;
+
+              context.fillStyle = bgColor;
+              context.beginPath();
+              if (context.roundRect) {
+                context.roundRect(tagX, tagY, tagW, tagH, 2);
+              } else {
+                context.rect(tagX, tagY, tagW, tagH);
+              }
+              context.fill();
+
+              context.fillStyle = "#ffffff";
+              context.textAlign = "left";
+              context.textBaseline = "middle";
+              context.fillText(text, tagX + 4, y);
+              context.restore();
+            };
+
+            // Stop Loss Line
             if (slY !== null) {
               context.strokeStyle = "rgba(239, 68, 68, 0.4)";
               context.beginPath();
               context.moveTo(entryX, slY);
-              context.lineTo(mediaSize.width, slY);
+              context.lineTo(rectEndX, slY);
               context.stroke();
+              
+              drawPriceTag(slY, `SL: ${this.slPrice.toFixed(4)} (-${lossPct.toFixed(2)}%)`, "rgba(220, 38, 38, 0.85)");
             }
 
-            // Border Line for Take Profit (Green)
+            // Take Profit Line
             if (tpY !== null) {
               context.strokeStyle = "rgba(16, 185, 129, 0.4)";
               context.beginPath();
               context.moveTo(entryX, tpY);
-              context.lineTo(mediaSize.width, tpY);
+              context.lineTo(rectEndX, tpY);
               context.stroke();
+
+              drawPriceTag(tpY, `TP: ${this.tpPrice.toFixed(4)} (+${profitPct.toFixed(2)}%)`, "rgba(5, 150, 105, 0.85)");
             }
 
-            // Border Line for Entry (Amber)
+            // Entry Line
             context.strokeStyle = "rgba(245, 158, 11, 0.5)";
             context.beginPath();
             context.moveTo(entryX, entryY);
-            context.lineTo(mediaSize.width, entryY);
+            context.lineTo(rectEndX, entryY);
             context.stroke();
 
-            // Vertical dotted starting line at entryTime
-            context.strokeStyle = "rgba(161, 161, 170, 0.3)";
-            context.setLineDash([4, 4]);
-            context.beginPath();
-            context.moveTo(entryX, Math.min(lossYStart, profitYStart));
-            context.lineTo(entryX, Math.max(lossYStart + lossHeight, profitYStart + profitHeight));
-            context.stroke();
+            drawPriceTag(entryY, `ENTRY: ${this.entryPrice.toFixed(4)}`, "rgba(217, 119, 6, 0.85)");
+
+            // 3. Draw Vertical Boundaries (Start and End)
+            // Vertical starting line
+            if (entryX >= 0 && entryX <= mediaSize.width) {
+              context.strokeStyle = "rgba(161, 161, 170, 0.4)";
+              context.setLineDash([4, 4]);
+              context.beginPath();
+              context.moveTo(entryX, Math.min(lossYStart, profitYStart));
+              context.lineTo(entryX, Math.max(lossYStart + lossHeight, profitYStart + profitHeight));
+              context.stroke();
+              context.setLineDash([]);
+            }
+
+            // Vertical ending line
+            if (exitX !== null && exitX >= 0 && exitX <= mediaSize.width) {
+              context.strokeStyle = "rgba(161, 161, 170, 0.4)";
+              context.setLineDash([4, 4]);
+              context.beginPath();
+              context.moveTo(exitX, Math.min(lossYStart, profitYStart));
+              context.lineTo(exitX, Math.max(lossYStart + lossHeight, profitYStart + profitHeight));
+              context.stroke();
+              context.setLineDash([]);
+            }
+
+            // 4. Draw Center Floating Badges (Centering dynamically in the visible horizontal box)
+            const visibleLeft = Math.max(0, entryX);
+            const visibleRight = Math.min(mediaSize.width, rectEndX);
+            const visibleWidth = visibleRight - visibleLeft;
+            const middleX = (visibleLeft + visibleRight) / 2;
+
+            const drawBadge = (x: number, y: number, text: string, bgColor: string, textColor: string) => {
+              context.save();
+              context.font = "bold 9px var(--font-geist-mono), monospace";
+              const textWidth = context.measureText(text).width;
+              const padX = 6;
+              const padY = 3;
+              const badgeW = textWidth + padX * 2;
+              const badgeH = 14;
+              const badgeX = x - badgeW / 2;
+              const badgeY = y - badgeH / 2;
+
+              context.fillStyle = bgColor;
+              context.beginPath();
+              if (context.roundRect) {
+                context.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
+              } else {
+                context.rect(badgeX, badgeY, badgeW, badgeH);
+              }
+              context.fill();
+
+              context.fillStyle = textColor;
+              context.textAlign = "center";
+              context.textBaseline = "middle";
+              context.fillText(text, x, y);
+              context.restore();
+            };
+
+            if (visibleWidth > 40) {
+              if (lossHeight > 16) {
+                drawBadge(middleX, lossYStart + lossHeight / 2, `SL: -${lossPct.toFixed(2)}%`, "rgba(220, 38, 38, 0.75)", "#ffffff");
+              }
+              if (profitHeight > 16) {
+                drawBadge(middleX, profitYStart + profitHeight / 2, `TP: +${profitPct.toFixed(2)}%`, "rgba(5, 150, 105, 0.75)", "#ffffff");
+              }
+            }
 
             context.restore();
           });
@@ -382,62 +484,10 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     const displayPos = activePos || histTrade;
 
     if (displayPos) {
-      const isHist = !!histTrade && !activePos;
-      // Entry Line (Yellow Dotted)
-      const entryLine = candleSeries.createPriceLine({
-        price: displayPos.entry,
-        color: "#F59E0B", // amber-500
-        lineWidth: 2,
-        lineStyle: LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: `${isHist ? "HIST ENTRY" : "ENTRY"}: ${n(displayPos.entry, 4)}`,
-      });
-      activeLines.push(entryLine);
-
-      // Stop Loss Line (Red Solid)
-      if (displayPos.sl) {
-        const slLine = candleSeries.createPriceLine({
-          price: displayPos.sl,
-          color: "#FF4D4D",
-          lineWidth: 2,
-          lineStyle: LineStyle.Solid,
-          axisLabelVisible: true,
-          title: `${isHist ? "HIST SL" : "SL"}: ${n(displayPos.sl, 4)}`,
-        });
-        activeLines.push(slLine);
-      }
-
-      // Take Profit 1 (Green Solid)
-      if (displayPos.tp1) {
-        const isHit = isHist ? (displayPos.reason === "TP1" || displayPos.reason === "TP2" || displayPos.reason === "TP2_POLL") : displayPos.tp1_hit;
-        const tp1Line = candleSeries.createPriceLine({
-          price: displayPos.tp1,
-          color: "#00FF88",
-          lineWidth: 2,
-          lineStyle: LineStyle.Solid,
-          axisLabelVisible: true,
-          title: `${isHist ? "HIST TP1" : "TP1"}: ${n(displayPos.tp1, 4)} ${isHit ? "(HIT)" : ""}`,
-        });
-        activeLines.push(tp1Line);
-      }
-
-      // Take Profit 2 (Green Solid)
-      if (displayPos.tp2) {
-        const isHit = isHist && (displayPos.reason === "TP2" || displayPos.reason === "TP2_POLL");
-        const tp2Line = candleSeries.createPriceLine({
-          price: displayPos.tp2,
-          color: "#059669", // emerald-600
-          lineWidth: 2,
-          lineStyle: LineStyle.Solid,
-          axisLabelVisible: true,
-          title: `${isHist ? "HIST TP2" : "TP2"}: ${n(displayPos.tp2, 4)} ${isHit ? "(HIT)" : ""}`,
-        });
-        activeLines.push(tp2Line);
-      }
-
       // Attach Position Overlay Primitive (Shaded rectangles)
       const isLong = displayPos.direction === "LONG";
       const entryTime = Math.floor(new Date(displayPos.opened_at).getTime() / 1000);
+      const exitTime = displayPos.closed_at ? Math.floor(new Date(displayPos.closed_at).getTime() / 1000) : null;
       const targetTp = displayPos.tp2 || displayPos.tp1;
 
       if (entryTime && displayPos.entry) {
@@ -446,6 +496,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
           displayPos.sl,
           targetTp,
           entryTime,
+          exitTime,
           isLong
         );
         (candleSeries as any).attachPrimitive(positionPrimitive);
