@@ -3,7 +3,7 @@
 import { usePositions } from "@/hooks/usePositions";
 import { fromNow, n, pct, priceDecimals } from "@/lib/format";
 
-export function PositionsTable() {
+export function PositionsTable({ onSelectSymbol }: { onSelectSymbol?: (symbol: string) => void }) {
   const { data, isLoading } = usePositions();
   const rows = data ?? [];
 
@@ -45,7 +45,11 @@ export function PositionsTable() {
               const isLong = p.direction === "LONG";
               const profit = p.unrealized_pct >= 0;
               return (
-                <tr key={p.symbol} className="border-b border-border hover:bg-bg-surface transition-colors animate-slideIn">
+                <tr
+                  key={p.symbol}
+                  onClick={() => onSelectSymbol?.(p.symbol)}
+                  className="border-b border-border hover:bg-bg-surface transition-colors animate-slideIn cursor-pointer"
+                >
                   <td className="px-5 py-2.5 text-text-primary">
                     {p.symbol}
                     {p.tp1_hit && (

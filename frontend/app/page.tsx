@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { StatusGrid } from "@/components/StatusGrid";
 import { AISentimentCard } from "@/components/AISentimentCard";
 import { EquityChart } from "@/components/EquityChart";
+import { InteractiveChart } from "@/components/InteractiveChart";
 import { PositionsTable } from "@/components/PositionsTable";
 import { OpenOrdersTable } from "@/components/OpenOrdersTable";
 import { TradesTable } from "@/components/TradesTable";
@@ -12,6 +13,8 @@ import { ConfigPanel } from "@/components/ConfigPanel";
 import { LiveSync } from "@/components/LiveSync";
 
 export default function Dashboard() {
+  const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
+
   // Cookie tek domain'de (rewrites /api proxy üzerinden) — auth gate /api/status'un
   // 401 dönüşünden geliyor; jsonFetcher yönlendiriyor /login'e.
   useEffect(() => {
@@ -31,13 +34,16 @@ export default function Dashboard() {
           <AISentimentCard />
         </section>
         <section>
+          <InteractiveChart selectedSymbol={selectedSymbol} onSelectSymbol={setSelectedSymbol} />
+        </section>
+        <section>
           <EquityChart />
         </section>
         <section>
-          <PositionsTable />
+          <PositionsTable onSelectSymbol={setSelectedSymbol} />
         </section>
         <section>
-          <OpenOrdersTable />
+          <OpenOrdersTable onSelectSymbol={setSelectedSymbol} />
         </section>
         <section>
           <TradesTable />

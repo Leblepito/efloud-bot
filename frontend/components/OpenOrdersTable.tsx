@@ -28,7 +28,7 @@ function isoFromMs(ms: number | null): string | null {
   return ms ? new Date(ms).toISOString() : null;
 }
 
-export function OpenOrdersTable() {
+export function OpenOrdersTable({ onSelectSymbol }: { onSelectSymbol?: (symbol: string) => void }) {
   const { data, isLoading } = useOrders();
   const rows = data ?? [];
 
@@ -72,7 +72,11 @@ export function OpenOrdersTable() {
                   ? (o.filled / o.amount) * 100
                   : 0;
               return (
-                <tr key={o.id} className="border-b border-border hover:bg-bg-surface transition-colors animate-slideIn">
+                <tr
+                  key={o.id}
+                  onClick={() => onSelectSymbol?.(o.symbol)}
+                  className="border-b border-border hover:bg-bg-surface transition-colors animate-slideIn cursor-pointer"
+                >
                   <td className="px-5 py-2.5 text-text-primary">{o.symbol}</td>
                   <td className="px-3 py-2.5">
                     <span className="text-[10px] tracking-widest text-text-secondary border border-border px-1.5 py-px">
