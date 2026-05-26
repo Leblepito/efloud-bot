@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createChart, ColorType, LineStyle, IChartApi, ISeriesApi, CandlestickSeries } from "lightweight-charts";
+import { createChart, ColorType, LineStyle, IChartApi, ISeriesApi, CandlestickSeries, createSeriesMarkers } from "lightweight-charts";
 import { usePositions } from "@/hooks/usePositions";
 import { useOrders } from "@/hooks/useOrders";
 import { useConfig } from "@/hooks/useConfig";
@@ -18,6 +18,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const markersPluginRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const { data: positions } = usePositions();
@@ -134,6 +135,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
       wickDownColor: "#FF4D4D",
     });
     candleSeriesRef.current = candleSeries;
+    markersPluginRef.current = createSeriesMarkers(candleSeries);
 
     // 3. Handle responsive resizing smoothly
     const resizeObserver = new ResizeObserver((entries) => {
@@ -219,6 +221,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
       chart.remove(); // v5 cleanup method is chart.remove()
       chartRef.current = null;
       candleSeriesRef.current = null;
+      markersPluginRef.current = null;
     };
   }, [activeSymbol, timeframe]);
 
@@ -370,7 +373,9 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     // Sort markers chronologically (Lightweight Charts requirement!)
     markers.sort((a, b) => a.time - b.time);
 
-    (candleSeries as any).setMarkers(markers);
+    if (markersPluginRef.current) {
+      markersPluginRef.current.setMarkers(markers);
+    }
   }, [history, activeSymbol, isLoading]);
 
   const handleSymbolChange = (symbol: string) => {
