@@ -60,7 +60,7 @@ CONFIG = {
         "ext_tp2": 1.618
     },
     "risk": {
-        "risk_per_trade_pct": 1.0,
+        "risk_per_trade_pct": 1.5,
         "max_open_positions": 10,
         "min_rr": 1.5,
         "min_confluence": 50,
