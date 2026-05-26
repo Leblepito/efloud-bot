@@ -2,9 +2,14 @@ import pytest
 from unittest.mock import AsyncMock, patch
 from pathlib import Path
 
-# We import the sentiment module which does not exist yet (this will trigger the failing test)
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
 from engine.ai import sentiment
 
+@pytest.mark.skipif(genai is None, reason="google-generativeai is not installed")
 @pytest.mark.asyncio
 async def test_fetch_sentiment_from_gemini():
     # Mock Gemini response
