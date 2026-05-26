@@ -30,6 +30,8 @@
 | 2026-05-26 | Antigravity (Orchestrator) | Docker Compose Deploy | Hetzner VPS Remote Deploy & Verification | ✅ | orta | Hetzner VPS üzerinde Docker Compose baştan derlendi. SSL/Caddy yönlendirmesi ve API kimlik denetimi canlıda doğrulandı |
 | 2026-05-26 | Antigravity (Orchestrator) | TradingView Charts | Candlestick Terminal & Live Binance WebSockets | ✅ | uzun | TradingView Lightweight Charts v5 ile Binance REST + WS canlı fiyat akışı ve bot işlem seviyeleri overlays entegre edilerek VPS'te canlıya alındı |
 | 2026-05-26 | Antigravity (Orchestrator) | NotebookLMSkill & WrapUpSkill | Hafıza Senkronizasyonu & Oturum Wrap-Up | ✅ | kisa | Google Playwright Chromium tabanlı çerez yakalama sistemi ile NotebookLM kimlik doğrulaması yapıldı, 2026-05-26 oturum özeti "Utku's AI Brain" notebook'una yüklendi |
+| 2026-05-26 | Antigravity (Orchestrator) | writing-plans | ML Regime Retraining Spec Planı | ✅ | kisa | ML rejim tespiti & automated retraining spec planı yazıldı |
+| 2026-05-26 | Antigravity (Orchestrator) | test-driven-development | ML Regime Classifier & Integration | ✅ | orta | TDD disipliniyle pure-NumPy model, train, ensembling ve orchestrator testleri kodlandı |
 
 ---
 
