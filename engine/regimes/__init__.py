@@ -22,7 +22,9 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from typing import Literal
+from pathlib import Path
 import logging
+from engine.regimes.model import RegimeMLModel
 
 log = logging.getLogger("efloud.regime")
 
@@ -73,6 +75,22 @@ class RegimeDetector:
         self.bb_period = bb_period
         self.bb_squeeze = bb_squeeze_threshold
         self.allow_volatile_entries = allow_volatile_entries
+        self.weights_path = Path(__file__).resolve().parents[2] / "state" / "regime_model_weights.json"
+        self.model = None
+        self._load_ml_model()
+
+    def _load_ml_model(self):
+        """Auto-load weights for the ML Regime Detector if present on disk."""
+        if self.weights_path.exists():
+            try:
+                self.model = RegimeMLModel(num_features=5, num_classes=5)
+                self.model.load_weights(str(self.weights_path))
+            except Exception as e:
+                log.warning(f"Failed to load RegimeMLModel weights: {e}")
+                self.model = None
+        else:
+            self.model = None
+
 
     def analyze(self, df: pd.DataFrame,
                  df_htf: pd.DataFrame = None) -> RegimeAnalysis:
@@ -100,36 +118,66 @@ class RegimeDetector:
             htf_aligned = htf_trend_up == mtf_trend_up
 
         # ── Regime decision tree ──
-
-        # 1. VOLATILE: anormal ATR VEYA BB expansion
         bb_expansion = bb_w_ratio > 1.4  # BB normalden %40 geniş
         if atr_ratio > self.vol_mult or (atr_ratio > 1.2 and bb_expansion):
             notes.append(f"ATR {atr_ratio:.1f}x + BBW {bb_w_ratio:.2f} — volatile")
-            return RegimeAnalysis("VOLATILE", 85, adx_val, bb_w_ratio, atr_ratio,
-                                   htf_aligned, notes)
-
-        # 2. RANGING: ADX düşük + BB sıkıştı
-        if adx_val < self.adx_range and bb_w_ratio < self.bb_squeeze:
+            regime = "VOLATILE"
+            confidence = 85
+        elif adx_val < self.adx_range and bb_w_ratio < self.bb_squeeze:
             notes.append(f"ADX {adx_val:.1f} + BB squeezing ({bb_w_ratio:.2f}) — ranging")
-            return RegimeAnalysis("RANGING", 75, adx_val, bb_w_ratio, atr_ratio,
-                                   htf_aligned, notes)
-
-        # 3. REVERSAL: HTF ile MTF farklı yönde + ADX orta
-        if not htf_aligned and self.adx_range <= adx_val <= self.adx_trend:
+            regime = "RANGING"
+            confidence = 75
+        elif not htf_aligned and self.adx_range <= adx_val <= self.adx_trend:
             notes.append(f"HTF/MTF diverging + ADX {adx_val:.1f} — possible reversal")
-            return RegimeAnalysis("REVERSAL", 70, adx_val, bb_w_ratio, atr_ratio,
-                                   htf_aligned, notes)
-
-        # 4. TRENDING: ADX yüksek
-        if adx_val >= self.adx_trend:
+            regime = "REVERSAL"
+            confidence = 70
+        elif adx_val >= self.adx_trend:
             notes.append(f"ADX {adx_val:.1f} — trending")
-            return RegimeAnalysis("TRENDING", 80, adx_val, bb_w_ratio, atr_ratio,
-                                   htf_aligned, notes)
+            regime = "TRENDING"
+            confidence = 80
+        else:
+            notes.append(f"ADX {adx_val:.1f} — weak trend")
+            regime = "TRENDING"
+            confidence = 50
 
-        # 5. Default: TRENDING weak
-        notes.append(f"ADX {adx_val:.1f} — weak trend")
-        return RegimeAnalysis("TRENDING", 50, adx_val, bb_w_ratio, atr_ratio,
-                               htf_aligned, notes)
+        # ── ML Model Inference & Ensembling Layer ──
+        if self.model is not None:
+            try:
+                # Extract features for current state
+                feat_adx = adx_val / 100.0
+                feat_bbw = min(bb_w_ratio, 5.0) / 2.0
+                feat_atr = min(atr_ratio, 5.0) / 2.0
+                
+                # Returns standard deviation of past 20 elements
+                ret = df["close"].iloc[-21:].pct_change().std()
+                feat_ret_std = float(min(ret * 100.0, 5.0)) if not pd.isna(ret) else 0.0
+                
+                # Volume Z-score of past 20 elements
+                vol_sub = df["volume"].iloc[-21:]
+                feat_vol = 0.0
+                vol_std = vol_sub.std()
+                if vol_std > 0:
+                    feat_vol = float((df["volume"].iloc[-1] - vol_sub.mean()) / vol_std)
+                feat_vol = float(max(min(feat_vol, 3.0), -3.0))
+                
+                X_vec = np.array([[feat_adx, feat_bbw, feat_atr, feat_ret_std, feat_vol]])
+                probs = self.model.predict_proba(X_vec)[0]
+                ml_idx = np.argmax(probs)
+                ml_regime = self.model.class_labels[ml_idx]
+                ml_confidence = int(probs[ml_idx] * 100)
+                
+                notes.append(f"ML Model: {ml_regime} ({ml_confidence}%)")
+                
+                # Ensemble voting rule: if ML has >= 65% confidence, merge/promote
+                if ml_confidence >= 65:
+                    regime = ml_regime
+                    confidence = int((ml_confidence + confidence) / 2)
+            except Exception as e:
+                notes.append(f"ML Inference skipped: {e}")
+
+        return RegimeAnalysis(regime, confidence, adx_val, bb_w_ratio, atr_ratio,
+                              htf_aligned, notes)
+
 
     @staticmethod
     def _adx(df: pd.DataFrame, period: int = 14) -> float:
