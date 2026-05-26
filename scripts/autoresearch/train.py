@@ -48,7 +48,7 @@ CONFIG = {
         "entry": "15m"
     },
     "structure": {
-        "swing_lookback": 5,
+        "swing_lookback": 4,
         "ob_sequential": 5,
         "body_mode": True,
         "eq_threshold_pct": 0.1,
