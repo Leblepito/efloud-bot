@@ -62,7 +62,7 @@ CONFIG = {
     "risk": {
         "risk_per_trade_pct": 1.0,
         "max_open_positions": 10,
-        "min_rr": 1.8,
+        "min_rr": 1.5,
         "min_confluence": 50,
         "recency_bars": 40,
         "sl_atr_buffer": 0.5,
