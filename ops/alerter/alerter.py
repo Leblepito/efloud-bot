@@ -24,6 +24,7 @@ from pathlib import Path
 from ops.alerter.dedup import Dedup
 from ops.alerter.rules import RULES, Rule
 from ops.alerter.telegram_client import send_message
+from ops.alerter.formatter import format_alert_with_ai
 
 # Configure logging — alerter has its own simple text format, distinct from bot's JSON
 logging.basicConfig(
@@ -162,7 +163,9 @@ class Alerter:
                 f"rate limit hit ({RATE_LIMIT_MAX_PER_MIN}/min) — dropping {rule.alert_key}"
             )
             return
-        ok = send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, text)
+        # AI-based structured formatting wrapper (with zero-friction fallback)
+        formatted_text = format_alert_with_ai(text, rule.severity, rule.alert_key)
+        ok = send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, formatted_text)
         if ok:
             self.send_timestamps.append(now)
             self.stat_alerts_fired += 1
