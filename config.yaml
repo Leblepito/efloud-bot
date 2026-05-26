@@ -89,7 +89,7 @@ timeframes:
 
 # ── Structure ──
 structure:
-  swing_lookback: 5             # Min 4 (Efloud 4-mum)
+  swing_lookback: 4             # Min 4 (Efloud 4-mum) (Optimized from 5)
   ob_sequential: 5
   body_mode: true               # Kripto = body
   eq_threshold_pct: 0.1
@@ -103,9 +103,9 @@ fibonacci:
 
 # ── Risk ──
 risk:
-  risk_per_trade_pct: 0.75         # 20 coin için düşürüldü (risk dağılımı)
-  max_open_positions: 7             # Aynı anda max 7 pozisyon (20 coin için)
-  min_rr: 1.8                       # R:R 1:1.8 minimum — TP1 mantığı düzeltildi (signals.py)
+  risk_per_trade_pct: 2.0         # 20 coin için düşürüldü (risk dağılımı) (Optimized from 0.75)
+  max_open_positions: 7             # Aynı onda max 7 pozisyon (20 coin için)
+  min_rr: 1.5                       # R:R 1:1.5 minimum — TP1 mantığı düzeltildi (signals.py) (Optimized from 1.8)
   min_confluence: 55                # 55'te: HTF+MTF+OB+OTE gibi 4 konsept bir arada = ~65 puan
                                     # Tek başına HTF+MTF (45 puan) yetmez — multi-concept zorunlu
   recency_bars: 40                   # Sinyal tazelik penceresi (son N bar'daki CHoCH'ları değerlendirir)
@@ -148,7 +148,7 @@ safety:
   volatile_atr_mult: 2.5
 
   # Position Guards — 20 coin için sıkılaştırılmış
-  max_position_notional_pct: 3.0    # Tek trade max %3 (20 coin için)
+  max_position_notional_pct: 8.0    # Tek trade max %8 (Optimized from 3.0)
   max_total_exposure: 3.0            # Toplam notional < 3x balance (konservatif)
   max_holding_hours: 48
   max_pyramid_adds: 2
