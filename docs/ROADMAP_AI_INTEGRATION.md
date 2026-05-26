@@ -71,6 +71,7 @@
 | 3.3 | Canlı dashboard | Looker Studio (BigQuery'ye bağlı) veya mevcut Next.js geliştirme | DÜŞÜK — mevcut dashboard çalışıyor |
 | 3.4 | Serverless cron | Cloud Scheduler + Functions | DÜŞÜK — Hetzner cron yeterli şimdilik |
 | 3.5 | Forex adapter | `ExchangeAdapter` protocol + MT5/OANDA concrete impl | AÇIK — broker kararı bekliyor |
+| 3.6 | Hedge Mode & Cross Margin | Çift yönlü LONG/SHORT pozisyon açma (Hedge Mode) ve Cross Margin desteği | AÇIK — Utku talebi (yeri gelince hatırlatılacak) |
 
 ### Faz 4 — Ajan Kendini Geliştirme Döngüsü (Sürekli)
 
