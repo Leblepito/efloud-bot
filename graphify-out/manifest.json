@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\api.py": {
-    "mtime": 1778215846.164265,
-    "ast_hash": "c38c8e66750aa3a2ae6d9fd99d0df239",
+    "mtime": 1779784909.0224707,
+    "ast_hash": "68be2c6cdbf672276b99b59fb9e12cdc",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\auth.py": {
@@ -780,8 +780,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\engine\\safe_orchestrator.py": {
-    "mtime": 1779585234.9768047,
-    "ast_hash": "20822ba7ab41cba1499f7e6f366b3883",
+    "mtime": 1779780181.8495655,
+    "ast_hash": "939b7691b1835a7b91c78cab74c4538d",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\engine\\scenarios.py": {
@@ -935,8 +935,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\package.json": {
-    "mtime": 1777569947.2948346,
-    "ast_hash": "e73a63252253e94cdcee96b094bc790b",
+    "mtime": 1779783962.694095,
+    "ast_hash": "d1c6faef0240ad4b1dc28ce90595e06a",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\postcss.config.mjs": {
@@ -965,8 +965,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\app\\page.tsx": {
-    "mtime": 1778215846.1696029,
-    "ast_hash": "d13024d7f64f8c311fac1a452a85fe86",
+    "mtime": 1779786606.1490128,
+    "ast_hash": "9a71c8f0665a44659eec434f64070089",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\app\\login\\page.tsx": {
@@ -1005,13 +1005,13 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\OpenOrdersTable.tsx": {
-    "mtime": 1778215846.1701195,
-    "ast_hash": "1a33bef52dbcd301950ff50574f2049e",
+    "mtime": 1779784108.6175673,
+    "ast_hash": "3845f26bc08bd5fd2960347cd6196ede",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\PositionsTable.tsx": {
-    "mtime": 1777570145.7872894,
-    "ast_hash": "9ec2ab3da35f21260b6f6e38658aeaad",
+    "mtime": 1779784100.4913998,
+    "ast_hash": "440437073a986efb85dbe61fc1b63652",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\StatusCard.tsx": {
@@ -1030,8 +1030,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\TradesTable.tsx": {
-    "mtime": 1777570163.6071172,
-    "ast_hash": "f019a793420213003bddd7c12054b3ce",
+    "mtime": 1779786570.1484258,
+    "ast_hash": "b9158c4dcb5d2d9c73c2d57c4dc97fee",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\hooks\\useConfig.ts": {
@@ -1230,8 +1230,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\pre_deployment_checklist.py": {
-    "mtime": 1777566955.0584707,
-    "ast_hash": "6ad549d9f3d8b8ecfd51f9b93032af1a",
+    "mtime": 1779791000.367179,
+    "ast_hash": "adeb685a2ab7a34cabaaa6d0698534b6",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\run_phase_a.py": {
@@ -1500,8 +1500,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\GEMINI.md": {
-    "mtime": 1779770744.7130046,
-    "ast_hash": "e44dc961ac13d708d305ebefd85d7a88",
+    "mtime": 1779772052.4542978,
+    "ast_hash": "08226f2b20e34467c5939a335fb4bba6",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\HERMES.md": {
@@ -1660,18 +1660,18 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\prompt_changelog.md": {
-    "mtime": 1779770240.410889,
-    "ast_hash": "e2bb0cef855020ab9cb55dc40a00c876",
+    "mtime": 1779772058.6693788,
+    "ast_hash": "6badfb8ce0255b3444c2a959dd06fd39",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\ROADMAP_AI_INTEGRATION.md": {
-    "mtime": 1779770830.4802861,
-    "ast_hash": "f81da90ec08511014290871340bcc978",
+    "mtime": 1779782942.5877721,
+    "ast_hash": "be3cf75256575f7f6555c1c23eadc8ce",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\skill_log.md": {
-    "mtime": 1779770222.0109663,
-    "ast_hash": "cb8c98dedf3558f0d7033a714be2f53a",
+    "mtime": 1779790428.5283656,
+    "ast_hash": "dd6e0c72a3fc75df6a3d65db753b2a9c",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\strategy-evolution.md": {
@@ -2032,6 +2032,111 @@
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\README.md": {
     "mtime": 1777566834.8917303,
     "ast_hash": "0c094bad2f1c5b48822c4268643c695f",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\engine\\ai\\sentiment.py": {
+    "mtime": 1779780092.0894182,
+    "ast_hash": "0607e0e33771cf91cd51d05045cc6b86",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\engine\\ai\\__init__.py": {
+    "mtime": 1779780066.2160976,
+    "ast_hash": "8a199febacd5d33a51cbb5411280b92a",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\AISentimentCard.tsx": {
+    "mtime": 1779780257.2612238,
+    "ast_hash": "190092fa0cb90007cd73e114c16b197c",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\InteractiveChart.tsx": {
+    "mtime": 1779788853.1207368,
+    "ast_hash": "aafb444d945795241e7f827431971957",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\optimize_strategy.py": {
+    "mtime": 1779772942.6855288,
+    "ast_hash": "ffe0cdd9ed7176dfc15c75d3eec12e3f",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\sync_optimization_to_supabase.py": {
+    "mtime": 1779772999.42715,
+    "ast_hash": "0bf1aebddf68da3a6534b0c8a969b885",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\tests\\engine\\test_ai_sentiment.py": {
+    "mtime": 1779780006.086478,
+    "ast_hash": "378a363a78d1e04c6140b085c70d27e9",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\tests\\engine\\test_ai_sentiment_registry.py": {
+    "mtime": 1779779840.4997313,
+    "ast_hash": "0cf0bb10933152a4282a0412df1d0dbb",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\tests\\engine\\test_orchestrator_ai_sentiment.py": {
+    "mtime": 1779780207.036294,
+    "ast_hash": "9d9be253f23447019d9fb1720b366d4f",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\tests\\scripts\\test_optimize_strategy.py": {
+    "mtime": 1779772624.3430128,
+    "ast_hash": "0caf456396ec16a298c5b31c77600153",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\tests\\scripts\\test_sync_optimization_to_supabase.py": {
+    "mtime": 1779773004.8490353,
+    "ast_hash": "5d831cc0e601bb855bbb23ee91d9dde7",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\deployment_guide.md": {
+    "mtime": 1779773066.9049876,
+    "ast_hash": "d5cfdff21831bd6192cfc5dd6e7cf803",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\KING_GEMINI_PROTOCOL.md": {
+    "mtime": 1779772048.07191,
+    "ast_hash": "8bad096f0ab9f6164cc6143276ab0512",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\session-summary-2026-05-26.md": {
+    "mtime": 1779789801.0595963,
+    "ast_hash": "f856e7c5875d0babdd251a752c7833e1",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-26_faz-0.1-0.2_caveman-graphify.md": {
+    "mtime": 1779771560.2282917,
+    "ast_hash": "b0a0a822cb4a48711707859b5f95df30",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-26_faz-1.1-1.2-1.3-1.4_strategy-opt.md": {
+    "mtime": 1779773088.3018417,
+    "ast_hash": "f513adc87c462796b6cc0885e21c5c95",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-26_faz-2-1_gemini-sentiment-layer.md": {
+    "mtime": 1779782947.836212,
+    "ast_hash": "f28a42141899acddb3cd5573f43cc5e0",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\plans\\2026-05-26-gemini-ai-sentiment-plan.md": {
+    "mtime": 1779779773.5163877,
+    "ast_hash": "19167ae0821ac11864c27243d34ed58f",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\plans\\2026-05-26-graphify-integration.md": {
+    "mtime": 1779791715.3695269,
+    "ast_hash": "c67e246205957f4940dfdd092e65b8fc",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\specs\\2026-05-26-gemini-ai-sentiment-design.md": {
+    "mtime": 1779776479.2799785,
+    "ast_hash": "0b418718a655f38a277d270fd010d1e7",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\specs\\2026-05-26-graphify-integration-design.md": {
+    "mtime": 1779791701.87698,
+    "ast_hash": "a4cd71e2634acc6f0b26e6812f5c4668",
     "semantic_hash": ""
   }
 }
