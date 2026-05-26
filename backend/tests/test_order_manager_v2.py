@@ -344,3 +344,66 @@ class TestPnLCalculation:
         mgr.positions.append(pos)
         mgr._record_close(pos, exit_price=94000, reason="SL")
         assert pos.pnl_usdt == pytest.approx(-1000.0)  # (94000-95000)*1
+
+
+class TestHedgeModeOrderParameters:
+    """Verifies that when hedge_mode is True, OrderManager injects positionSide into orders."""
+
+    @pytest.fixture
+    def hedge_mgr(self, mock_client):
+        return OrderManager(mock_client, dry_run=False, hedge_mode=True)
+
+    def test_open_position_injects_position_side(self, hedge_mgr, mock_client):
+        mock_client.exchange.create_order.side_effect = [
+            {"id": "E"}, {"id": "S"}, {"id": "T1"}, {"id": "T2"},
+        ]
+
+        pos = hedge_mgr.open_position(
+            symbol="BTC/USDT", direction="LONG",
+            size=1.0, entry=95000, sl=94000,
+            tp1=96000, tp2=97000,
+        )
+
+        assert pos is not None
+        calls = mock_client.exchange.create_order.call_args_list
+        assert len(calls) == 4
+
+        # Entry Order
+        assert calls[0].kwargs["params"]["positionSide"] == "LONG"
+        # SL Order
+        assert calls[1].kwargs["params"]["positionSide"] == "LONG"
+        # TP1 Order
+        assert calls[2].kwargs["params"]["positionSide"] == "LONG"
+        # TP2 Order
+        assert calls[3].kwargs["params"]["positionSide"] == "LONG"
+
+    def test_move_sl_to_breakeven_injects_position_side(self, hedge_mgr, mock_client):
+        pos = Position(
+            symbol="BTC/USDT", direction="SHORT", entry=95000,
+            sl=96000, tp1=94000, tp2=93000, size=1.0,
+            sl_order_id="SL-OLD", tp1_order_id="TP1-OLD", tp2_order_id="TP2-OLD"
+        )
+        mock_client.exchange.create_order.return_value = {"id": "SL-NEW"}
+
+        hedge_mgr._move_sl_to_breakeven(pos)
+
+        calls = mock_client.exchange.create_order.call_args_list
+        assert len(calls) == 1
+        assert calls[0].kwargs["params"]["positionSide"] == "SHORT"
+        assert calls[0].kwargs["params"]["stopPrice"] == 95000
+
+    def test_fallback_close_injects_position_side(self, hedge_mgr, mock_client):
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000,
+            sl=94000, tp1=96000, tp2=97000, size=1.0,
+            sl_order_id="SL-OLD", tp1_order_id="TP-OLD"
+        )
+        hedge_mgr.positions.append(pos)
+        mock_client.exchange.create_order.return_value = {"id": "CLOSE-OK"}
+
+        hedge_mgr._fallback_close(pos, price=95200, reason="TEST")
+
+        calls = mock_client.exchange.create_order.call_args_list
+        assert len(calls) == 1
+        assert calls[0].kwargs["params"]["positionSide"] == "LONG"
+

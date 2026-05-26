@@ -181,6 +181,25 @@ class BinanceClient:
             log.warning(f"Margin mode set failed for {symbol}: {e}")
             return False
 
+    def set_position_mode(self, dual_side: bool = True) -> bool:
+        """Set position mode: dualSidePosition (Hedge Mode) to True, or False for One-way."""
+        if self.market_type != "futures":
+            return False
+        try:
+            self.exchange.fapiPrivatePostPositionSideDual({
+                "dualSidePosition": "true" if dual_side else "false"
+            })
+            log.info(f"✅ Position mode set to {'HEDGE' if dual_side else 'ONE_WAY'}")
+            return True
+        except Exception as e:
+            err_str = str(e).lower()
+            # -4059 = "No need to change position side" (zaten istenen modda)
+            if "no need" in err_str or "already" in err_str or "-4059" in err_str:
+                log.debug(f"Position mode already {'HEDGE' if dual_side else 'ONE_WAY'}")
+                return True
+            log.warning(f"Position mode set failed: {e}")
+            return False
+
     def get_open_positions(self, symbol: str = None) -> list:
         """Açık pozisyonları getir.
 
@@ -269,8 +288,10 @@ class OrderManager:
     def __init__(self, client: BinanceClient, dry_run: bool = True,
                  on_position_change=None, state_dir: Optional[str] = None,
                  orphan_protector=None,
-                 trade_journal: "Optional[TradeJournal]" = None):
+                 trade_journal: "Optional[TradeJournal]" = None,
+                 hedge_mode: bool = False):
         self.client = client
+        self.hedge_mode = hedge_mode
         self.dry_run = dry_run
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
@@ -338,12 +359,15 @@ class OrderManager:
         untracked.
         """
         try:
+            rollback_params = {"reduceOnly": True}
+            if self.hedge_mode:
+                rollback_params["positionSide"] = direction
             rollback_order = self.client.exchange.create_order(
                 ccxt_sym,
                 "market",
                 rollback_side,
                 rollback_size,
-                params={"reduceOnly": True},
+                params=rollback_params,
             )
             log.critical(
                 "order_manager.entry_rollback_after_sl_failure: %s %s entry_order_id=%s "
@@ -435,10 +459,17 @@ class OrderManager:
         # CCXT'nin futures route'una gitmesi için symbol'i collateral notation ile sar
         ccxt_sym = self.client.to_ccxt_symbol(symbol)
 
+        # Build parameters for CCXT orders
+        params = {}
+        if self.hedge_mode:
+            params["positionSide"] = direction  # "LONG" or "SHORT"
+
         # 1) Market entry order. If this fails, nothing was opened and no
         # rollback is required.
         try:
-            entry_order = self.client.exchange.create_order(ccxt_sym, "market", side, size)
+            entry_order = self.client.exchange.create_order(
+                ccxt_sym, "market", side, size, params=params
+            )
         except Exception as e:
             log.error(f"Order failed for {symbol}: {e}", exc_info=True)
             return None
@@ -466,10 +497,13 @@ class OrderManager:
 
         # 2) Server-side SL — STOP_MARKET reduceOnly. If this fails after the
         # market entry filled, immediately try to flatten the exchange position.
+        sl_params = {"stopPrice": sl, "reduceOnly": True}
+        if self.hedge_mode:
+            sl_params["positionSide"] = direction
         try:
             sl_order = self.client.exchange.create_order(
                 ccxt_sym, "STOP_MARKET", reverse_side, size,
-                params={"stopPrice": sl, "reduceOnly": True}
+                params=sl_params
             )
         except Exception as e:
             log.error(f"Order failed for {symbol}: {e}", exc_info=True)
@@ -493,10 +527,13 @@ class OrderManager:
         # 3) Server-side TP1 — TAKE_PROFIT_MARKET, half (or full for single-target),
         # reduceOnly. If TP placement fails after SL succeeds, keep local tracking
         # rather than orphaning a protected exchange position.
+        tp1_params = {"stopPrice": tp1, "reduceOnly": True}
+        if self.hedge_mode:
+            tp1_params["positionSide"] = direction
         try:
             tp1_order = self.client.exchange.create_order(
                 ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, tp1_size,
-                params={"stopPrice": tp1, "reduceOnly": True}
+                params=tp1_params
             )
             tp1_oid = tp1_order.get("id", "") if isinstance(tp1_order, dict) else ""
             log.info(f"  ↳ TP1 @ {tp1:.4f} (size={tp1_size:.4f}) | order_id={tp1_oid}")
@@ -545,9 +582,12 @@ class OrderManager:
             log.info("  ↳ TP2 skipped (single-target setup)")
         else:
             try:
+                tp2_params = {"stopPrice": tp2, "reduceOnly": True}
+                if self.hedge_mode:
+                    tp2_params["positionSide"] = direction
                 tp2_order = self.client.exchange.create_order(
                     ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, tp2_size,
-                    params={"stopPrice": tp2, "reduceOnly": True}
+                    params=tp2_params
                 )
                 tp2_oid = tp2_order.get("id", "") if isinstance(tp2_order, dict) else ""
                 log.info(f"  ↳ TP2 @ {tp2:.4f} (size={tp2_size:.4f}) | order_id={tp2_oid}")
@@ -813,9 +853,12 @@ class OrderManager:
 
             reverse_side = "sell" if pos.direction == "LONG" else "buy"
             remaining_size = pos.size / 2  # TP1 yarısı kapandı, kalan yarısı için SL
+            sl_params = {"stopPrice": pos.entry, "reduceOnly": True}
+            if self.hedge_mode:
+                sl_params["positionSide"] = pos.direction
             new_sl = self.client.exchange.create_order(
                 ccxt_sym, "STOP_MARKET", reverse_side, remaining_size,
-                params={"stopPrice": pos.entry, "reduceOnly": True}
+                params=sl_params
             )
             pos.sl = pos.entry
             pos.sl_order_id = new_sl.get("id", "")
@@ -950,9 +993,12 @@ class OrderManager:
             close_side = "sell" if pos.direction == "LONG" else "buy"
             ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
             try:
+                close_params = {"reduceOnly": True}
+                if self.hedge_mode:
+                    close_params["positionSide"] = pos.direction
                 self.client.exchange.create_order(
                     ccxt_sym, "market", close_side, pos.size,
-                    params={"reduceOnly": True})
+                    params=close_params)
             except Exception as e:
                 log.error(f"Fallback close failed: {e}")
 

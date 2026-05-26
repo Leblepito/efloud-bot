@@ -162,6 +162,13 @@ class BotRunner:
                 except Exception as e:
                     log.warning(f"Setup failed for {sym}: {e}")
 
+            # Hedge Mode position side configuration on exchange
+            hedge_mode = ex_cfg.get("hedge_mode", False)
+            try:
+                self.client.set_position_mode(dual_side=hedge_mode)
+            except Exception as e:
+                log.warning(f"Position mode setup failed: {e}")
+
         notif_mgr = NotificationManager(channels=["log"])  # WS push üzerinden ayrıca yapılır
         state_dir = self.cfg["operation"].get("state_dir", "./state")
 
@@ -183,6 +190,7 @@ class BotRunner:
             state_dir=state_dir,
             orphan_protector=orphan_protector,
             trade_journal=trade_journal,
+            hedge_mode=self.cfg.get("exchange", {}).get("hedge_mode", False),
         )
 
         # PR #S6 wiring (hotfix): instantiate SetupStateStore when smc_version=v2.

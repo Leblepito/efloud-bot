@@ -208,3 +208,28 @@ def test_opposite_check_ignores_closed_positions():
     existing = [_FakePos(symbol="FIL/USDT", direction="LONG", id="p1", is_open=False)]
     result = _guard().can_open_position(existing_positions=existing, **_open_args())
     assert result.allowed
+
+
+def test_opposite_direction_allowed_in_hedge_mode():
+    """If hedge_mode is True, PositionGuard must allow opposite-direction entry."""
+    # We construct a custom guard where hedge_mode=True
+    guard = PositionGuard(
+        max_notional_pct_of_balance=10.0,
+        max_total_exposure_multiplier=5.0,
+        max_holding_hours=24.0,
+        max_pyramid_adds=0,
+        min_sl_distance_atr=0.5,
+        max_sl_distance_atr=5.0,
+        reserve_balance=0.0,
+        max_open_positions=10,
+        reverse_min_profit_pct=0.2,
+        hedge_mode=True,
+    )
+    existing = [_FakePos(symbol="FIL/USDT", direction="LONG", id="p1")]
+    
+    # Attempting to open a SHORT position (opposite to LONG)
+    res = guard.can_open_position(existing_positions=existing, **_open_args(direction="SHORT"))
+    
+    assert res.allowed is True
+    assert "OPPOSITE_DIRECTION_EXISTS" not in res.reason
+

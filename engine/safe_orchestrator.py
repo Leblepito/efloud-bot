@@ -222,6 +222,7 @@ class SafeOrchestrator:
             max_open_positions=self.config.get("risk", {}).get("max_open_positions", 999),
             reverse_min_profit_pct=safety.get("reverse_min_profit_pct", 0.2),
             pause_config=pause_config,
+            hedge_mode=self.config.get("exchange", {}).get("hedge_mode", False),
         )
         orphan_cfg = load_orphan_protection_config(safety)
         self.orphan_protector = OrphanProtector(orphan_cfg, self.client) if self.client is not None else None
@@ -1484,7 +1485,7 @@ class SafeOrchestrator:
             pos = self.lifecycle.open_position(
                 symbol=cand.symbol,
                 direction=cand.direction,
-                entry=entry_price,
+                entry_price=entry_price,
                 size=size,
                 sl=sl,
                 tp1=tp1,

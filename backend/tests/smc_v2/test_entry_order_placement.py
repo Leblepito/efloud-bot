@@ -81,8 +81,8 @@ def _make_mock_order_manager():
 
 
 class TestInertWhenNoOrderManager:
-    """When order_manager is None (test/paper mode), no order placement
-    attempt even on CONFIRMED."""
+    """When order_manager is None (test/paper mode), paper position is created
+    directly in local lifecycle state (no exchange order placed)."""
 
     def test_no_order_placed_when_order_manager_none(self, tmp_path):
         store = SetupStateStore(tmp_path / "state.json")
@@ -94,7 +94,9 @@ class TestInertWhenNoOrderManager:
         )
         cand = store.candidates[0]
         result = orc._place_v2_entry_order(cand, current_price=105.0, entry_price=105.0)
-        assert result is None
+        assert result is not None
+        assert result.symbol == "BTC/USDT"
+        assert result.direction == "SHORT"
 
 
 class TestOrderPlacementOnConfirmed:

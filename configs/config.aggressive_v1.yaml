@@ -49,7 +49,8 @@ exchange:
   api_secret: ""           # Env: BINANCE_API_SECRET
   testnet: false           # MAINNET
   leverage: 5              # 5x kaldıraç (orta-agresif)
-  margin_mode: ISOLATED    # Pozisyonlar birbirini etkilemez
+  margin_mode: CROSSED     # CROSSED margin mode
+  hedge_mode: true         # Enable Hedge Position mode
 
 # ── 9 sembol — Phase A 2.0 (2026-05-07) tier-ranked from 21 candidates ──
 symbols:
@@ -119,7 +120,7 @@ fibonacci:
 # ── Risk: aggressive — 10% notional per trade × 10 positions = 100% gross exposure ──
 risk:
   risk_per_trade_pct: 2.0             # $40 risk budget per trade @ $2000 (no change vs H2-A2)
-  max_open_positions: 10              # 2026-05-09 user request — was 5, scaled with daily_loss 20%
+  max_open_positions: 20              # Double limit to support dual-sided entries on 10 symbols
   min_rr: 1.8                         # Min R:R 1:1.8
   min_confluence: 55                  # ChoCH(25) + MTF onay(20) + 1 SMC layer(10) — see docs/superpowers/specs/2026-05-08-bull-aware-signal-trigger-design.md
   recency_bars: 40

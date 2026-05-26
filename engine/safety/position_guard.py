@@ -143,7 +143,8 @@ class PositionGuard:
                  reserve_balance: float = 0.0,
                  max_open_positions: int = 999,
                  reverse_min_profit_pct: float = 0.2,
-                 pause_config: PauseConfig | None = None):
+                 pause_config: PauseConfig | None = None,
+                 hedge_mode: bool = False):
         self.max_size_pct = max_notional_pct_of_balance / 100
         self.max_exposure = max_total_exposure_multiplier
         self.max_hold = max_holding_hours
@@ -159,6 +160,7 @@ class PositionGuard:
         # buffer, default 0.2% net). Below threshold the opposite signal is
         # rejected — TP or SL must fire first.
         self.reverse_min_profit_pct = reverse_min_profit_pct
+        self.hedge_mode = hedge_mode
         self._pause = pause_config or PauseConfig(
             enabled=False,
             source="default",
@@ -284,13 +286,15 @@ class PositionGuard:
         # Without this branch Binance auto-flip (isolated + hedge off)
         # would close the existing position whenever the bot sent an
         # opposite-side order — bypassing the bot's TP/SL discipline.
-        for p in existing_positions:
-            if (p.is_open and p.symbol == symbol and p.direction != direction
-                and p.scenario_id is None):
-                return PositionCheckResult(
-                    False,
-                    f"OPPOSITE_DIRECTION_EXISTS: {p.direction} open on {symbol} (pos {p.id})"
-                )
+        # Bypass this check if hedge_mode is enabled (allows dual-sided LONG/SHORT positions).
+        if not self.hedge_mode:
+            for p in existing_positions:
+                if (p.is_open and p.symbol == symbol and p.direction != direction
+                    and p.scenario_id is None):
+                    return PositionCheckResult(
+                        False,
+                        f"OPPOSITE_DIRECTION_EXISTS: {p.direction} open on {symbol} (pos {p.id})"
+                    )
 
         # 5. SL distance sanity (ATR tabanlı)
         if atr > 0:

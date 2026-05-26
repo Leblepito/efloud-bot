@@ -13,7 +13,8 @@ exchange:
   api_secret: ""           # Prefer env var BINANCE_API_SECRET
   testnet: true            # İlk testlerde true bırak
   leverage: 3
-  margin_mode: ISOLATED    # ISOLATED zorunlu (cross likidasyon yayılmasını önler)
+  margin_mode: CROSSED     # CROSSED margin mode
+  hedge_mode: true         # Enable Hedge Position mode
 
 # ── SMC v2 feature flag (PR #S6) ──
 # Inert default: smc_version=v1, smc_v2_symbols=[] → v1 path active, v2 dormant.
@@ -104,7 +105,7 @@ fibonacci:
 # ── Risk ──
 risk:
   risk_per_trade_pct: 2.0         # 20 coin için düşürüldü (risk dağılımı) (Optimized from 0.75)
-  max_open_positions: 7             # Aynı onda max 7 pozisyon (20 coin için)
+  max_open_positions: 20             # Aynı anda max 20 pozisyon (hedge mode için)
   min_rr: 1.5                       # R:R 1:1.5 minimum — TP1 mantığı düzeltildi (signals.py) (Optimized from 1.8)
   min_confluence: 55                # 55'te: HTF+MTF+OB+OTE gibi 4 konsept bir arada = ~65 puan
                                     # Tek başına HTF+MTF (45 puan) yetmez — multi-concept zorunlu
