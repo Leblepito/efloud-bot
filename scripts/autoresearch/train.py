@@ -84,7 +84,7 @@ CONFIG = {
         "adx_range_threshold": 0,
         "allow_volatile_entries": True,
         "volatile_atr_mult": 2.5,
-        "max_position_notional_pct": 6.0,
+        "max_position_notional_pct": 8.0,
         "max_total_exposure": 1.0,
         "max_holding_hours": 24,
         "max_pyramid_adds": 0,
