@@ -1,19 +1,21 @@
 # HERMES.md — Efloud-bot Operatör Kılavuzu
 
-> Operatör/insan onay zinciri (Hermes) için. Yönetim kılavuzu.
+> Bu dosya **Hermes** (operatör/insan onay zinciri) için yazılmıştır. Projeyi
+> sıfırdan anlayıp güvenle yönetebilmen için tek bakışta her şeyi içerir.
 > Tarih: 2026-05-24 | Master HEAD: `3fa88b8` | Bot durumu: **CANLI**
 
 ---
 
 ## 1. Nedir Bu Bot?
 
-**Efloud-bot**: Binance USDT-M futures üzerinde SMC doktriniyle otonom trade botu. Hetzner VPS 7/24, FastAPI dashboard + Telegram alert.
+**Efloud-bot** = Binance USDT-M futures'ta Smart Money Concepts (SMC) doktriniyle
+otonom çalışan trade bot'u. Hetzner VPS'te 7/24, FastAPI dashboard + Telegram alert.
 
-**Algoritma**: 2 paralel sürüm hazır.
-- **v1** (RUNNING): mevcut SMC entry/SL/TP (canlı).
-- **v2** (HAZIR, INERT): pullback+confirmation algoritması. Kod merge edildi, prod dormant.
+**Bugünkü algoritma**: 2 kuşak paralel hazır.
+- **v1** (RUNNING): mevcut SMC entry/SL/TP — şu an canlıda kullanılıyor
+- **v2** (HAZIR, INERT): yeniden tasarlanmış pullback+confirmation algoritması — kod merge'lendi, prodüksiyonda dormant
 
-**Hedef**: Forex (MT5/OANDA) pluggable exchange adapter.
+**Yarın hedef**: forex (MT5/OANDA) için pluggable exchange adapter (henüz scope dışı).
 
 ---
 
@@ -34,24 +36,24 @@
 
 ## 3. Hermes Rol Tanımı (CLAUDE.md §3)
 
-**Hermes yapar** (insan):
-- VPS SSH, `docker compose up -d`, `backend.migrate up`.
-- `config.yaml` risk/safety/mainnet edit.
-- PR sign-off, prod merge onayı.
-- Incident response (canlı müdahale).
-- Mainnet aç/kapa, leverage/sizing değişim.
+**Sen yaparsın** (Claude değil):
+- VPS SSH + `docker compose up -d` + `backend.migrate up`
+- `config.yaml` risk/safety/mainnet edit'leri
+- PR sign-off + production merge onayı
+- Incident response (canlıya müdahale)
+- Mainnet aç/kapa, leverage/sizing değişikliği
 
-**Claude yapar**:
-- Kod, test, refactor öneri.
-- PR hazırlığı.
-- Backtest analizi, log değerlendirme.
-- Docs, spec, plan.
+**Claude yapar** (sen değil):
+- Kod yazma, test, refactor önerisi
+- PR hazırlama (push + PR open)
+- Backtest analizi, log değerlendirmesi
+- Docs, spec, plan
 
-**YASAK**:
-- `EFLOUD_ALLOW_MAINNET=1` + `dry_run: false` kontrolsüz deploy.
-- Compose/env değişiminde sadece `docker restart` (recreate gerekir).
-- Risk/safety değişimi test/backtest olmadan mergeleme.
-- Çoklu konuyu tek PR'da karıştırma.
+**Asla yapma**:
+- `EFLOUD_ALLOW_MAINNET=1` set edip `dry_run=false` bırakıp deploy etme
+- `docker-compose.prod.yml` env değişikliğinde sadece `docker restart` (recreate gerekir)
+- Risk/safety değişikliğini backtest'siz + test'siz mergelama
+- Birden fazla concern'i tek PR'a karıştırma
 
 ---
 
@@ -109,19 +111,20 @@ main.py                              ← entry point
 
 ### 5b. 3-katmanlı inert garanti (bugün canlıda)
 
-v2 emir vermez çünkü:
-1. `config.yaml engine.smc_version=v1` → main.py `_build_setup_state_store` None döner → `SafeOrchestrator.setup_state_store=None` → `_place_v2_entry_order` çağrılmaz.
-2. `config.yaml engine.smc_v2_symbols=[]` → whitelist tüm sembolleri reddeder.
-3. `config.yaml engine.smc_v2_shadow=false` → (sadece üst 2 bypass edilirse devreye girer).
+v2 hiçbir gerçek emir vermez çünkü:
 
-Canlı v2 emri için **minimum 3 manuel config editi** gerekir.
+1. `config.yaml engine.smc_version=v1` → main.py `_build_setup_state_store` None döner → `SafeOrchestrator.setup_state_store=None` → `_place_v2_entry_order` asla çağrılmaz
+2. `config.yaml engine.smc_v2_symbols=[]` → whitelist tüm sembolleri reddeder
+3. `config.yaml engine.smc_v2_shadow=false` → (sadece üst 2 bypass edilirse devreye girer)
+
+**Minimum 3 elle config edit gerektirir** v2'nin canlı emir verebilmesi için.
 
 ### 5c. Pending
 
-- **Prod deploy** (zero-risk — default inert).
-- **Shadow aktivasyon** (1 hafta gözlem).
-- **Baseline backtest** (6 aylık gerçek OHLCV).
-- **PR #S7**: 3-faz prod rollout (ETH+BTC → +5 mid-cap → all 20).
+- **Production deploy** (zero-risk — defaults inert)
+- **Shadow aktivasyon** (1 hafta paralel gözlem)
+- **Baseline backtest** (6 aylık gerçek OHLCV)
+- **PR #S7**: 3-faz prod rollout (ETH+BTC → +5 mid-cap → all 20)
 
 ---
 
@@ -142,19 +145,24 @@ curl -s localhost:8080/api/healthz                # 200 bekle
 
 **Davranış değişikliği YOK** — defaults v1 inert. Bot v1 ile trade etmeye devam eder.
 
-**1 saat gözlem**:
-- `https://bot.ualgotrade.com` → healthz yeşil.
-- Mevcut açık pozisyonlar (varsa) yönetilmeye devam eder.
-- Telegram alert'ler gelir.
-- Circuit breaker tetiklenmedi.
+**1 saat gözle**:
+- `https://bot.ualgotrade.com` → healthz yeşil
+- Mevcut açık pozisyonlar (varsa) yönetilmeye devam ediyor
+- Telegram alert'ler geliyor
+- Circuit breaker tetiklenmedi
 
-**Rollback**:
+**Eğer bir şey ters giderse**:
 ```bash
 git -c safe.directory=/opt/efloud-bot reset --hard d03857c
 docker compose -f docker-compose.prod.yml up -d
 ```
 
 ### Adım 2 — Shadow aktivasyon (sessiz pencereyi bekle)
+
+```bash
+# config.yaml düzenle (lokalde edit + scp, veya VPS'te vi)
+# engine bloğunu güncelle:
+```
 
 ```yaml
 engine:
@@ -164,19 +172,19 @@ engine:
 ```
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d   # recreate
+docker compose -f docker-compose.prod.yml up -d   # config değişimi → recreate ZORUNLU
 docker exec efloud-bot tail -f /app/logs/smc_v2_shadow.log
 ```
 
-**Davranış**: v1 canlı emir verir. v2 hayalî sinyal hesaplayıp JSON yazar. Sıfır gerçek emir.
+**Beklenen**: v1 hâlâ canlı emir veriyor, v2 paralel hayalî sinyal hesaplayıp dosyaya JSON yazıyor. Hiç gerçek emir gitmez.
 
 **7 gün gözlem**:
-- Günlük sinyal sayısı: `wc -l /app/logs/smc_v2_shadow.log`.
-- direction, entry, sl, tp1, tp2 kontrolü.
-- v1 trade'ler ile karşılaştır.
-- Logu Claude'a at, analiz raporu hazırlasın.
+- Günlük: `wc -l /app/logs/smc_v2_shadow.log` (sinyal sayısı)
+- Günlük: son 10 satır oku → direction, entry, sl, tp1, tp2 mantıklı mı
+- v1 trade'lerle karşılaştır
+- Log dosyasını Claude'a paylaş → analiz raporu hazırlar
 
-**Rollback**:
+**Rollback** (shadow'da sorun yok aslında — log only, ama config'i geri almak istersen):
 ```yaml
 engine:
   smc_version: v1
@@ -190,10 +198,12 @@ docker compose -f docker-compose.prod.yml up -d
 ### Adım 3 — Baseline backtest (Shadow ile paralel)
 
 ```bash
+# Önce OHLCV cache'i hazırla (VPS'te veya lokalde)
 python -m scripts.prefetch_data \
   --symbols ETH/USDT,BTC/USDT,SOL/USDT,BNB/USDT,ADA/USDT,LINK/USDT,AVAX/USDT \
   --period-days 180
 
+# Comparison koştur
 python -m backtest.cli compare \
   --symbols ETH/USDT,BTC/USDT,SOL/USDT,BNB/USDT,ADA/USDT,LINK/USDT,AVAX/USDT \
   --period-days 180 \
@@ -202,17 +212,17 @@ python -m backtest.cli compare \
 
 Çıktı: `reports/backtests/<date>_compare_7sym_180d_<runid>/comparison.json`
 
-**Gate hedefleri**:
+**Gate sonuçları**:
 - `win_rate`: ≥ v1 (hard reject < v1×0.95)
 - `avg_realized_rr`: ≥ 1.5 absolute (hard reject < 1.2)
 - `max_drawdown_pct`: ≤ v1 (hard reject > v1×1.1)
 - `stop_hunt_rate`: < v1×0.5 (hard reject ≥ v1)
 - `sharpe_like`: ≥ v1 (hard reject < v1×0.9)
 
-**Karar**:
-- Tümü `pass` → S7'ye geç.
-- `hard_reject` → v2 redesign (Claude'a bildir, spec revize).
-- `warn` → shadow süresini uzat.
+**Karar matrisi**:
+- Tümü `pass` → S7'ye geç
+- Herhangi biri `hard_reject` → v2 redesign (Claude'a bildir, spec revize)
+- Bazıları `warn` → shadow gözlem süresini uzat
 
 ### Adım 4 — PR #S7 (3-faz prod rollout)
 
@@ -227,8 +237,10 @@ engine:
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-**Rollback kriteri** (manuel):
-- 3 ardışık loss VEYA PnL ≤ -2% → `smc_version: v1` + recreate.
+**Per-phase rollback kriteri** (manuel, otomatik değil):
+- 3 ardışık losing trade VEYA
+- Cumulative phase PnL ≤ -2%
+- → `smc_version: v1` flip + recreate
 
 **Phase 2** (1 hafta): `+ SOL, BNB, ADA, LINK, AVAX`
 **Phase 3** (sürekli): tüm 20 sembol
@@ -241,33 +253,41 @@ docker compose -f docker-compose.prod.yml up -d
 ```bash
 docker ps | grep efloud-bot              # Up mu?
 docker logs efloud-bot --tail 100        # son loglar
-docker exec efloud-bot ls /app/state     # state
+docker logs efloud-bot --since 1h        # son 1 saat
+docker exec efloud-bot ls /app/state     # state dosyaları
 ```
 
 ### Migration çalıştır
 ```bash
 docker exec efloud-bot python3 -m backend.migrate up
+# Çıktı: schema_migrations'a hangi dosyaları uyguladı
+# 008_tp2_nullable.sql çalıştığını gör
 ```
 
 ### Config değişimi
 ```bash
+# Lokalde edit
 vi /opt/efloud-bot/config.yaml
 
-# YAML parse test
+# YAML parse test (yanlış indent → bot crash)
 docker exec efloud-bot python3 -c "import yaml; yaml.safe_load(open('/app/config.yaml'))"
 
-# Recreate
+# Recreate ZORUNLU (restart yetmez)
 docker compose -f docker-compose.prod.yml up -d
 ```
 
 ### Compose env değişimi
 ```bash
+# .env dosyası değişti veya docker-compose.prod.yml env: bloğu
 docker compose -f docker-compose.prod.yml up -d   # recreate
+# docker restart YETMEZ — env değişikliği container'ı recreate gerektirir
 ```
 
 ### Kill switch (acil durdurma)
 ```bash
 docker compose -f docker-compose.prod.yml stop efloud-bot
+# Restart için: docker compose ... start efloud-bot
+# autoheal devre dışı bırakmak için: AUTOSTART=0 .env'de
 ```
 
 ### Shadow log incelemesi
@@ -275,20 +295,25 @@ docker compose -f docker-compose.prod.yml stop efloud-bot
 # Tail
 docker exec efloud-bot tail -f /app/logs/smc_v2_shadow.log
 
-# Sinyal sayısı
+# Toplam sinyal
 docker exec efloud-bot wc -l /app/logs/smc_v2_shadow.log
 
 # Sembol dağılımı
 docker exec efloud-bot sh -c "cat /app/logs/smc_v2_shadow.log | python3 -c \"import json,sys; from collections import Counter; print(Counter(json.loads(l)['symbol'] for l in sys.stdin))\""
 
-# Son 10 sinyal pretty-print
+# Son 10 sinyali pretty-print
 docker exec efloud-bot sh -c "tail -10 /app/logs/smc_v2_shadow.log | python3 -m json.tool --json-lines"
 ```
 
 ### Veritabanı sorguları
 ```bash
+# Son 10 trade
 docker exec efloud-bot python3 -c "
 import asyncio, asyncpg, os, json
+async def main():
+    pool = await asyncpg.create_pool(os.environ['DATABASE_URL'])
+    rows = await pool.fetch('SELECT symbol, direction, entry, exit, pnl_usdt, entry_setup_source, tp1_target_type FROM trades ORDER BY opened_at DESC LIMIT 10')
+    for r in rows: print(dict(r))
 async def main():
     pool = await asyncpg.create_pool(os.environ['DATABASE_URL'])
     rows = await pool.fetch('SELECT symbol, direction, entry, exit, pnl_usdt, entry_setup_source, tp1_target_type FROM trades ORDER BY opened_at DESC LIMIT 10')
@@ -301,13 +326,13 @@ asyncio.run(main())
 
 ## 8. Tehlike Sinyalleri (Olursa Hemen Bildir)
 
-1. **`healthz` 503** → Bot internal hata, autoheal restart loop riski.
-2. **Circuit breaker HALTED** → Günlük/haftalık limit aşıldı, trade durdu.
-3. **`record_trade_open failed`** → Migration eksik, db table uyuşmazlığı.
-4. **Orphan SL/TP** → `reduceOnly` order Binance'te kalmış, poz kapalı.
-5. **Shadow log'da `would_execute: true`** → Shadow bypass bug! Canlı emir riski.
-6. **v1 vs v2 zıt sinyal**.
-7. **State'te `tp2: 0.0`**.
+1. **`healthz` 503 dönüyor** → bot internal hata, autoheal restart loop riski
+2. **Circuit breaker HALTED** → kayıp eşiği aşıldı, bot trade durdurdu
+3. **`record_trade_open failed: column ... does not exist`** → migration çalışmamış, deploy ordering hatası
+4. **Binance'te orphan reduceOnly order var ama Position kapalı** → PR #C1 helper çalışmadı, manuel iptal gerekebilir
+5. **Shadow log'da `would_execute: true` var** → KOD BUG, shadow gate atlanmış, hemen Claude'a bildir
+6. **v1 ve v2 aynı sinyal için ZIT yön veriyor** → manuel inceleme gerekli
+7. **State file'da `tp2: 0.0` var ama bot v2 single-target açtı** → PR #S5.6 fix çalışmamış, restart sorunlu
 
 ---
 
@@ -315,45 +340,46 @@ asyncio.run(main())
 
 | Şey | Yer |
 |---|---|
-| Dashboard | `https://bot.ualgotrade.com` / `https://178-104-122-91.nip.io` |
-| Dashboard şifre | Password manager |
-| VPS SSH | `ssh efloud-bot` / `ssh root@178.104.122.91` |
-| SSH key | `~/.ssh/id_ed25519` (`efloud-bot-hetzner`) |
+| Dashboard | `https://bot.ualgotrade.com` (primary) / `https://178-104-122-91.nip.io` (fallback) |
+| Dashboard şifre | Operatörün password manager'ı |
+| VPS SSH | `ssh efloud-bot` (alias) veya `ssh root@178.104.122.91` |
+| SSH key | `~/.ssh/id_ed25519` (label `efloud-bot-hetzner`) |
 | Repo | `/opt/efloud-bot` |
 | State dir | `/opt/efloud-bot/state_1k/` |
-| Log dir | `/app/logs/` (container) |
-| Telegram | `EFLOUD_TELEGRAM_TOKEN` + `EFLOUD_TELEGRAM_CHAT_ID` |
-| Postgres | `DATABASE_URL` (Supabase pooler) |
+| Log dir | container içinde `/app/logs/` |
+| Telegram alert | `EFLOUD_TELEGRAM_TOKEN` + `EFLOUD_TELEGRAM_CHAT_ID` env'de |
+| Postgres | Supabase pooler — `DATABASE_URL` env'de |
 
 ---
 
 ## 10. Claude'a Hangi Konularda Soru Sor
 
 **Sor**:
-- Shadow log yorumlama.
-- Backtest analiz (`comparison.json` at).
-- Yeni feature spec/plan taslak.
-- Kod/PR review.
-- Bug repro/fix.
-- Memory açıklamaları.
+- Shadow log yorumu (bana log paste et → analiz raporu)
+- Backtest sonucu yorumu (comparison.json paste et → gate analizi + öneri)
+- Yeni feature spec/plan yazımı
+- Kod review (PR push etmeden önce)
+- Bug repro + fix önerisi
+- Memory'deki herhangi bir konunun açıklaması
 
-**Sorma** (operatör işi):
-- Production deploy / restart.
-- Config / mainnet edit.
-- VPS terminal komut çalıştırma.
-- Manuel pozisyon kapama.
+**Sorma** (sen yaparsın):
+- "Production'a deploy et"
+- "Config değiştir, mainnet aç"
+- "VPS'e bağlan, log dök"
+- "Açık pozisyonu manuel kapat"
 
 ---
 
 ## 11. Acil Durum Akışı
 
-**Senaryo**: Bot anormal çalışıyor (hatalı emir, kontrolsüz state, limit aşımı).
+**Senaryo**: Bot beklenmedik bir şekilde davranıyor (yanlış emir, açıklanamayan kayıp, state corruption).
 
 ```bash
 # 1. Acil durdur
 docker compose -f docker-compose.prod.yml stop efloud-bot
 
-# 2. Binance UI pozisyon kontrol et (SL/TP manuel koy / kapat)
+# 2. Binance UI'da pozisyonları kontrol et
+#    Açık pozisyon varsa: manuel SL/TP koy, sonra manuel kapat
 
 # 3. State backup al
 docker exec efloud-bot tar -czf /tmp/state_backup_$(date +%s).tar.gz /app/state_1k
@@ -362,17 +388,17 @@ docker cp efloud-bot:/tmp/state_backup_*.tar.gz ./
 # 4. Log dök
 docker logs efloud-bot --since 4h > emergency_$(date +%s).log
 
-# 5. Claude'a at: log + state + durum özeti
+# 5. Claude'a brief: log + state + ne olduğu
 ```
 
 ---
 
 ## 12. Bu Doküman + İlgili Referanslar
 
-- Spec parent: `docs/superpowers/specs/2026-05-23-smc-entry-sltp-rework-design.md` (909 satır).
-- Her PR spec: `docs/superpowers/specs/2026-05-2X-smc-v2-*.md`.
-- Her PR plan: `docs/superpowers/plans/2026-05-2X-smc-v2-*.md`.
-- `CLAUDE.md`: Proje bellek, kural, mimari.
-- `HERMES.md`: Operatör kılavuzu.
+- Spec parent: `docs/superpowers/specs/2026-05-23-smc-entry-sltp-rework-design.md` (909 satır)
+- Her PR'ın kendi spec'i: `docs/superpowers/specs/2026-05-2X-smc-v2-*.md`
+- Her PR'ın plan'ı: `docs/superpowers/plans/2026-05-2X-smc-v2-*.md`
+- CLAUDE.md: proje memory, kurallar, mimari
+- Bu dosya: `HERMES.md` — operatör perspektifi
 
 **Bot canlı, kararlı, kod %100 hazır. Acele yok, risk yok.**

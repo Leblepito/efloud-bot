@@ -47,3 +47,11 @@ tmp/
 # Git worktrees (isolated workspaces for parallel work, never committed)
 .worktrees/
 worktrees/
+
+# Cloned external reference repositories
+external_repos/
+
+# Local candidate configs
+configs/candidate_*.yaml
+
+
