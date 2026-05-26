@@ -36,7 +36,7 @@ export function InteractiveChart({ selectedSymbol, onSelectSymbol }: Interactive
     }
   }, [selectedSymbol]);
 
-  // Extract config symbols to populate dropdown
+  // Extract config symbols to populate dropdown, dynamically adding symbols with active positions or orders
   const symbolOptions = Array.from(
     new Set([
       "BTCUSDT",
@@ -44,9 +44,11 @@ export function InteractiveChart({ selectedSymbol, onSelectSymbol }: Interactive
       "SOLUSDT",
       "TRXUSDT",
       "XRPUSDT",
-      ...(config?.symbols?.map((s) => s.replace("/", "").replace(":", "")) ?? []),
+      ...(config?.symbols?.map((s) => s.replace("/", "").replace(":", "").replace("USDT", "")) ?? []),
+      ...(positions?.map((p) => p.symbol.replace("/", "").replace(":", "").replace("USDT", "")) ?? []),
+      ...(orders?.map((o) => o.symbol.replace("/", "").replace(":", "").replace("USDT", "")) ?? []),
     ])
-  );
+  ).map((sym) => `${sym}USDT`);
 
   // Re-fetch data and re-initialize chart when symbol or timeframe changes
   useEffect(() => {

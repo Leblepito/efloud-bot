@@ -45,30 +45,104 @@ async def status_endpoint() -> dict:
 
 @router.get("/positions", dependencies=[Depends(require_auth)])
 async def positions() -> list[dict]:
-    if not runner.order_mgr or not runner.client:
+    """Live positions fetched directly from Binance, enriched with bot metadata if tracked."""
+    if not runner.client or not runner.order_mgr:
         return []
+    try:
+        # Fetch actual live positions on Binance
+        bn_positions = runner.client.get_open_positions()
+    except Exception as e:
+        log.warning(f"Failed to fetch live positions from Binance: {e}")
+        # Fallback to empty if exchange is temporarily unreachable
+        bn_positions = []
+
     out = []
-    for p in runner.order_mgr.positions:
-        try:
-            cur_price = runner.client.get_price(p.symbol)
-        except Exception:
-            cur_price = p.entry
-        is_long = p.direction == "LONG"
-        unrealized = ((cur_price - p.entry) / p.entry * 100) if is_long else \
-                     ((p.entry - cur_price) / p.entry * 100)
-        out.append({
-            "symbol": p.symbol,
-            "direction": p.direction,
-            "entry": p.entry,
-            "sl": p.sl,
-            "tp1": p.tp1,
-            "tp2": p.tp2,
-            "size": p.size,
-            "current_price": cur_price,
-            "unrealized_pct": round(unrealized, 3),
-            "tp1_hit": p.tp1_hit,
-            "opened_at": p.opened_at,
-        })
+    # Strip CCXT contract notation for comparisons: 'FIL/USDT:USDT' -> 'FIL/USDT'
+    from exchange import _strip_contract_suffix
+
+    # Create a lookup map of local bot positions
+    local_pos_map = {
+        _strip_contract_suffix(p.symbol): p for p in runner.order_mgr.positions
+    }
+
+    # If we successfully fetched live positions, use them as the primary source of truth
+    if bn_positions:
+        for bp in bn_positions:
+            ccxt_symbol = bp.get("symbol", "")
+            base_symbol = _strip_contract_suffix(ccxt_symbol)
+            
+            contracts = float(bp.get("contracts", 0))
+            entry_price = float(bp.get("entryPrice", 0) or 0)
+            mark_price = float(bp.get("markPrice", 0) or 0)
+            side = str(bp.get("side", "")).upper()  # "LONG" or "SHORT"
+            if side == "LONG":
+                direction = "LONG"
+            elif side == "SHORT":
+                direction = "SHORT"
+            else:
+                direction = "LONG" if contracts > 0 else "SHORT"
+                
+            # Check if this is tracked locally by the bot
+            local_pos = local_pos_map.get(base_symbol)
+            
+            if local_pos:
+                sl = local_pos.sl
+                tp1 = local_pos.tp1
+                tp2 = local_pos.tp2
+                tp1_hit = local_pos.tp1_hit
+                opened_at = local_pos.opened_at
+            else:
+                # Untracked/Orphan position on the exchange (manual position)
+                sl = 0.0
+                tp1 = 0.0
+                tp2 = None
+                tp1_hit = False
+                opened_at = "" # Will show as blank/untracked
+
+            # Calculate live unrealized PnL percentage
+            if entry_price > 0:
+                is_long = direction == "LONG"
+                unrealized = ((mark_price - entry_price) / entry_price * 100) if is_long else \
+                             ((entry_price - mark_price) / entry_price * 100)
+            else:
+                unrealized = 0.0
+
+            out.append({
+                "symbol": base_symbol,
+                "direction": direction,
+                "entry": entry_price,
+                "sl": sl,
+                "tp1": tp1,
+                "tp2": tp2 if tp2 is not None else 0.0,
+                "size": contracts,
+                "current_price": mark_price,
+                "unrealized_pct": round(unrealized, 3),
+                "tp1_hit": tp1_hit,
+                "opened_at": opened_at,
+            })
+    else:
+        # Fallback to local positions list if exchange is temporarily unreachable (graceful degradation)
+        for p in runner.order_mgr.positions:
+            try:
+                cur_price = runner.client.get_price(p.symbol)
+            except Exception:
+                cur_price = p.entry
+            is_long = p.direction == "LONG"
+            unrealized = ((cur_price - p.entry) / p.entry * 100) if is_long else \
+                         ((p.entry - cur_price) / p.entry * 100)
+            out.append({
+                "symbol": p.symbol,
+                "direction": p.direction,
+                "entry": p.entry,
+                "sl": p.sl,
+                "tp1": p.tp1,
+                "tp2": p.tp2 if p.tp2 is not None else 0.0,
+                "size": p.size,
+                "current_price": cur_price,
+                "unrealized_pct": round(unrealized, 3),
+                "tp1_hit": p.tp1_hit,
+                "opened_at": p.opened_at,
+            })
     return out
 
 
