@@ -117,6 +117,27 @@ async def equity(days: int = 7) -> list[dict]:
     return await db.fetch_equity_history(days=min(max(days, 1), 90))
 
 
+@router.get("/ai/sentiment", dependencies=[Depends(require_auth)])
+async def ai_sentiment() -> dict:
+    """Yapay zeka makro duygu durumunu local registry'den yukler."""
+    import json
+    from pathlib import Path
+    try:
+        registry_path = Path("./state/ai_sentiment_registry.json")
+        if registry_path.exists():
+            with open(registry_path, encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {
+        "macro_sentiment": "NEUTRAL",
+        "confidence_score": 1.0,
+        "fear_and_greed": 50.0,
+        "bitcoin_trend": "NEUTRAL",
+        "reasoning": "Duygu durumu verisi yuklenemedi (fallback)."
+    }
+
+
 @router.post("/bot/start", dependencies=[Depends(require_auth)])
 async def bot_start() -> dict:
     if runner.running and not runner.stopped:

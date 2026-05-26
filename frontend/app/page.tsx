@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
 import { StatusGrid } from "@/components/StatusGrid";
+import { AISentimentCard } from "@/components/AISentimentCard";
 import { EquityChart } from "@/components/EquityChart";
 import { PositionsTable } from "@/components/PositionsTable";
 import { OpenOrdersTable } from "@/components/OpenOrdersTable";
@@ -25,6 +26,9 @@ export default function Dashboard() {
       <main className="mx-auto max-w-7xl px-6 py-8 space-y-6">
         <section>
           <StatusGrid />
+        </section>
+        <section>
+          <AISentimentCard />
         </section>
         <section>
           <EquityChart />
