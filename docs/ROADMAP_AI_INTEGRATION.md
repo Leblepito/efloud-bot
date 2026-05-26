@@ -55,7 +55,7 @@
 
 | # | İş | Platform | Detay |
 |---|---|---|---|
-| 2.1 | **Gemini API — Makro Duygu Analizi Layer'ı** | Google AI Studio / Gemini API | Yeni modül: `engine/ai/sentiment.py`. Gemini'nin 2M+ token bağlam penceresi ile son 30 günlük daily OHLCV + Fear&Greed Index + funding rate verilerini analiz ederek "RISK-ON / RISK-OFF / NEUTRAL" makro skoru üretir. Bu skor `SafeOrchestrator.run_cycle()` içinde confluence skoruna ±5 puan bonus/penalty olarak eklenir. |
+| ✅ 2.1 | **Gemini API — Makro Duygu Analizi Layer'ı** | Google AI Studio / Gemini API | Yeni modül: `engine/ai/sentiment.py`. Gemini'nin 2M+ token bağlam penceresi ile son 30 günlük daily OHLCV + Fear&Greed Index + funding rate verilerini analiz ederek "RISK-ON / RISK-OFF / NEUTRAL" makro skoru üretir. Bu skor `SafeOrchestrator.run_cycle()` içinde confluence skoruna ±5 puan bonus/penalty olarak eklenir. (2026-05-26) |
 | 2.2 | **Gemini API — SMC Yapı Doğrulama** | Google AI Studio / Gemini API | `engine/signals.py` içindeki sinyal üretiminden sonra, Gemini'ye HTF+MTF+Entry TF'nin son 200 mumunu göndererek "Bu BOS/CHoCH gerçekten kurumsal akış mı, yoksa noise mı?" sorusunun yanıtını alır. Confidence ≥70 olmayan sinyalleri filtreler. |
 | 2.3 | **Vertex AI — Regime Detection ML** | Vertex AI AutoML | `engine/regimes/__init__.py`'deki kural tabanlı ADX/ATR rejim algılayıcısını, geçmiş verilerle eğitilmiş bir XGBoost/TabNet modeli ile zenginleştirir. Günlük otomatik yeniden eğitim pipeline'ı. |
 | 2.4 | **Firebase Genkit — Yapılandırılmış Çıktı** | Firebase Genkit | Telegram bildirimleri ve ajan yanıtları için structured JSON output. `ops/` modülündeki Telegram formatter'ı Genkit ile sarmalanır. |
@@ -202,8 +202,8 @@ Bu dosya hem **Gemini (Antigravity)** hem **Claude Code** hem de **Hermes** tara
 
 | # | İş | Model | Referans Repo | Gerekçe |
 |---|---|---|---|---|
-| 2.1 | Gemini sentiment layer **tasarımı** | 🏛️ OPUS | — | API akışı, hata yönetimi, graceful degradation spec |
-| 2.1i | Gemini sentiment layer **implementasyonu** | 🔧 FLASH | — | `engine/ai/sentiment.py` kodunu yaz, test yaz |
+| ✅ 2.1 | Gemini sentiment layer **tasarımı** | 🏛️ OPUS | — | API akışı, hata yönetimi, graceful degradation spec (2026-05-26) |
+| ✅ 2.1i | Gemini sentiment layer **implementasyonu** | 🔧 FLASH | — | `engine/ai/sentiment.py` kodunu yaz, test yaz (2026-05-26) |
 | 2.2 | SMC yapı doğrulama **tasarımı** | 🏛️ OPUS | — | Prompt engineering, doğruluk metrikleri |
 | 2.2i | SMC yapı doğrulama **implementasyonu** | 🔧 FLASH | — | Kodu yaz, backtest ile valide et |
 | 2.3 | Vertex AI regime detection | 🤝 ORTAK | — | Opus ML mimarisi, Flash eğitim pipeline'ı |

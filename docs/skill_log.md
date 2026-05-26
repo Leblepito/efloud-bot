@@ -26,6 +26,8 @@
 | 2026-05-26 | Antigravity (Flash) | graphify | Mimari Harita Çıkarma | ✅ | orta | `graphify update .` executed locally, generating 6548 nodes, 10098 edges, 426 communities |
 | 2026-05-26 | Antigravity (Flash) | scripts/optimize_strategy.py | Otonom Backtest Loop | ✅ | orta | Strategy parameter optimizer implemented, unit tested (5/5 pass), smoke run successful |
 | 2026-05-26 | Antigravity (Flash) | scripts/sync_optimization_to_supabase.py | Supabase Entegrasyonu | ✅ | kisa | Supabase sync script implemented, unique constraint, unit tested (2/2 pass) |
+| 2026-05-26 | Antigravity (Orchestrator) | engine/ai/sentiment.py | AI Sentiment Layer ve Next.js/FastAPI Entegrasyonu | ✅ | uzun | Gemini AI Sentiment Layer, RAM-based StateStore ve interaktif dark Next.js UI kartı eklendi. Testler 100% yeşil |
+| 2026-05-26 | Antigravity (Orchestrator) | Docker Compose Deploy | Hetzner VPS Remote Deploy & Verification | ✅ | orta | Hetzner VPS üzerinde Docker Compose baştan derlendi. SSL/Caddy yönlendirmesi ve API kimlik denetimi canlıda doğrulandı |
 
 ---
 
