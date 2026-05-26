@@ -13,7 +13,7 @@ const reasonStyle: Record<string, string> = {
   RECONCILED: "text-text-secondary border-border-strong",
 };
 
-export function TradesTable() {
+export function TradesTable({ onSelectTrade }: { onSelectTrade?: (trade: any) => void }) {
   const { data, isLoading } = useHistory(50);
   const rows = data ?? [];
   const total = rows.reduce((acc, t) => acc + (t.pnl_usdt ?? 0), 0);
@@ -64,7 +64,11 @@ export function TradesTable() {
               const profit = pnl >= 0;
               const badgeCls = reasonStyle[t.reason ?? ""] ?? "text-text-muted border-border";
               return (
-                <tr key={t.id} className="border-b border-border hover:bg-bg-surface transition-colors">
+                <tr
+                  key={t.id}
+                  onClick={() => onSelectTrade?.(t)}
+                  className="border-b border-border hover:bg-bg-surface transition-colors cursor-pointer"
+                >
                   <td className="px-5 py-2 text-text-primary">{t.symbol}</td>
                   <td className="px-3 py-2">
                     <span className={`text-[10px] tracking-widest ${isLong ? "text-accent-green" : "text-accent-red"}`}>

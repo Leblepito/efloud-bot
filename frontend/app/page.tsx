@@ -14,6 +14,7 @@ import { LiveSync } from "@/components/LiveSync";
 
 export default function Dashboard() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
+  const [selectedTrade, setSelectedTrade] = useState<any>(null);
 
   // Cookie tek domain'de (rewrites /api proxy üzerinden) — auth gate /api/status'un
   // 401 dönüşünden geliyor; jsonFetcher yönlendiriyor /login'e.
@@ -34,7 +35,11 @@ export default function Dashboard() {
           <AISentimentCard />
         </section>
         <section>
-          <InteractiveChart selectedSymbol={selectedSymbol} onSelectSymbol={setSelectedSymbol} />
+          <InteractiveChart
+            selectedSymbol={selectedSymbol}
+            selectedTrade={selectedTrade}
+            onSelectSymbol={setSelectedSymbol}
+          />
         </section>
         <section>
           <EquityChart />
@@ -46,7 +51,7 @@ export default function Dashboard() {
           <OpenOrdersTable onSelectSymbol={setSelectedSymbol} />
         </section>
         <section>
-          <TradesTable />
+          <TradesTable onSelectTrade={setSelectedTrade} />
         </section>
         <section>
           <ConfigPanel />

@@ -5,14 +5,16 @@ import { createChart, ColorType, LineStyle, IChartApi, ISeriesApi, CandlestickSe
 import { usePositions } from "@/hooks/usePositions";
 import { useOrders } from "@/hooks/useOrders";
 import { useConfig } from "@/hooks/useConfig";
+import { useHistory } from "@/hooks/useHistory";
 import { n } from "@/lib/format";
 
 type InteractiveChartProps = {
   selectedSymbol?: string;
+  selectedTrade?: any;
   onSelectSymbol?: (symbol: string) => void;
 };
 
-export function InteractiveChart({ selectedSymbol, onSelectSymbol }: InteractiveChartProps) {
+export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol }: InteractiveChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -21,6 +23,7 @@ export function InteractiveChart({ selectedSymbol, onSelectSymbol }: Interactive
   const { data: positions } = usePositions();
   const { data: orders } = useOrders();
   const { data: config } = useConfig();
+  const { data: history } = useHistory(200);
 
   const [activeSymbol, setActiveSymbol] = useState("BTCUSDT");
   const [timeframe, setTimeframe] = useState("15m");
@@ -35,6 +38,35 @@ export function InteractiveChart({ selectedSymbol, onSelectSymbol }: Interactive
       setActiveSymbol(normalized);
     }
   }, [selectedSymbol]);
+
+  // Sync with external selected trade from history table selection
+  useEffect(() => {
+    if (selectedTrade) {
+      const normalized = selectedTrade.symbol.replace("/", "").replace(":", "");
+      setActiveSymbol(normalized);
+      setTimeframe("15m"); // Default to 15m for historical SMC trades
+
+      // Calculate timestamps in seconds
+      const openedSec = Math.floor(new Date(selectedTrade.opened_at).getTime() / 1000);
+      const closedSec = selectedTrade.closed_at
+        ? Math.floor(new Date(selectedTrade.closed_at).getTime() / 1000)
+        : Math.floor(Date.now() / 1000);
+
+      // Centered focus with margin (e.g. 15 candles on each side)
+      // 15m candle = 900 seconds
+      const margin = 15 * 900;
+
+      // Small timeout to allow the chart to fetch historical candles first
+      setTimeout(() => {
+        if (chartRef.current) {
+          chartRef.current.timeScale().setVisibleRange({
+            from: (openedSec - margin) as any,
+            to: (closedSec + margin) as any,
+          });
+        }
+      }, 1000);
+    }
+  }, [selectedTrade]);
 
   // Extract config symbols to populate dropdown, dynamically adding symbols with active positions or orders
   const symbolOptions = Array.from(
@@ -190,15 +222,12 @@ export function InteractiveChart({ selectedSymbol, onSelectSymbol }: Interactive
     };
   }, [activeSymbol, timeframe]);
 
-  // 7. Render dynamic price level overlays (Entry, TP, SL) matching active positions and orders
+  // 7. Render dynamic price level overlays (Entry, TP, SL) matching active positions, orders, or selected historical trade
   useEffect(() => {
     const candleSeries = candleSeriesRef.current;
     if (!candleSeries) return;
 
     // Reset/clear any previous price lines before drawing new ones
-    // Lightweight charts price lines don't have a clear all, so we manage them dynamically
-    // The easiest and cleanest way in React wrapper is to store lines in a ref and delete them,
-    // or let the series destroy/recreate handle it. Since we re-run this effect when positions/orders change:
     const activeLines: any[] = [];
 
     // Find if we have an active position for the current symbol
@@ -206,53 +235,61 @@ export function InteractiveChart({ selectedSymbol, onSelectSymbol }: Interactive
       (p) => p.symbol.replace("/", "").replace(":", "") === activeSymbol
     );
 
-    if (activePos) {
+    // Or check if we have a selected historical trade for the current symbol
+    const histTrade = selectedTrade && selectedTrade.symbol.replace("/", "").replace(":", "") === activeSymbol ? selectedTrade : null;
+
+    const displayPos = activePos || histTrade;
+
+    if (displayPos) {
+      const isHist = !!histTrade && !activePos;
       // Entry Line (Yellow Dotted)
       const entryLine = candleSeries.createPriceLine({
-        price: activePos.entry,
+        price: displayPos.entry,
         color: "#F59E0B", // amber-500
         lineWidth: 2,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
-        title: `ENTRY: ${n(activePos.entry, 4)}`,
+        title: `${isHist ? "HIST ENTRY" : "ENTRY"}: ${n(displayPos.entry, 4)}`,
       });
       activeLines.push(entryLine);
 
       // Stop Loss Line (Red Solid)
-      if (activePos.sl) {
+      if (displayPos.sl) {
         const slLine = candleSeries.createPriceLine({
-          price: activePos.sl,
+          price: displayPos.sl,
           color: "#FF4D4D",
           lineWidth: 2,
           lineStyle: LineStyle.Solid,
           axisLabelVisible: true,
-          title: `SL: ${n(activePos.sl, 4)}`,
+          title: `${isHist ? "HIST SL" : "SL"}: ${n(displayPos.sl, 4)}`,
         });
         activeLines.push(slLine);
       }
 
       // Take Profit 1 (Green Solid)
-      if (activePos.tp1) {
+      if (displayPos.tp1) {
+        const isHit = isHist ? (displayPos.reason === "TP1" || displayPos.reason === "TP2" || displayPos.reason === "TP2_POLL") : displayPos.tp1_hit;
         const tp1Line = candleSeries.createPriceLine({
-          price: activePos.tp1,
+          price: displayPos.tp1,
           color: "#00FF88",
           lineWidth: 2,
           lineStyle: LineStyle.Solid,
           axisLabelVisible: true,
-          title: `TP1: ${n(activePos.tp1, 4)} ${activePos.tp1_hit ? "(HIT)" : ""}`,
+          title: `${isHist ? "HIST TP1" : "TP1"}: ${n(displayPos.tp1, 4)} ${isHit ? "(HIT)" : ""}`,
         });
         activeLines.push(tp1Line);
       }
 
       // Take Profit 2 (Green Solid)
-      if (activePos.tp2) {
+      if (displayPos.tp2) {
+        const isHit = isHist && (displayPos.reason === "TP2" || displayPos.reason === "TP2_POLL");
         const tp2Line = candleSeries.createPriceLine({
-          price: activePos.tp2,
+          price: displayPos.tp2,
           color: "#059669", // emerald-600
           lineWidth: 2,
           lineStyle: LineStyle.Solid,
           axisLabelVisible: true,
-          title: `TP2: ${n(activePos.tp2, 4)}`,
+          title: `${isHist ? "HIST TP2" : "TP2"}: ${n(displayPos.tp2, 4)} ${isHit ? "(HIT)" : ""}`,
         });
         activeLines.push(tp2Line);
       }
@@ -287,7 +324,54 @@ export function InteractiveChart({ selectedSymbol, onSelectSymbol }: Interactive
         }
       });
     };
-  }, [positions, orders, activeSymbol, isLoading]);
+  }, [positions, orders, activeSymbol, selectedTrade, isLoading]);
+
+  // 8. Render historical trade markers (ENTRY/EXIT arrows & circles) on candles
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    if (!candleSeries || !history) return;
+
+    const markers: any[] = [];
+
+    // Filter recent trades that belong to the currently active symbol
+    const symbolTrades = history.filter(
+      (t) => t.symbol.replace("/", "").replace(":", "") === activeSymbol
+    );
+
+    symbolTrades.forEach((t) => {
+      const entryTime = Math.floor(new Date(t.opened_at).getTime() / 1000);
+      const isLong = t.direction === "LONG";
+
+      // Entry Marker (Green Up Arrow for Long, Red Down Arrow for Short)
+      markers.push({
+        time: entryTime as any,
+        position: isLong ? "belowBar" : "aboveBar",
+        shape: isLong ? "arrowUp" : "arrowDown",
+        color: isLong ? "#00FF88" : "#FF4D4D",
+        text: `${isLong ? "L" : "S"} Entry: ${t.entry}`,
+      });
+
+      // Exit Marker (Circle)
+      if (t.closed_at) {
+        const exitTime = Math.floor(new Date(t.closed_at).getTime() / 1000);
+        const pnl = t.pnl_usdt ?? 0;
+        const profit = pnl >= 0;
+
+        markers.push({
+          time: exitTime as any,
+          position: isLong ? "aboveBar" : "belowBar",
+          shape: "circle",
+          color: profit ? "#00FF88" : "#FF4D4D",
+          text: `Exit: ${t.reason ?? "RECONCILED"} (${t.pnl_pct != null ? (t.pnl_pct >= 0 ? "+" : "") + t.pnl_pct.toFixed(2) : "—"}%)`,
+        });
+      }
+    });
+
+    // Sort markers chronologically (Lightweight Charts requirement!)
+    markers.sort((a, b) => a.time - b.time);
+
+    (candleSeries as any).setMarkers(markers);
+  }, [history, activeSymbol, isLoading]);
 
   const handleSymbolChange = (symbol: string) => {
     setActiveSymbol(symbol);
