@@ -56,26 +56,36 @@ class Database:
         tp1_target_type: Optional[str] = None,
         tp2_target_type: Optional[str] = None,
         bars_to_pullback: Optional[int] = None,
+        initial_sl: Optional[float] = None,
+        adx_value: Optional[float] = None,
+        atr_value: Optional[float] = None,
+        funding_rate: Optional[float] = None,
+        confluence_details: Optional[dict] = None,
     ) -> Optional[str]:
         """Insert trade with no exit yet. Returns trade UUID."""
         if not self.pool:
             return None
         try:
+            conf_json = json.dumps(confluence_details, default=str) if confluence_details is not None else None
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
                     INSERT INTO trades (symbol, direction, entry, sl, tp1, tp2, size,
                                         confluence, binance_order_id, trace_id, bar_ts_ms,
                                         entry_setup_source, tp1_target_type,
-                                        tp2_target_type, bars_to_pullback)
+                                        tp2_target_type, bars_to_pullback,
+                                        initial_sl, adx_value, atr_value,
+                                        funding_rate, confluence_details)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                            $12, $13, $14, $15)
+                            $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb)
                     RETURNING id::text
                     """,
                     symbol, direction, entry, sl, tp1, tp2, size,
                     confluence, binance_order_id, trace_id, bar_ts_ms,
                     entry_setup_source, tp1_target_type,
                     tp2_target_type, bars_to_pullback,
+                    initial_sl, adx_value, atr_value,
+                    funding_rate, conf_json,
                 )
                 return row["id"] if row else None
         except Exception as e:
@@ -87,6 +97,9 @@ class Database:
         pnl_pct: float, reason: str,
         trace_id: Optional[str] = None,       # NEW (informational; not used in WHERE)
         bar_ts_ms: Optional[int] = None,       # NEW (forward-compat; not yet used)
+        *,
+        mae_pct: Optional[float] = None,
+        mfe_pct: Optional[float] = None,
     ) -> None:
         """Update most recent open trade for symbol with exit details."""
         if not self.pool:
@@ -101,7 +114,9 @@ class Database:
                     """
                     UPDATE trades
                     SET exit = $2, pnl_usdt = $3, pnl_pct = $4, reason = $5,
-                        closed_at = NOW()
+                        closed_at = NOW(),
+                        mae_pct = COALESCE($6, mae_pct),
+                        mfe_pct = COALESCE($7, mfe_pct)
                     WHERE id = (
                         SELECT id FROM trades
                         WHERE symbol = $1 AND closed_at IS NULL
@@ -109,6 +124,7 @@ class Database:
                     )
                     """,
                     symbol, exit_price, pnl_usdt, pnl_pct, reason,
+                    mae_pct, mfe_pct,
                 )
         except Exception as e:
             log.warning(f"record_trade_close failed: {e}")
@@ -124,7 +140,9 @@ class Database:
                            size, pnl_usdt, pnl_pct, reason, opened_at, closed_at,
                            confluence,
                            entry_setup_source, tp1_target_type,
-                           tp2_target_type, bars_to_pullback
+                           tp2_target_type, bars_to_pullback,
+                           mae_pct, mfe_pct, initial_sl, adx_value, atr_value,
+                           funding_rate, confluence_details
                     FROM trades
                     ORDER BY opened_at DESC LIMIT $1
                     """,
@@ -153,7 +171,9 @@ class Database:
                            size, pnl_usdt, pnl_pct, reason, opened_at, closed_at,
                            confluence,
                            entry_setup_source, tp1_target_type,
-                           tp2_target_type, bars_to_pullback
+                           tp2_target_type, bars_to_pullback,
+                           mae_pct, mfe_pct, initial_sl, adx_value, atr_value,
+                           funding_rate, confluence_details
                     FROM trades
                     WHERE closed_at IS NOT NULL AND closed_at >= $1
                     ORDER BY closed_at DESC

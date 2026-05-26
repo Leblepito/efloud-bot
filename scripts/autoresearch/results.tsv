@@ -1,0 +1,13 @@
+commit	sharpe_ratio	net_profit_pct	max_drawdown	status	description
+1ab3741	0.54	0.15	0.45	keep	baseline SMC v2 config
+225adcc	0.09	-0.22	0.53	discard	try min_confluence 45
+9315a5c	0.60	0.16	0.30	keep	reduced swing_lookback to 4
+18be47c	0.11	-0.15	0.57	discard	try ote_lower 0.5
+dff2d53	0.52	0.40	0.25	keep	try min_rr 1.5
+333faba	0.52	0.60	0.38	keep	try risk 1.5 and max_notional 3.0
+cbfc51a	0.52	0.80	0.50	keep	try risk 2.0 and max_notional 4.0
+3337822	0.52	0.80	0.50	discard	try pullback_timeout_bars 12
+b9858a6	0.52	0.80	0.50	discard	try fvg_priority False
+bbae60c	0.52	0.80	0.50	discard	try sl_atr_buffer 0.3
+a708526	0.51	1.19	0.75	keep	try max_notional 6.0
+bef19b2	0.51	1.59	1.00	keep	try max_notional 8.0

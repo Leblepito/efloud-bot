@@ -954,10 +954,19 @@ class SafeOrchestrator:
                             exchange_ok = True
                             if self.order_manager is not None:
                                 try:
+                                    # Build confluence_details for DB warehouse from signal
+                                    _conf_details = {
+                                        "score": latest.confluence,
+                                        "reasons": getattr(latest, "reasons", []),
+                                        "htf_bias": htf_bias,
+                                        "regime": regime_analysis.regime,
+                                    } if latest is not None else None
                                     exchange_pos = self.order_manager.open_position(
                                         symbol, latest.direction, size,
                                         latest.entry, latest.sl, latest.tp1, latest.tp2,
                                         trace_id=trace_id,
+                                        atr_value=float(atr) if atr is not None else None,
+                                        confluence_details=_conf_details,
                                     )
                                 except Exception as e:
                                     log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
@@ -1509,6 +1518,7 @@ class SafeOrchestrator:
             tp1_target_type=tp_tags.get("tp1_source"),
             tp2_target_type=tp_tags.get("tp2_source"),
             bars_to_pullback=cand.bars_waited,
+            atr_value=float(atr_15m),
         )
 
     def _log_shadow_signal(self, *, cand, entry_price, sl, tp1, tp2, size,

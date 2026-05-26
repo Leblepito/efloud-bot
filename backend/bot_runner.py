@@ -417,6 +417,12 @@ class BotRunner:
                         tp1_target_type=getattr(pos, "tp1_target_type", None),
                         tp2_target_type=getattr(pos, "tp2_target_type", None),
                         bars_to_pullback=getattr(pos, "bars_to_pullback", None),
+                        # Phase 3.2 warehouse telemetry — market-state at entry
+                        initial_sl=getattr(pos, "sl", None),
+                        adx_value=getattr(pos, "adx_value", None),
+                        atr_value=getattr(pos, "atr_value", None),
+                        funding_rate=getattr(pos, "funding_rate", None),
+                        confluence_details=getattr(pos, "confluence_details", None),
                     ),
                     self.loop,
                 )
@@ -429,6 +435,8 @@ class BotRunner:
                         pnl_usdt=pos.pnl_usdt, pnl_pct=pnl_pct,
                         reason=pos.exit_reason,
                         trace_id=getattr(pos, "trace_id", None),
+                        mae_pct=getattr(pos, "mae_pct", None),
+                        mfe_pct=getattr(pos, "mfe_pct", None),
                     ),
                     self.loop,
                 )
@@ -465,6 +473,8 @@ class BotRunner:
             symbol=pos.symbol, exit_price=pos.exit_price,
             pnl_usdt=pos.pnl_usdt, pnl_pct=pnl_pct, reason=pos.exit_reason,
             trace_id=getattr(pos, "trace_id", None),
+            mae_pct=getattr(pos, "mae_pct", None),
+            mfe_pct=getattr(pos, "mfe_pct", None),
         )
 
     # ─────────────────────────────────────────────────────────────

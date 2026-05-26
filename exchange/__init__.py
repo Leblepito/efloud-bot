@@ -254,6 +254,14 @@ class Position:
     tp2_target_type:    Optional[str] = None   # "FVG_FAR"      | "FIB_EXT"     | "NONE"          | None
     bars_to_pullback:   Optional[int] = None   # bars elapsed AWAITING_PULLBACK → IN_ZONE
 
+    # Warehouse telemetry (Phase 3.2) — market-state snapshot at entry time.
+    # Persisted to DB for post-mortem analysis via bot_runner.position_opened.
+    # All default None so existing callers remain unaffected.
+    adx_value:          Optional[float] = None  # ADX indicator value at entry
+    atr_value:          Optional[float] = None  # ATR indicator value at entry
+    funding_rate:       Optional[float] = None  # Funding rate at entry (from exchange)
+    confluence_details: Optional[dict]  = None  # Sub-scores, reasons, HTF/MTF biases
+
     def update_excursion(self, high: float, low: float) -> None:
         """Update mae_pct/mfe_pct from this bar's price extremes.
 
@@ -421,7 +429,11 @@ class OrderManager:
                       entry_setup_source: Optional[str] = None,
                       tp1_target_type: Optional[str] = None,
                       tp2_target_type: Optional[str] = None,
-                      bars_to_pullback: Optional[int] = None) -> Optional[Position]:
+                      bars_to_pullback: Optional[int] = None,
+                      adx_value: Optional[float] = None,
+                      atr_value: Optional[float] = None,
+                      funding_rate: Optional[float] = None,
+                      confluence_details: Optional[dict] = None) -> Optional[Position]:
         """Yeni pozisyon aç + server-side SL + TP1 (yarı) + TP2 (yarı) yerleştir.
 
         trace_id / bar_ts_ms: optional log-correlation + bar-alignment metadata
@@ -450,7 +462,11 @@ class OrderManager:
                            entry_setup_source=entry_setup_source,
                            tp1_target_type=tp1_target_type,
                            tp2_target_type=tp2_target_type,
-                           bars_to_pullback=bars_to_pullback)
+                           bars_to_pullback=bars_to_pullback,
+                           adx_value=adx_value,
+                           atr_value=atr_value,
+                           funding_rate=funding_rate,
+                           confluence_details=confluence_details)
             self.positions.append(pos)
             self._persist()
             self._emit("position_opened", pos)
@@ -568,6 +584,10 @@ class OrderManager:
                 tp1_target_type=tp1_target_type,
                 tp2_target_type=tp2_target_type,
                 bars_to_pullback=bars_to_pullback,
+                adx_value=adx_value,
+                atr_value=atr_value,
+                funding_rate=funding_rate,
+                confluence_details=confluence_details,
             )
             self.positions.append(pos)
             self._persist()
@@ -625,6 +645,10 @@ class OrderManager:
             tp1_target_type=tp1_target_type,
             tp2_target_type=tp2_target_type,
             bars_to_pullback=bars_to_pullback,
+            adx_value=adx_value,
+            atr_value=atr_value,
+            funding_rate=funding_rate,
+            confluence_details=confluence_details,
         )
         self.positions.append(pos)
         self._persist()
