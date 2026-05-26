@@ -235,6 +235,10 @@ class SafeOrchestrator:
         # Recovery
         self._restore_state()
 
+        # AI Sentiment State Registry Entegrasyonu (SMR Entegrasyon)
+        self.sentiment_state = {}
+        self.load_ai_sentiment()
+
     def _get_planner(self, symbol: str) -> ScenarioPlanner:
         """Sembol başına ScenarioPlanner — senaryolar karışmasın."""
         if symbol not in self._planners:
@@ -329,6 +333,27 @@ class SafeOrchestrator:
             except Exception as e:
                 log.warning(f"Could not restore processed_signals: {e}")
                 self._processed_signals = {}
+
+    def load_ai_sentiment(self):
+        """Yapay zeka makro duygu durumunu local registry'den yukler."""
+        try:
+            registry_path = Path(self.store.dir) / "ai_sentiment_registry.json"
+            if registry_path.exists():
+                with open(registry_path, encoding="utf-8") as f:
+                    self.sentiment_state = json.load(f)
+                    log.info(f"♻️  Loaded AI sentiment state: {self.sentiment_state.get('macro_sentiment', 'NEUTRAL')}")
+                    return
+        except Exception as e:
+            log.warning(f"Could not load AI sentiment state: {e}")
+        
+        # Fallback default neutral
+        self.sentiment_state = {
+            "macro_sentiment": "NEUTRAL",
+            "confidence_score": 1.0,
+            "fear_and_greed": 50.0,
+            "bitcoin_trend": "NEUTRAL",
+            "reasoning": "Fallback default due to load failure."
+        }
 
     def _persist_state(self):
         """State'i diske yaz."""
