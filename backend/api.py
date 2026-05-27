@@ -60,9 +60,9 @@ async def positions() -> list[dict]:
     # Strip CCXT contract notation for comparisons: 'FIL/USDT:USDT' -> 'FIL/USDT'
     from exchange import _strip_contract_suffix
 
-    # Create a lookup map of local bot positions
+    # Create a lookup map of local bot positions by symbol and direction
     local_pos_map = {
-        _strip_contract_suffix(p.symbol): p for p in runner.order_mgr.positions
+        (_strip_contract_suffix(p.symbol), p.direction): p for p in runner.order_mgr.positions
     }
 
     # If we successfully fetched live positions, use them as the primary source of truth
@@ -82,8 +82,8 @@ async def positions() -> list[dict]:
             else:
                 direction = "LONG" if contracts > 0 else "SHORT"
                 
-            # Check if this is tracked locally by the bot
-            local_pos = local_pos_map.get(base_symbol)
+            # Check if this is tracked locally by the bot by symbol and direction
+            local_pos = local_pos_map.get((base_symbol, direction))
             
             if local_pos:
                 sl = local_pos.sl

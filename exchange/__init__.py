@@ -702,11 +702,16 @@ class OrderManager:
             # that's how the 2026-05-08 stacking bug fired (every transient API
             # error tripped TP1-hit on every open position).
 
-        # Binance'deki açık pozisyon symbol'leri.
+        # Binance'deki açık pozisyon symbol'leri ve yönleri (Hedge Mode uyumlu).
         # CCXT futures returns 'FIL/USDT:USDT'; bot tracks 'FIL/USDT'. Strip the
         # contract suffix so set membership matches local Position.symbol form.
         bn_open_symbols = {
             _strip_contract_suffix(p["symbol"])
+            for p in bn_positions
+            if float(p.get("contracts", 0)) > 0
+        }
+        bn_open_positions = {
+            (_strip_contract_suffix(p["symbol"]), str(p.get("side", "")).upper())
             for p in bn_positions
             if float(p.get("contracts", 0)) > 0
         }
@@ -765,7 +770,7 @@ class OrderManager:
         closed_now: List[Position] = []
 
         for pos in self.positions[:]:
-            if pos.symbol not in bn_open_symbols:
+            if (pos.symbol, pos.direction) not in bn_open_positions:
                 # Pozisyon Binance'de kapanmış — TP2 / SL / manual close
                 # Ordering note: _estimate_exit_price runs before
                 # _cancel_position_siblings as defense-in-depth. Currently safe
