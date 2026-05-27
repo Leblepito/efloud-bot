@@ -30,14 +30,28 @@ class PositionOverlayPrimitive {
 
           target.useMediaCoordinateSpace(({ context, mediaSize }: any) => {
             const timeScale = this._chart.timeScale();
+            const visibleRange = timeScale.getVisibleRange();
             
-            const entryX = timeScale.timeToCoordinate(this.entryTime);
+            let entryX = timeScale.timeToCoordinate(this.entryTime);
             const entryY = this._series.priceToCoordinate(this.entryPrice);
             
             const slY = this.slPrice ? this._series.priceToCoordinate(this.slPrice) : null;
             const tpY = this.tpPrice ? this._series.priceToCoordinate(this.tpPrice) : null;
 
-            if (entryX === null || entryY === null) return;
+            if (entryX === null) {
+              if (visibleRange && (this.entryTime < (visibleRange.from as number))) {
+                entryX = 0; // Clamp entry to left edge of screen if it is in the past
+              } else {
+                return; // Not visible or in the future
+              }
+            }
+
+            if (entryY === null) return;
+
+            // If the entire closed trade is in the past and off-screen, do not draw
+            if (visibleRange && this.exitTime !== null && (this.exitTime < (visibleRange.from as number))) {
+              return;
+            }
 
             const exitX = this.exitTime ? timeScale.timeToCoordinate(this.exitTime) : null;
             const rectEndX = exitX !== null ? exitX : mediaSize.width;
@@ -245,6 +259,23 @@ class PositionOverlayPrimitive {
   timeAxisViews() {
     return [];
   }
+}
+
+function alignTimestampToTimeframe(timestamp: number, timeframe: string): number {
+  const date = new Date(timestamp * 1000);
+  if (timeframe.endsWith("m")) {
+    const minutes = parseInt(timeframe);
+    const m = Math.floor(date.getUTCMinutes() / minutes) * minutes;
+    date.setUTCMinutes(m, 0, 0);
+  } else if (timeframe.endsWith("h")) {
+    const hours = parseInt(timeframe);
+    const h = Math.floor(date.getUTCHours() / hours) * hours;
+    date.setUTCMinutes(0, 0, 0);
+    date.setUTCHours(h);
+  } else if (timeframe.endsWith("d")) {
+    date.setUTCHours(0, 0, 0, 0);
+  }
+  return Math.floor(date.getTime() / 1000);
 }
 
 type InteractiveChartProps = {
@@ -486,8 +517,12 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     if (displayPos) {
       // Attach Position Overlay Primitive (Shaded rectangles)
       const isLong = displayPos.direction === "LONG";
-      const entryTime = Math.floor(new Date(displayPos.opened_at).getTime() / 1000);
-      const exitTime = displayPos.closed_at ? Math.floor(new Date(displayPos.closed_at).getTime() / 1000) : null;
+      const rawEntryTime = Math.floor(new Date(displayPos.opened_at).getTime() / 1000);
+      const rawExitTime = displayPos.closed_at ? Math.floor(new Date(displayPos.closed_at).getTime() / 1000) : null;
+      
+      const entryTime = alignTimestampToTimeframe(rawEntryTime, timeframe);
+      const exitTime = rawExitTime ? alignTimestampToTimeframe(rawExitTime, timeframe) : null;
+      
       const targetTp = displayPos.tp2 || displayPos.tp1;
 
       if (entryTime && displayPos.entry) {
