@@ -23,6 +23,7 @@ export type OpenPosition = {
   size: number;
   current_price: number;
   unrealized_pct: number;
+  unrealized_usdt: number;
   tp1_hit: boolean;
   opened_at: string;
 };

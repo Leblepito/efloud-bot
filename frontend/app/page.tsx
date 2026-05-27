@@ -12,6 +12,8 @@ import { TradesTable } from "@/components/TradesTable";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { LiveSync } from "@/components/LiveSync";
 import { TradeDetailPanel } from "@/components/TradeDetailPanel";
+import { SocialFeeds } from "@/components/SocialFeeds";
+import { MarketIndicators } from "@/components/MarketIndicators";
 
 export default function Dashboard() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
@@ -32,8 +34,12 @@ export default function Dashboard() {
         <section>
           <StatusGrid />
         </section>
-        <section>
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <AISentimentCard />
+          <SocialFeeds />
+        </section>
+        <section>
+          <MarketIndicators />
         </section>
         <section>
           <InteractiveChart

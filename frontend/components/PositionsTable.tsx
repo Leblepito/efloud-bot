@@ -70,7 +70,10 @@ export function PositionsTable({ onSelectSymbol }: { onSelectSymbol?: (symbol: s
                   <td className="px-3 py-2.5 text-right text-text-secondary">{n(p.tp2, dec)}</td>
                   <td className="px-3 py-2.5 text-right text-text-secondary">{n(p.size, 4)}</td>
                   <td className={`px-3 py-2.5 text-right ${profit ? "text-accent-green" : "text-accent-red"}`}>
-                    {pct(p.unrealized_pct)}
+                    <div>{pct(p.unrealized_pct)}</div>
+                    <div className="text-[10px] opacity-80 font-mono mt-0.5">
+                      {p.unrealized_usdt >= 0 ? "+" : ""}{n(p.unrealized_usdt, 2)} USDT
+                    </div>
                   </td>
                   <td className="px-5 py-2.5 text-right text-text-muted">{fromNow(p.opened_at)}</td>
                 </tr>

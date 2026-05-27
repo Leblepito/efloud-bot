@@ -342,16 +342,18 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
   // Extract config symbols to populate dropdown, dynamically adding symbols with active positions or orders
   const symbolOptions = Array.from(
     new Set([
-      "BTCUSDT",
-      "ETHUSDT",
-      "SOLUSDT",
-      "TRXUSDT",
-      "XRPUSDT",
-      ...(config?.symbols?.map((s) => s.replace("/", "").replace(":", "").replace("USDT", "")) ?? []),
-      ...(positions?.map((p) => p.symbol.replace("/", "").replace(":", "").replace("USDT", "")) ?? []),
-      ...(orders?.map((o) => o.symbol.replace("/", "").replace(":", "").replace("USDT", "")) ?? []),
+      "BTC",
+      "ETH",
+      "SOL",
+      "TRX",
+      "XRP",
+      ...(config?.symbols?.map((s) => s.split(/[\/:]/)[0].replace(/USDT$/i, "")) ?? []),
+      ...(positions?.map((p) => p.symbol.split(/[\/:]/)[0].replace(/USDT$/i, "")) ?? []),
+      ...(orders?.map((o) => o.symbol.split(/[\/:]/)[0].replace(/USDT$/i, "")) ?? []),
     ])
-  ).map((sym) => `${sym}USDT`);
+  )
+    .filter(Boolean)
+    .map((sym) => `${sym.toUpperCase()}USDT`);
 
   // Re-fetch data and re-initialize chart when symbol or timeframe changes
   useEffect(() => {
@@ -419,10 +421,24 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     const controller = new AbortController();
     const fetchHistory = async () => {
       try {
-        const res = await fetch(
-          `https://fapi.binance.com/fapi/v1/klines?symbol=${activeSymbol}&interval=${timeframe}&limit=200`,
-          { signal: controller.signal }
-        );
+        let url = `https://fapi.binance.com/fapi/v1/klines?symbol=${activeSymbol}&interval=${timeframe}&limit=1000`;
+        
+        // If a historical trade is selected, set startTime to fetch around the trade
+        if (selectedTrade && selectedTrade.symbol.replace("/", "").replace(":", "") === activeSymbol) {
+          const openedMs = new Date(selectedTrade.opened_at).getTime();
+          let candleDurationMs = 15 * 60000; // default 15m
+          if (timeframe === "1m") candleDurationMs = 60000;
+          else if (timeframe === "5m") candleDurationMs = 5 * 60000;
+          else if (timeframe === "15m") candleDurationMs = 15 * 60000;
+          else if (timeframe === "1h") candleDurationMs = 60 * 60000;
+          else if (timeframe === "4h") candleDurationMs = 4 * 60 * 60000;
+          else if (timeframe === "1d") candleDurationMs = 24 * 60 * 60000;
+          
+          const startMs = openedMs - 100 * candleDurationMs;
+          url += `&startTime=${Math.floor(startMs)}`;
+        }
+
+        const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(`Binance returned HTTP ${res.status}`);
         const data = await res.json();
         
