@@ -770,7 +770,13 @@ class OrderManager:
         closed_now: List[Position] = []
 
         for pos in self.positions[:]:
-            if (pos.symbol, pos.direction) not in bn_open_positions:
+            # Normalization fallback for legacy/mock tests that don't pass 'side' parameter:
+            if self.hedge_mode:
+                is_open = (pos.symbol, pos.direction) in bn_open_positions or (pos.symbol, "") in bn_open_positions
+            else:
+                is_open = pos.symbol in bn_open_symbols
+
+            if not is_open:
                 # Pozisyon Binance'de kapanmış — TP2 / SL / manual close
                 # Ordering note: _estimate_exit_price runs before
                 # _cancel_position_siblings as defense-in-depth. Currently safe
