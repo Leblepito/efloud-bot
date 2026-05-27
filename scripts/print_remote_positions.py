@@ -24,25 +24,25 @@ def main():
             sys.exit(1)
             
     positions_list = p.get("positions", [])
-    open_positions = [v for v in positions_list if v.get("closed_at") is None]
     
     print(f"==========================================================")
-    print(f"📊 Live Open Positions Count: {len(open_positions)}")
+    print(f"📊 Live Open Positions Count: {len([x for x in positions_list if x.get('closed_at') is None])}")
+    print(f"📊 Total Trades History Count: {len(positions_list)}")
     print(f"==========================================================")
-    for v in open_positions:
-        print(f"- Symbol: {v.get('symbol')}")
+    for v in positions_list:
+        status = "OPEN" if v.get("closed_at") is None else f"CLOSED at {v.get('closed_at')}"
+        print(f"- Symbol: {v.get('symbol')} ({status})")
         print(f"  Direction: {v.get('direction')}")
-        # Parse entry details
         entries = v.get("entries", [])
         if entries:
             print(f"  Entry Price: {entries[0].get('price')} (Initial)")
-        else:
-            print(f"  Entry Price: Unknown")
         print(f"  Stop Loss: {v.get('sl')}")
         print(f"  Take Profit 1: {v.get('tp1')}")
         print(f"  Take Profit 2: {v.get('tp2')}")
-        print(f"  Max Adverse Excursion (MAE): {v.get('mae_pct'):.4f}%")
-        print(f"  Max Favorable Excursion (MFE): {v.get('mfe_pct'):.4f}%")
+        exits = v.get("exits", [])
+        if exits:
+            pnl = sum(e.get("pnl", 0.0) for e in exits)
+            print(f"  Realized PnL: {pnl:.4f} USDT")
         print(f"----------------------------------------------------------")
 
 if __name__ == "__main__":
