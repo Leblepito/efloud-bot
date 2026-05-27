@@ -701,6 +701,7 @@ class SafeOrchestrator:
             daily_filter_strict=risk_cfg.get("daily_filter_strict", False),
             symbol=symbol,
             symbol_confluence_overrides=risk_cfg.get("symbol_confluence_overrides"),
+            levels=all_levels,
         )
 
         # ═══ STEP 4: Scenario Planning (per-symbol) ═══

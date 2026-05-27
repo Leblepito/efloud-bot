@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Any
 from .smc import SMCEngine
 from .confluence import calc_confluence
+from .levels import Level
 import pandas as pd
 import httpx
 import os
@@ -212,6 +213,7 @@ def generate_signals(
     daily_filter_strict: bool = False,          # True = 1d ters yön → reddet
     symbol: Optional[str] = None,               # NEW — for per-symbol threshold lookup
     symbol_confluence_overrides: Optional[Dict[str, int]] = None,  # NEW
+    levels: Optional[List[Level]] = None,       # NEW — injected levels for PA confluence
 ) -> List[Signal]:
     """
     4-Timeframe Efloud akışı:
@@ -229,6 +231,7 @@ def generate_signals(
     # ── HTF analiz ──
     htf = engine.analyze(df_htf)
     htf_bias = htf["trend"]
+    htf_bias_original = htf_bias
     htf_fvgs = htf["active_fvgs"]
     htf_obs = htf["active_obs"]
 
@@ -246,8 +249,13 @@ def generate_signals(
                 htf_bias = "BEAR"
                 log.info(f"HTF fallback: {change_pct:.1f}% slope → BEAR")
             else:
-                log.info(f"HTF undefined and slope neutral ({change_pct:+.1f}%) — skipping")
-                return []
+                e_range = engine.range_info(df_entry)
+                if e_range and (e_range.discount or e_range.premium):
+                    htf_bias = "BULL" if e_range.discount else "BEAR"
+                    log.info(f"HTF flat but Range active → trading range play ({htf_bias})")
+                else:
+                    log.info(f"HTF undefined, slope neutral ({change_pct:+.1f}%), and no active range — skipping")
+                    return []
         else:
             log.info("HTF bias undefined and insufficient data — skipping")
             return []
@@ -336,12 +344,30 @@ def generate_signals(
         )
 
         in_ob, ob_ns, ob_eq = False, False, False
+        matched_ob = None
         for ob in a_obs:
-            if ob.direction == brk.direction and ob.bot <= price <= ob.top:
-                in_ob = True
-                ob_ns = ob.near_swing
-                ob_eq = abs(price - ob.eq) / max(ob.eq, 1e-10) < 0.003
-                break
+            if ob.direction == brk.direction:
+                # Efloud retest: price is inside the OB, or within 2% of its boundary
+                is_near = (ob.bot <= price <= ob.top * 1.02) if is_long else (ob.bot * 0.98 <= price <= ob.top)
+                if is_near:
+                    in_ob = True
+                    ob_ns = ob.near_swing
+                    ob_eq = abs(price - ob.eq) / max(ob.eq, 1e-10) < 0.003
+                    matched_ob = ob
+                    break
+
+        # ── Efloud Pullback/Retest Entry Refinement (Low-risk Entry Opportunity) ──
+        # "Orderblock veya Equilibrium noktasına bir geri çekilme, düşük risk ile işleme giriş fırsatı arama."
+        if in_ob and matched_ob:
+            if is_long:
+                price = min(matched_ob.top, price)
+            else:
+                price = max(matched_ob.bot, price)
+        elif in_ote and e_ote:
+            if is_long:
+                price = min(e_ote.top, price)
+            else:
+                price = max(e_ote.bot, price)
 
         correct_zone = (is_long and e_range.discount) or (not is_long and e_range.premium)
         has_dev = (is_long and e_range.dev_bull) or (not is_long and e_range.dev_bear)
@@ -361,6 +387,22 @@ def generate_signals(
                 # Soft penalty: daily ters yönde, -5 puan
                 score = max(0, score - 5)
                 reasons.append(f"Daily diverging ({daily_bias} vs {htf_bias})")
+
+        # ── Efloud Level-based Confluence Enhancements (User Price Action Notes) ──
+        if levels:
+            major_level_names = {"MO", "PMO", "WO", "PWO", "DO", "PDO", "MondayH", "MondayL"}
+            for lvl in levels:
+                # 1. Price near a Major Opening or Monday H/L level
+                if lvl.name in major_level_names:
+                    if abs(price - lvl.price) / lvl.price <= 0.003: # Within 0.3%
+                        score = min(100, score + 5)
+                        reasons.append(f"Price near major level {lvl.name} ({lvl.price:.2f})")
+                
+                # 2. Price in Stacked S/R Zone (3+ levels cluster)
+                if lvl.strength >= 3:
+                    if abs(price - lvl.price) / lvl.price <= 0.005: # Within 0.5%
+                        score = min(100, score + 8)
+                        reasons.append(f"Price in Stacked Zone level {lvl.name} ({lvl.price:.2f})")
 
         if score > max_seen_score:
             max_seen_score = score
@@ -393,45 +435,123 @@ def generate_signals(
             for i in range(1, len(df_entry))
         ]
         atr14 = float(pd.Series(tr).rolling(14).mean().iloc[-1]) if len(tr) >= 14 else (price * 0.005)
-        buffer = 0.5 * atr14
+        
+        # ── Dynamic ATR Invalidation Buffer (Volatility Alignment) ──
+        # "Hiçbir konsept kesin doğrudur diye düşünülmemeli yanılma payı unutulmamalı, buna göre stop koyulmalıdır."
+        buffer_mult = 0.5
+        if len(df_entry) >= 14:
+            high_low_spread = (df_entry["high"] - df_entry["low"]).rolling(14).mean().iloc[-1]
+            close_spread = abs(df_entry["close"] - df_entry["close"].shift(14)).iloc[-1]
+            if close_spread > 1.2 * high_low_spread:
+                buffer_mult = 0.75  # Trend-aligned volatility buffer to prevent deviasyon sweeps
+        buffer = buffer_mult * atr14
 
         if is_long:
+            htf_above_targets = []
             sl_c = [s for s in e_sl if s.idx < brk.idx]
             local_lo = float(df_entry["low"].iloc[max(0, brk.idx - 20):brk.idx].min()) - buffer
             sl = sl_c[-1].price if sl_c else local_lo
             if sl < local_lo:
                 sl = local_lo
+            
+            # Range deviation tight SL override
+            if has_dev and e_range:
+                sl = min(sl, e_range.lo - buffer)
+
             # Safety clamp: at least 0.1% below entry price
             sl = min(sl, price * 0.999)
             
             risk_tmp = abs(price - sl)
             min_tp_long = price + risk_tmp * min_rr
-            htf_above_targets = [f.top for f in htf_fvgs
-                                   if f.direction == "BULL" and f.top >= min_tp_long]
-            htf_above_targets += [s.price for s in htf["swing_highs"]
-                                    if s.price >= min_tp_long]
-            tp1 = min(htf_above_targets) if htf_above_targets else min_tp_long
+            
+            # Prioritize Liquidity over Imbalance in ranging markets
+            liquidity_targets = [s.price for s in htf["swing_highs"] if s.price >= min_tp_long]
+            if "eq_highs" in htf:
+                liquidity_targets += [eq["price"] for eq in htf["eq_highs"] if eq["price"] >= min_tp_long]
+                
+            if has_dev and e_range:
+                # Efloud Range deviation play: target EQ for TP1, RH for TP2
+                tp1 = e_range.eq
+                if tp1 < min_tp_long:
+                    tp1 = min_tp_long
+            elif (htf_bias_original == "UNDEF") and liquidity_targets:
+                # Ranging market: target liquidity pools
+                tp1 = min(liquidity_targets)
+            else:
+                # Trending market: target FVG or liquidity pools
+                htf_above_targets = [f.top for f in htf_fvgs
+                                       if f.direction == "BULL" and f.top >= min_tp_long]
+                htf_above_targets += liquidity_targets
+                if htf_above_targets:
+                    tp1 = min(htf_above_targets)
+                else:
+                    # ── Fibonacci price discovery targets (empty structures) ──
+                    # "fiyat oluşmamış bir alanda hedef belirlemek için kullanılabilir. 1.272"
+                    tp1 = price + risk_tmp * 1.272
         else:
+            htf_below_targets = []
             sl_c = [s for s in e_sh if s.idx < brk.idx]
             local_hi = float(df_entry["high"].iloc[max(0, brk.idx - 20):brk.idx].max()) + buffer
             sl = sl_c[-1].price if sl_c else local_hi
             if sl > local_hi:
                 sl = local_hi
+            
+            # Range deviation tight SL override
+            if has_dev and e_range:
+                sl = max(sl, e_range.hi + buffer)
+
             # Safety clamp: at least 0.1% above entry price
             sl = max(sl, price * 1.001)
             
             risk_tmp = abs(price - sl)
             min_tp_short = price - risk_tmp * min_rr
-            htf_below_targets = [f.bot for f in htf_fvgs
-                                   if f.direction == "BEAR" and f.bot <= min_tp_short]
-            htf_below_targets += [s.price for s in htf["swing_lows"]
-                                    if s.price <= min_tp_short]
-            tp1 = max(htf_below_targets) if htf_below_targets else min_tp_short
+            
+            # Prioritize Liquidity over Imbalance in ranging markets
+            liquidity_targets = [s.price for s in htf["swing_lows"] if s.price <= min_tp_short]
+            if "eq_lows" in htf:
+                liquidity_targets += [eq["price"] for eq in htf["eq_lows"] if eq["price"] <= min_tp_short]
+                
+            if has_dev and e_range:
+                # Efloud Range deviation play: target EQ for TP1, RL for TP2
+                tp1 = e_range.eq
+                if tp1 > min_tp_short:
+                    tp1 = min_tp_short
+            elif (htf_bias_original == "UNDEF") and liquidity_targets:
+                # Ranging market: target liquidity pools
+                tp1 = max(liquidity_targets)
+            else:
+                # Trending market: target FVG or liquidity pools
+                htf_below_targets = [f.bot for f in htf_fvgs
+                                       if f.direction == "BEAR" and f.bot <= min_tp_short]
+                htf_below_targets += liquidity_targets
+                if htf_below_targets:
+                    tp1 = max(htf_below_targets)
+                else:
+                    # ── Fibonacci price discovery targets (empty structures) ──
+                    # "fiyat oluşmamış bir alanda hedef belirlemek için kullanılabilir. 1.272"
+                    tp1 = price - risk_tmp * 1.272
 
         risk = abs(price - sl)
         if risk == 0:
             continue
-        tp2 = (price + risk * fib_ext) if is_long else (price - risk * fib_ext)
+            
+        # Target opposite range extreme for deviation play, else fib extension
+        if has_dev and e_range:
+            tp2 = e_range.hi if is_long else e_range.lo
+        else:
+            # If tp1 is our 1.272 Fibo target, tp2 targets 2.618 (or fib_ext if configured)
+            is_discovery = False
+            if is_long:
+                if not htf_above_targets:
+                    is_discovery = True
+            else:
+                if not htf_below_targets:
+                    is_discovery = True
+                    
+            if not has_dev and is_discovery:
+                tp2 = (price + risk * 2.618) if is_long else (price - risk * 2.618)
+            else:
+                tp2 = (price + risk * fib_ext) if is_long else (price - risk * fib_ext)
         rr1 = round(abs(tp1 - price) / risk, 2)
         rr2 = round(abs(tp2 - price) / risk, 2)
 

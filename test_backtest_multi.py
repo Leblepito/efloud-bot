@@ -4,8 +4,8 @@ Multi-seed Backtest — Strategy Robustness Test
 
 Farklı piyasa koşullarında (uptrend, downtrend, choppy) bot'un performansı.
 """
-import sys, logging, numpy as np, pandas as pd
-sys.path.insert(0, '/home/claude/efloud-bot')
+import sys, logging, numpy as np, pandas as pd, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 logging.basicConfig(level=logging.ERROR)  # Spam azalt
 
 from backtest.runner import BacktestRunner
