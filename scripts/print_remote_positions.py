@@ -23,7 +23,7 @@ def main():
             print(f"Error decoding JSON: {e}")
             sys.exit(1)
             
-    positions_list = p.get("positions", [])
+    positions_list = p.get("data", [])
     
     print(f"==========================================================")
     print(f"📊 Live Open Positions Count: {len([x for x in positions_list if x.get('closed_at') is None])}")
