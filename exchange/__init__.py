@@ -807,6 +807,32 @@ class OrderManager:
                     self._move_sl_to_breakeven(pos)
                     self._emit("tp1_hit", pos)
 
+        # 🧹 Fail-safe leftover order sweeper:
+        # If there are open orders on Binance for a symbol, but we have:
+        # 1. No active position tracked locally for this symbol.
+        # 2. AND no active open position on the exchange for this symbol.
+        # Then cancel all open orders for this symbol to prevent orphan leftovers!
+        if orders_fetch_ok and not self.dry_run and bn_orders_raw:
+            active_symbols = {pos.symbol for pos in self.positions} | bn_open_symbols
+            for order in bn_orders_raw:
+                ccxt_sym = order.get("symbol")
+                if not ccxt_sym:
+                    continue
+                order_sym = _strip_contract_suffix(ccxt_sym)
+                if order_sym and order_sym not in active_symbols:
+                    oid = order.get("id")
+                    if oid:
+                        log.warning(
+                            f"🧹 [cleanup] Leftover orphan order detected on {order_sym} "
+                            f"(no active position locally or on exchange). Cancelling order {oid}..."
+                        )
+                        try:
+                            self.client.exchange.cancel_order(oid, ccxt_sym)
+                        except Exception as e:
+                            log.warning(
+                                f"⚠️ [cleanup] Failed to cancel leftover order {oid} on {order_sym}: {e}"
+                            )
+
         # Always persist after a reconcile pass so disk reflects latest exchange-derived
         # state (closes removed from list, tp1_hit flags flipped, sl_order_id updated).
         self._persist()

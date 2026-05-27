@@ -334,3 +334,64 @@ class TestFallbackCloseRefactor:
         cancel_calls = mock_client.exchange.cancel_order.call_args_list
         cancelled_ids = [c.args[0] for c in cancel_calls]
         assert sorted(cancelled_ids) == ["SL-1", "TP1-1", "TP2-1"]
+
+
+class TestLeftoverOrderSweeper:
+    """Verifies that the fail-safe Leftover Order Sweeper detects and cancels
+    orphan open orders for symbols that have no active positions locally or on the exchange.
+    """
+
+    def test_sweeps_orphan_orders_on_untracked_symbols(self, mgr, mock_client):
+        # Local state: no positions open (empty)
+        mgr.positions = []
+
+        # Exchange has no active open positions
+        mock_client.get_open_positions.return_value = []
+
+        # Exchange returns open orders (some for untracked symbols, e.g. ETH/USDT)
+        mock_client.exchange.fetch_open_orders.return_value = [
+            {"id": "ORPHAN-1", "symbol": "ETH/USDT:USDT"},
+            {"id": "ORPHAN-2", "symbol": "ETH/USDT:USDT"},
+        ]
+
+        closed = mgr.reconcile()
+
+        # No closes because no local positions existed
+        assert closed == []
+
+        # Orphan orders must be cancelled!
+        assert mock_client.exchange.cancel_order.call_count == 2
+        calls = mock_client.exchange.cancel_order.call_args_list
+        assert calls[0].args == ("ORPHAN-1", "ETH/USDT:USDT")
+        assert calls[1].args == ("ORPHAN-2", "ETH/USDT:USDT")
+
+    def test_does_not_sweep_orders_on_active_symbols(self, mgr, mock_client):
+        # Local state has BTC position open
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+            sl_order_id="SL-1", tp1_order_id="TP1-1", tp2_order_id="TP2-1",
+        )
+        mgr.positions = [pos]
+
+        # Exchange has BTC position open
+        mock_client.get_open_positions.return_value = [
+            {"symbol": "BTC/USDT:USDT", "contracts": 1.0, "side": "LONG"}
+        ]
+
+        # Exchange returns open orders for BTC (active symbol)
+        mock_client.exchange.fetch_open_orders.return_value = [
+            {"id": "SL-1", "symbol": "BTC/USDT:USDT"},
+            {"id": "TP1-1", "symbol": "BTC/USDT:USDT"},
+            {"id": "TP2-1", "symbol": "BTC/USDT:USDT"},
+        ]
+
+        closed = mgr.reconcile()
+
+        # Position still open
+        assert closed == []
+        assert pos in mgr.positions
+
+        # No orders cancelled (since it's an active tracked symbol)
+        assert mock_client.exchange.cancel_order.call_count == 0
+
