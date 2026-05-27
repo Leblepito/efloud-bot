@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\api.py": {
-    "mtime": 1779784909.0224707,
-    "ast_hash": "68be2c6cdbf672276b99b59fb9e12cdc",
+    "mtime": 1779869024.755154,
+    "ast_hash": "1d1be116e391d0d6ac4888e43965d220",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\auth.py": {
@@ -515,8 +515,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_sibling_cleanup.py": {
-    "mtime": 1779530711.4453282,
-    "ast_hash": "f9e49e1909c41bb0abf10b3155eaf1c4",
+    "mtime": 1779874834.3458586,
+    "ast_hash": "0d4bda5bd8f8cf6bd11905a42437b22f",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_sizing_balance_source.py": {
@@ -920,8 +920,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\exchange\\__init__.py": {
-    "mtime": 1779803899.6772177,
-    "ast_hash": "62fdbf6151f92c22201fc0a6a69bd170",
+    "mtime": 1779874825.8862011,
+    "ast_hash": "6c0e894fe5233de0f785b392ea75352f",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\next-env.d.ts": {
@@ -965,8 +965,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\app\\page.tsx": {
-    "mtime": 1779807103.8632004,
-    "ast_hash": "3caf6185f1268f33ea8d6a18e8086a5f",
+    "mtime": 1779868452.677001,
+    "ast_hash": "fc7657b6f818c10b38562984106fbd63",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\app\\login\\page.tsx": {
@@ -1010,8 +1010,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\PositionsTable.tsx": {
-    "mtime": 1779784100.4913998,
-    "ast_hash": "440437073a986efb85dbe61fc1b63652",
+    "mtime": 1779868407.8762877,
+    "ast_hash": "3398e3848bcbb339fd4c8b9d03714552",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\StatusCard.tsx": {
@@ -1070,8 +1070,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\lib\\api.ts": {
-    "mtime": 1778215846.1728911,
-    "ast_hash": "ed1cc79fbc3da212a51cf6823ea4163e",
+    "mtime": 1779868402.186617,
+    "ast_hash": "7ef99346bf87fafd745fc9d75e10166b",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\lib\\format.ts": {
@@ -2050,8 +2050,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\InteractiveChart.tsx": {
-    "mtime": 1779855159.5514302,
-    "ast_hash": "d589fbb48c221a0a9f53b7559669e131",
+    "mtime": 1779876481.0771759,
+    "ast_hash": "f5744cb75d192fc2fea5ed62db3422c5",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\optimize_strategy.py": {
@@ -2342,6 +2342,16 @@
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\tests\\engine\\test_price_action_levels.py": {
     "mtime": 1779859684.3497427,
     "ast_hash": "8851b75c3b5835ea280f79787d6a07c3",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\MarketIndicators.tsx": {
+    "mtime": 1779868478.3289826,
+    "ast_hash": "87cb22fc4639105258ba2167b5ae1224",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\SocialFeeds.tsx": {
+    "mtime": 1779868444.355572,
+    "ast_hash": "ae68e87dc3eb3f10dad3f88130cccad9",
     "semantic_hash": ""
   }
 }
