@@ -23,19 +23,26 @@ def main():
             print(f"Error decoding JSON: {e}")
             sys.exit(1)
             
+    positions_list = p.get("positions", [])
+    open_positions = [v for v in positions_list if v.get("closed_at") is None]
+    
     print(f"==========================================================")
-    print(f"📊 Live Open Positions Count: {len(p)}")
+    print(f"📊 Live Open Positions Count: {len(open_positions)}")
     print(f"==========================================================")
-    for k, v in p.items():
-        if k == "saved_at" or not isinstance(v, dict):
-            continue
-        print(f"- Symbol: {k}")
+    for v in open_positions:
+        print(f"- Symbol: {v.get('symbol')}")
         print(f"  Direction: {v.get('direction')}")
-        print(f"  Entry Price: {v.get('entry_price')}")
-        print(f"  Size: {v.get('size')}")
+        # Parse entry details
+        entries = v.get("entries", [])
+        if entries:
+            print(f"  Entry Price: {entries[0].get('price')} (Initial)")
+        else:
+            print(f"  Entry Price: Unknown")
         print(f"  Stop Loss: {v.get('sl')}")
         print(f"  Take Profit 1: {v.get('tp1')}")
         print(f"  Take Profit 2: {v.get('tp2')}")
+        print(f"  Max Adverse Excursion (MAE): {v.get('mae_pct'):.4f}%")
+        print(f"  Max Favorable Excursion (MFE): {v.get('mfe_pct'):.4f}%")
         print(f"----------------------------------------------------------")
 
 if __name__ == "__main__":
