@@ -377,9 +377,33 @@ def generate_signals(
             continue
 
         # SL / TP
+        # SL / TP
+        # Spec §5.1 / User request: local structure invalidation Stop Loss.
+        # Find the local minimum/maximum of the last 20 candles before the breakout
+        # to ensure the SL is tight and professional (matches the red invalidation point),
+        # instead of using very old swing highs/lows from before brk.idx which ruins R:R.
+        # Plus a buffer of 0.5 * ATR(14) on the entry timeframe.
+        
+        # Simple true range ATR(14) calculation
+        h_vals = df_entry["high"].values
+        l_vals = df_entry["low"].values
+        c_vals = df_entry["close"].values
+        tr = [
+            max(h_vals[i] - l_vals[i], abs(h_vals[i] - c_vals[i-1]), abs(l_vals[i] - c_vals[i-1])) 
+            for i in range(1, len(df_entry))
+        ]
+        atr14 = float(pd.Series(tr).rolling(14).mean().iloc[-1]) if len(tr) >= 14 else (price * 0.005)
+        buffer = 0.5 * atr14
+
         if is_long:
             sl_c = [s for s in e_sl if s.idx < brk.idx]
-            sl = sl_c[-1].price if sl_c else price * 0.99
+            local_lo = float(df_entry["low"].iloc[max(0, brk.idx - 20):brk.idx].min()) - buffer
+            sl = sl_c[-1].price if sl_c else local_lo
+            if sl < local_lo:
+                sl = local_lo
+            # Safety clamp: at least 0.1% below entry price
+            sl = min(sl, price * 0.999)
+            
             risk_tmp = abs(price - sl)
             min_tp_long = price + risk_tmp * min_rr
             htf_above_targets = [f.top for f in htf_fvgs
@@ -389,7 +413,13 @@ def generate_signals(
             tp1 = min(htf_above_targets) if htf_above_targets else min_tp_long
         else:
             sl_c = [s for s in e_sh if s.idx < brk.idx]
-            sl = sl_c[-1].price if sl_c else price * 1.01
+            local_hi = float(df_entry["high"].iloc[max(0, brk.idx - 20):brk.idx].max()) + buffer
+            sl = sl_c[-1].price if sl_c else local_hi
+            if sl > local_hi:
+                sl = local_hi
+            # Safety clamp: at least 0.1% above entry price
+            sl = max(sl, price * 1.001)
+            
             risk_tmp = abs(price - sl)
             min_tp_short = price - risk_tmp * min_rr
             htf_below_targets = [f.bot for f in htf_fvgs
