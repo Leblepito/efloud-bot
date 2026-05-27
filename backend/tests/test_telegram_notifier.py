@@ -178,6 +178,25 @@ class TestMessageFormatters:
             # (0.2762 - 0.2628) / 0.2762 * 100 = +4.85%
             assert "+4.85%" in text
 
+    def test_position_closed_calculates_fees_and_net_pnl(self, notifier):
+        """When size > 0, notify_position_closed must compute fees and net PnL."""
+        with patch.object(notifier, "send") as mock_send:
+            # Let's say entry=2000, exit=2010 (LONG), size=2, gross pnl = 20 USDT.
+            # Total fee = (2000 + 2010) * 2 * 0.0005 = 4.01 USDT
+            # Real net pnl = 20 - 4.01 = 15.99 USDT
+            notifier.notify_position_closed(
+                symbol="ETH/USDT", direction="LONG",
+                entry=2000.0, exit_price=2010.0,
+                pnl_usdt=20.0, exit_reason="TP1",
+                size=2.0,
+            )
+            text = mock_send.call_args.args[0]
+            assert "Gross PnL: `+20.00` USDT" in text
+            assert "Fee Paid: `4.0100` USDT" in text
+            assert "Real Net PnL: *`+15.99`* USDT" in text
+            assert "✅" in text  # Real net PnL is positive
+
+
     def test_formatters_are_noop_when_disabled(self, monkeypatch):
         """When notifier is disabled, formatters MUST NOT call send()."""
         monkeypatch.delenv("EFLOUD_TELEGRAM_TOKEN", raising=False)

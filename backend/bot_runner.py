@@ -419,6 +419,7 @@ class BotRunner:
                     entry=pos.entry, exit_price=pos.exit_price or 0.0,
                     pnl_usdt=pos.pnl_usdt or 0.0,
                     exit_reason=pos.exit_reason or "UNKNOWN",
+                    size=pos.size,
                 )
         except Exception as e:
             log.warning(f"Telegram notification dispatch failed: {e}")

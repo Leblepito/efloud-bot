@@ -149,14 +149,13 @@ class TelegramNotifier:
         exit_price: float,
         pnl_usdt: float,
         exit_reason: str,
+        size: float = 0.0,
     ) -> None:
         """Fire-and-forget notification for a closed position."""
         if not self.enabled:
             return
-        winning = pnl_usdt > 0
-        emoji = "✅" if winning else "❌"
-        # Compute PnL % defensively — avoid div-by-zero when entry is 0
-        # (shouldn't happen in production but tests/dry-run can hit it).
+        
+        # Compute gross PnL % defensively
         if entry:
             if direction == "LONG":
                 pnl_pct = (exit_price - entry) / entry * 100
@@ -164,9 +163,38 @@ class TelegramNotifier:
                 pnl_pct = (entry - exit_price) / entry * 100
         else:
             pnl_pct = 0.0
-        text = (
-            f"{emoji} *{symbol} {direction} kapandı* — `{exit_reason}`\n"
-            f"Entry: `{entry:.4f}` → Exit: `{exit_price:.4f}`\n"
-            f"PnL: `{pnl_usdt:+.2f}` USDT (`{pnl_pct:+.2f}%`)"
-        )
+
+        # Estimate exchange fees (Binance Futures standard taker fee is 0.05%)
+        # Both entry and exit orders are estimated.
+        fee_rate = 0.0005  # 0.05%
+        
+        if size > 0:
+            total_fee = (entry + exit_price) * size * fee_rate
+            real_net_pnl = pnl_usdt - total_fee
+            if entry:
+                real_pnl_pct = (real_net_pnl / (entry * size)) * 100
+            else:
+                real_pnl_pct = 0.0
+            
+            # Determine success based on REAL net PnL after commissions!
+            winning = real_net_pnl > 0
+            emoji = "✅" if winning else "❌"
+            
+            text = (
+                f"{emoji} *{symbol} {direction} kapandı* — `{exit_reason}`\n"
+                f"Entry: `{entry:.4f}` → Exit: `{exit_price:.4f}`\n"
+                f"Gross PnL: `{pnl_usdt:+.2f}` USDT (`{pnl_pct:+.2f}%`)\n"
+                f"Fee Paid: `{total_fee:.4f}` USDT\n"
+                f"Real Net PnL: *`{real_net_pnl:+.2f}`* USDT (*`{real_pnl_pct:+.2f}%`*)"
+            )
+        else:
+            winning = pnl_usdt > 0
+            emoji = "✅" if winning else "❌"
+            text = (
+                f"{emoji} *{symbol} {direction} kapandı* — `{exit_reason}`\n"
+                f"Entry: `{entry:.4f}` → Exit: `{exit_price:.4f}`\n"
+                f"PnL: `{pnl_usdt:+.2f}` USDT (`{pnl_pct:+.2f}%`)"
+            )
+            
         self.send(text)
+

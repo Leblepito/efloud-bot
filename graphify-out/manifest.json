@@ -85,8 +85,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\bot_runner.py": {
-    "mtime": 1779806126.9402325,
-    "ast_hash": "6a504d4648277df85f7764aa41a3887e",
+    "mtime": 1779880871.3984118,
+    "ast_hash": "dc16d2ad19b8eb80d532af7bdebddb68",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\db.py": {
@@ -185,8 +185,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\notifications\\__init__.py": {
-    "mtime": 1779543351.8861637,
-    "ast_hash": "adcb789da31fd2b4955134b33a70e04a",
+    "mtime": 1779880860.663242,
+    "ast_hash": "e94a1833c82b7013ad2e375326586394",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_api_bot_control.py": {
@@ -545,8 +545,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_telegram_notifier.py": {
-    "mtime": 1778404622.6227698,
-    "ast_hash": "7f0ae96a1131ccd21788b9d6bf899e0b",
+    "mtime": 1779881757.39315,
+    "ast_hash": "ca45762b2a0df1505b9ad48a1276cd81",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_tf_normalization.py": {
