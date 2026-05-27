@@ -27,6 +27,8 @@ def main():
     print(f"📊 Live Open Positions Count: {len(p)}")
     print(f"==========================================================")
     for k, v in p.items():
+        if k == "saved_at" or not isinstance(v, dict):
+            continue
         print(f"- Symbol: {k}")
         print(f"  Direction: {v.get('direction')}")
         print(f"  Entry Price: {v.get('entry_price')}")
