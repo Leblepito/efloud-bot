@@ -548,6 +548,9 @@ class SafeOrchestrator:
         now: Optional[datetime] = None,
     ) -> SafeCycleResult:
         """Safety check'li tam analiz cycle'ı."""
+        # Yapay zeka makro duygu durumunu en güncel haliyle yükle
+        self.load_ai_sentiment()
+
         # Arka planda ML model eğitim kontrolünü yap
         self.check_and_train_regime_model(symbol, df_entry)
 
@@ -702,6 +705,7 @@ class SafeOrchestrator:
             symbol=symbol,
             symbol_confluence_overrides=risk_cfg.get("symbol_confluence_overrides"),
             levels=all_levels,
+            ai_sentiment=self.sentiment_state,
         )
 
         # ═══ STEP 4: Scenario Planning (per-symbol) ═══

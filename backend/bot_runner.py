@@ -36,6 +36,7 @@ CONFIG_PATH_DEFAULT = "configs/config.phase2_micro.yaml"
 class BotRunner:
     def __init__(self) -> None:
         self.task: Optional[asyncio.Task] = None
+        self.sentiment_task: Optional[asyncio.Task] = None
         self.loop: Optional[asyncio.AbstractEventLoop] = None  # captured at startup for cross-thread DB writes
         self.cfg: dict = {}
         self.client: Optional[BinanceClient] = None
@@ -226,6 +227,7 @@ class BotRunner:
 
         # Spawn the worker task
         self.task = asyncio.create_task(self._run_loop(), name="bot_runner")
+        self.sentiment_task = asyncio.create_task(self._run_sentiment_loop(), name="sentiment_worker")
         self.running = True
         log.info("🚀 Bot runner started")
         bus.publish("bot_started", config_path=cfg_path)
@@ -257,6 +259,12 @@ class BotRunner:
                 self.pubsub_task.cancel()
             except Exception as e:
                 log.warning(f"Pub/Sub consumer stop error: {e}")
+        if self.sentiment_task and not self.sentiment_task.done():
+            self.sentiment_task.cancel()
+            try:
+                await self.sentiment_task
+            except asyncio.CancelledError:
+                pass
         if self.task and not self.task.done():
             self.task.cancel()
             try:
@@ -531,6 +539,34 @@ class BotRunner:
     def _now_iso() -> str:
         from datetime import datetime, timezone
         return datetime.now(timezone.utc).isoformat()
+
+    async def _run_sentiment_loop(self) -> None:
+        """Periodically calls Gemini AI macro sentiment analyzer every 4 hours."""
+        from engine.ai.sentiment import fetch_and_save_sentiment
+        
+        # Give some initial delay on startup so it doesn't block the main trading thread startup
+        await asyncio.sleep(5.0)
+        
+        while not self.stopped:
+            api_key = os.environ.get("GEMINI_API_KEY") or self.cfg.get("gemini", {}).get("api_key")
+            if not api_key:
+                log.warning("⚠️ GEMINI_API_KEY not configured. Skipping periodic sentiment analysis update.")
+            else:
+                try:
+                    log.info("♻️ Triggering Gemini AI macro sentiment analysis...")
+                    res = await fetch_and_save_sentiment(api_key=api_key)
+                    log.info(f"✅ AI Sentiment updated: {res.get('macro_sentiment', 'NEUTRAL')} (FGI: {res.get('fear_and_greed', 50)})")
+                    # reload orchestrator's sentiment state in real time!
+                    if self.orch:
+                        self.orch.load_ai_sentiment()
+                except Exception as e:
+                    log.error(f"❌ Error updating Gemini AI sentiment: {e}", exc_info=True)
+            
+            # Wait 4 hours (14400 seconds), checking every 10 seconds for stopped flag
+            for _ in range(1440):
+                if self.stopped:
+                    break
+                await asyncio.sleep(10)
 
 
 # Module singleton

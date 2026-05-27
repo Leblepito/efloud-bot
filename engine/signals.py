@@ -214,6 +214,7 @@ def generate_signals(
     symbol: Optional[str] = None,               # NEW — for per-symbol threshold lookup
     symbol_confluence_overrides: Optional[Dict[str, int]] = None,  # NEW
     levels: Optional[List[Level]] = None,       # NEW — injected levels for PA confluence
+    ai_sentiment: Optional[Dict[str, Any]] = None,  # NEW — async macro sentiment
 ) -> List[Signal]:
     """
     4-Timeframe Efloud akışı:
@@ -377,6 +378,24 @@ def generate_signals(
             is_long, htf_bias, in_htf_fvg, in_ote, mtf_conf,
             has_sfp, in_ob, ob_ns, ob_eq, correct_zone, has_dev
         )
+
+        # Gemini AI Macro Sentiment confluence bonus/penalty
+        if ai_sentiment and "macro_sentiment" in ai_sentiment:
+            macro = ai_sentiment["macro_sentiment"]
+            if macro == "RISK_ON":
+                if is_long:
+                    score = min(100, score + 5)
+                    reasons.append("Gemini AI Macro Sentiment is RISK_ON (+5)")
+                else:
+                    score = max(0, score - 5)
+                    reasons.append("Gemini AI Macro Sentiment is RISK_ON (-5)")
+            elif macro == "RISK_OFF":
+                if not is_long:
+                    score = min(100, score + 5)
+                    reasons.append("Gemini AI Macro Sentiment is RISK_OFF (+5)")
+                else:
+                    score = max(0, score - 5)
+                    reasons.append("Gemini AI Macro Sentiment is RISK_OFF (-5)")
 
         # Daily filter bonus — 1d ile aynı yönde ise +5 confluence
         if daily_bias != "UNDEF":
