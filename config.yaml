@@ -23,11 +23,11 @@ exchange:
 # Live v2 (Hermes-only): set smc_v2_shadow=false. Per-symbol opt-in via
 # smc_v2_symbols=["ETH/USDT","BTC/USDT",...] for phased rollout.
 engine:
-  smc_version: v1               # "v1" | "v2"
+  smc_version: v2               # "v1" | "v2"
   # Whitelist gates EXECUTION only — v2 state machine still runs upstream
   # when smc_version=v2, but no order is placed unless symbol is whitelisted.
-  smc_v2_symbols: []            # ["*"] = all symbols, [] = no execution
-  smc_v2_shadow: false          # true = log v2 signal, skip order placement
+  smc_v2_symbols: ["*"]            # ["*"] = all symbols, [] = no execution
+  smc_v2_shadow: true          # true = log v2 signal, skip order placement
 
 # ── SMC v2 tunables (PR #S6) ──
 # Active only when engine.smc_version == "v2". Defaults match parent spec §9.
