@@ -14,6 +14,7 @@ import { LiveSync } from "@/components/LiveSync";
 import { TradeDetailPanel } from "@/components/TradeDetailPanel";
 import { SocialFeeds } from "@/components/SocialFeeds";
 import { MarketIndicators } from "@/components/MarketIndicators";
+import { SocialLearningCenter } from "@/components/SocialLearningCenter";
 
 export default function Dashboard() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
@@ -37,6 +38,9 @@ export default function Dashboard() {
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <AISentimentCard />
           <SocialFeeds />
+        </section>
+        <section>
+          <SocialLearningCenter />
         </section>
         <section>
           <MarketIndicators />

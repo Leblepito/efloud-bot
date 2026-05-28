@@ -45,7 +45,7 @@
 | 2026-05-28 | Hermes/Codex | writing-plans | Social Learning Backtest + Frontend Yol Haritası | ✅ | kısa | Telegram/X içeriklerinden doktrin çıkarımı, backtest hipotezi ve frontend Learning Center planı yazıldı |
 | 2026-05-28 | Hermes/Codex | test-driven-development | Social feed refactor + doctrine parser | ✅ | orta | `backend/social` modülü ve deterministik SMC/MPA parser TDD ile eklendi; 19/19 hedef test yeşil |
 | 2026-05-28 | Hermes/Codex | test-driven-development | Social archive/hypothesis/report entegrasyonu | ✅ | orta | Research note değerlendirildi; JSONL archive, hypothesis generator ve read-only API snapshot eklendi; 43/43 hedef test yeşil |
-
+| 2026-05-28 | Antigravity (Flash) | NextJS Dashboard | SocialLearningCenter & PR Safety Checklist | ✅ | orta | SocialLearningCenter component (glowing warning, interactive tag cloud filtering, candidate config patches) ve .github PR templates entegre edildi, build yeşil |
 
 ---
 
