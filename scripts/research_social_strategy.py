@@ -29,6 +29,26 @@ log = logging.getLogger("efloud.scripts.research_social_strategy")
 CANDIDATES_DIR = Path("configs/candidates")
 REPORTS_DIR = Path("reports/social_research")
 
+# Defense-in-depth: every write path produced by this script is validated
+# against this set before `open(..., "w")`. Pinned by
+# docs/runbooks/social-research-promotion.md Gate 1 and the unit test in
+# backend/tests/test_research_script_output_guard.py.
+PROTECTED_OUTPUT_NAMES = frozenset({
+    "config.yaml",
+    "config.phase2_1k.yaml",
+    "docker-compose.prod.yml",
+    ".env",
+})
+
+
+def _refuse_protected_output(path) -> None:
+    """Raise if the script would write to a production-control file."""
+    if Path(path).name in PROTECTED_OUTPUT_NAMES:
+        raise ValueError(
+            f"Refusing to write to production-control file: {path}"
+        )
+
+
 def apply_patch(config: dict, patch: dict):
     """Apply dotted-key patch (e.g. 'engine.risk.max_dd': 0.1) to a config dict."""
     for key, value in patch.items():
@@ -42,7 +62,7 @@ def apply_patch(config: dict, patch: dict):
 
 def run_research(symbols: str, period_days: int, base_config_path: str):
     log.info("Starting social strategy research...")
-    
+
     CANDIDATES_DIR.mkdir(parents=True, exist_ok=True)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -67,19 +87,20 @@ def run_research(symbols: str, period_days: int, base_config_path: str):
         log.info("-" * 40)
         log.info("RESEARCHING HYPOTHESIS: %s", h_id)
         log.info("Title: %s", h.get("title"))
-        
+
         # 1. Generate candidate config
         candidate_cfg = yaml.safe_load(yaml.dump(base_cfg))  # deep copy
         patch = h.get("candidate_config_patch", {})
         if patch:
             apply_patch(candidate_cfg, patch)
-        
+
         candidate_path = CANDIDATES_DIR / f"candidate_{h_id}.yaml"
+        _refuse_protected_output(candidate_path)
         with open(candidate_path, "w", encoding="utf-8") as f:
             f.write("# RESEARCH CANDIDATE CONFIG - PROMOTION REQUIRES HUMAN APPROVAL\n")
             f.write(f"# Hypothesis ID: {h_id}\n")
             yaml.dump(candidate_cfg, f, default_flow_style=False)
-        
+
         log.info("Candidate config generated: %s", candidate_path)
 
         # 2. Run backtest comparison
@@ -91,7 +112,7 @@ def run_research(symbols: str, period_days: int, base_config_path: str):
             "--config", str(candidate_path),
             "--hypothesis", h_id
         ]
-        
+
         log.info("Executing backtest: %s", " ".join(cmd))
         try:
             # We don't capture output to allow real-time progress in CLI
@@ -108,6 +129,6 @@ if __name__ == "__main__":
     parser.add_argument("--symbols", required=True, help="Comma-separated symbols")
     parser.add_argument("--period-days", type=int, default=180, help="Backtest period in days")
     parser.add_argument("--base-config", default="configs/config.phase2_1k.yaml", help="Base config path")
-    
+
     args = parser.parse_args()
     run_research(args.symbols, args.period_days, args.base_config)
