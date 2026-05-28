@@ -68,7 +68,7 @@ def test_entry_failure_returns_none_without_rollback(mgr, mock_client):
 def test_entry_success_sl_failure_rolls_back_reduce_only_market_close(mgr, mock_client):
     mock_client.exchange.create_order.side_effect = [
         {"id": "ENTRY-1", "average": 95012.5, "filled": 0.75},
-        RuntimeError("Order would immediately trigger"),
+        RuntimeError("SL failed — insufficient margin"),
         {"id": "ROLLBACK-1"},
     ]
 
@@ -121,7 +121,7 @@ def test_sl_success_tp1_failure_keeps_position_tracked_with_sl_order_id(mgr, moc
     mock_client.exchange.create_order.side_effect = [
         {"id": "ENTRY-1", "average": 95001.0, "filled": 1.0},
         {"id": "SL-1"},
-        RuntimeError("TP1 would immediately trigger"),
+        RuntimeError("TP1 placement failed — market data delayed"),
     ]
 
     pos = _open_long(mgr)
@@ -146,7 +146,7 @@ def test_sl_success_tp2_failure_keeps_position_tracked_with_sl_and_tp1(mgr, mock
         {"id": "ENTRY-1", "filled": 1.0},
         {"id": "SL-1"},
         {"id": "TP1-1"},
-        RuntimeError("TP2 would immediately trigger"),
+        RuntimeError("TP2 placement failed — market data delayed"),
     ]
 
     pos = _open_long(mgr)
