@@ -32,6 +32,15 @@ def _strip_contract_suffix(symbol: str) -> str:
     return symbol.split(":", 1)[0] if ":" in symbol else symbol
 
 
+# Sentinel value set by _retry_tp_order when a TP order cannot be placed because
+# the price has already passed the stop price (Binance -2021 'Order would
+# immediately trigger'). This is a truthy string so that:
+#   1. Sentinel check in downstream logic must be explicit via _is_real_oid().
+#   2. Naive `if tp_order_id:` checks still treat it as "set, not empty".
+#   3. String persists cleanly through JSON state serialization on Position fields.
+_TP_UNREACHABLE_SENTINEL = "UNREACHABLE"
+
+
 class BinanceClient:
     """CCXT ile Binance Futures/Spot bağlantısı."""
 
@@ -384,6 +393,24 @@ class OrderManager:
         )
         return any(m in err for m in unreachable_markers)
 
+    @staticmethod
+    def _is_real_oid(oid) -> bool:
+        """Return True iff `oid` is a real Binance order id (not empty, not sentinel).
+
+        Guards call-sites that interpret a truthy `position.order_id / .tp1_order_id
+        / .sl_order_id` as a pending live order on Binance. Sentinel value
+        `_TP_UNREACHABLE_SENTINEL` is truthy but represents "we tried, failed
+        permanently, do not retry and do not interpret as live order".
+
+        Use cases where this check is mandatory:
+          - reconcile's TP1 fill detection (prevents false "TP1 hit" when
+            sentinel set)
+          - _estimate_exit_price's phantom TP2 hit detection
+          - _cancel_position_siblings to avoid wasteful cancel_order() calls
+            on a sentinel id
+        """
+        return bool(oid) and oid != _TP_UNREACHABLE_SENTINEL
+
     def _retry_tp_order(
         self,
         *,
@@ -454,7 +481,7 @@ class OrderManager:
                             "error": str(e),
                         },
                     )
-                    return "UNREACHABLE"
+                    return _TP_UNREACHABLE_SENTINEL
                 is_transient = self._is_transient_error(e)
                 if not is_transient or attempt == max_attempts:
                     log.warning(
@@ -850,7 +877,7 @@ class OrderManager:
             price_display=sl,
         )
 
-        if not sl_oid or sl_oid == "UNREACHABLE":
+        if not self._is_real_oid(sl_oid):
             # SL exhausted or unreachable (price already past SL level —
             # Binance -2021 'would immediately trigger') — both require
             # immediate rollback because the position is already at loss.
@@ -862,7 +889,7 @@ class OrderManager:
                 direction=direction,
                 entry_order_id=oid,
                 original_error=Exception(
-                    f"SL placement {'unreachable (-2021)' if sl_oid == 'UNREACHABLE' else 'exhausted after retries'}"
+                    f"SL placement {'unreachable (-2021)' if sl_oid == _TP_UNREACHABLE_SENTINEL else 'exhausted after retries'}"
                 ),
             )
             return None
@@ -1089,7 +1116,7 @@ class OrderManager:
             # Pozisyon hâlâ açık — TP1 fill kontrolü
             # Only run when the open-orders fetch succeeded; otherwise an empty
             # bn_order_ids (from a failed fetch) would falsely declare TP1 filled.
-            if orders_fetch_ok and pos.tp1_order_id and not pos.tp1_hit:
+            if orders_fetch_ok and self._is_real_oid(pos.tp1_order_id) and not pos.tp1_hit:
                 if pos.tp1_order_id not in bn_order_ids:
                     # TP1 order'ı kaybolmuş = filled
                     pos.tp1_hit = True
@@ -1163,7 +1190,7 @@ class OrderManager:
             ("TP1", pos.tp1_order_id),
             ("TP2", pos.tp2_order_id),
         ]:
-            if not oid:
+            if not self._is_real_oid(oid):
                 result["missing"].append(label)
                 continue
             try:
@@ -1274,11 +1301,11 @@ class OrderManager:
         # TP2 / TP1 / SL'den hangisi yoksa o tetiklenmiş demektir
         order_ids = {str(o.get("id", "")) for o in bn_orders}
 
-        if pos.tp2_order_id and pos.tp2_order_id not in order_ids:
+        if self._is_real_oid(pos.tp2_order_id) and pos.tp2_order_id not in order_ids:
             return pos.tp2  # TP2 hit
-        if pos.sl_order_id and pos.sl_order_id not in order_ids:
+        if self._is_real_oid(pos.sl_order_id) and pos.sl_order_id not in order_ids:
             return pos.sl   # SL hit
-        if pos.tp1_order_id and pos.tp1_order_id not in order_ids and not pos.tp1_hit:
+        if self._is_real_oid(pos.tp1_order_id) and pos.tp1_order_id not in order_ids and not pos.tp1_hit:
             return pos.tp1
         # Fallback: current market price
         try:
