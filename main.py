@@ -530,9 +530,17 @@ def main():
         # Setup position mode (Hedge vs One-way) to match configured setting
         hedge_mode = ex_cfg.get("hedge_mode", False)
         try:
-            client.set_position_mode(hedge_mode)
+            success = client.set_position_mode(hedge_mode)
+            if not success:
+                log.critical(
+                    f"⛔ CRITICAL: Position mode setup failed! Binance rejected the change. "
+                    f"Make sure you have NO open positions and NO open orders on your entire Futures account, "
+                    f"then restart the bot."
+                )
+                sys.exit(1)
         except Exception as e:
-            log.warning(f"Position mode setup failed: {e}")
+            log.critical(f"⛔ CRITICAL: Position mode setup failed with exception: {e}")
+            sys.exit(1)
 
         margin_mode = ex_cfg.get("margin_mode", "ISOLATED").upper()
         tradeable_syms = (permission_mgr.get_tradeable_symbols() if permission_mgr

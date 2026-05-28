@@ -119,9 +119,13 @@ try:
         print(f"  [4/4] Position mode: ✅ {'HEDGE' if is_hedge else 'ONE-WAY'}")
     else:
         if hedge_mode:
-            print(f"  [4/4] Position mode: ⚠️ ONE-WAY — Config'de HEDGE_MODE aktif, fakat hesap One-way modda. Bot başlatıldığında otomatik olarak HEDGE moda geçecektir.")
+            print(f"  [4/4] Position mode: ⚠️ ONE-WAY — Config'de HEDGE_MODE aktif, fakat hesap One-way modda. "
+                  f"Bot başlatıldığında otomatik olarak HEDGE moda geçmeye çalışacaktır. "
+                  f"(ÖNEMLİ: Hesapta açık emir veya pozisyon varsa geçiş başarısız olur!)")
         else:
-            print(f"  [4/4] Position mode: ⚠️ HEDGE — Config'de ONE-WAY aktif, fakat hesap Hedge modda. Bot başlatıldığında otomatik olarak ONE-WAY moda geçecektir.")
+            print(f"  [4/4] Position mode: ⚠️ HEDGE — Config'de ONE-WAY aktif, fakat hesap Hedge modda. "
+                  f"Bot başlatıldığında otomatik olarak ONE-WAY moda geçmeye çalışacaktır. "
+                  f"(ÖNEMLİ: Hesapta açık emir veya pozisyon varsa geçiş başarısız olur!)")
 except Exception as e:
     print(f"  [4/4] Position mode: ⚠️ kontrol edilemedi ({e})")
 
