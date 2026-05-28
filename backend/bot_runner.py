@@ -167,9 +167,21 @@ class BotRunner:
             # Hedge Mode position side configuration on exchange
             hedge_mode = ex_cfg.get("hedge_mode", False)
             try:
-                self.client.set_position_mode(dual_side=hedge_mode)
+                success = self.client.set_position_mode(dual_side=hedge_mode)
+                if not success:
+                    msg = (
+                        "Position mode setup failed! Binance rejected the change. "
+                        "Make sure you have NO open positions and NO open orders on your entire Futures account, "
+                        "then try starting again."
+                    )
+                    log.error(f"⛔ {msg}")
+                    self.last_error = msg
+                    return
             except Exception as e:
-                log.warning(f"Position mode setup failed: {e}")
+                msg = f"Position mode setup failed with exception: {e}"
+                log.error(f"⛔ {msg}")
+                self.last_error = msg
+                return
 
         notif_mgr = NotificationManager(channels=["log"])  # WS push üzerinden ayrıca yapılır
         state_dir = self.cfg["operation"].get("state_dir", "./state")
