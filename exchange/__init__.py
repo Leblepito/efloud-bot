@@ -451,9 +451,13 @@ class OrderManager:
             # Round sizes using the exchange's amount precision to avoid stepSize/lotSize errors on Binance
             if not self.dry_run:
                 try:
-                    tp1_size = float(self.client.exchange.amount_to_precision(ccxt_sym, tp1_size))
+                    res1 = self.client.exchange.amount_to_precision(ccxt_sym, tp1_size)
+                    if isinstance(res1, str):
+                        tp1_size = float(res1)
                     if not is_single_target:
-                        tp2_size = float(self.client.exchange.amount_to_precision(ccxt_sym, tp2_size))
+                        res2 = self.client.exchange.amount_to_precision(ccxt_sym, tp2_size)
+                        if isinstance(res2, str):
+                            tp2_size = float(res2)
                 except Exception as e:
                     log.warning(f"Failed to format TP sizes using exchange precision for {pos.symbol}: {e}")
 
@@ -681,9 +685,13 @@ class OrderManager:
         # Round sizes using the exchange's amount precision to avoid stepSize/lotSize errors on Binance
         if not self.dry_run:
             try:
-                tp1_size = float(self.client.exchange.amount_to_precision(ccxt_sym, tp1_size))
+                res1 = self.client.exchange.amount_to_precision(ccxt_sym, tp1_size)
+                if isinstance(res1, str):
+                    tp1_size = float(res1)
                 if not is_single_target:
-                    tp2_size = float(self.client.exchange.amount_to_precision(ccxt_sym, tp2_size))
+                    res2 = self.client.exchange.amount_to_precision(ccxt_sym, tp2_size)
+                    if isinstance(res2, str):
+                        tp2_size = float(res2)
             except Exception as e:
                 log.warning(f"Failed to format TP sizes using exchange precision for {symbol}: {e}")
 
@@ -1096,7 +1104,9 @@ class OrderManager:
             remaining_size = pos.size / 2  # TP1 yarısı kapandı, kalan yarısı için SL
             if not self.dry_run:
                 try:
-                    remaining_size = float(self.client.exchange.amount_to_precision(ccxt_sym, remaining_size))
+                    res = self.client.exchange.amount_to_precision(ccxt_sym, remaining_size)
+                    if isinstance(res, str):
+                        remaining_size = float(res)
                 except Exception as e:
                     log.warning(f"Failed to format remaining SL size using exchange precision for {pos.symbol}: {e}")
             sl_params = {"stopPrice": pos.entry}

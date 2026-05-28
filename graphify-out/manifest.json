@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\api.py": {
-    "mtime": 1779869024.755154,
-    "ast_hash": "1d1be116e391d0d6ac4888e43965d220",
+    "mtime": 1779956009.503283,
+    "ast_hash": "979375b8d3df7e17662b0355360f8fc9",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\auth.py": {
@@ -645,8 +645,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backtest\\cli.py": {
-    "mtime": 1779536798.1626093,
-    "ast_hash": "ded08d170ce986dbfa239f5f03ff9c73",
+    "mtime": 1779956312.6175277,
+    "ast_hash": "0192c9f05f2783f6082f7f04ed66a4d2",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backtest\\compare_live.py": {
@@ -655,8 +655,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backtest\\comparison.py": {
-    "mtime": 1779536798.1631272,
-    "ast_hash": "938ebc02ea237e194f37a81b4d24d802",
+    "mtime": 1779956292.648832,
+    "ast_hash": "861c8542b95f8925e1672c4e184b2347",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backtest\\engine.py": {
@@ -920,8 +920,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\exchange\\__init__.py": {
-    "mtime": 1779952864.1937683,
-    "ast_hash": "bc7d298448d0b98906e71e2e024b1a30",
+    "mtime": 1779957134.6205897,
+    "ast_hash": "bb623c17fedb99d601e914085e14e808",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\next-env.d.ts": {
@@ -1670,8 +1670,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\skill_log.md": {
-    "mtime": 1779938021.1826515,
-    "ast_hash": "21b54da1d69b7ab3f615b0d7b86ab361",
+    "mtime": 1779956080.6706824,
+    "ast_hash": "ce140aa7ef0bd9dfd4a484607c01e370",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\strategy-evolution.md": {
@@ -2362,6 +2362,91 @@
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_tp_order_reliability.py": {
     "mtime": 1779933001.179361,
     "ast_hash": "1a280d3d62146a78bd288621b32c952a",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\social\\archive.py": {
+    "mtime": 1779955837.5315924,
+    "ast_hash": "97f9661a29e32560eb9efff186d12ac2",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\social\\doctrine.py": {
+    "mtime": 1779954655.3582935,
+    "ast_hash": "7b421c560fa574224ee624fba8ad540a",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\social\\feeds.py": {
+    "mtime": 1779954526.388381,
+    "ast_hash": "e2c521b5d073ea39b4abcbe1febd5dc5",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\social\\hypotheses.py": {
+    "mtime": 1779955880.5929098,
+    "ast_hash": "26aa66428dc15bf2e7ea9ee3cfa89f12",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\social\\reports.py": {
+    "mtime": 1779955948.2705362,
+    "ast_hash": "4f979601443181f0a1886a93af16f2d8",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\social\\__init__.py": {
+    "mtime": 1779954534.5975163,
+    "ast_hash": "56f1c44d9f13ba68cbaa7028925ac53d",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_exchange_tp_precision.py": {
+    "mtime": 1779957226.832448,
+    "ast_hash": "324e2d1b16da0e7a3b1fe8f33f3ca0ad",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_social_archive.py": {
+    "mtime": 1779955730.6738958,
+    "ast_hash": "45759f211cdc1d3bfa78bf3313e55104",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_social_doctrine.py": {
+    "mtime": 1779954607.0555248,
+    "ast_hash": "f65c233a1a9ae9cbda324e89619b3b60",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_social_feeds.py": {
+    "mtime": 1779954472.0898643,
+    "ast_hash": "457ee5cd660dfe02fd837d135ab78608",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_social_hypotheses.py": {
+    "mtime": 1779955757.077879,
+    "ast_hash": "014102a497df19f505e0b520286a462d",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_social_reports.py": {
+    "mtime": 1779955922.8279455,
+    "ast_hash": "76b78f467cdd19f9970446da18304e02",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\collect_social_doctrine.py": {
+    "mtime": 1779956208.1991024,
+    "ast_hash": "333f08b03841879b36ed7d16845f3df9",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\research_social_strategy.py": {
+    "mtime": 1779957104.3963857,
+    "ast_hash": "b82b5a44ecfd75988b3b155734570f6e",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\configs\\candidates\\candidate_social_ote_fvg_htf_bias_v1.yaml": {
+    "mtime": 1779957130.0616107,
+    "ast_hash": "e48509b41a5e69fc2267f95a8a9cd2c2",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-28_unified-social-learning-hedge-integration.md": {
+    "mtime": 1779956065.5396686,
+    "ast_hash": "582381d6964bb6a9572243e4c74b5cef",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\plans\\2026-05-28-social-learning-backtest-frontend.md": {
+    "mtime": 1779954408.0628138,
+    "ast_hash": "61f44d12c41274c720dbb30dba3db007",
     "semantic_hash": ""
   }
 }
