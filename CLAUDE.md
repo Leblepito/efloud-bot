@@ -111,18 +111,37 @@ ops/                → Telegram alerter, daily reports
 - CCXT futures call: `BTC/USDT:USDT` suffix gerekir. Spot'a düşmesini önler.
 - `to_ccxt_symbol()` ve `_strip_contract_suffix()` köprüyü kurar, bypass etme.
 
+### CLI vs FastAPI Wiring Parity (Kritik — 2026-05-28 Incident)
+- `main.py` (CLI) ve `backend/bot_runner.py` (FastAPI) her ikisi de **bağımsız şekilde** `OrderManager` ve `SafeOrchestrator` oluşturuyor.
+- Herhangi bir construction parametresi değişikliği (**hedge_mode**, **state_dir**, **orphan_protector**, **trade_journal**, **on_position_change**) **her iki dosyaya** yansımalı.
+- Aksi halde CLI mode sessizce diverge olur — production doğru çalışırken CLI modu korumasız pozisyonlar açıyordu (2026-05-28 SL/TP delivery incident).
+- Yeni param eklerken: `grep -n "OrderManager(" main.py backend/bot_runner.py` ile her iki yeri yakala.
+
 ---
 
-## 6. Güncel Durum (2026-05-10)
+## 6. Güncel Durum (2026-05-28)
 
 | Item | Durum |
 |------|-------|
-| **PR #30** | Deployed — WEAKNESS churn fix + `log_audit` JSONB cast fix |
+| **fix/sltp-delivery-reliability** | ✅ Pushed — GitHub PR bekliyor (branch: `fix/sltp-delivery-reliability`) |
+| **PR #92-#98 (Son merged)** | `6d784a2` — Social Learning + verdict badges + research guards |
 | **PR-B daily brief** | Audit tamamlandı |
 | **U2algo_bot** | Rafta |
 | **Aktif odak** | Ualgo_bot + Efloud-bot |
 | **Forex broker kararı** | Açık (MT5 vs OANDA — TR/TH banka uyumu kriter) |
 | **UI/UX kapsamlı analiz** | Sıradaki büyük iş |
+
+### SL/TP Delivery Fix (2026-05-28)
+
+Branch `fix/sltp-delivery-reliability` şu an GitHub'da, review bekliyor:
+
+- **BUG #1**: `main.py` OrderManager wiring eksik (hedge_mode, state_dir, orphan_protector)
+- **BUG #2**: SL placement retry yoktu (TP'de vardı, SL'de yoktu)
+- **BUG #3**: `_repair_missing_protection_orders` sadece TP1/TP2 tamir ediyordu (SL değil)
+- **BUG #4**: `_move_sl_to_breakeven` SL placement başarısızlığında recovery yoktu
+
+**Plan**: `.hermes/plans/2026-05-28_sltp-delivery-bugfixes.md`
+**Testler**: 272 passed, 0 failed (13 yeni test)
 
 ---
 

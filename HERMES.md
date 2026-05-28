@@ -1,7 +1,7 @@
 # HERMES.md — Efloud-bot Operatör Kılavuzu
 
 > Operatör/insan onay zinciri (Hermes) için. Yönetim kılavuzu.
-> Tarih: 2026-05-24 | Master HEAD: `3fa88b8` | Bot durumu: **CANLI**
+> Tarih: 2026-05-28 | Master HEAD: `6d784a2` | Branch: `fix/sltp-delivery-reliability` (PR bekliyor) | Bot durumu: **CANLI**
 
 ---
 
@@ -118,6 +118,11 @@ Canlı v2 emri için **minimum 3 manuel config editi** gerekir.
 
 ### 5c. Pending
 
+- **fix/sltp-delivery-reliability** (YENİ — 2026-05-28, PR bekliyor):
+  - CLI wiring fix + SL retry/repair + breakeven SL retry
+  - 272 test passed, 0 regression
+  - `main.py`, `exchange/__init__.py` değişti — non-breaking
+  - Review + merge sonrası deploy: `git pull && docker compose up -d`
 - **Prod deploy** (zero-risk — default inert).
 - **Shadow aktivasyon** (1 hafta gözlem).
 - **Baseline backtest** (6 aylık gerçek OHLCV).
@@ -308,6 +313,8 @@ asyncio.run(main())
 5. **Shadow log'da `would_execute: true`** → Shadow bypass bug! Canlı emir riski.
 6. **v1 vs v2 zıt sinyal**.
 7. **State'te `tp2: 0.0`**.
+8. **`order_manager.repair_missing_sl`** → SL placement exhaust edildi, reconcile tamir ediyor. Sık olursa API/retry mantığı araştırılmalı.
+9. **`order_manager.be_sl_placement_failed`** → TP1-hit sonrası breakeven SL 3 denemede başarısız. Pozisyon SL'siz bekliyor, reconcile kurtaracak — ama izlenmeli.
 
 ---
 
