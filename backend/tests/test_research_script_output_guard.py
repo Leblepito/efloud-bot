@@ -62,3 +62,32 @@ def test_guard_uses_basename_not_substring():
     must NOT be refused. Only the final filename matters."""
     _refuse_protected_output("backup/.env/notes.txt")
     _refuse_protected_output("configs/config.yaml.bak")
+
+
+@pytest.mark.parametrize(
+    "h_id",
+    [
+        # Attacker-controlled hypothesis id values that, when fed into
+        # `CANDIDATES_DIR / f"candidate_{h_id}.yaml"`, resolve to a path
+        # whose final segment is a protected basename. The guard must
+        # still refuse them because `Path.name` returns the last
+        # segment regardless of leading "../" traversal noise.
+        "../../../config",
+        "../../config.phase2_1k",
+        "../../docker-compose.prod.yml/config",
+    ],
+)
+def test_guard_catches_path_traversal_in_h_id(h_id):
+    from pathlib import Path
+
+    constructed = Path("configs/candidates") / f"candidate_{h_id}.yaml"
+    if constructed.name in PROTECTED_OUTPUT_NAMES:
+        with pytest.raises(ValueError, match="Refusing to write"):
+            _refuse_protected_output(constructed)
+    # The non-protected case (e.g. ".yaml" suffix breaking the match) is
+    # already covered by the allow-list test above; the explicit
+    # protected-name attack is the one that matters here.
+    explicit_attack = Path("configs/candidates") / Path(h_id).name
+    if explicit_attack.name in PROTECTED_OUTPUT_NAMES:
+        with pytest.raises(ValueError, match="Refusing to write"):
+            _refuse_protected_output(explicit_attack)
