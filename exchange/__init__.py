@@ -461,9 +461,11 @@ class OrderManager:
                         "tp_leg": "TP1",
                     },
                 )
-                tp1_params = {"stopPrice": pos.tp1, "reduceOnly": True}
+                tp1_params = {"stopPrice": pos.tp1}
                 if self.hedge_mode:
                     tp1_params["positionSide"] = pos.direction
+                else:
+                    tp1_params["reduceOnly"] = True
                 new_tp1_oid = self._retry_tp_order(
                     ccxt_sym=ccxt_sym,
                     order_type="TAKE_PROFIT_MARKET",
@@ -493,9 +495,11 @@ class OrderManager:
                         "tp_leg": "TP2",
                     },
                 )
-                tp2_params = {"stopPrice": pos.tp2, "reduceOnly": True}
+                tp2_params = {"stopPrice": pos.tp2}
                 if self.hedge_mode:
                     tp2_params["positionSide"] = pos.direction
+                else:
+                    tp2_params["reduceOnly"] = True
                 new_tp2_oid = self._retry_tp_order(
                     ccxt_sym=ccxt_sym,
                     order_type="TAKE_PROFIT_MARKET",
@@ -555,9 +559,11 @@ class OrderManager:
         untracked.
         """
         try:
-            rollback_params = {"reduceOnly": True}
+            rollback_params = {}
             if self.hedge_mode:
                 rollback_params["positionSide"] = direction
+            else:
+                rollback_params["reduceOnly"] = True
             rollback_order = self.client.exchange.create_order(
                 ccxt_sym,
                 "market",
@@ -701,9 +707,11 @@ class OrderManager:
 
         # 2) Server-side SL — STOP_MARKET reduceOnly. If this fails after the
         # market entry filled, immediately try to flatten the exchange position.
-        sl_params = {"stopPrice": sl, "reduceOnly": True}
+        sl_params = {"stopPrice": sl}
         if self.hedge_mode:
             sl_params["positionSide"] = direction
+        else:
+            sl_params["reduceOnly"] = True
         try:
             sl_order = self.client.exchange.create_order(
                 ccxt_sym, "STOP_MARKET", reverse_side, size,
@@ -733,9 +741,11 @@ class OrderManager:
         # rather than orphaning a protected exchange position.
         # FIX: TP1 failure must NOT early-return — TP2 must still be attempted.
         # FIX: Retry with backoff for transient API errors (reduceOnly = idempotent).
-        tp1_params = {"stopPrice": tp1, "reduceOnly": True}
+        tp1_params = {"stopPrice": tp1}
         if self.hedge_mode:
             tp1_params["positionSide"] = direction
+        else:
+            tp1_params["reduceOnly"] = True
         tp1_oid = self._retry_tp_order(
             ccxt_sym=ccxt_sym,
             order_type="TAKE_PROFIT_MARKET",
@@ -758,9 +768,11 @@ class OrderManager:
         if tp2 is None:
             log.info("  ↳ TP2 skipped (single-target setup)")
         else:
-            tp2_params = {"stopPrice": tp2, "reduceOnly": True}
+            tp2_params = {"stopPrice": tp2}
             if self.hedge_mode:
                 tp2_params["positionSide"] = direction
+            else:
+                tp2_params["reduceOnly"] = True
             tp2_oid = self._retry_tp_order(
                 ccxt_sym=ccxt_sym,
                 order_type="TAKE_PROFIT_MARKET",
@@ -1064,9 +1076,11 @@ class OrderManager:
 
             reverse_side = "sell" if pos.direction == "LONG" else "buy"
             remaining_size = pos.size / 2  # TP1 yarısı kapandı, kalan yarısı için SL
-            sl_params = {"stopPrice": pos.entry, "reduceOnly": True}
+            sl_params = {"stopPrice": pos.entry}
             if self.hedge_mode:
                 sl_params["positionSide"] = pos.direction
+            else:
+                sl_params["reduceOnly"] = True
             new_sl = self.client.exchange.create_order(
                 ccxt_sym, "STOP_MARKET", reverse_side, remaining_size,
                 params=sl_params
@@ -1204,9 +1218,11 @@ class OrderManager:
             close_side = "sell" if pos.direction == "LONG" else "buy"
             ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
             try:
-                close_params = {"reduceOnly": True}
+                close_params = {}
                 if self.hedge_mode:
                     close_params["positionSide"] = pos.direction
+                else:
+                    close_params["reduceOnly"] = True
                 self.client.exchange.create_order(
                     ccxt_sym, "market", close_side, pos.size,
                     params=close_params)
