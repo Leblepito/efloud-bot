@@ -527,6 +527,13 @@ def main():
         log.info("ℹ️  Dry run veya read-only key: permission detection atlandı")
 
     if ex_cfg["market_type"] == "futures" and api_key and not cfg["operation"].get("dry_run", True):
+        # Setup position mode (Hedge vs One-way) to match configured setting
+        hedge_mode = ex_cfg.get("hedge_mode", False)
+        try:
+            client.set_position_mode(hedge_mode)
+        except Exception as e:
+            log.warning(f"Position mode setup failed: {e}")
+
         margin_mode = ex_cfg.get("margin_mode", "ISOLATED").upper()
         tradeable_syms = (permission_mgr.get_tradeable_symbols() if permission_mgr
                            else initial_syms)

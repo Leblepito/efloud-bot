@@ -79,10 +79,12 @@ except Exception as e:
 # Load active config if specified in environment
 config_path = os.environ.get("EFLOUD_CONFIG_PATH", "configs/config.phase2_micro.yaml")
 starting_balance = 100.0
+hedge_mode = False
 try:
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
         starting_balance = float(config.get("safety", {}).get("starting_balance", 100.0))
+        hedge_mode = bool(config.get("exchange", {}).get("hedge_mode", False))
 except Exception:
     pass
 
@@ -113,11 +115,13 @@ except Exception as e:
 try:
     pos_mode = ex.fapiPrivateGetPositionSideDual()
     is_hedge = pos_mode.get("dualSidePosition", False)
-    if is_hedge:
-        print(f"  [4/4] Position mode: ⚠️ HEDGE — bot ONE-WAY mode için tasarlandı")
-        print("        Binance → Futures Settings → Position Mode → One-way")
+    if is_hedge == hedge_mode:
+        print(f"  [4/4] Position mode: ✅ {'HEDGE' if is_hedge else 'ONE-WAY'}")
     else:
-        print(f"  [4/4] Position mode: ✅ ONE-WAY")
+        if hedge_mode:
+            print(f"  [4/4] Position mode: ⚠️ ONE-WAY — Config'de HEDGE_MODE aktif, fakat hesap One-way modda. Bot başlatıldığında otomatik olarak HEDGE moda geçecektir.")
+        else:
+            print(f"  [4/4] Position mode: ⚠️ HEDGE — Config'de ONE-WAY aktif, fakat hesap Hedge modda. Bot başlatıldığında otomatik olarak ONE-WAY moda geçecektir.")
 except Exception as e:
     print(f"  [4/4] Position mode: ⚠️ kontrol edilemedi ({e})")
 
