@@ -56,7 +56,10 @@ order. Skipping a gate is not allowed.
   paths are validated against `PROTECTED_OUTPUT_NAMES` (currently:
   `config.yaml`, `config.phase2_1k.yaml`, `docker-compose.prod.yml`, `.env`);
   any attempt to coerce the candidate output path to one of these names
-  raises before the file is opened.
+  raises before the file is opened. The runbook list and the code list are
+  pinned together by `backend/tests/test_research_script_output_guard.py`
+  (`test_protected_set_includes_production_control_files`) — when adding a
+  new production-control file, update both sides and that test.
 
 ### Gate 2 — 180-day backtest compare
 
