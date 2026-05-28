@@ -364,6 +364,26 @@ class OrderManager:
         )
         return any(m in err for m in transient_markers)
 
+    @staticmethod
+    def _is_unreachable_error(exc: Exception) -> bool:
+        """Return True if the TP order is unreachable due to price already passed.
+
+        Binance -2021 'Order would immediately trigger' means stop price is
+        already past current market price. Repairing such TP is pointless —
+        position is in profit zone. Sentinel handling prevents infinite retry
+        loops (see PR #102a — LINK/USDT SHORT incident 2026-05-28 14:41 UTC).
+
+        Markers:
+          - binance code -2021
+          - 'would immediately trigger' text (non-code variant)
+        """
+        err = str(exc).lower()
+        unreachable_markers = (
+            "-2021",
+            "would immediately trigger",
+        )
+        return any(m in err for m in unreachable_markers)
+
     def _retry_tp_order(
         self,
         *,
@@ -384,7 +404,12 @@ class OrderManager:
     ) -> str:
         """Place a TP (or SL repair) order with retry on transient errors.
 
-        Returns the order ID on success, or "" on exhausted retries.
+        Returns:
+          - order_id (truthy string) on success
+          - "" on exhausted retries (non-unreachable non-transient errors)
+          - "UNREACHABLE" sentinel when Binance -2021 'would immediately
+            trigger' — price already past TP target. Sentinel stops infinite
+            repair loops (PR #102a).
 
         TP orders are reduceOnly — idempotent and safe to retry. If a previous
         attempt actually went through but we didn't see the response (timeout),
@@ -409,6 +434,27 @@ class OrderManager:
                 )
                 return oid
             except Exception as e:
+                # Unreachable errors (price already past TP target) are a
+                # special category — return sentinel immediately, no retry.
+                if self._is_unreachable_error(e):
+                    log.critical(
+                        "order_manager.tp_unreachable: %s %s tp_leg=%s "
+                        "entry_order_id=%s sl_order_id=%s error=%s — "
+                        "position likely in profit zone, repair skipping",
+                        symbol, direction, label,
+                        entry_order_id, sl_order_id,
+                        e,
+                        extra={
+                            "event": "order_manager.tp_unreachable",
+                            "symbol": symbol,
+                            "direction": direction,
+                            "tp_leg": label,
+                            "entry_order_id": entry_order_id,
+                            "sl_order_id": sl_order_id,
+                            "error": str(e),
+                        },
+                    )
+                    return "UNREACHABLE"
                 is_transient = self._is_transient_error(e)
                 if not is_transient or attempt == max_attempts:
                     log.warning(
@@ -804,8 +850,10 @@ class OrderManager:
             price_display=sl,
         )
 
-        if not sl_oid:
-            # SL exhausted — rollback entry
+        if not sl_oid or sl_oid == "UNREACHABLE":
+            # SL exhausted or unreachable (price already past SL level —
+            # Binance -2021 'would immediately trigger') — both require
+            # immediate rollback because the position is already at loss.
             self._rollback_entry_after_protection_failure(
                 ccxt_sym=ccxt_sym,
                 rollback_side=reverse_side,
@@ -813,7 +861,9 @@ class OrderManager:
                 symbol=symbol,
                 direction=direction,
                 entry_order_id=oid,
-                original_error=Exception("SL placement exhausted after retries"),
+                original_error=Exception(
+                    f"SL placement {'unreachable (-2021)' if sl_oid == 'UNREACHABLE' else 'exhausted after retries'}"
+                ),
             )
             return None
 
