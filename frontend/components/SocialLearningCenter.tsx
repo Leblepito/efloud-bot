@@ -418,7 +418,8 @@ export function SocialLearningCenter() {
               const hasConfig = Object.keys(hyp.candidate_config_patch).length > 0;
               const run = data.research_runs?.[hyp.id];
               const verdictKey: Verdict | "NONE" = run ? run.verdict : "NONE";
-              const verdictStyle = VERDICT_STYLES[verdictKey];
+              const verdictStyle =
+                VERDICT_STYLES[verdictKey] ?? VERDICT_STYLES.UNKNOWN;
 
               return (
                 <div
