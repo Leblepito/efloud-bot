@@ -50,6 +50,10 @@
 | 2026-05-28 | Claude Opus 4.7 | verification + branch-out | Gemini Task 8 carve-into-PR | ✅ | kısa | Gemini'nin frontend dilim'i (#89) byte-identical kopya + commit + PR. Reviewer doğruladı. |
 | 2026-05-28 | Claude Opus 4.7 | code-review (Hermes mode) | First-pass review on session PRs | ✅ | uzun | 5 reviewer dispatch (#85-89), bulgular #90-92 follow-up PR'larına dönüştü, hepsi merge edildi. |
 | 2026-05-28 | Claude Opus 4.7 | TDD + worktree | Working-tree carve-out (PR #93/#94/#95) | ✅ | orta | engine/signals.py defensive fix, Codex input-guard merged with my output-guard, Hermes growth-OS docs. 17/17 + 10 signal tests yeşil. |
+| 2026-05-28 | Antigravity | VPS Deploy + Systemd Integration | Hermes-Agent Telegram Gateway Setup | ✅ | kisa | Remote `.env` updated with user's local API keys and systemd service reinstalled with root override. Active long-polling socket to Telegram verified. |
+| 2026-05-28 | Claude Opus 4.7 | brainstorming + worktree | Open-items close-out (PR #96-98) | ✅ | orta | Faz 0.3 ✅ + skill_log session log (#96), research_runs aggregator backend + tests (#97), Social Learning Center verdict badges frontend (#98). 25 yeşil test. Verdict-badges follow-up kapatıldı. |
+| 2026-05-28 | Claude Opus 4.7 | code-review (Hermes mode) | Reviewer follow-up fixes on #96-98 | ✅ | kısa | İki minor: research_runs docstring monotonic-claim düzeltmesi + isinstance guards (#97), verdictStyle fallback (#98). Hepsi aynı PR'lara amend commit. |
+| 2026-05-28 | Claude Opus 4.7 | efloud-risk-ops-reviewer + deploy | PR #99 live deploy (SL/TP delivery fix) | ✅ | uzun | Risk-ops APPROVE-WITH-CONDITIONS, 13/13 new tests yeşil. Merge bfd2724 → VPS git pull 58041c9→bfd2724 → docker compose -f docker-compose.prod.yml up -d --build (recreate). Container `Started 14:02:10 UTC`, healthcheck 503 = bot trading loop kapalı (EFLOUD_AUTOSTART=0 design — operator manuel başlatacak). |
 
 ## Skill Etkinlik Özeti (Aylık Güncellenir)
 
