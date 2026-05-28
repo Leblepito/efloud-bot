@@ -478,6 +478,40 @@ class OrderManager:
                 except Exception as e:
                     log.warning(f"Failed to format TP sizes using exchange precision for {pos.symbol}: {e}")
 
+            # ── Repair SL if missing (highest priority — unprotected position) ──
+            if not pos.sl_order_id:
+                log.critical(
+                    "order_manager.repair_missing_sl: %s %s "
+                    "— re-sending protection order",
+                    pos.symbol, pos.direction,
+                    extra={
+                        "event": "order_manager.repair_missing_sl",
+                        "symbol": pos.symbol,
+                        "direction": pos.direction,
+                    },
+                )
+                sl_repair_params = {"stopPrice": pos.sl}
+                if self.hedge_mode:
+                    sl_repair_params["positionSide"] = pos.direction
+                else:
+                    sl_repair_params["reduceOnly"] = True
+                new_sl_oid = self._retry_tp_order(
+                    ccxt_sym=ccxt_sym,
+                    order_type="STOP_MARKET",
+                    side=reverse_side,
+                    amount=pos.size,
+                    params=sl_repair_params,
+                    label="SL_REPAIR",
+                    symbol=pos.symbol,
+                    direction=pos.direction,
+                    entry_order_id=pos.order_id,
+                    sl_order_id="",
+                    price_display=pos.sl,
+                    tp1_order_id=pos.tp1_order_id or "",
+                )
+                if new_sl_oid:
+                    pos.sl_order_id = new_sl_oid
+
             # Repair TP1 if missing and not yet hit
             if not pos.tp1_order_id and not pos.tp1_hit:
                 log.critical(
@@ -748,20 +782,30 @@ class OrderManager:
         else:
             log.info(f"MARKET {direction} {symbol} size={size} | order_id={oid}")
 
-        # 2) Server-side SL — STOP_MARKET reduceOnly. If this fails after the
-        # market entry filled, immediately try to flatten the exchange position.
+        # 2) Server-side SL — STOP_MARKET reduceOnly. Retry on transient errors
+        # (same as TP). If exhausted, rollback the entry (flatten exchange position).
         sl_params = {"stopPrice": sl}
         if self.hedge_mode:
             sl_params["positionSide"] = direction
         else:
             sl_params["reduceOnly"] = True
-        try:
-            sl_order = self.client.exchange.create_order(
-                ccxt_sym, "STOP_MARKET", reverse_side, size,
-                params=sl_params
-            )
-        except Exception as e:
-            log.error(f"Order failed for {symbol}: {e}", exc_info=True)
+
+        sl_oid = self._retry_tp_order(
+            ccxt_sym=ccxt_sym,
+            order_type="STOP_MARKET",
+            side=reverse_side,
+            amount=size,
+            params=sl_params,
+            label="SL",
+            symbol=symbol,
+            direction=direction,
+            entry_order_id=oid,
+            sl_order_id="",
+            price_display=sl,
+        )
+
+        if not sl_oid:
+            # SL exhausted — rollback entry
             self._rollback_entry_after_protection_failure(
                 ccxt_sym=ccxt_sym,
                 rollback_side=reverse_side,
@@ -769,11 +813,10 @@ class OrderManager:
                 symbol=symbol,
                 direction=direction,
                 entry_order_id=oid,
-                original_error=e,
+                original_error=Exception("SL placement exhausted after retries"),
             )
             return None
 
-        sl_oid = sl_order.get("id", "") if isinstance(sl_order, dict) else ""
         log.info(f"  ↳ SL @ {sl:.4f} | order_id={sl_oid}")
 
         tp1_oid = ""
@@ -1097,6 +1140,10 @@ class OrderManager:
         protect). Skip the BE move entirely and instead cancel orphan SL/TP2
         reduceOnly orders on the exchange to prevent them lingering forever.
         Inert under v1 (v1 always sets numeric tp2).
+
+        Retry: New SL at breakeven uses _retry_tp_order (3 attempts, backoff).
+        On exhaustion, sl_order_id is set to '' so reconcile's
+        _repair_missing_protection_orders catches it on the next cycle.
         """
         if self.dry_run:
             pos.sl = pos.entry
@@ -1110,36 +1157,64 @@ class OrderManager:
             self._cancel_position_siblings(pos, ccxt_sym, reason="TP1_FULL_CLOSE")
             return
 
-        try:
-            if pos.sl_order_id:
-                try:
-                    self.client.exchange.cancel_order(pos.sl_order_id, ccxt_sym)
-                except Exception as e:
-                    log.warning(f"SL cancel failed for {pos.symbol}: {e} (continuing)")
+        # Step 1: Cancel old SL (best-effort — failure means it may already
+        # be filled/cancelled server-side; new SL is a separate order).
+        if pos.sl_order_id:
+            try:
+                self.client.exchange.cancel_order(pos.sl_order_id, ccxt_sym)
+            except Exception as e:
+                log.warning(f"SL cancel failed for {pos.symbol}: {e} (continuing)")
 
-            reverse_side = "sell" if pos.direction == "LONG" else "buy"
-            remaining_size = pos.size / 2  # TP1 yarısı kapandı, kalan yarısı için SL
-            if not self.dry_run:
-                try:
-                    res = self.client.exchange.amount_to_precision(ccxt_sym, remaining_size)
-                    if isinstance(res, str):
-                        remaining_size = float(res)
-                except Exception as e:
-                    log.warning(f"Failed to format remaining SL size using exchange precision for {pos.symbol}: {e}")
-            sl_params = {"stopPrice": pos.entry}
-            if self.hedge_mode:
-                sl_params["positionSide"] = pos.direction
-            else:
-                sl_params["reduceOnly"] = True
-            new_sl = self.client.exchange.create_order(
-                ccxt_sym, "STOP_MARKET", reverse_side, remaining_size,
-                params=sl_params
-            )
-            pos.sl = pos.entry
-            pos.sl_order_id = new_sl.get("id", "")
-            log.info(f"  ↳ New SL @ break-even {pos.entry:.4f} | order_id={pos.sl_order_id}")
+        # Step 2: Place new SL at breakeven with retry
+        reverse_side = "sell" if pos.direction == "LONG" else "buy"
+        remaining_size = pos.size / 2  # TP1 yarısı kapandı, kalan yarısı için SL
+        try:
+            res = self.client.exchange.amount_to_precision(ccxt_sym, remaining_size)
+            if isinstance(res, str):
+                remaining_size = float(res)
         except Exception as e:
-            log.error(f"Move-SL-to-breakeven failed for {pos.symbol}: {e}")
+            log.warning(f"Failed to format remaining SL size using exchange precision for {pos.symbol}: {e}")
+
+        sl_params = {"stopPrice": pos.entry}
+        if self.hedge_mode:
+            sl_params["positionSide"] = pos.direction
+        else:
+            sl_params["reduceOnly"] = True
+
+        new_sl_oid = self._retry_tp_order(
+            ccxt_sym=ccxt_sym,
+            order_type="STOP_MARKET",
+            side=reverse_side,
+            amount=remaining_size,
+            params=sl_params,
+            label="SL_BE",
+            symbol=pos.symbol,
+            direction=pos.direction,
+            entry_order_id=pos.order_id,
+            sl_order_id=pos.sl_order_id or "",
+            price_display=pos.entry,
+        )
+
+        # Always update logical SL (lifecycle state stays consistent)
+        pos.sl = pos.entry
+
+        if new_sl_oid:
+            pos.sl_order_id = new_sl_oid
+            log.info(f"  ↳ New SL @ break-even {pos.entry:.4f} | order_id={pos.sl_order_id}")
+        else:
+            # All retries exhausted — clear order_id so reconcile repairs
+            pos.sl_order_id = ""
+            log.warning(
+                "order_manager.be_sl_placement_failed: %s %s — "
+                "sl_order_id cleared, reconcile will repair on next cycle",
+                pos.symbol, pos.direction,
+                extra={
+                    "event": "order_manager.be_sl_placement_failed",
+                    "symbol": pos.symbol,
+                    "direction": pos.direction,
+                    "sl_price": pos.sl,
+                },
+            )
 
     def _estimate_exit_price(self, pos: Position, bn_orders: list) -> float:
         """Reconcile sırasında exit price tahmin et.
