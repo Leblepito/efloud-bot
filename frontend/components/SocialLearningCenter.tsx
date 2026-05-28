@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { fromNow } from "@/lib/format";
 
 interface DoctrineItem {
   feed_id: string;
