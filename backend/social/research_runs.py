@@ -99,9 +99,12 @@ def latest_runs_per_hypothesis(
 
     "Most recent" is decided lexicographically on the directory name,
     which begins with ``YYYY-MM-DD_compare_`` and ends with an opaque
-    run-id suffix. This matches how ``backtest.cli`` writes them and
-    is stable inside a single calendar day because the run-id is
-    monotonic per process.
+    ``uuid.uuid4().hex[:8]`` suffix (see ``backtest/cli.py``). Across
+    calendar days this is deterministic. Inside the same calendar day
+    the uuid suffix is not monotonic, so ties on the date are tie-broken
+    lexicographically by run-id — which is stable but arbitrary. The
+    badge consumer can still flap between two equally-recent same-day
+    runs; treat that as informational, not a regression.
     """
     reports_root = Path(reports_root)
     latest: dict[str, CompareRun] = {}
@@ -114,13 +117,26 @@ def latest_runs_per_hypothesis(
         if not hypothesis or not isinstance(hypothesis, str):
             continue
 
+        # Defensive: a malformed upstream report could ship non-dict
+        # gates/deltas or a non-list doctrine_tags. Coerce to the
+        # expected types and skip if coercion would lose information.
+        raw_gates = report.get("gates")
+        raw_deltas = report.get("deltas")
+        raw_tags = report.get("doctrine_tags")
+        if raw_gates is not None and not isinstance(raw_gates, dict):
+            continue
+        if raw_deltas is not None and not isinstance(raw_deltas, dict):
+            continue
+        if raw_tags is not None and not isinstance(raw_tags, list):
+            continue
+
         candidate = CompareRun(
             hypothesis=hypothesis,
             run_dir=run_dir,
             run_date=_run_date_from_dirname(run_dir.name),
-            gates=dict(report.get("gates") or {}),
-            doctrine_tags=list(report.get("doctrine_tags") or []),
-            deltas=dict(report.get("deltas") or {}),
+            gates=dict(raw_gates or {}),
+            doctrine_tags=list(raw_tags or []),
+            deltas=dict(raw_deltas or {}),
         )
         prev = latest.get(hypothesis)
         if prev is None or candidate.run_dir.name > prev.run_dir.name:
