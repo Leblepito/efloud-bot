@@ -186,6 +186,22 @@ class BinanceClient:
         """Set position mode: dualSidePosition (Hedge Mode) to True, or False for One-way."""
         if self.market_type != "futures":
             return False
+        
+        # First, query the current position side configuration to avoid POSTing when already set.
+        # This prevents Binance from rejecting the request with -4067 (not allowed with open positions/orders)
+        # even when the position mode already matches what we want.
+        try:
+            current_config = self.exchange.fapiPrivateGetPositionSideDual()
+            if isinstance(current_config, dict):
+                current_dual = current_config.get("dualSidePosition")
+                # CCXT response value can be boolean True/False or string "true"/"false"
+                is_currently_dual = str(current_dual).lower() == "true"
+                if is_currently_dual == dual_side:
+                    log.info(f"✅ Position mode is already verified as {'HEDGE' if dual_side else 'ONE_WAY'} via GET")
+                    return True
+        except Exception as q_err:
+            log.warning(f"Failed to query current position mode: {q_err} (will attempt to set anyway)")
+
         try:
             self.exchange.fapiPrivatePostPositionSideDual({
                 "dualSidePosition": "true" if dual_side else "false"
@@ -200,6 +216,7 @@ class BinanceClient:
                 return True
             log.warning(f"Position mode set failed: {e}")
             return False
+
 
     def get_open_positions(self, symbol: str = None) -> list:
         """Açık pozisyonları getir.
