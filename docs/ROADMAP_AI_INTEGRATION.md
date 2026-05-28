@@ -34,7 +34,7 @@
 |---|---|---|---|---|
 | ✅ 0.1 | `CLAUDE.md` ve `HERMES.md` dosyalarını caveman-tarzı sıkıştır | `caveman` | Token girdisi ↓%40-50 | Teknik doğruluğu koruyarak, her oturum başında yüklenen ~22 KB belleği ~12 KB'a indirir. Kod referansları, path'ler ve config key'leri byte-seviyesinde korunmalı. |
 | ✅ 0.2 | Proje bilgi grafiğini çıkar (`graphify`) | `graphify` | Mimari görünürlük | `graphify extract .` → `graphify-out/graph.json` + `GRAPH_REPORT.md`. Forex adapter refaktörü öncesi bağımlılık haritası. |
-| 0.3 | Bu roadmap'i `CLAUDE.md` §7'ye referans olarak ekle | — | Ajan keşfedilebilirliği | Tüm ajanlar bu dosyayı sıradaki iş listesi olarak kullanır. |
+| ✅ 0.3 | Bu roadmap'i `CLAUDE.md` §7'ye referans olarak ekle (2026-05-28) | — | Ajan keşfedilebilirliği | Tüm ajanlar bu dosyayı sıradaki iş listesi olarak kullanır. CLAUDE.md §7 "Çoklu Ajan Yol Haritası" bloğu bu dosyaya yönlendiriyor. |
 
 ### Faz 1 — Otonom Strateji Optimizasyonu (Yüksek Değer, Orta Risk)
 
@@ -190,7 +190,7 @@ Bu dosya hem **Gemini (Antigravity)** hem **Claude Code** hem de **Hermes** tara
 |---|---|---|---|---|
 | ✅ 0.1 | Caveman memory sıkıştırma | 🔧 FLASH | `caveman` | Mekanik uygulama — dosya oku, sıkıştır, yaz |
 | ✅ 0.2 | Graphify mimari harita çıkar | 🔧 FLASH | `graphify` | Komut çalıştırma + çıktı toplama |
-| 0.3 | CLAUDE.md referans güncelleme | 🏛️ OPUS | — | Bellek dosyası tasarımı — tutarlılık kritik |
+| ✅ 0.3 | CLAUDE.md referans güncelleme | 🏛️ OPUS | — | Bellek dosyası tasarımı — tutarlılık kritik (tamamlandı 2026-05-28) |
 
 #### Faz 1 — Otonom Strateji Optimizasyonu
 
