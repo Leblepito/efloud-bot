@@ -20,6 +20,7 @@ load_dotenv()
 
 import os
 import ccxt
+import yaml
 
 ALLOW = os.environ.get("EFLOUD_ALLOW_MAINNET") == "1"
 KEY = os.environ.get("BINANCE_API_KEY", "")
