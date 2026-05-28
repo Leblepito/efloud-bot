@@ -38,11 +38,15 @@ def test_build_social_research_snapshot_from_archive(tmp_path):
 def test_build_social_research_snapshot_empty_archive(tmp_path):
     from backend.social.reports import build_social_research_snapshot
 
-    snapshot = build_social_research_snapshot(tmp_path / "missing.jsonl")
+    snapshot = build_social_research_snapshot(
+        tmp_path / "missing.jsonl",
+        reports_root=tmp_path / "no-such-reports",
+    )
 
     assert snapshot == {
         "archive_count": 0,
         "doctrine": [],
         "hypotheses": [],
+        "research_runs": {},
         "research_only": True,
     }
