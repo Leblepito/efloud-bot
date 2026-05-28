@@ -33,6 +33,9 @@ from engine.permissions import PermissionManager
 from engine.risk.custom_calculator import CustomRiskCalculator
 from engine import SafeOrchestrator
 
+from main import load_dotenv
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 log = logging.getLogger(__name__)
 

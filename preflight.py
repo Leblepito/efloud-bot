@@ -6,6 +6,15 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Fix Windows console encoding issues
+if sys.platform == "win32":
+    try:
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    except:
+        pass
+
 from main import load_dotenv
 load_dotenv()
 
@@ -66,19 +75,33 @@ except Exception as e:
     print("        İhtimaller: 1) yanlış key, 2) IP whitelist, 3) futures yetkisi yok")
     sys.exit(1)
 
+# Load active config if specified in environment
+config_path = os.environ.get("EFLOUD_CONFIG_PATH", "configs/config.phase2_micro.yaml")
+starting_balance = 100.0
+try:
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        starting_balance = float(config.get("safety", {}).get("starting_balance", 100.0))
+except Exception:
+    pass
+
 # 3. Balance (sadece var/yok kontrol)
 try:
     bal = ex.fetch_balance(params={"type": "future"})
     usdt = bal.get("USDT", {})
     free = float(usdt.get("free", 0))
     total = float(usdt.get("total", 0))
-    if total < 10:
-        print(f"  [3/4] Futures cüzdan: ❌ bakiye çok düşük (${total:.2f} USDT)")
-        print("        Binance Spot → Futures'a en az $50-200 transfer et")
+    
+    min_balance = max(10.0, starting_balance * 0.8)
+    max_balance = starting_balance * 2.5
+    
+    if total < min_balance:
+        print(f"  [3/4] Futures cüzdan: ❌ bakiye düşük (${total:.2f} USDT)")
+        print(f"        Gerekli olan bakiye en az: ${min_balance:.2f} USDT (starting_balance={starting_balance})")
         sys.exit(1)
-    elif total > 500:
+    elif total > max_balance:
         print(f"  [3/4] Futures cüzdan: ⚠️ bakiye yüksek (${total:.2f} USDT)")
-        print("        Micro config $100 için optimize — fazlasını Spot'a geri al")
+        print(f"        Config {starting_balance} için optimize — fazlasını Spot'a geri al")
     else:
         print(f"  [3/4] Futures cüzdan: ✅ ${total:.2f} USDT (free: ${free:.2f})")
 except Exception as e:
@@ -101,4 +124,4 @@ print("\n" + "=" * 60)
 print("  ✅ Pre-flight OK — bot başlatılabilir")
 print("=" * 60)
 print("\nKomut:")
-print('  python main.py configs/config.phase2_micro.yaml')
+print(f"  python main.py {config_path}")

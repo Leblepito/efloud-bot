@@ -41,6 +41,7 @@
 | 2026-05-26 | Antigravity (Orchestrator) | writing-plans | Phase 4: Self-Evolution Loop & VPS Deploy | ✅ | kisa | Phase 4 implementation plan & VPS deployment runbook created |
 | 2026-05-26 | Antigravity (Orchestrator) | prompt-evolution | Phase 4.2: Prompt Evolution | ✅ | orta | 4 agent templates evolved with superpowers TDD & AST Graphify constraints |
 | 2026-05-26 | Antigravity (Flash) | git-hooks | Phase 4.4: Graphify Auto-Update Git Hook | ✅ | kisa | `scripts/setup_git_hooks.py` created and post-commit hook successfully registered |
+| 2026-05-28 | Antigravity (Orchestrator) | test-driven-development | SL/TP Korumalı Emir Güvenilirlik Fix | ✅ | orta | TP1 başarısızlığında erken return kaldırıldı, 3 denemeli retry-backoff ve reconcile-onarım eklendi. 746 test yeşil |
 
 
 ---
