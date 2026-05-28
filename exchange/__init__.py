@@ -448,6 +448,15 @@ class OrderManager:
             tp1_size = pos.size if is_single_target else pos.size / 2
             tp2_size = 0.0 if is_single_target else pos.size - tp1_size
 
+            # Round sizes using the exchange's amount precision to avoid stepSize/lotSize errors on Binance
+            if not self.dry_run:
+                try:
+                    tp1_size = float(self.client.exchange.amount_to_precision(ccxt_sym, tp1_size))
+                    if not is_single_target:
+                        tp2_size = float(self.client.exchange.amount_to_precision(ccxt_sym, tp2_size))
+                except Exception as e:
+                    log.warning(f"Failed to format TP sizes using exchange precision for {pos.symbol}: {e}")
+
             # Repair TP1 if missing and not yet hit
             if not pos.tp1_order_id and not pos.tp1_hit:
                 log.critical(
@@ -668,6 +677,15 @@ class OrderManager:
 
         # CCXT'nin futures route'una gitmesi için symbol'i collateral notation ile sar
         ccxt_sym = self.client.to_ccxt_symbol(symbol)
+
+        # Round sizes using the exchange's amount precision to avoid stepSize/lotSize errors on Binance
+        if not self.dry_run:
+            try:
+                tp1_size = float(self.client.exchange.amount_to_precision(ccxt_sym, tp1_size))
+                if not is_single_target:
+                    tp2_size = float(self.client.exchange.amount_to_precision(ccxt_sym, tp2_size))
+            except Exception as e:
+                log.warning(f"Failed to format TP sizes using exchange precision for {symbol}: {e}")
 
         # Build parameters for CCXT orders
         params = {}
@@ -1076,6 +1094,11 @@ class OrderManager:
 
             reverse_side = "sell" if pos.direction == "LONG" else "buy"
             remaining_size = pos.size / 2  # TP1 yarısı kapandı, kalan yarısı için SL
+            if not self.dry_run:
+                try:
+                    remaining_size = float(self.client.exchange.amount_to_precision(ccxt_sym, remaining_size))
+                except Exception as e:
+                    log.warning(f"Failed to format remaining SL size using exchange precision for {pos.symbol}: {e}")
             sl_params = {"stopPrice": pos.entry}
             if self.hedge_mode:
                 sl_params["positionSide"] = pos.direction

@@ -42,6 +42,9 @@
 | 2026-05-26 | Antigravity (Orchestrator) | prompt-evolution | Phase 4.2: Prompt Evolution | ✅ | orta | 4 agent templates evolved with superpowers TDD & AST Graphify constraints |
 | 2026-05-26 | Antigravity (Flash) | git-hooks | Phase 4.4: Graphify Auto-Update Git Hook | ✅ | kisa | `scripts/setup_git_hooks.py` created and post-commit hook successfully registered |
 | 2026-05-28 | Antigravity (Orchestrator) | test-driven-development | SL/TP Korumalı Emir Güvenilirlik Fix | ✅ | orta | TP1 başarısızlığında erken return kaldırıldı, 3 denemeli retry-backoff ve reconcile-onarım eklendi. 746 test yeşil |
+| 2026-05-28 | Hermes/Codex | writing-plans | Social Learning Backtest + Frontend Yol Haritası | ✅ | kısa | Telegram/X içeriklerinden doktrin çıkarımı, backtest hipotezi ve frontend Learning Center planı yazıldı |
+| 2026-05-28 | Hermes/Codex | test-driven-development | Social feed refactor + doctrine parser | ✅ | orta | `backend/social` modülü ve deterministik SMC/MPA parser TDD ile eklendi; 19/19 hedef test yeşil |
+| 2026-05-28 | Hermes/Codex | test-driven-development | Social archive/hypothesis/report entegrasyonu | ✅ | orta | Research note değerlendirildi; JSONL archive, hypothesis generator ve read-only API snapshot eklendi; 43/43 hedef test yeşil |
 
 
 ---

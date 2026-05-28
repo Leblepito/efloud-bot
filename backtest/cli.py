@@ -169,6 +169,22 @@ def cmd_compare(args):
     """Run v1 vs v2 SMC backtest comparison (spec §8.2)."""
     from backtest.comparison import run_v1_v2_comparison
 
+    # Resolve hypothesis if provided
+    doctrine_tags = None
+    if args.hypothesis:
+        try:
+            from backend.social.archive import load_doctrine_snapshots
+            from backend.social.hypotheses import generate_hypotheses
+            rows = load_doctrine_snapshots("state/social_doctrine.jsonl")
+            doctrines = [row.get("doctrine", {}) for row in rows if row.get("doctrine")]
+            hypotheses = generate_hypotheses(doctrines)
+            match = next((h for h in hypotheses if h["id"] == args.hypothesis), None)
+            if match:
+                doctrine_tags = match.get("doctrine_tags")
+        except (ImportError, ModuleNotFoundError):
+            # Fallback if backend is not available in current PYTHONPATH
+            pass
+
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
@@ -184,9 +200,12 @@ def cmd_compare(args):
 
     report = run_v1_v2_comparison(
         symbols=symbols, data=data, config=cfg, initial_balance=args.balance,
+        hypothesis=args.hypothesis, doctrine_tags=doctrine_tags
     )
     (out_dir / "comparison.json").write_text(json.dumps(report, indent=2, default=str))
     print(f"OK Compare backtest: {out_dir}")
+    if args.hypothesis:
+        print(f"   Hypothesis: {args.hypothesis} (Tags: {doctrine_tags})")
     print(
         f"   v1 trades={report['v1']['total_trades']}  "
         f"v2 trades={report['v2']['total_trades']}"
@@ -233,6 +252,7 @@ def build_parser():
     p_cmp.add_argument("--period-days", type=int, default=30)
     p_cmp.add_argument("--config", default="configs/config.phase2_1k.yaml")
     p_cmp.add_argument("--balance", type=float, default=2000.0)
+    p_cmp.add_argument("--hypothesis", help="Link backtest to a social research hypothesis ID")
     p_cmp.set_defaults(func=cmd_compare)
 
     return p

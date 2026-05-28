@@ -133,6 +133,8 @@ def run_v1_v2_comparison(
     step_every_n_bars: int = 1,
     smc_window_bars: int = _DEFAULT_SMC_WINDOW,
     entry_tf: str | None = None,
+    hypothesis: str | None = None,
+    doctrine_tags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run v1 + v2 backtests over the same data, return comparison report.
 
@@ -142,6 +144,8 @@ def run_v1_v2_comparison(
             "v2": <run_backtest result + stop_hunt_rate + avg_realized_rr>,
             "deltas": {<metric>: {"abs": ..., "rel_pct": ...}, ...},
             "gates": {<metric>: "pass" | "warn" | "hard_reject", ...},
+            "hypothesis": str | None,
+            "doctrine_tags": list[str] | None,
         }
     """
     entry_tf = entry_tf or config["timeframes"]["entry"]
@@ -166,4 +170,6 @@ def run_v1_v2_comparison(
         "v2": v2,
         "deltas": compute_deltas(v1, v2),
         "gates": evaluate_gates(v1, v2, DEFAULT_GATES),
+        "hypothesis": hypothesis,
+        "doctrine_tags": doctrine_tags,
     }

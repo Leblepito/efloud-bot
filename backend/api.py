@@ -324,97 +324,34 @@ async def config() -> dict:
 
 @router.get("/social/feeds", dependencies=[Depends(require_auth)])
 async def social_feeds() -> dict:
-    """X (Twitter) ve Telegram gönderilerini çeker ve harmanlar.
-    
-    Telegram için 'Efloud TA & Charts' kanalının public web önizlemesini (t.me/s/EfloudTheSurfer)
-    parsellemeye çalışır, bir hata oluşursa veya boş dönerse yedek (fallback) yüksek değerli analizleri döner.
-    X (Twitter) için Efloud'un en güncel ve değerli eğitici tweetlerini sunar.
-    """
-    import httpx
-    import re
-    
-    telegram_posts = []
-    # 1. Telegram Public Preview Parser (No Token Required!)
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.get("https://t.me/s/EfloudTheSurfer")
-            if response.status_code == 200:
-                html = response.text
-                pattern = re.compile(r'<div class="tgme_widget_message_text[^>]*>(.*?)</div>', re.DOTALL)
-                matches = pattern.findall(html)
-                
-                time_pattern = re.compile(r'<time datetime="([^"]+)"', re.DOTALL)
-                times = time_pattern.findall(html)
-                
-                for idx, text in enumerate(matches[:10]):
-                    clean_text = re.sub(r'<[^>]+>', '', text).strip()
-                    if clean_text:
-                        timestamp = times[idx] if idx < len(times) else "Recent"
-                        telegram_posts.append({
-                            "id": f"tg-{idx}",
-                            "source": "telegram",
-                            "author": "Efloud TA & Charts",
-                            "content": clean_text,
-                            "timestamp": timestamp
-                        })
-    except Exception as e:
-        log.warning(f"Telegram public scraper failed: {e}")
+    """X (Twitter) ve Telegram gönderilerini test edilebilir helper üzerinden döner."""
+    from backend.social.feeds import fetch_social_feeds
 
-    # Fallback/Curated Telegram posts if scraper was blocked or empty
-    if not telegram_posts:
-        telegram_posts = [
-            {
-                "id": "tg-fb1",
-                "source": "telegram",
-                "author": "Efloud TA & Charts",
-                "content": "📌 BTC Güncelleme: 1D grafikte market yapısı bullish (MSB gerçekleşti). OTE bölgesinden (93200-94100) gelen pullback tepkisiyle 103k hedefine doğru ilerliyoruz. Güçlü FVG alanları destek olarak çalışmaya devam edecektir.",
-                "timestamp": "2026-05-26T14:30:00Z"
-            },
-            {
-                "id": "tg-fb2",
-                "source": "telegram",
-                "author": "Efloud TA & Charts",
-                "content": "📈 ETH/USDT: 4H grafikte FVG (Fair Value Gap) test edildi ve reaksiyon alındı. 2480 seviyesi korunduğu sürece üst likidite hedefleri (2650 - 2800) masada kalacaktır. Risk yönetimine sadık kalın.",
-                "timestamp": "2026-05-25T11:15:00Z"
-            },
-            {
-                "id": "tg-fb3",
-                "source": "telegram",
-                "author": "Efloud TA & Charts",
-                "content": "💡 Mixed Price Action (MPA) Notu: Sabit indikatörlere bağımlı kalmak yerine piyasanın likidite hareketlerini izleyin. Likidite temizliği yapılan her bölge potansiyel bir dönüş noktasıdır.",
-                "timestamp": "2026-05-24T09:00:00Z"
-            }
-        ]
+    return await fetch_social_feeds()
 
-    # Curated X/Twitter Educational Posts
-    twitter_posts = [
-        {
-            "id": "tw-1",
-            "source": "twitter",
-            "author": "@EfloudTheSurfer",
-            "content": "Market yapısını okurken en büyük hata trendin yönünü yanlış yorumlamaktır. Bir yüksek tepe (HH) yapısı oluşmadan sadece mum şekillerine bakarak dönüş aranmaz. Market Yapısı Kırılımı (MSB) ilk şarttır. 🧵👇",
-            "timestamp": "2026-05-27T08:12:00Z"
-        },
-        {
-            "id": "tw-2",
-            "source": "twitter",
-            "author": "@EfloudTheSurfer",
-            "content": "SMC (Smart Money Concepts) ritüellerden ibaret değildir. FVG, Order Block veya OTE sadece birer bölgedir. Önemli olan bu bölgelerin HTF (High Time Frame) trend yönüyle uyumlu (Confluence) olmasıdır.",
-            "timestamp": "2026-05-26T19:40:00Z"
-        },
-        {
-            "id": "tw-3",
-            "source": "twitter",
-            "author": "@EfloudTheSurfer",
-            "content": "Disiplinli bir trader, kâr hedefine ulaştığında TP1 alıp stop noktasını giriş seviyesine (break-even) taşır. Bu bot da tam olarak bu kurallarla çalışıyor. Sermayeyi korumak her zaman birinci önceliktir. 🛡️",
-            "timestamp": "2026-05-25T15:20:00Z"
-        }
-    ]
 
-    return {
-        "telegram": telegram_posts,
-        "twitter": twitter_posts
-    }
+@router.get("/social/doctrine", dependencies=[Depends(require_auth)])
+async def social_doctrine() -> list[dict]:
+    """Research-only parsed social doctrine snapshots."""
+    from backend.social.reports import build_social_research_snapshot
+
+    return build_social_research_snapshot()["doctrine"]
+
+
+@router.get("/social/hypotheses", dependencies=[Depends(require_auth)])
+async def social_hypotheses() -> list[dict]:
+    """Research-only strategy hypotheses derived from parsed social doctrine."""
+    from backend.social.reports import build_social_research_snapshot
+
+    return build_social_research_snapshot()["hypotheses"]
+
+
+@router.get("/social/research-snapshot", dependencies=[Depends(require_auth)])
+async def social_research_snapshot() -> dict:
+    """Combined social learning snapshot for dashboard Learning Center."""
+    from backend.social.reports import build_social_research_snapshot
+
+    return build_social_research_snapshot()
 
 
 @router.get("/market/funding-rates", dependencies=[Depends(require_auth)])
