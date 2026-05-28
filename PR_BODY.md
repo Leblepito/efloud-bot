@@ -134,6 +134,11 @@ Revert this PR. Main code behavior change is isolated to `exchange/__init__.py`;
 - #45 — strategy SL from CHoCH/BOS break range with ATR fallback
 - #46 — FIL reduceOnly close PnL mismatch
 
+## Security & Scope Check
+
+- [ ] **Live config touched?** (Check if config.yaml, .env, docker-compose.prod.yml, VPS deploy or mainnet risk settings were modified)
+- [ ] **Research-only?** (Check if changes are fully isolated to candidate, backtest, or research/learning layers with zero production execution path impact)
+
 ## Approval gates
 
 - [ ] Claude as-shipped review
