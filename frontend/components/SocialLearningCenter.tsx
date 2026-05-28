@@ -27,12 +27,47 @@ interface HypothesisItem {
   risk: string;
 }
 
+type Verdict = "PASS" | "WARN" | "REJECT" | "UNKNOWN";
+
+interface ResearchRunEntry {
+  verdict: Verdict;
+  gates: Record<string, string>;
+  doctrine_tags: string[];
+  run_dir: string;
+  run_date: string;
+  deltas: Record<string, any>;
+}
+
 interface ResearchSnapshot {
   archive_count: number;
   doctrine: DoctrineItem[];
   hypotheses: HypothesisItem[];
+  research_runs?: Record<string, ResearchRunEntry>;
   research_only: boolean;
 }
+
+const VERDICT_STYLES: Record<Verdict | "NONE", { label: string; cls: string }> = {
+  PASS: {
+    label: "✓ 180D BACKTEST: PASS",
+    cls: "border-accent-green/30 bg-accent-green/10 text-accent-green",
+  },
+  WARN: {
+    label: "⚠ 180D BACKTEST: WARN",
+    cls: "border-accent-amber/30 bg-accent-amber/10 text-accent-amber",
+  },
+  REJECT: {
+    label: "✗ 180D BACKTEST: REJECT",
+    cls: "border-accent-red/30 bg-accent-red/10 text-accent-red",
+  },
+  UNKNOWN: {
+    label: "? 180D BACKTEST: UNKNOWN",
+    cls: "border-border bg-bg-surface text-text-muted",
+  },
+  NONE: {
+    label: "NO BACKTEST RUN YET",
+    cls: "border-border/40 bg-bg/40 text-text-muted",
+  },
+};
 
 export function SocialLearningCenter() {
   const [data, setData] = useState<ResearchSnapshot | null>(null);
@@ -381,6 +416,10 @@ export function SocialLearningCenter() {
             {filteredHypotheses.map((hyp) => {
               const isExpanded = expandedHypothesis === hyp.id;
               const hasConfig = Object.keys(hyp.candidate_config_patch).length > 0;
+              const run = data.research_runs?.[hyp.id];
+              const verdictKey: Verdict | "NONE" = run ? run.verdict : "NONE";
+              const verdictStyle =
+                VERDICT_STYLES[verdictKey] ?? VERDICT_STYLES.UNKNOWN;
 
               return (
                 <div
@@ -397,9 +436,23 @@ export function SocialLearningCenter() {
                         {hyp.title}
                       </h5>
                     </div>
-                    <span className="px-2 py-0.5 border border-accent-amber/20 bg-accent-amber/5 text-accent-amber text-[9px] font-bold rounded shrink-0 self-start uppercase">
-                      {hyp.risk.replace("_", " ")}
-                    </span>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="px-2 py-0.5 border border-accent-amber/20 bg-accent-amber/5 text-accent-amber text-[9px] font-bold rounded uppercase">
+                        {hyp.risk.replace("_", " ")}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 border text-[9px] font-bold rounded uppercase tracking-wider ${verdictStyle.cls}`}
+                        title={
+                          run
+                            ? `Latest run: ${run.run_date} · ${Object.keys(
+                                run.gates,
+                              ).length} gates`
+                            : "No compare run linked to this hypothesis yet"
+                        }
+                      >
+                        {verdictStyle.label}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Rationale */}
