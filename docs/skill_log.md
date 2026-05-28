@@ -46,8 +46,10 @@
 | 2026-05-28 | Hermes/Codex | test-driven-development | Social feed refactor + doctrine parser | ✅ | orta | `backend/social` modülü ve deterministik SMC/MPA parser TDD ile eklendi; 19/19 hedef test yeşil |
 | 2026-05-28 | Hermes/Codex | test-driven-development | Social archive/hypothesis/report entegrasyonu | ✅ | orta | Research note değerlendirildi; JSONL archive, hypothesis generator ve read-only API snapshot eklendi; 43/43 hedef test yeşil |
 | 2026-05-28 | Antigravity (Flash) | NextJS Dashboard | SocialLearningCenter & PR Safety Checklist | ✅ | orta | SocialLearningCenter component (glowing warning, interactive tag cloud filtering, candidate config patches) ve .github PR templates entegre edildi, build yeşil |
-
----
+| 2026-05-28 | Claude Opus 4.7 | writing-plans + worktree | Social-learning Phase B (Tasks 5/9/10 + collection job) | ✅ | uzun | 4 atomik PR (#85 runbook, #86 backtest doctrine_tags test, #87 collector, #88 gap report). 18 yeşil test. Live-ops surface yok. |
+| 2026-05-28 | Claude Opus 4.7 | verification + branch-out | Gemini Task 8 carve-into-PR | ✅ | kısa | Gemini'nin frontend dilim'i (#89) byte-identical kopya + commit + PR. Reviewer doğruladı. |
+| 2026-05-28 | Claude Opus 4.7 | code-review (Hermes mode) | First-pass review on session PRs | ✅ | uzun | 5 reviewer dispatch (#85-89), bulgular #90-92 follow-up PR'larına dönüştü, hepsi merge edildi. |
+| 2026-05-28 | Claude Opus 4.7 | TDD + worktree | Working-tree carve-out (PR #93/#94/#95) | ✅ | orta | engine/signals.py defensive fix, Codex input-guard merged with my output-guard, Hermes growth-OS docs. 17/17 + 10 signal tests yeşil. |
 
 ## Skill Etkinlik Özeti (Aylık Güncellenir)
 
