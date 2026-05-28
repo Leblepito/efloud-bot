@@ -37,6 +37,7 @@ from engine.journal import TradeJournal
 from engine.safety import (
     MainnetGuard, mask_secret, retry_with_backoff,
     RateLimiter, validate_kline_integrity,
+    OrphanProtector, load_orphan_protection_config,
 )
 from engine.universe import SymbolUniverse
 from engine.permissions import PermissionManager
@@ -571,8 +572,18 @@ def main():
                               trade_journal=trade_journal,
                               setup_state_store=setup_state_store)
 
-    order_mgr = OrderManager(client, dry_run=cfg["operation"]["dry_run"],
-                              trade_journal=trade_journal)
+    # Build orphan_protector (mirrors bot_runner.py:189-190)
+    orphan_cfg = load_orphan_protection_config(cfg.get("safety", {}))
+    orphan_protector = OrphanProtector(orphan_cfg, client) if not cfg["operation"]["dry_run"] else None
+    
+    order_mgr = OrderManager(
+        client,
+        dry_run=cfg["operation"]["dry_run"],
+        state_dir=state_dir,
+        orphan_protector=orphan_protector,
+        trade_journal=trade_journal,
+        hedge_mode=cfg.get("exchange", {}).get("hedge_mode", False),
+    )
     rate_limiter = RateLimiter(max_per_minute=1000)
 
     shutdown = GracefulShutdown()
