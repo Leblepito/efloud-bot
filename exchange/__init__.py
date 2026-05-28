@@ -3,6 +3,7 @@
 import ccxt
 import json
 import os
+import time as _time
 import pandas as pd
 import logging
 from pathlib import Path
@@ -326,6 +327,193 @@ class OrderManager:
             self._restore()
 
     # ─────────────────────────────────────────────────────────────
+    # TP/SL Retry & Repair Helpers
+    # ─────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _is_transient_error(exc: Exception) -> bool:
+        """Return True if the exchange error is likely transient and retryable.
+
+        Retryable: network timeout, rate limit, server overload, disconnected.
+        Non-retryable: insufficient balance, invalid symbol, bad params, etc.
+        """
+        err = str(exc).lower()
+        transient_markers = (
+            "timeout", "timed out", "rate limit", "ratelimit",
+            "-1001", "disconnected", "-1003", "too many",
+            "-1015", "too many orders", "service unavailable",
+            "503", "502", "504", "internal error", "network",
+            "econnreset", "econnrefused", "epipe",
+        )
+        return any(m in err for m in transient_markers)
+
+    def _retry_tp_order(
+        self,
+        *,
+        ccxt_sym: str,
+        order_type: str,
+        side: str,
+        amount: float,
+        params: dict,
+        label: str,
+        symbol: str,
+        direction: str,
+        entry_order_id: str,
+        sl_order_id: str,
+        price_display: float,
+        tp1_order_id: str = "",
+        max_attempts: int = 3,
+        base_delay: float = 1.0,
+    ) -> str:
+        """Place a TP (or SL repair) order with retry on transient errors.
+
+        Returns the order ID on success, or "" on exhausted retries.
+
+        TP orders are reduceOnly — idempotent and safe to retry. If a previous
+        attempt actually went through but we didn't see the response (timeout),
+        placing a duplicate reduceOnly is harmless: Binance will either accept
+        it (creating a second order that both reduce) or reject it if the
+        position is already fully covered.
+
+        Non-transient errors (insufficient balance, bad symbol) fail immediately
+        without retry to avoid wasting attempts.
+        """
+        stop_price = params.get("stopPrice", price_display)
+        for attempt in range(1, max_attempts + 1):
+            try:
+                order = self.client.exchange.create_order(
+                    ccxt_sym, order_type, side, amount, params=params,
+                )
+                oid = order.get("id", "") if isinstance(order, dict) else ""
+                log.info(
+                    f"  ↳ {label} @ {price_display:.4f} (size={amount:.4f}) | "
+                    f"order_id={oid}"
+                    + (f" (attempt {attempt})" if attempt > 1 else "")
+                )
+                return oid
+            except Exception as e:
+                is_transient = self._is_transient_error(e)
+                if not is_transient or attempt == max_attempts:
+                    log.warning(
+                        "order_manager.tp_placement_failed_after_sl: %s %s "
+                        "tp_leg=%s entry_order_id=%s sl_order_id=%s "
+                        "tp1_order_id=%s error=%s attempts=%d/%d",
+                        symbol, direction, label,
+                        entry_order_id, sl_order_id, tp1_order_id,
+                        e, attempt, max_attempts,
+                        exc_info=True,
+                        extra={
+                            "event": "order_manager.tp_placement_failed_after_sl",
+                            "symbol": symbol,
+                            "direction": direction,
+                            "tp_leg": label,
+                            "entry_order_id": entry_order_id,
+                            "sl_order_id": sl_order_id,
+                            "tp1_order_id": tp1_order_id,
+                            "error": str(e),
+                            "attempt": attempt,
+                            "max_attempts": max_attempts,
+                            "retryable": is_transient,
+                        },
+                    )
+                    return ""
+                # Transient error, more attempts left — backoff and retry.
+                delay = base_delay * (2 ** (attempt - 1))
+                log.info(
+                    f"  ↳ {label} attempt {attempt}/{max_attempts} failed "
+                    f"(transient): {e} — retrying in {delay:.1f}s"
+                )
+                _time.sleep(delay)
+        return ""  # unreachable but defensive
+
+    def _repair_missing_protection_orders(self, bn_order_ids: set) -> None:
+        """Re-send TP1/TP2 orders for positions that have empty order IDs.
+
+        Called from reconcile() after the TP1-hit detection pass. This is the
+        safety net that catches:
+        - Historical positions opened before the TP retry fix
+        - Positions where all 3 retry attempts were exhausted
+        - Positions created during a crash/restart window
+
+        Only attempts repair when:
+        1. Position is open (still in self.positions)
+        2. The position hasn't been TP1-hit (for TP1 repair)
+        3. The order ID is empty (never successfully placed)
+        4. tp2 is not None (for TP2 repair; single-target has no TP2)
+        """
+        for pos in self.positions:
+            ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
+            reverse_side = "sell" if pos.direction == "LONG" else "buy"
+            is_single_target = pos.tp2 is None
+            tp1_size = pos.size if is_single_target else pos.size / 2
+            tp2_size = 0.0 if is_single_target else pos.size - tp1_size
+
+            # Repair TP1 if missing and not yet hit
+            if not pos.tp1_order_id and not pos.tp1_hit:
+                log.critical(
+                    "order_manager.repair_missing_tp: %s %s tp_leg=TP1 "
+                    "— re-sending protection order",
+                    pos.symbol, pos.direction,
+                    extra={
+                        "event": "order_manager.repair_missing_tp",
+                        "symbol": pos.symbol,
+                        "direction": pos.direction,
+                        "tp_leg": "TP1",
+                    },
+                )
+                tp1_params = {"stopPrice": pos.tp1, "reduceOnly": True}
+                if self.hedge_mode:
+                    tp1_params["positionSide"] = pos.direction
+                new_tp1_oid = self._retry_tp_order(
+                    ccxt_sym=ccxt_sym,
+                    order_type="TAKE_PROFIT_MARKET",
+                    side=reverse_side,
+                    amount=tp1_size,
+                    params=tp1_params,
+                    label="TP1_REPAIR",
+                    symbol=pos.symbol,
+                    direction=pos.direction,
+                    entry_order_id=pos.order_id,
+                    sl_order_id=pos.sl_order_id,
+                    price_display=pos.tp1,
+                )
+                if new_tp1_oid:
+                    pos.tp1_order_id = new_tp1_oid
+
+            # Repair TP2 if missing (only for dual-target)
+            if not is_single_target and not pos.tp2_order_id and not pos.tp1_hit:
+                log.critical(
+                    "order_manager.repair_missing_tp: %s %s tp_leg=TP2 "
+                    "— re-sending protection order",
+                    pos.symbol, pos.direction,
+                    extra={
+                        "event": "order_manager.repair_missing_tp",
+                        "symbol": pos.symbol,
+                        "direction": pos.direction,
+                        "tp_leg": "TP2",
+                    },
+                )
+                tp2_params = {"stopPrice": pos.tp2, "reduceOnly": True}
+                if self.hedge_mode:
+                    tp2_params["positionSide"] = pos.direction
+                new_tp2_oid = self._retry_tp_order(
+                    ccxt_sym=ccxt_sym,
+                    order_type="TAKE_PROFIT_MARKET",
+                    side=reverse_side,
+                    amount=tp2_size,
+                    params=tp2_params,
+                    label="TP2_REPAIR",
+                    symbol=pos.symbol,
+                    direction=pos.direction,
+                    entry_order_id=pos.order_id,
+                    sl_order_id=pos.sl_order_id,
+                    price_display=pos.tp2,
+                    tp1_order_id=pos.tp1_order_id,
+                )
+                if new_tp2_oid:
+                    pos.tp2_order_id = new_tp2_oid
+
+    # ─────────────────────────────────────────────────────────────
     # Open / Close
     # ─────────────────────────────────────────────────────────────
 
@@ -543,96 +731,50 @@ class OrderManager:
         # 3) Server-side TP1 — TAKE_PROFIT_MARKET, half (or full for single-target),
         # reduceOnly. If TP placement fails after SL succeeds, keep local tracking
         # rather than orphaning a protected exchange position.
+        # FIX: TP1 failure must NOT early-return — TP2 must still be attempted.
+        # FIX: Retry with backoff for transient API errors (reduceOnly = idempotent).
         tp1_params = {"stopPrice": tp1, "reduceOnly": True}
         if self.hedge_mode:
             tp1_params["positionSide"] = direction
-        try:
-            tp1_order = self.client.exchange.create_order(
-                ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, tp1_size,
-                params=tp1_params
-            )
-            tp1_oid = tp1_order.get("id", "") if isinstance(tp1_order, dict) else ""
-            log.info(f"  ↳ TP1 @ {tp1:.4f} (size={tp1_size:.4f}) | order_id={tp1_oid}")
-        except Exception as e:
-            log.warning(
-                "order_manager.tp_placement_failed_after_sl: %s %s tp_leg=TP1 "
-                "entry_order_id=%s sl_order_id=%s error=%s",
-                symbol,
-                direction,
-                oid,
-                sl_oid,
-                e,
-                exc_info=True,
-                extra={
-                    "event": "order_manager.tp_placement_failed_after_sl",
-                    "symbol": symbol,
-                    "direction": direction,
-                    "tp_leg": "TP1",
-                    "entry_order_id": oid,
-                    "sl_order_id": sl_oid,
-                    "error": str(e),
-                },
-            )
-            pos = Position(
-                symbol=symbol, direction=direction, entry=actual_entry,
-                sl=sl, tp1=tp1, tp2=tp2, size=size,
-                order_id=oid, sl_order_id=sl_oid,
-                tp1_order_id=tp1_oid, tp2_order_id=tp2_oid,
-                opened_at=pd.Timestamp.now(tz="UTC").isoformat(),
-                trace_id=trace_id, bar_ts_ms=bar_ts_ms,
-                entry_setup_source=entry_setup_source,
-                tp1_target_type=tp1_target_type,
-                tp2_target_type=tp2_target_type,
-                bars_to_pullback=bars_to_pullback,
-                adx_value=adx_value,
-                atr_value=atr_value,
-                funding_rate=funding_rate,
-                confluence_details=confluence_details,
-            )
-            self.positions.append(pos)
-            self._persist()
-            self._emit("position_opened", pos)
-            return pos
+        tp1_oid = self._retry_tp_order(
+            ccxt_sym=ccxt_sym,
+            order_type="TAKE_PROFIT_MARKET",
+            side=reverse_side,
+            amount=tp1_size,
+            params=tp1_params,
+            label="TP1",
+            symbol=symbol,
+            direction=direction,
+            entry_order_id=oid,
+            sl_order_id=sl_oid,
+            price_display=tp1,
+        )
 
         # 4) Server-side TP2 — kalan yarı. Same policy as TP1: SL-protected
         # positions must remain tracked even when optional TP placement fails.
         # Single-target mode (tp2=None): skip TP2 placement entirely.
         # tp2_oid stays "" so reconcile / cleanup helper find no order to cancel.
+        # FIX: TP2 is always attempted even when TP1 failed (early-return removed).
         if tp2 is None:
             log.info("  ↳ TP2 skipped (single-target setup)")
         else:
-            try:
-                tp2_params = {"stopPrice": tp2, "reduceOnly": True}
-                if self.hedge_mode:
-                    tp2_params["positionSide"] = direction
-                tp2_order = self.client.exchange.create_order(
-                    ccxt_sym, "TAKE_PROFIT_MARKET", reverse_side, tp2_size,
-                    params=tp2_params
-                )
-                tp2_oid = tp2_order.get("id", "") if isinstance(tp2_order, dict) else ""
-                log.info(f"  ↳ TP2 @ {tp2:.4f} (size={tp2_size:.4f}) | order_id={tp2_oid}")
-            except Exception as e:
-                log.warning(
-                    "order_manager.tp_placement_failed_after_sl: %s %s tp_leg=TP2 "
-                    "entry_order_id=%s sl_order_id=%s tp1_order_id=%s error=%s",
-                    symbol,
-                    direction,
-                    oid,
-                    sl_oid,
-                    tp1_oid,
-                    e,
-                    exc_info=True,
-                    extra={
-                        "event": "order_manager.tp_placement_failed_after_sl",
-                        "symbol": symbol,
-                        "direction": direction,
-                        "tp_leg": "TP2",
-                        "entry_order_id": oid,
-                        "sl_order_id": sl_oid,
-                        "tp1_order_id": tp1_oid,
-                        "error": str(e),
-                    },
-                )
+            tp2_params = {"stopPrice": tp2, "reduceOnly": True}
+            if self.hedge_mode:
+                tp2_params["positionSide"] = direction
+            tp2_oid = self._retry_tp_order(
+                ccxt_sym=ccxt_sym,
+                order_type="TAKE_PROFIT_MARKET",
+                side=reverse_side,
+                amount=tp2_size,
+                params=tp2_params,
+                label="TP2",
+                symbol=symbol,
+                direction=direction,
+                entry_order_id=oid,
+                sl_order_id=sl_oid,
+                price_display=tp2,
+                tp1_order_id=tp1_oid,
+            )
 
         pos = Position(
             symbol=symbol, direction=direction, entry=actual_entry,
@@ -806,6 +948,14 @@ class OrderManager:
                     log.info(f"RECONCILE: TP1 hit {pos.symbol} → SL → break-even @ {pos.entry}")
                     self._move_sl_to_breakeven(pos)
                     self._emit("tp1_hit", pos)
+
+        # 🔧 Repair missing protection orders:
+        # If a position was opened but TP1/TP2 placement failed (transient API
+        # error, early-return bug pre-fix, crash between entry and TP placement),
+        # re-send the missing orders now. This is the safety net that ensures
+        # every open position eventually gets full SL+TP protection.
+        if orders_fetch_ok and not self.dry_run:
+            self._repair_missing_protection_orders(bn_order_ids)
 
         # 🧹 Fail-safe leftover order sweeper:
         # If there are open orders on Binance for a symbol, but we have:

@@ -380,7 +380,11 @@ def _scan_one(symbol, orch, client, order_mgr, rate_limiter, cfg):
         log.info(f"🎬 [{symbol}] Actions: {result.actions_taken}")
 
     if not cfg["operation"]["dry_run"]:
-        sync_orders(orch, order_mgr, symbol, log)
+        # FIX: sync_orders disabled — orchestrator now calls order_manager.open_position
+        # directly (line ~971). sync_orders was a legacy bridge that created duplicate
+        # SL/TP orders and order-ID mismatches. See implementation_plan BUG #4.
+        # sync_orders(orch, order_mgr, symbol, log)
+        pass
 
     # Per-bar MAE/MFE update for live exchange-side positions.
     # Mirrors engine.lifecycle.Position contract so journal writes from
