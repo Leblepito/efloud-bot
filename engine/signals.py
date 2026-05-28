@@ -94,14 +94,26 @@ class Signal:
 
 
 def _df_to_compact_csv(df: pd.DataFrame, limit: int = 20) -> str:
-    """Format the last N bars of a DataFrame into a compact CSV string."""
+    """Format the last N bars of a DataFrame into a compact CSV string.
+
+    Production OHLCV data has open/high/low/close/volume columns, but several
+    unit tests and defensive call paths use minimal candle frames. Gemini
+    validation is a non-blocking enrichment layer, so missing optional columns
+    must degrade to a usable compact representation instead of aborting signal
+    generation.
+    """
     if df is None or df.empty:
         return "No data available."
     sub_df = df.iloc[-limit:]
     lines = ["Time,Open,High,Low,Close,Vol"]
     for idx, row in sub_df.iterrows():
         ts_str = idx.strftime("%m-%d %H:%M") if isinstance(idx, pd.Timestamp) else str(idx)
-        lines.append(f"{ts_str},{row['open']:.4f},{row['high']:.4f},{row['low']:.4f},{row['close']:.4f},{int(row.get('volume', 0))}")
+        close = float(row.get("close", row.get("open", 0.0)))
+        open_ = float(row.get("open", close))
+        high = float(row.get("high", max(open_, close)))
+        low = float(row.get("low", min(open_, close)))
+        volume = int(row.get("volume", 0))
+        lines.append(f"{ts_str},{open_:.4f},{high:.4f},{low:.4f},{close:.4f},{volume}")
     return "\n".join(lines)
 
 
