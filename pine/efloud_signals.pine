@@ -25,6 +25,8 @@ swingLb  = input.int(5, "Swing lookback (pivot L/R)", minval = 1, group = grpSwi
 oteLo    = input.float(0.618, "OTE retrace lo", group = grpSwing)
 oteHi    = input.float(0.786, "OTE retrace hi", group = grpSwing)
 htfSlope = input.float(2.0, "HTF bias slope fallback %", group = grpSwing)
+eqThrPct = input.float(0.1, "Equal-level eşik %", minval = 0.0, group = grpSwing)   // EQH/EQL kümeleme (smc.py eq_thr)
+eqThr    = eqThrPct / 100.0
 
 grpV2 = "V2 Setup Makinesi"
 pullbackTimeoutBars = input.int(8, "Pullback timeout (15m bar)", minval = 1, group = grpV2)
@@ -39,6 +41,8 @@ minSlAtr    = input.float(0.5, "Min SL (ATR)", group = grpRisk)
 maxSlAtr    = input.float(5.0, "Max SL (ATR) — aşılırsa setup RED", group = grpRisk)
 minRr       = input.float(1.8, "Min R:R (TP1)", group = grpRisk)
 fibExt      = input.float(1.618, "TP2 fib extension", group = grpRisk)
+fibTp1      = input.float(1.272, "TP1 Fibo (price discovery)", group = grpRisk)   // yapı yoksa TP1
+fibDiscTp2  = input.float(2.618, "TP2 Fibo (discovery ext)", group = grpRisk)     // discovery'de TP2
 
 grpViz = "Görsel"
 showZones  = input.bool(true, "Zone kutuları", group = grpViz)
@@ -46,9 +50,9 @@ showLevels = input.bool(true, "Entry/SL/TP çizgileri", group = grpViz)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HTF BUNDLE — 4h bağlamında çalışır, skaler demet döner (repaint-safe)
-//   trend(int 1/-1/0), son swing high/low, OTE band, en yakın unmitige FVG bot/top
-//   NOT (sadeleştirme): TP likiditesi tek en-yakın HTF swing'e indirgendi;
-//   çoklu EqLevel kümeleme swing-high likiditesine katlandı (spec §12 #?).
+//   trend(int 1/-1/0), son swing high/low, en-yakın EQH/EQL, OTE band, en yakın unmitige FVG bot/top
+//   NOT (sadeleştirme): TP likiditesi yön başına tek en-yakın swing + tek en-yakın
+//   EQH/EQL + FVG_NEAR (3 skaler aday); tam küme dizileri yok (spec §12 #6).
 // ─────────────────────────────────────────────────────────────────────────────
 htfBundle() =>
     ph = ta.pivothigh(swingLb, swingLb)
@@ -66,6 +70,21 @@ htfBundle() =>
     if not na(pl)
         lastSL := pl
         refSL  := pl
+
+    // Equal-high/low likidite havuzu (smc.py:308-353 liquidity_pools tek-skaler karşılığı):
+    // ardışık iki pivot eqThr (%0.1) içindeyse → EQH/EQL likidite seviyesi.
+    var float prevPH  = na
+    var float prevPL  = na
+    var float lastEqh = na
+    var float lastEql = na
+    if not na(ph)
+        if not na(prevPH) and math.abs(ph - prevPH) <= prevPH * eqThr
+            lastEqh := math.max(ph, prevPH)
+        prevPH := ph
+    if not na(pl)
+        if not na(prevPL) and math.abs(pl - prevPL) <= prevPL * eqThr
+            lastEql := math.min(pl, prevPL)
+        prevPL := pl
 
     // Yapı trendi (CHoCH/BOS aynı trend güncellemesi)
     if not na(refSH) and close > refSH
@@ -113,9 +132,9 @@ htfBundle() =>
         bearFvgBot := na
         bearFvgTop := na
 
-    [bias, lastSH, lastSL, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
+    [bias, lastSH, lastSL, lastEqh, lastEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
 
-[htfBias, htfSwingHigh, htfSwingLow, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+[htfBias, htfSwingHigh, htfSwingLow, htfEqh, htfEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
 
 // Daily bias (opsiyonel)
 dailyBias = 0
@@ -222,35 +241,86 @@ calcSl(int dir, float entry, float zl, float zh, float anchor) =>
         sl := structuralSl
     sl
 
-// TP hesapla (tp_calc.py, sadeleştirilmiş likidite = en yakın HTF swing)
-// dönüş: [tp1, tp2]  (tp2 na olabilir → tek hedef)
+// TP hesapla — hibrit: v2 aday zinciri (EQH/EQL + swing + FVG_NEAR) + Fibonacci ladder.
+// dönüş: [tp1, tp2]  (tp1 na → setup RED / InsufficientTPDistance; tp2 na → tek hedef)
+//   TP1 aday öncelik: LIQUIDITY (swing + EQH/EQL) > FVG_NEAR; fiyat eşitliğinde LIQUIDITY.
+//   Yapı yoksa → Fibonacci price discovery: tp1 = entry ± max(minRr, fibTp1)*risk.
 calcTp(int dir, float entry, float sl) =>
     risk    = math.abs(entry - sl)
     minDist = minRr * risk
-    float tp1 = na
-    // LIQUIDITY adayı: HTF swing (doğru tarafta) yeterince uzaksa
-    float liq = dir == 1 ? htfSwingHigh : htfSwingLow
-    bool liqOk = not na(liq) and (dir == 1 ? (liq - entry) >= minDist : (entry - liq) >= minDist)
-    if liqOk
-        tp1 := liq
-    else
-        tp1 := dir == 1 ? entry + minDist : entry - minDist   // RR_PROJECTION
-    // TP2: tp1 ötesindeki ters-yön FVG far-kenar, yoksa fib_ext
-    float tp2 = na
+
+    // Yapısal adaylar: en-yakın qualifiye LIQUIDITY ve FVG_NEAR ayrı izlenir.
+    bool  anyCand = false        // doğru tarafta en az bir yapısal aday var mı
+    float bestLiq = na
+    float bestFvg = na
     if dir == 1
-        float far = not na(bearFvgTop) and bearFvgTop > tp1 ? bearFvgTop : na
-        if not na(far)
-            tp2 := far
-        else
-            f = entry + fibExt * risk
-            tp2 := f > tp1 ? f : na
+        // LIQUIDITY (entry ÜSTÜ): HTF swing high + EQH
+        if not na(htfSwingHigh) and htfSwingHigh > entry
+            anyCand := true
+            if (htfSwingHigh - entry) >= minDist and (na(bestLiq) or htfSwingHigh < bestLiq)
+                bestLiq := htfSwingHigh
+        if not na(htfEqh) and htfEqh > entry
+            anyCand := true
+            if (htfEqh - entry) >= minDist and (na(bestLiq) or htfEqh < bestLiq)
+                bestLiq := htfEqh
+        // FVG_NEAR: BEAR FVG yakın-kenar (bot)
+        if not na(bearFvgBot) and bearFvgBot > entry
+            anyCand := true
+            if (bearFvgBot - entry) >= minDist and (na(bestFvg) or bearFvgBot < bestFvg)
+                bestFvg := bearFvgBot
     else
-        float far = not na(bullFvgBot) and bullFvgBot < tp1 ? bullFvgBot : na
-        if not na(far)
-            tp2 := far
+        // LIQUIDITY (entry ALTI): HTF swing low + EQL — ayna
+        if not na(htfSwingLow) and htfSwingLow < entry
+            anyCand := true
+            if (entry - htfSwingLow) >= minDist and (na(bestLiq) or htfSwingLow > bestLiq)
+                bestLiq := htfSwingLow
+        if not na(htfEql) and htfEql < entry
+            anyCand := true
+            if (entry - htfEql) >= minDist and (na(bestLiq) or htfEql > bestLiq)
+                bestLiq := htfEql
+        // FVG_NEAR: BULL FVG yakın-kenar (top)
+        if not na(bullFvgTop) and bullFvgTop < entry
+            anyCand := true
+            if (entry - bullFvgTop) >= minDist and (na(bestFvg) or bullFvgTop > bestFvg)
+                bestFvg := bullFvgTop
+
+    // TP1 seçimi: LIQUIDITY > FVG_NEAR (FVG yalnız STRICTLY daha yakınsa kazanır).
+    float tp1 = na
+    bool  isDiscovery = false
+    if not na(bestLiq) and not na(bestFvg)
+        bool fvgCloser = dir == 1 ? bestFvg < bestLiq : bestFvg > bestLiq
+        tp1 := fvgCloser ? bestFvg : bestLiq
+    else if not na(bestLiq)
+        tp1 := bestLiq
+    else if not na(bestFvg)
+        tp1 := bestFvg
+    else if anyCand
+        tp1 := na                                   // adaylar var ama hiçbiri min_dist → RED
+    else
+        f = math.max(minRr, fibTp1)                 // hiç yapı yok → Fibonacci discovery (R:R clamp)
+        tp1 := dir == 1 ? entry + f * risk : entry - f * risk
+        isDiscovery := true
+
+    // TP2: discovery → fibDiscTp2; aksi halde FVG far-kenar, yoksa fibExt (tp1 ötesinde).
+    float tp2 = na
+    if not na(tp1)
+        if isDiscovery
+            fd = dir == 1 ? entry + fibDiscTp2 * risk : entry - fibDiscTp2 * risk
+            tp2 := (dir == 1 ? fd > tp1 : fd < tp1) ? fd : na   // TP2 > TP1 invariantını koru (minRr>fibDiscTp2 clamp ucu)
+        else if dir == 1
+            float far = not na(bearFvgTop) and bearFvgTop > tp1 ? bearFvgTop : na
+            if not na(far)
+                tp2 := far
+            else
+                f = entry + fibExt * risk
+                tp2 := f > tp1 ? f : na
         else
-            f = entry - fibExt * risk
-            tp2 := f < tp1 ? f : na
+            float far = not na(bullFvgBot) and bullFvgBot < tp1 ? bullFvgBot : na
+            if not na(far)
+                tp2 := far
+            else
+                f = entry - fibExt * risk
+                tp2 := f < tp1 ? f : na
     [tp1, tp2]
 
 // ── Confirmed bar mantığı ──

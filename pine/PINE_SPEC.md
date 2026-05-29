@@ -215,7 +215,9 @@ ATR = 15m ATR(14). Pine: `ta.atr(14)` (chart 15m ise doğrudan).
 
 ---
 
-## 9. TAKE PROFIT formülü — `tp_calc.py:38-127`
+## 9. TAKE PROFIT formülü — HİBRİT (`tp_calc.py:38-127` zinciri + `signals.py:519-585` Fibonacci ladder)
+
+Pine `calcTp`: v2 aday zinciri (likidite/FVG) **+** yapı yokken v1 Fibonacci discovery ladder.
 
 ```
 risk = |entry - sl|
@@ -223,24 +225,32 @@ min_dist = min_rr * risk        # min_rr = 1.8 (prod) / 1.5 (root)
 
 ── TP1 aday zinciri (öncelik: LIQUIDITY > FVG_NEAR; fiyat eşitliğinde LIQUIDITY) ──
 LONG (entry ÜSTÜ):
-   EQH kümeleri (eq_levels, kind=EQH, price>entry)        [LIQUIDITY]
- + HTF swing_highs (price>entry)                           [LIQUIDITY]
- + BEAR FVG yakın-kenar f.bot (f.bot>entry)                [FVG_NEAR]
-SHORT (entry ALTI): ayna — EQL + swing_lows + BULL FVG f.top  (hepsi <entry)
+   en-yakın EQH (htfEqh, price>entry)                      [LIQUIDITY]
+ + en-yakın HTF swing high (htfSwingHigh, price>entry)     [LIQUIDITY]
+ + BEAR FVG yakın-kenar (bearFvgBot > entry)               [FVG_NEAR]
+SHORT (entry ALTI): ayna — htfEql + htfSwingLow + BULL FVG bullFvgTop  (hepsi <entry)
 
-adayları fiyata göre sırala (LONG artan / SHORT azalan), fiyatları dedup et.
-tp1 = mesafesi >= min_dist olan İLK aday
-   aday var ama hiçbiri yetmiyorsa → InsufficientTPDistanceError (setup RED)
-   hiç aday yoksa → tp1 = entry ± min_dist  (source=RR_PROJECTION)
+bestLiq = mesafesi >= min_dist olan en-yakın LIQUIDITY; bestFvg = aynısı FVG_NEAR.
+tp1:
+   ikisi de varsa → daha yakını (eşit/belirsiz yakınlıkta LIQUIDITY; FVG yalnız STRICTLY yakınsa)
+   yalnız biri varsa → o
+   aday VAR ama hiçbiri >= min_dist → tp1 = na  (InsufficientTPDistance → setup RED)
+   HİÇ aday yoksa → Fibonacci price discovery: tp1 = entry ± max(min_rr, fibTp1)*risk
+                    (fibTp1=1.272; min R:R'yi koruyacak şekilde clamp), isDiscovery=true
 
 ── TP2 ──
-LONG: tp1 ötesindeki BEAR FVG far-kenar (f.top > tp1) varsa → min(...)   [FVG_FAR]
-      yoksa fib_tp2 = entry + fib_ext*risk ; (fib_tp2 > tp1) ise FIB_EXT, değilse None
-SHORT: ayna (BULL FVG f.bot < tp1 ; entry - fib_ext*risk)
-Değişmez kural: TP2 > TP1 (LONG) kesin, veya TP2 = None → TEK HEDEF modu.
+isDiscovery → tp2 = entry ± fibDiscTp2*risk   (2.618)
+aksi halde:
+  LONG: tp1 ötesindeki BEAR FVG far-kenar (bearFvgTop > tp1) varsa → o   [FVG_FAR]
+        yoksa fib_tp2 = entry + fib_ext*risk ; (fib_tp2 > tp1) ise FIB_EXT, değilse na
+  SHORT: ayna (bullFvgBot < tp1 ; entry - fib_ext*risk)
+Değişmez kural: TP2 > TP1 (LONG) / TP2 < TP1 (SHORT) kesin, veya TP2 = na → TEK HEDEF modu.
 ```
-- `fib_ext` ≈ **1.618** (v1 varsayılanı; config'te ayrı set edilmezse).
-- TP2 = None ise: lifecycle TP1'de **tam kapanış** yapar (50/50 ladder YOK).
+- `fibTp1` ≈ **1.272** (price discovery TP1; `signals.py:521/563`); `min_rr` < 1.272 değilse `max()` clamp devreye girer.
+- `fibDiscTp2` ≈ **2.618** (discovery TP2; `signals.py:583`).
+- `fib_ext` ≈ **1.618** (yapısal TP2; v1 varsayılanı).
+- **EQH/EQL** (`htfEqh`/`htfEql`): `htfBundle`'da ardışık iki pivot `eqThr` (%0.1) içindeyse oluşur — `smc.py:308-353 liquidity_pools` küme mantığının tek-skaler karşılığı.
+- TP2 = na ise: lifecycle TP1'de **tam kapanış** yapar (50/50 ladder YOK).
 - TP2 varsa: TP1'de %50, TP2'de kalan %50 (strateji versiyonunda).
 
 ---
@@ -251,7 +261,7 @@ Değişmez kural: TP2 > TP1 (LONG) kesin, veya TP2 = None → TEK HEDEF modu.
 |---|---|---|
 | `SLTooFarError` | stop_dist > 5×ATR | adayı oluşturma / düşür |
 | anchor=None | kırılmamış HTF swing yok | adayı oluşturma |
-| `InsufficientTPDistanceError` | TP adayları var ama min R:R'ye uzak değil | adayı düşür |
+| `InsufficientTPDistanceError` | yapısal TP adayları var ama hiçbiri min R:R'ye uzak değil | `calcTp` `tp1=na` döner → `tpOk` false → setup fire etmez |
 | timeout | bars_waited > 8 | EXPIRED, diziden çıkar |
 | cap | sembolde 3 aktif aday | yeni CHoCH'u reddet |
 | TP2 invalid | fib_tp2 ≤ tp1 | TP2=None (tek hedef) |
@@ -273,6 +283,9 @@ Değişmez kural: TP2 > TP1 (LONG) kesin, veya TP2 = None → TEK HEDEF modu.
 | `minSlAtr` | 0.5 | config `safety.min_sl_atr` |
 | `maxSlAtr` | 5.0 | config `safety.max_sl_atr` |
 | `minRr` | 1.8 | `config.phase2_1k risk.min_rr` |
+| `eqThrPct` | 0.1 | `smc.py` eq_thr (EQH/EQL kümeleme) |
+| `fibTp1` | 1.272 | `signals.py:521/563` (price discovery TP1) |
+| `fibDiscTp2` | 2.618 | `signals.py:583` (discovery TP2) |
 | `fibExt` | 1.618 | v1 default |
 | `atrLen` | 14 | `smc.py` |
 | `htfSlopePct` | 2.0 | bias fallback |
@@ -294,6 +307,10 @@ Değişmez kural: TP2 > TP1 (LONG) kesin, veya TP2 = None → TEK HEDEF modu.
 4. **`risk_per_trade_pct` pozisyon boyutu:** Pine `strategy`'de
    `strategy.entry qty` ile simüle edilir; gerçek borsa marj/leverage birebir değil.
 5. **MTF(1h) rolü:** V2'de zayıf; spec'te 4h ağırlıklı. Pine'da 1h opsiyonel.
+6. **TP1 likidite kümeleri:** Python tüm EQH/EQL kümelerini + tüm swing'leri tarar; Pine `htfBundle`
+   skaler sınırı nedeniyle yön başına **tek en-yakın** swing + **tek en-yakın** EQH/EQL + FVG_NEAR
+   yakın-kenarını taşır (3 skaler aday). Tam küme dizileri yok → kabul edilen sadeleştirme.
+   (Önceki tek-swing indirgemesine göre EQH/EQL + FVG_NEAR ile zenginleştirildi.)
 
 ---
 
