@@ -1,0 +1,359 @@
+//@version=6
+// =============================================================================
+// EFloud Signals — SMC v2 port (INDIKATÖR)
+// Kaynak: engine/smc_v2/  ·  Spec: pine/PINE_SPEC.md (onaylı)
+// V2 = bekleme-onay durum makinesi: CHoCH → pullback zone → engulfing teyit.
+// Confluence YOK, AI gate YOK (V2 sadık port). minRr default 1.8 (prod config).
+//
+// !!! Derleme bu oturumda MCP ile yapılamadı — Pine Editor'da derlenecek. !!!
+// Repaint güvenliği: HTF verisi lookahead_off + kapanmış bar.
+// =============================================================================
+indicator("EFloud Signals v2", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INPUTS  (strateji dosyasıyla AYNI isimler — senkron şart)
+// ─────────────────────────────────────────────────────────────────────────────
+grpTF   = "Timeframe Chain"
+htfTf   = input.timeframe("240", "HTF (bias / anchor / likidite)", group = grpTF)   // 4h
+// LTF = grafik TF'i (15m beklenir). Daily filtre opsiyonel:
+useDaily   = input.bool(false, "Daily makro filtre kullan", group = grpTF)
+dailyTf    = input.timeframe("1D", "Daily TF", group = grpTF)
+dailyStrict= input.bool(false, "Daily filtre SERT (ters yön reddet)", group = grpTF)
+
+grpSwing = "SMC Primitifleri"
+swingLb  = input.int(5, "Swing lookback (pivot L/R)", minval = 1, group = grpSwing)
+oteLo    = input.float(0.618, "OTE retrace lo", group = grpSwing)
+oteHi    = input.float(0.786, "OTE retrace hi", group = grpSwing)
+htfSlope = input.float(2.0, "HTF bias slope fallback %", group = grpSwing)
+
+grpV2 = "V2 Setup Makinesi"
+pullbackTimeoutBars = input.int(8, "Pullback timeout (15m bar)", minval = 1, group = grpV2)
+maxPending          = input.int(3, "Max bekleyen aday", minval = 1, group = grpV2)
+recencyBars         = input.int(20, "CHoCH recency (bar)", minval = 1, group = grpV2)
+requireConfirm      = input.bool(true, "Engulfing teyidi şart", group = grpV2)
+
+grpRisk = "Risk (SL / TP)"
+atrLen      = input.int(14, "ATR length", minval = 1, group = grpRisk)
+slAtrBuffer = input.float(0.5, "SL ATR buffer", group = grpRisk)
+minSlAtr    = input.float(0.5, "Min SL (ATR)", group = grpRisk)
+maxSlAtr    = input.float(5.0, "Max SL (ATR) — aşılırsa setup RED", group = grpRisk)
+minRr       = input.float(1.8, "Min R:R (TP1)", group = grpRisk)
+fibExt      = input.float(1.618, "TP2 fib extension", group = grpRisk)
+
+grpViz = "Görsel"
+showZones  = input.bool(true, "Zone kutuları", group = grpViz)
+showLevels = input.bool(true, "Entry/SL/TP çizgileri", group = grpViz)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTF BUNDLE — 4h bağlamında çalışır, skaler demet döner (repaint-safe)
+//   trend(int 1/-1/0), son swing high/low, OTE band, en yakın unmitige FVG bot/top
+//   NOT (sadeleştirme): TP likiditesi tek en-yakın HTF swing'e indirgendi;
+//   çoklu EqLevel kümeleme swing-high likiditesine katlandı (spec §12 #?).
+// ─────────────────────────────────────────────────────────────────────────────
+htfBundle() =>
+    ph = ta.pivothigh(swingLb, swingLb)
+    pl = ta.pivotlow(swingLb, swingLb)
+
+    var float lastSH = na
+    var float lastSL = na
+    var int   trend  = 0          // 1 BULL, -1 BEAR, 0 UNDEF
+    var float refSH  = na         // yapı kırılımı için aktif swing high
+    var float refSL  = na
+
+    if not na(ph)
+        lastSH := ph
+        refSH  := ph
+    if not na(pl)
+        lastSL := pl
+        refSL  := pl
+
+    // Yapı trendi (CHoCH/BOS aynı trend güncellemesi)
+    if not na(refSH) and close > refSH
+        trend := 1
+        refSH := na
+    if not na(refSL) and close < refSL
+        trend := -1
+        refSL := na
+
+    // Slope fallback (trend UNDEF iken)
+    bias = trend
+    if bias == 0 and bar_index > 40
+        chg = (close - close[40]) / close[40] * 100.0
+        bias := chg > htfSlope ? 1 : chg < -htfSlope ? -1 : 0
+
+    // OTE band (son swing high/low'dan)
+    float oteTop = na
+    float oteBot = na
+    if not na(lastSH) and not na(lastSL) and lastSH > lastSL
+        d = lastSH - lastSL
+        if bias >= 0
+            oteTop := lastSH - d * oteLo
+            oteBot := lastSH - d * oteHi
+        else
+            oteTop := lastSL + d * oteHi
+            oteBot := lastSL + d * oteLo
+
+    // En yakın unmitige FVG (3-bar imbalance), yön bazlı
+    // BULL FVG: low > high[2] ; BEAR FVG: high < low[2]
+    var float bullFvgBot = na
+    var float bullFvgTop = na
+    var float bearFvgBot = na
+    var float bearFvgTop = na
+    if low > high[2]
+        bullFvgBot := high[2]
+        bullFvgTop := low
+    if high < low[2]
+        bearFvgBot := high
+        bearFvgTop := low[2]
+    // Mitigasyon: BULL FVG bot'a değilirse iptal; BEAR FVG top'a değilirse iptal
+    if not na(bullFvgBot) and low <= bullFvgBot
+        bullFvgBot := na
+        bullFvgTop := na
+    if not na(bearFvgTop) and high >= bearFvgTop
+        bearFvgBot := na
+        bearFvgTop := na
+
+    [bias, lastSH, lastSL, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
+
+[htfBias, htfSwingHigh, htfSwingLow, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+
+// Daily bias (opsiyonel)
+dailyBias = 0
+if useDaily
+    db = request.security(syminfo.tickerid, dailyTf, (close - close[30]) / close[30] * 100.0, lookahead = barmerge.lookahead_off)
+    dailyBias := db > 5.0 ? 1 : db < -5.0 ? -1 : 0
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LTF (15m, grafik) — swing + yapı + CHoCH tetik
+// ─────────────────────────────────────────────────────────────────────────────
+phL = ta.pivothigh(swingLb, swingLb)
+plL = ta.pivotlow(swingLb, swingLb)
+
+var float lRefSH = na
+var float lRefSL = na
+var int   lTrend = 0
+if not na(phL)
+    lRefSH := phL
+if not na(plL)
+    lRefSL := plL
+
+// CHoCH = trend ters/UNDEF iken kırılım (reversal). BOS = aynı yön (V2 BOS'u atlar).
+bool chochBull = false
+bool chochBear = false
+float chochPx  = na
+if not na(lRefSH) and close > lRefSH
+    chochBull := lTrend <= 0          // önceki trend BEAR/UNDEF → CHoCH
+    chochPx   := close
+    lTrend    := 1
+    lRefSH    := na
+if not na(lRefSL) and close < lRefSL
+    chochBear := lTrend >= 0
+    chochPx   := close
+    lTrend    := -1
+    lRefSL    := na
+
+atr15 = ta.atr(atrLen)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETUP STATE MAKİNESİ — paralel var diziler
+//   state: 0 AWAITING_PULLBACK, 1 IN_ZONE  (CONFIRMED/EXPIRED diziden çıkarılır)
+// ─────────────────────────────────────────────────────────────────────────────
+var int[]   sDir       = array.new_int()      // 1 LONG, -1 SHORT
+var int[]   sState     = array.new_int()
+var float[] sZoneLow   = array.new_float()
+var float[] sZoneHigh  = array.new_float()
+var float[] sAnchor    = array.new_float()
+var float[] sTrigPx    = array.new_float()
+var int[]   sBarsWait  = array.new_int()
+
+// Sembolde aktif aday sayısı (cap kontrolü)
+pendingCount() => array.size(sDir)
+
+// Zone kur: FVG önceliği, OTE fallback. Dejenere (sıfır genişlik) → na döner.
+buildZone(int dir, float trigPx) =>
+    float zl = na
+    float zh = na
+    if dir == 1            // LONG → trigger ALTINDAKİ BEAR FVG
+        if not na(bearFvgTop) and bearFvgTop < trigPx
+            zl := bearFvgBot
+            zh := bearFvgTop
+    else                   // SHORT → trigger ÜSTÜNDEKİ BULL FVG
+        if not na(bullFvgBot) and bullFvgBot > trigPx
+            zl := bullFvgBot
+            zh := bullFvgTop
+    if na(zl) and not na(oteTop) and not na(oteBot) and oteTop != oteBot
+        zl := math.min(oteBot, oteTop)
+        zh := math.max(oteBot, oteTop)
+    [zl, zh]
+
+// SL anchor: ters taraftaki son HTF swing (sadeleştirme: en-son-unbroken yerine son swing)
+slAnchor(int dir) => dir == 1 ? htfSwingLow : htfSwingHigh
+
+// Yeni CHoCH adayı ekle (tüm tetik filtreleri)
+addCandidate(int dir, float trigPx) =>
+    if pendingCount() < maxPending and htfBias != 0 and (dir == 1 ? htfBias == 1 : htfBias == -1)
+        // Daily sert filtre
+        bool dailyOk = not (useDaily and dailyStrict and dailyBias != 0 and dailyBias != (dir == 1 ? 1 : -1))
+        if dailyOk
+            anchor = slAnchor(dir)
+            [zl, zh] = buildZone(dir, trigPx)
+            if not na(anchor) and not na(zl) and not na(zh)
+                array.push(sDir, dir)
+                array.push(sState, 0)
+                array.push(sZoneLow, zl)
+                array.push(sZoneHigh, zh)
+                array.push(sAnchor, anchor)
+                array.push(sTrigPx, trigPx)
+                array.push(sBarsWait, 0)
+
+// SL hesapla (sl_calc.py). NA = setup RED (SLTooFar veya anchor sorunu)
+calcSl(int dir, float entry, float zl, float zh, float anchor) =>
+    buf = slAtrBuffer * atr15
+    float structuralSl = dir == 1 ? math.min(zl, anchor) - buf : math.max(zh, anchor) + buf
+    stopDist = math.abs(entry - structuralSl)
+    minDist  = minSlAtr * atr15
+    maxDist  = maxSlAtr * atr15
+    float sl = na
+    if stopDist > maxDist
+        sl := na                                   // reddet
+    else if stopDist < minDist
+        sl := dir == 1 ? entry - minDist : entry + minDist
+    else
+        sl := structuralSl
+    sl
+
+// TP hesapla (tp_calc.py, sadeleştirilmiş likidite = en yakın HTF swing)
+// dönüş: [tp1, tp2]  (tp2 na olabilir → tek hedef)
+calcTp(int dir, float entry, float sl) =>
+    risk    = math.abs(entry - sl)
+    minDist = minRr * risk
+    float tp1 = na
+    // LIQUIDITY adayı: HTF swing (doğru tarafta) yeterince uzaksa
+    float liq = dir == 1 ? htfSwingHigh : htfSwingLow
+    bool liqOk = not na(liq) and (dir == 1 ? (liq - entry) >= minDist : (entry - liq) >= minDist)
+    if liqOk
+        tp1 := liq
+    else
+        tp1 := dir == 1 ? entry + minDist : entry - minDist   // RR_PROJECTION
+    // TP2: tp1 ötesindeki ters-yön FVG far-kenar, yoksa fib_ext
+    float tp2 = na
+    if dir == 1
+        float far = not na(bearFvgTop) and bearFvgTop > tp1 ? bearFvgTop : na
+        if not na(far)
+            tp2 := far
+        else
+            f = entry + fibExt * risk
+            tp2 := f > tp1 ? f : na
+    else
+        float far = not na(bullFvgBot) and bullFvgBot < tp1 ? bullFvgBot : na
+        if not na(far)
+            tp2 := far
+        else
+            f = entry - fibExt * risk
+            tp2 := f < tp1 ? f : na
+    [tp1, tp2]
+
+// ── Confirmed bar mantığı ──
+var float lastEntry = na
+var float lastSl    = na
+var float lastTp1   = na
+var float lastTp2   = na
+var int   lastDir   = 0
+bool firedLong  = false
+bool firedShort = false
+
+if barstate.isconfirmed
+    // 1) Yeni CHoCH adayları (recency: bar zaten güncel)
+    if chochBull
+        addCandidate(1, chochPx)
+    if chochBear
+        addCandidate(-1, chochPx)
+
+    // 2) Mevcut adayları ilerlet (sondan başa — güvenli silme)
+    if array.size(sDir) > 0
+        for i = array.size(sDir) - 1 to 0
+            dir   = array.get(sDir, i)
+            st    = array.get(sState, i)
+            zl    = array.get(sZoneLow, i)
+            zh    = array.get(sZoneHigh, i)
+            wait  = array.get(sBarsWait, i) + 1
+            array.set(sBarsWait, i, wait)
+
+            bool inZone = close >= zl and close <= zh
+            if st == 0 and inZone
+                array.set(sState, i, 1)            // IN_ZONE (yapışkan)
+                st := 1
+
+            bool expired = wait > pullbackTimeoutBars
+            bool confirmed = false
+
+            if st == 1 and not expired
+                // Engulfing teyit (zone içinde kapanış)
+                bool priorBull = close[1] > open[1]
+                bool priorBear = close[1] < open[1]
+                bool curBull   = close > open
+                bool curBear   = close < open
+                bool bullEng = priorBear and curBull and open <= close[1] and close >= open[1]
+                bool bearEng = priorBull and curBear and open >= close[1] and close <= open[1]
+                bool eng = dir == 1 ? bullEng : bearEng
+                bool zoneClose = close >= zl and close <= zh
+                if (not requireConfirm and inZone) or (eng and zoneClose)
+                    // CONFIRMED → giriş
+                    entry  = close
+                    anchor = array.get(sAnchor, i)
+                    sl     = calcSl(dir, entry, zl, zh, anchor)
+                    if not na(sl)
+                        [tp1, tp2] = calcTp(dir, entry, sl)
+                        bool tpOk = dir == 1 ? tp1 > entry : tp1 < entry
+                        if tpOk
+                            confirmed := true
+                            lastEntry := entry
+                            lastSl    := sl
+                            lastTp1   := tp1
+                            lastTp2   := tp2
+                            lastDir   := dir
+                            firedLong  := dir == 1
+                            firedShort := dir == -1
+
+            // 3) Terminal durumları diziden çıkar
+            if expired or confirmed
+                array.remove(sDir, i)
+                array.remove(sState, i)
+                array.remove(sZoneLow, i)
+                array.remove(sZoneHigh, i)
+                array.remove(sAnchor, i)
+                array.remove(sTrigPx, i)
+                array.remove(sBarsWait, i)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GÖRSEL
+// ─────────────────────────────────────────────────────────────────────────────
+plotshape(firedLong,  title = "LONG entry",  style = shape.triangleup,   location = location.belowbar, color = color.new(color.teal, 0),  size = size.small)
+plotshape(firedShort, title = "SHORT entry", style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0),   size = size.small)
+
+if showLevels and (firedLong or firedShort)
+    col = lastDir == 1 ? color.teal : color.red
+    line.new(bar_index, lastEntry, bar_index + 6, lastEntry, color = color.new(color.gray, 0), width = 1)
+    line.new(bar_index, lastSl,    bar_index + 6, lastSl,    color = color.new(color.red, 0),  width = 1, style = line.style_dashed)
+    line.new(bar_index, lastTp1,   bar_index + 6, lastTp1,   color = color.new(color.green, 0), width = 1)
+    label.new(bar_index + 6, lastEntry, "Entry", style = label.style_label_left, color = color.new(col, 80), textcolor = color.white, size = size.tiny)
+    label.new(bar_index + 6, lastSl,    "SL",    style = label.style_label_left, color = color.new(color.red, 80), textcolor = color.white, size = size.tiny)
+    label.new(bar_index + 6, lastTp1,   "TP1",   style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny)
+    if not na(lastTp2)
+        line.new(bar_index, lastTp2, bar_index + 6, lastTp2, color = color.new(color.green, 30), width = 1)
+        label.new(bar_index + 6, lastTp2, "TP2", style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny)
+
+// Zone kutusu (aktif IN_ZONE adayları)
+if showZones and barstate.islast and array.size(sDir) > 0
+    for i = 0 to array.size(sDir) - 1
+        zl = array.get(sZoneLow, i)
+        zh = array.get(sZoneHigh, i)
+        c  = array.get(sState, i) == 1 ? color.new(color.orange, 80) : color.new(color.blue, 88)
+        box.new(bar_index - 5, zh, bar_index + 2, zl, border_color = color.new(color.gray, 50), bgcolor = c)
+
+// HTF bias arka plan tonu
+bgcolor(htfBias == 1 ? color.new(color.teal, 95) : htfBias == -1 ? color.new(color.red, 95) : na, title = "HTF bias")
+
+// ── Alerts ──
+alertcondition(firedLong,  title = "EFloud V2 LONG",  message = "EFloud V2 LONG entry confirmed")
+alertcondition(firedShort, title = "EFloud V2 SHORT", message = "EFloud V2 SHORT entry confirmed")

@@ -1,0 +1,308 @@
+//@version=6
+// =============================================================================
+// EFloud Strategy — SMC v2 port (STRATEJİ / BACKTEST)
+// Kaynak: engine/smc_v2/  ·  Spec: pine/PINE_SPEC.md (onaylı)
+// efloud_signals.pine (indikatör) ile AYNI mantık + AYNI input isimleri.
+// Mantık değişirse HER İKİ dosya senkron güncellenir (CLAUDE.md kuralı).
+//
+// Gerçekçi varsayılanlar: commission 0.04% (Binance futures taker), slippage 1.
+// Pozisyon boyutu risk-bazlı (riskPerTradePct). pyramiding=1 (tek aktif işlem)
+//   → çok-pozisyon exit yönetimi sadeleştirmesi (spec §12).
+// =============================================================================
+strategy("EFloud Strategy v2", overlay = true, initial_capital = 10000, currency = currency.USD, commission_type = strategy.commission.percent, commission_value = 0.04, slippage = 1, pyramiding = 1, process_orders_on_close = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INPUTS  (indikatör dosyasıyla AYNI isimler — senkron şart)
+// ─────────────────────────────────────────────────────────────────────────────
+grpTF   = "Timeframe Chain"
+htfTf   = input.timeframe("240", "HTF (bias / anchor / likidite)", group = grpTF)
+useDaily   = input.bool(false, "Daily makro filtre kullan", group = grpTF)
+dailyTf    = input.timeframe("1D", "Daily TF", group = grpTF)
+dailyStrict= input.bool(false, "Daily filtre SERT (ters yön reddet)", group = grpTF)
+
+grpSwing = "SMC Primitifleri"
+swingLb  = input.int(5, "Swing lookback (pivot L/R)", minval = 1, group = grpSwing)
+oteLo    = input.float(0.618, "OTE retrace lo", group = grpSwing)
+oteHi    = input.float(0.786, "OTE retrace hi", group = grpSwing)
+htfSlope = input.float(2.0, "HTF bias slope fallback %", group = grpSwing)
+
+grpV2 = "V2 Setup Makinesi"
+pullbackTimeoutBars = input.int(8, "Pullback timeout (15m bar)", minval = 1, group = grpV2)
+maxPending          = input.int(3, "Max bekleyen aday", minval = 1, group = grpV2)
+recencyBars         = input.int(20, "CHoCH recency (bar)", minval = 1, group = grpV2)
+requireConfirm      = input.bool(true, "Engulfing teyidi şart", group = grpV2)
+
+grpRisk = "Risk (SL / TP)"
+atrLen      = input.int(14, "ATR length", minval = 1, group = grpRisk)
+slAtrBuffer = input.float(0.5, "SL ATR buffer", group = grpRisk)
+minSlAtr    = input.float(0.5, "Min SL (ATR)", group = grpRisk)
+maxSlAtr    = input.float(5.0, "Max SL (ATR) — aşılırsa setup RED", group = grpRisk)
+minRr       = input.float(1.8, "Min R:R (TP1)", group = grpRisk)
+fibExt      = input.float(1.618, "TP2 fib extension", group = grpRisk)
+riskPerTradePct = input.float(1.0, "Risk per trade %", minval = 0.01, group = grpRisk)
+tp1ClosePct     = input.float(50.0, "TP1'de kapanış %", minval = 1, maxval = 100, group = grpRisk)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTF BUNDLE — 4h bağlamında (indikatörle birebir aynı)
+// ─────────────────────────────────────────────────────────────────────────────
+htfBundle() =>
+    ph = ta.pivothigh(swingLb, swingLb)
+    pl = ta.pivotlow(swingLb, swingLb)
+    var float lastSH = na
+    var float lastSL = na
+    var int   trend  = 0
+    var float refSH  = na
+    var float refSL  = na
+    if not na(ph)
+        lastSH := ph
+        refSH  := ph
+    if not na(pl)
+        lastSL := pl
+        refSL  := pl
+    if not na(refSH) and close > refSH
+        trend := 1
+        refSH := na
+    if not na(refSL) and close < refSL
+        trend := -1
+        refSL := na
+    bias = trend
+    if bias == 0 and bar_index > 40
+        chg = (close - close[40]) / close[40] * 100.0
+        bias := chg > htfSlope ? 1 : chg < -htfSlope ? -1 : 0
+    float oteTop = na
+    float oteBot = na
+    if not na(lastSH) and not na(lastSL) and lastSH > lastSL
+        d = lastSH - lastSL
+        if bias >= 0
+            oteTop := lastSH - d * oteLo
+            oteBot := lastSH - d * oteHi
+        else
+            oteTop := lastSL + d * oteHi
+            oteBot := lastSL + d * oteLo
+    var float bullFvgBot = na
+    var float bullFvgTop = na
+    var float bearFvgBot = na
+    var float bearFvgTop = na
+    if low > high[2]
+        bullFvgBot := high[2]
+        bullFvgTop := low
+    if high < low[2]
+        bearFvgBot := high
+        bearFvgTop := low[2]
+    if not na(bullFvgBot) and low <= bullFvgBot
+        bullFvgBot := na
+        bullFvgTop := na
+    if not na(bearFvgTop) and high >= bearFvgTop
+        bearFvgBot := na
+        bearFvgTop := na
+    [bias, lastSH, lastSL, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
+
+[htfBias, htfSwingHigh, htfSwingLow, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+
+dailyBias = 0
+if useDaily
+    db = request.security(syminfo.tickerid, dailyTf, (close - close[30]) / close[30] * 100.0, lookahead = barmerge.lookahead_off)
+    dailyBias := db > 5.0 ? 1 : db < -5.0 ? -1 : 0
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LTF (15m) — CHoCH tetik (indikatörle birebir aynı)
+// ─────────────────────────────────────────────────────────────────────────────
+phL = ta.pivothigh(swingLb, swingLb)
+plL = ta.pivotlow(swingLb, swingLb)
+var float lRefSH = na
+var float lRefSL = na
+var int   lTrend = 0
+if not na(phL)
+    lRefSH := phL
+if not na(plL)
+    lRefSL := plL
+bool chochBull = false
+bool chochBear = false
+float chochPx  = na
+if not na(lRefSH) and close > lRefSH
+    chochBull := lTrend <= 0
+    chochPx   := close
+    lTrend    := 1
+    lRefSH    := na
+if not na(lRefSL) and close < lRefSL
+    chochBear := lTrend >= 0
+    chochPx   := close
+    lTrend    := -1
+    lRefSL    := na
+
+atr15 = ta.atr(atrLen)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETUP STATE MAKİNESİ (indikatörle birebir aynı)
+// ─────────────────────────────────────────────────────────────────────────────
+var int[]   sDir      = array.new_int()
+var int[]   sState    = array.new_int()
+var float[] sZoneLow  = array.new_float()
+var float[] sZoneHigh = array.new_float()
+var float[] sAnchor   = array.new_float()
+var float[] sTrigPx   = array.new_float()
+var int[]   sBarsWait = array.new_int()
+
+pendingCount() => array.size(sDir)
+
+buildZone(int dir, float trigPx) =>
+    float zl = na
+    float zh = na
+    if dir == 1
+        if not na(bearFvgTop) and bearFvgTop < trigPx
+            zl := bearFvgBot
+            zh := bearFvgTop
+    else
+        if not na(bullFvgBot) and bullFvgBot > trigPx
+            zl := bullFvgBot
+            zh := bullFvgTop
+    if na(zl) and not na(oteTop) and not na(oteBot) and oteTop != oteBot
+        zl := math.min(oteBot, oteTop)
+        zh := math.max(oteBot, oteTop)
+    [zl, zh]
+
+slAnchor(int dir) => dir == 1 ? htfSwingLow : htfSwingHigh
+
+addCandidate(int dir, float trigPx) =>
+    if pendingCount() < maxPending and htfBias != 0 and (dir == 1 ? htfBias == 1 : htfBias == -1)
+        bool dailyOk = not (useDaily and dailyStrict and dailyBias != 0 and dailyBias != (dir == 1 ? 1 : -1))
+        if dailyOk
+            anchor = slAnchor(dir)
+            [zl, zh] = buildZone(dir, trigPx)
+            if not na(anchor) and not na(zl) and not na(zh)
+                array.push(sDir, dir)
+                array.push(sState, 0)
+                array.push(sZoneLow, zl)
+                array.push(sZoneHigh, zh)
+                array.push(sAnchor, anchor)
+                array.push(sTrigPx, trigPx)
+                array.push(sBarsWait, 0)
+
+calcSl(int dir, float entry, float zl, float zh, float anchor) =>
+    buf = slAtrBuffer * atr15
+    float structuralSl = dir == 1 ? math.min(zl, anchor) - buf : math.max(zh, anchor) + buf
+    stopDist = math.abs(entry - structuralSl)
+    minDist  = minSlAtr * atr15
+    maxDist  = maxSlAtr * atr15
+    float sl = na
+    if stopDist > maxDist
+        sl := na
+    else if stopDist < minDist
+        sl := dir == 1 ? entry - minDist : entry + minDist
+    else
+        sl := structuralSl
+    sl
+
+calcTp(int dir, float entry, float sl) =>
+    risk    = math.abs(entry - sl)
+    minDist = minRr * risk
+    float tp1 = na
+    float liq = dir == 1 ? htfSwingHigh : htfSwingLow
+    bool liqOk = not na(liq) and (dir == 1 ? (liq - entry) >= minDist : (entry - liq) >= minDist)
+    tp1 := liqOk ? liq : (dir == 1 ? entry + minDist : entry - minDist)
+    float tp2 = na
+    if dir == 1
+        float far = not na(bearFvgTop) and bearFvgTop > tp1 ? bearFvgTop : na
+        if not na(far)
+            tp2 := far
+        else
+            f = entry + fibExt * risk
+            tp2 := f > tp1 ? f : na
+    else
+        float far = not na(bullFvgBot) and bullFvgBot < tp1 ? bullFvgBot : na
+        if not na(far)
+            tp2 := far
+        else
+            f = entry - fibExt * risk
+            tp2 := f < tp1 ? f : na
+    [tp1, tp2]
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIRMED → strategy.entry  (+ aktif işlem exit yönetimi)
+// ─────────────────────────────────────────────────────────────────────────────
+var float curSl  = na
+var float curTp1 = na
+var float curTp2 = na
+var int   curDir = 0
+
+if barstate.isconfirmed
+    if chochBull
+        addCandidate(1, chochPx)
+    if chochBear
+        addCandidate(-1, chochPx)
+
+    if array.size(sDir) > 0
+        for i = array.size(sDir) - 1 to 0
+            dir  = array.get(sDir, i)
+            st   = array.get(sState, i)
+            zl   = array.get(sZoneLow, i)
+            zh   = array.get(sZoneHigh, i)
+            wait = array.get(sBarsWait, i) + 1
+            array.set(sBarsWait, i, wait)
+
+            bool inZone = close >= zl and close <= zh
+            if st == 0 and inZone
+                array.set(sState, i, 1)
+                st := 1
+
+            bool expired = wait > pullbackTimeoutBars
+            bool confirmed = false
+
+            if st == 1 and not expired and strategy.position_size == 0
+                bool priorBull = close[1] > open[1]
+                bool priorBear = close[1] < open[1]
+                bool curBull   = close > open
+                bool curBear   = close < open
+                bool bullEng = priorBear and curBull and open <= close[1] and close >= open[1]
+                bool bearEng = priorBull and curBear and open >= close[1] and close <= open[1]
+                bool eng = dir == 1 ? bullEng : bearEng
+                bool zoneClose = close >= zl and close <= zh
+                if (not requireConfirm and inZone) or (eng and zoneClose)
+                    entry  = close
+                    anchor = array.get(sAnchor, i)
+                    sl     = calcSl(dir, entry, zl, zh, anchor)
+                    if not na(sl)
+                        [tp1, tp2] = calcTp(dir, entry, sl)
+                        bool tpOk = dir == 1 ? tp1 > entry : tp1 < entry
+                        if tpOk
+                            stopDist = math.abs(entry - sl)
+                            qty = stopDist > 0 ? (strategy.equity * riskPerTradePct / 100.0) / stopDist : na
+                            if not na(qty) and qty > 0
+                                confirmed := true
+                                curSl  := sl
+                                curTp1 := tp1
+                                curTp2 := tp2
+                                curDir := dir
+                                if dir == 1
+                                    strategy.entry("Long", strategy.long, qty = qty)
+                                else
+                                    strategy.entry("Short", strategy.short, qty = qty)
+
+            if expired or confirmed
+                array.remove(sDir, i)
+                array.remove(sState, i)
+                array.remove(sZoneLow, i)
+                array.remove(sZoneHigh, i)
+                array.remove(sAnchor, i)
+                array.remove(sTrigPx, i)
+                array.remove(sBarsWait, i)
+
+// Aktif işlem çıkışları (her bar yenilenir)
+if strategy.position_size != 0 and not na(curSl) and not na(curTp1)
+    if not na(curTp2)
+        strategy.exit("TP1", limit = curTp1, stop = curSl, qty_percent = tp1ClosePct)
+        strategy.exit("TP2", limit = curTp2, stop = curSl)
+    else
+        strategy.exit("TP", limit = curTp1, stop = curSl)
+
+// Flat olunca seviyeleri temizle
+if strategy.position_size == 0
+    curSl  := na
+    curTp1 := na
+    curTp2 := na
+    curDir := 0
+
+// ── Görsel (referans) ──
+plot(strategy.position_size != 0 ? curSl  : na, "SL",  color = color.new(color.red, 0),   style = plot.style_linebr)
+plot(strategy.position_size != 0 ? curTp1 : na, "TP1", color = color.new(color.green, 0), style = plot.style_linebr)
+plot(strategy.position_size != 0 ? curTp2 : na, "TP2", color = color.new(color.green, 40), style = plot.style_linebr)
