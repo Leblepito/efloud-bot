@@ -16,7 +16,7 @@
 # Önkoşullar (preflight.py ile doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi)
 #   ✓ canWithdraw = false (çekim kapalı, key sızsa fon güvende)
-#   ✓ Position mode = One-way
+#   ✓ Position mode = Hedge (dualSidePosition=true; bot startup'ta zorlar — set_position_mode)
 #   ✓ Bakiye ≥ $1000 Futures cüzdanında
 #   ✓ EFLOUD_ALLOW_MAINNET=1
 #
