@@ -563,6 +563,20 @@ class OrderManager:
                         "direction": pos.direction,
                     },
                 )
+                # SL repair TAM boyutu korur (emir tamamen kayıp dalı — yarı
+                # boyut çıplak pozisyon riski yaratır). Sadece TP1/TP2 ile
+                # simetrik precision rounding uygula (stepSize hatası önlenir).
+                sl_amount = pos.size
+                if not self.dry_run:
+                    try:
+                        res_sl = self.client.exchange.amount_to_precision(ccxt_sym, sl_amount)
+                        if isinstance(res_sl, str):
+                            sl_amount = float(res_sl)
+                    except Exception as e:
+                        log.warning(
+                            f"Failed to format SL size using exchange precision "
+                            f"for {pos.symbol}: {e}"
+                        )
                 sl_repair_params = {"stopPrice": pos.sl}
                 if self.hedge_mode:
                     sl_repair_params["positionSide"] = pos.direction
@@ -572,7 +586,7 @@ class OrderManager:
                     ccxt_sym=ccxt_sym,
                     order_type="STOP_MARKET",
                     side=reverse_side,
-                    amount=pos.size,
+                    amount=sl_amount,
                     params=sl_repair_params,
                     label="SL_REPAIR",
                     symbol=pos.symbol,

@@ -98,12 +98,26 @@ class TestPriceActionLevelsAndTargets:
         assert any("Price in Stacked Zone level MO" in r for r in sig.reasons)
 
     def test_range_deviation_targets_and_sl(self) -> None:
-        """Verify that Range Deviation setups set Stop Loss at deviation low and TP1/TP2 at EQ / opposite range high."""
+        """Verify Range Deviation TP2 targets the opposite range high when that
+        extreme is genuinely above both entry and TP1.
+
+        NOTE: this fixture was updated alongside the TP2 profitable-side clamp +
+        TP2>TP1 collapse fix. The original assertion (tp2 == 105.0) encoded the
+        OLD buggy behavior where range.hi (105.0) sat BELOW the min-R:R TP1
+        (106.0) — i.e. TP2 nearer than TP1, a degenerate inverted two-stage
+        exit. We now use a wider range (hi=120.0) so range.hi is a valid TP2
+        above TP1, exercising the normal (non-collapse) path."""
         choch_break = SimpleNamespace(
             direction="BULL", kind="CHoCH", idx=45, ts="2026-05-08T00:00", price=100.0
         )
-        # has_dev = True, range.hi = 105.0, range.lo = 95.0, range.eq = 100.0
         engine = self._make_mock_engine(choch_break, is_long=True, has_dev=True, htf_bias="BULL")
+        # Widen the range so range.hi (120.0) is clearly above the min-R:R TP1.
+        wide_range = SimpleNamespace(
+            discount=True, premium=False, dev_bull=True, dev_bear=False,
+            lo=95.0, hi=120.0, eq=100.0,
+        )
+        engine.analyze.return_value["range"] = wide_range
+        engine.range_info.return_value = wide_range
         df = pd.DataFrame({
             "open": [100.0] * 50,
             "high": [101.0] * 50,
@@ -119,11 +133,48 @@ class TestPriceActionLevelsAndTargets:
 
         assert len(sigs) == 1
         sig = sigs[0]
-        # For long Range deviation:
-        # TP1 should target e_range.eq = 100.0. Since entry = 100.0 and minimum R:R = 1.0,
-        # it is bumped to meet the minimum R:R distance, but matches our range play logic.
-        # TP2 should target range.hi = 105.0
-        assert sig.tp2 == 105.0
+        # TP1 targets e_range.eq (bumped to min R:R distance); TP2 targets the
+        # opposite range high = 120.0 (valid: above entry AND above TP1).
+        assert sig.tp2 == 120.0
+        assert sig.tp2 > sig.tp1  # two-stage exit preserved (no collapse)
+
+    def test_deviation_tp2_clamped_to_profitable_side_integration(self) -> None:
+        """Integration: GERÇEK generate_signals üzerinden deviation TP2'nin
+        yanlış-taraf range ekstreminden karlı tarafa clamp'lendiğini doğrula.
+
+        range.hi entry'nin (100.0) ALTINDA (99.0) — clamp olmasa TP2 zarar
+        tarafına düşerdi. Sonuç: tp2 > entry VE tp2 != tp1 (collapse yok)."""
+        choch_break = SimpleNamespace(
+            direction="BULL", kind="CHoCH", idx=45, ts="2026-05-08T00:00", price=100.0
+        )
+        engine = self._make_mock_engine(choch_break, is_long=True, has_dev=True, htf_bias="BULL")
+        # Override range so the opposite extreme (hi) lands on the WRONG side of entry.
+        wrong_side_range = SimpleNamespace(
+            discount=True, premium=False, dev_bull=True, dev_bear=False,
+            lo=90.0, hi=99.0, eq=100.0,  # hi=99.0 < entry=100.0 → loss side
+        )
+        engine.analyze.return_value["range"] = wrong_side_range
+        engine.range_info.return_value = wrong_side_range
+
+        df = pd.DataFrame({
+            "open": [100.0] * 50,
+            "high": [101.0] * 50,
+            "low": [99.0] * 50,
+            "close": [100.0] * 50
+        })
+
+        sigs = generate_signals(
+            engine, df, df, df,
+            min_confluence=20, min_rr=1.0, fib_ext=1.618,
+            recency_bars=40,
+        )
+
+        assert len(sigs) == 1
+        sig = sigs[0]
+        # Raw range.hi=99.0 is below entry; clamp must lift tp2 to profitable side.
+        assert sig.tp2 > sig.entry
+        # Two-stage exit preserved — TP2 must not collapse onto TP1.
+        assert sig.tp2 != sig.tp1
 
     def test_ranging_market_prioritizes_liquidity(self) -> None:
         """Verify that ranging markets (HTF bias = UNDEF) target liquidity pools (Swing Highs) instead of FVG."""

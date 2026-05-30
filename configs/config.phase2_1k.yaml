@@ -16,7 +16,7 @@
 # Önkoşullar (preflight.py ile doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi)
 #   ✓ canWithdraw = false (çekim kapalı, key sızsa fon güvende)
-#   ✓ Position mode = One-way
+#   ✓ Position mode = Hedge (dualSidePosition=true; bot startup'ta zorlar — set_position_mode)
 #   ✓ Bakiye ≥ $1000 Futures cüzdanında
 #   ✓ EFLOUD_ALLOW_MAINNET=1
 #
@@ -141,8 +141,13 @@ safety:
 
   min_seconds_between_symbol_fetches: 0.5
 
-
-engine:
-  smc_version: v2               # "v1" | "v2"
-  smc_v2_symbols: ["*"]
-  smc_v2_shadow: true          # true = log v2 signal, skip order placement
+  # ── Safety Integration (2026-05-30 plan) ──
+  reverse_min_profit_pct: 0.2          # kontra sinyal: karda + %0.2 buffer üstünde reverse
+  pause_new_entries: false             # true = yeni giriş durdur (mevcut pozisyonlar yönetilir)
+  orphan_protection:
+    enabled: true                      # borsa-yetim pozisyona otomatik SL
+    mode: place_missing_sl
+    default_sl_pct: 2.0
+    max_auto_protect_per_cycle: 1
+    min_distance_to_mark_pct: 0.5
+    require_tp_present: false           # TP'siz çıplak pozisyon EN risklisi → koru

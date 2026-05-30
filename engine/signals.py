@@ -72,6 +72,29 @@ def _format_score_histogram(buckets: Dict[int, int], top_n: int = 3) -> str:
     return " ".join(f"{score}×{count}" for score, count in top)
 
 
+def _resolve_deviation_tp2(raw_tp2, tp1, min_tp, price, risk, is_long):
+    """Range-deviation TP2'yi güvenli hedefe çöz.
+
+    1) Karlı-taraf clamp: TP2 asla min R:R eşiğinin zarar tarafında olmasın
+       (range ekstremi entry'nin yanlış tarafında kalabilir).
+    2) TP2 > TP1 invariant: clamp sonrası TP2, TP1'e çökerse (dar range + geniş
+       SL) discovery extension'a (2.618R) düş — aynı fiyatta çift TP emrini ve
+       sessiz tek-hedef dejenerasyonunu önler.
+    """
+    tp2 = raw_tp2
+    if is_long:
+        if tp2 < min_tp:
+            tp2 = min_tp
+        if tp2 <= tp1:
+            tp2 = price + risk * 2.618
+    else:
+        if tp2 > min_tp:
+            tp2 = min_tp
+        if tp2 >= tp1:
+            tp2 = price - risk * 2.618
+    return tp2
+
+
 @dataclass
 class Signal:
     direction: str          # "LONG" | "SHORT"
@@ -568,7 +591,12 @@ def generate_signals(
             
         # Target opposite range extreme for deviation play, else fib extension
         if has_dev and e_range:
-            tp2 = e_range.hi if is_long else e_range.lo
+            raw_tp2 = e_range.hi if is_long else e_range.lo
+            tp2 = _resolve_deviation_tp2(
+                raw_tp2, tp1,
+                min_tp_long if is_long else min_tp_short,
+                price, risk, is_long,
+            )
         else:
             # If tp1 is our 1.272 Fibo target, tp2 targets 2.618 (or fib_ext if configured)
             is_discovery = False
