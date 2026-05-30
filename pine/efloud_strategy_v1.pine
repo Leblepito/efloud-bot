@@ -55,6 +55,7 @@ fibExt      = input.float(1.618,"TP2 fib extension",                     group =
 recencyBars = input.int(20,    "CHoCH/BOS recency (parite — içkin)", minval = 1, group = grpRisk)
 riskPerTradePct = input.float(1.0,  "Risk per trade %",  minval = 0.01, group = grpRisk)
 tp1ClosePct     = input.float(50.0, "TP1'de kapanış %",  minval = 1, maxval = 100, group = grpRisk)
+moveSlToBe      = input.bool(true, "TP1 sonrası SL → break-even (entry)", group = grpRisk)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HTF BUNDLE (4h) — indikatörle birebir aynı
@@ -186,6 +187,8 @@ var float curTp1 = na
 var float curTp2 = na
 var int   curDir = 0
 var int   curScore = 0
+var float curEntry = na          // break-even için giriş fiyatı
+var bool  tp1Hit   = false       // TP1 dolduktan sonra SL'i BE'ye çekmek için
 
 if barstate.isconfirmed
     // ── pivot izleri ──
@@ -407,6 +410,7 @@ if barstate.isconfirmed
                         tp1 := math.max(rngEq, minTp)
                     else if htfTrendOrig == 0 and not na(liq)
                         tp1 := liq
+                        discovery := true                // F1: Python is_discovery (htf_above_targets boş) → TP2 2.618
                     else
                         float t = na
                         if not na(liq) and not na(fvgT)
@@ -426,6 +430,7 @@ if barstate.isconfirmed
                         tp1 := math.min(rngEq, minTp)
                     else if htfTrendOrig == 0 and not na(liq)
                         tp1 := liq
+                        discovery := true                // F1: Python is_discovery (htf_above_targets boş) → TP2 2.618
                     else
                         float t = na
                         if not na(liq) and not na(fvgB)
@@ -458,6 +463,8 @@ if barstate.isconfirmed
                         curTp2   := tp2
                         curDir   := breakDir
                         curScore := score
+                        curEntry := entry
+                        tp1Hit   := false
                         if isLong
                             strategy.entry("Long", strategy.long, qty = qty)
                         else
@@ -467,11 +474,15 @@ if barstate.isconfirmed
 // Aktif işlem çıkışları (TP1 %50 + TP2 %50 ladder, ortak SL)
 // ─────────────────────────────────────────────────────────────────────────────
 if strategy.position_size != 0 and not na(curSl) and not na(curTp1)
+    // TP1 dolduysa kalan (runner) SL'ini break-even'a (entry) çek
+    if moveSlToBe and not tp1Hit and (curDir == 1 ? high >= curTp1 : low <= curTp1)
+        tp1Hit := true
+    float effStop = (tp1Hit and moveSlToBe and not na(curEntry)) ? curEntry : curSl
     if not na(curTp2)
-        strategy.exit("TP1", limit = curTp1, stop = curSl, qty_percent = tp1ClosePct)
-        strategy.exit("TP2", limit = curTp2, stop = curSl)
+        strategy.exit("TP1", limit = curTp1, stop = effStop, qty_percent = tp1ClosePct)
+        strategy.exit("TP2", limit = curTp2, stop = effStop)
     else
-        strategy.exit("TP", limit = curTp1, stop = curSl)
+        strategy.exit("TP", limit = curTp1, stop = effStop)
 
 // Flat olunca seviyeleri temizle
 if strategy.position_size == 0
@@ -479,6 +490,8 @@ if strategy.position_size == 0
     curTp1 := na
     curTp2 := na
     curDir := 0
+    curEntry := na
+    tp1Hit   := false
 
 // ── Görsel (referans) ──
 plot(strategy.position_size != 0 ? curSl  : na, "SL",  color = color.new(color.red, 0),   style = plot.style_linebr)

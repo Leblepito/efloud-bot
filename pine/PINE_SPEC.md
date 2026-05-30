@@ -397,9 +397,9 @@ TP1:
   trending        → en yakın {FVG kenarı, swing likidite} ≥ min_tp
   hiçbiri yok     → entry ± risk × 1.272   (price discovery)
 TP2:
-  deviation  → range extreme (hi/lo)
-  discovery  → entry ± risk × 2.618
-  diğer      → entry ± risk × fib_ext (1.618)
+  deviation                       → range extreme (hi/lo)
+  discovery VEYA ranging-likidite → entry ± risk × 2.618   (F1: Python is_discovery = htf_above_targets boş → ranging dalı da buraya girer)
+  trending-yapısal-hedef          → entry ± risk × fib_ext (1.618)
 Filtre: TP1 doğru tarafta + rr1 ≥ min_rr
 ```
 
@@ -435,10 +435,15 @@ Değilse OTE içindeyse: OTE kenarına çek. (Confluence skoru **orijinal** brea
 | `useDaily` / `dailyStrict` | false / false | `signals.py` opsiyonel 4. TF |
 | `riskPerTradePct` (strateji) | 1.0 | pozisyon boyutu |
 | `tp1ClosePct` (strateji) | 50.0 | TP1'de %50 kapanış |
+| `moveSlToBe` (strateji) | true | TP1 sonrası SL → break-even (entry) |
+| `showSmcCtx` (indikatör) | true | sinyalde eşleşen OB kutusu + OTE bandı + LIQ çizgisi |
 
 ## A.9 — İndikatör ↔ Strateji senkronu (V1)
 
 V2 ile aynı kural (§13): aynı input isimleri + aynı hesap fonksiyonları (`htfBundle`,
 `mtfBundle`, OB/SFP/OTE/range, `calcSl`/`calcTp` mantığı). Mantık değişirse her iki
 V1 dosyası birlikte güncellenir. Strateji: `strategy.entry` (CONFIRMED'da, risk-bazlı
-qty), `strategy.exit` (TP1 %50 + TP2 %50 ladder, ortak SL), `commission=0.04`, `slippage=1`.
+qty), `strategy.exit` (TP1 %50 + TP2 %50 ladder, ortak SL; `moveSlToBe`=true ise TP1 sonrası
+SL break-even'a çekilir), `commission=0.04`, `slippage=1`. İndikatörde `showSmcCtx` ile sinyalde
+eşleşen OB/OTE/LIQ görseli çizilir (strateji-only `moveSlToBe` ve indikatör-only `showSmcCtx`
+pozisyon/görsel yaşam döngüsü farkı; senkron kuralı paylaşılan hesap mantığı için geçerli).
