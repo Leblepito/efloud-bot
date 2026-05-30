@@ -95,6 +95,24 @@ def _resolve_deviation_tp2(raw_tp2, tp1, min_tp, price, risk, is_long):
     return tp2
 
 
+def _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long):
+    """TP2'yi daima TP1'den DAHA UZAĞA zorla (target-inversion koruması, Y5).
+
+    TP2, TP1'e eşit/daha yakın olursa borsa SHORT/LONG TP emrini "anında
+    tetiklenir" (-2021) diye reddedebilir veya iki-aşamalı çıkış dejenere olur.
+    Çözüm: TP2'yi en az TP1+0.5R kadar öteye, en uzak Fibonacci uzantısına
+    (2.618R) çek. Davranış, generate_signals içindeki eski inline guard ile
+    BİREBİR aynıdır.
+    """
+    if is_long:
+        if tp2 <= tp1:
+            tp2 = max(tp2, tp1 + risk * 0.5, price + risk * 2.618)
+    else:
+        if tp2 >= tp1:
+            tp2 = min(tp2, tp1 - risk * 0.5, price - risk * 2.618)
+    return tp2
+
+
 @dataclass
 class Signal:
     direction: str          # "LONG" | "SHORT"
@@ -611,13 +629,8 @@ def generate_signals(
                 tp2 = (price + risk * 2.618) if is_long else (price - risk * 2.618)
             else:
                 tp2 = (price + risk * fib_ext) if is_long else (price - risk * fib_ext)
-        # Enforce TP2 is always further than TP1 to avoid target-inversion (Y5 target-inversion protection)
-        if is_long:
-            if tp2 <= tp1:
-                tp2 = max(tp2, tp1 + risk * 0.5, price + risk * 2.618)
-        else:
-            if tp2 >= tp1:
-                tp2 = min(tp2, tp1 - risk * 0.5, price - risk * 2.618)
+        # Target-inversion koruması (Y5): TP2 daima TP1'den uzakta olmalı.
+        tp2 = _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long)
 
         rr1 = round(abs(tp1 - price) / risk, 2)
         rr2 = round(abs(tp2 - price) / risk, 2)
