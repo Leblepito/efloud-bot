@@ -5,7 +5,7 @@
 // V2 = bekleme-onay durum makinesi: CHoCH → pullback zone → engulfing teyit.
 // Confluence YOK, AI gate YOK (V2 sadık port). minRr default 1.8 (prod config).
 //
-// !!! Derleme bu oturumda MCP ile yapılamadı — Pine Editor'da derlenecek. !!!
+// ✅ Pine Editor'da SIFIR HATA derlendi (2026-05-30).
 // Repaint güvenliği: HTF verisi lookahead_off + kapanmış bar.
 // =============================================================================
 indicator("EFloud Signals v2", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
