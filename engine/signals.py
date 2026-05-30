@@ -611,6 +611,14 @@ def generate_signals(
                 tp2 = (price + risk * 2.618) if is_long else (price - risk * 2.618)
             else:
                 tp2 = (price + risk * fib_ext) if is_long else (price - risk * fib_ext)
+        # Enforce TP2 is always further than TP1 to avoid target-inversion (Y5 target-inversion protection)
+        if is_long:
+            if tp2 <= tp1:
+                tp2 = max(tp2, tp1 + risk * 0.5, price + risk * 2.618)
+        else:
+            if tp2 >= tp1:
+                tp2 = min(tp2, tp1 - risk * 0.5, price - risk * 2.618)
+
         rr1 = round(abs(tp1 - price) / risk, 2)
         rr2 = round(abs(tp2 - price) / risk, 2)
 

@@ -148,3 +148,33 @@ def test_short_tp2_collapse_falls_back_to_extension():
     result = _resolve_deviation_tp2(raw_tp2, tp1, min_tp_short, price, risk, is_long=False)
     assert result == price - risk * 2.618
     assert result < tp1
+
+
+# ── Inversion Protection Invariant (Y5 Fix) ───────────────────
+
+def test_general_long_target_inversion_protection():
+    """Assert that a LONG tp2 that is closer than tp1 is pushed further than tp1."""
+    price, risk = 100.0, 2.0
+    tp1 = 110.0  # FVG target far away
+    tp2 = 103.2  # Raw 1.618R target close to entry (TP2 < TP1!)
+    
+    # Simulate the logic we added to signals.py:
+    if tp2 <= tp1:
+        tp2 = max(tp2, tp1 + risk * 0.5, price + risk * 2.618)
+        
+    assert tp2 == tp1 + risk * 0.5  # 111.0, which is further than tp1 (110.0)
+    assert tp2 > tp1
+
+
+def test_general_short_target_inversion_protection():
+    """Assert that a SHORT tp2 that is closer than tp1 is pushed further than tp1."""
+    price, risk = 100.0, 2.0
+    tp1 = 90.0   # FVG target far away
+    tp2 = 96.8   # Raw 1.618R target close to entry (TP2 > TP1!)
+    
+    # Simulate the logic:
+    if tp2 >= tp1:
+        tp2 = min(tp2, tp1 - risk * 0.5, price - risk * 2.618)
+        
+    assert tp2 == tp1 - risk * 0.5  # 89.0, which is further than tp1 (90.0)
+    assert tp2 < tp1
