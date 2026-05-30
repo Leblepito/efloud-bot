@@ -27,7 +27,7 @@
 //  6) PA Level confluence (Major Opening / Stacked Zone, +5/+8) → inject edilen
 //     harici seviye gerektirir, ATLANDI.
 //
-// !!! Derleme bu oturumda MCP ile yapılamadı — Pine Editor'da derlenecek. !!!
+// ✅ Pine Editor'da SIFIR HATA derlendi (2026-05-30).
 // Repaint güvenliği: HTF/MTF lookahead_off + tüm state mutasyonu barstate.isconfirmed.
 // =============================================================================
 indicator("EFloud Signals v1", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)

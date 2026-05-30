@@ -19,7 +19,7 @@
 //  6) PA Level confluence atlandı.
 //  + Backtest: pyramiding=1, sadece flat iken yeni giriş; state oturum-içi (var).
 //
-// !!! Derleme bu oturumda MCP ile yapılamadı — Pine Editor'da derlenecek. !!!
+// ✅ Pine Editor'da SIFIR HATA derlendi (2026-05-30).
 // =============================================================================
 strategy("EFloud Strategy v1", overlay = true, initial_capital = 10000, currency = currency.USD, commission_type = strategy.commission.percent, commission_value = 0.04, slippage = 1, pyramiding = 1, process_orders_on_close = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
 
