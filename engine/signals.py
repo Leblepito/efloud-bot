@@ -569,6 +569,15 @@ def generate_signals(
         # Target opposite range extreme for deviation play, else fib extension
         if has_dev and e_range:
             tp2 = e_range.hi if is_long else e_range.lo
+            # Karlı-taraf clamp: deviation TP2 asla min R:R eşiğinin zarar
+            # tarafında olmamalı (range ekstremi entry'nin yanlış tarafında
+            # kalabilir). min_tp_long/min_tp_short ilgili branch'te tanımlı.
+            if is_long:
+                if tp2 < min_tp_long:
+                    tp2 = min_tp_long
+            else:
+                if tp2 > min_tp_short:
+                    tp2 = min_tp_short
         else:
             # If tp1 is our 1.272 Fibo target, tp2 targets 2.618 (or fib_ext if configured)
             is_discovery = False
