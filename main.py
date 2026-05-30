@@ -286,11 +286,50 @@ def safe_fetch_ohlcv(client: BinanceClient, symbol: str,
 # CYCLE
 # ═══════════════════════════════════════════════
 
+def _cli_reconcile_sync(orch, order_mgr, cfg: dict, log) -> None:
+    """CLI reconcile→breaker sync — parity with the FastAPI daemon
+    (CLAUDE.md §5; mirrors bot_runner._sync_reconciled_close_to_logical).
+
+    Catch exchange-side TP/SL closes + flow their PnL into the CircuitBreaker
+    EXACTLY ONCE. Dedup runs entirely on the LOGICAL position's
+    `_reported_to_breaker` flag — the SAME source of truth STEP5 uses
+    (engine/safe_orchestrator.py). record_trade + the flag live INSIDE the
+    open-logical-match block, so STEP5 (which runs later in the cycle) sees the
+    flag and skips → no cross-path double count. No open logical match (orphan /
+    manual / already-closed-by-STEP5) → do NOT record.
+
+    Exception-safe: a sync failure must never kill the CLI cycle.
+    """
+    if not order_mgr or cfg["operation"]["dry_run"]:
+        return
+    try:
+        closed = order_mgr.reconcile()
+        for pos in closed:
+            logical = orch.lifecycle.same_direction_open(pos.symbol, pos.direction)
+            if logical is not None and not getattr(logical, "_reported_to_breaker", False):
+                orch.lifecycle.close_position(logical, pos.exit_price, pos.exit_reason)
+                orch._journal_record_exit(logical, pos.exit_price, pos.exit_reason)
+                orch.breaker.record_trade(pos.pnl_usdt)
+                logical._reported_to_breaker = True
+                log.info(
+                    f"CLI reconcile→breaker: {pos.symbol} {pos.direction} "
+                    f"pnl=${pos.pnl_usdt:.2f} reason={pos.exit_reason}"
+                )
+    except Exception as e:
+        log.warning(f"CLI reconcile pass failed: {e}")
+
+
 def run_cycle(orch: SafeOrchestrator, client: BinanceClient,
                 order_mgr: OrderManager, rate_limiter: RateLimiter,
                 universe: SymbolUniverse, cfg: dict):
     """Tüm symbol universe'ü analiz et."""
     log = logging.getLogger("efloud.main")
+
+    # CLI reconcile pass — parity with bot_runner FastAPI daemon (CLAUDE.md §5).
+    # Runs BEFORE the scan/STEP5 so logical positions are still open → single
+    # count, deduped on the logical _reported_to_breaker flag.
+    _cli_reconcile_sync(orch, order_mgr, cfg, log)
+
     symbols = universe.resolve()
     scan_mode = cfg["operation"].get("symbol_scan_mode", "sequential")
 
@@ -566,16 +605,13 @@ def main():
     # Inert default (smc_version=v1): setup_state_store=None → all v2 hooks
     # short-circuit per PR #67 contract.
     setup_state_store = _build_setup_state_store(cfg, state_dir)
-    orch = SafeOrchestrator(cfg, state_dir=state_dir,
-                              permission_mgr=permission_mgr,
-                              notification_mgr=notif_mgr,
-                              trade_journal=trade_journal,
-                              setup_state_store=setup_state_store)
 
-    # Build orphan_protector (mirrors bot_runner.py:189-190)
+    # Build orphan_protector + order_mgr BEFORE the orchestrator so order_mgr can
+    # be injected into SafeOrchestrator (CLI/FastAPI parity — CLAUDE.md §5).
+    # bot_runner.py builds OrderManager first then passes order_manager=order_mgr.
     orphan_cfg = load_orphan_protection_config(cfg.get("safety", {}))
     orphan_protector = OrphanProtector(orphan_cfg, client) if not cfg["operation"]["dry_run"] else None
-    
+
     order_mgr = OrderManager(
         client,
         dry_run=cfg["operation"]["dry_run"],
@@ -584,6 +620,14 @@ def main():
         trade_journal=trade_journal,
         hedge_mode=cfg.get("exchange", {}).get("hedge_mode", False),
     )
+
+    orch = SafeOrchestrator(cfg, state_dir=state_dir,
+                              permission_mgr=permission_mgr,
+                              notification_mgr=notif_mgr,
+                              order_manager=order_mgr,
+                              trade_journal=trade_journal,
+                              setup_state_store=setup_state_store)
+
     rate_limiter = RateLimiter(max_per_minute=1000)
 
     shutdown = GracefulShutdown()
