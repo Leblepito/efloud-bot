@@ -511,6 +511,46 @@ class BotRunner:
         except Exception as e:
             log.warning(f"Audit dispatch failed for {pos.symbol}: {e}")
 
+    def _sync_reconciled_close_to_logical(self, pos: Position) -> None:
+        """Exchange-side reconcile kapanışını mantıksal lifecycle + breaker'a
+        idempotent senkronize et.
+
+        Neden: reconcile() borsadaki TP/SL fill'lerini yakalar ama bu kapanışlar
+        CircuitBreaker'ın daily/consecutive-loss sayaçlarına akmıyordu (breaker
+        sadece lifecycle-kapanışlarını görüyordu). Bu, gerçek SL serilerinde
+        breaker'ı kör bırakıyordu (Y2 bulgusu).
+
+        Idempotent: dedup tamamen LOGICAL pozisyonun _reported_to_breaker
+        flag'i üzerinden yürür — STEP5 (safe_orchestrator:741-746) ile PAYLAŞILAN
+        tek doğruluk kaynağı. record_trade ve flag, açık logical eşleşmesi
+        bulunan blokun İÇİNDE yaşar; aksi halde STEP5'in zaten kapatıp saydığı
+        bir kapanış reconcile tarafından İKİNCİ kez sayılırdı (cross-path
+        double-count — Y2 düzeltmesini bozar, breaker'ı erken trip ettirir).
+
+        Döngü sırası (reconcile ÖNCE, sonra STEP5) bunu doğru + kayıpsız kılar:
+        reconcile logical'ı hâlâ AÇIK görür → bir kez kaydeder + logical'ı
+        flag'ler → STEP5 sonradan flag'i görüp atlar.
+        """
+        if self.orch is None:
+            return
+        try:
+            logical = self.orch.lifecycle.same_direction_open(pos.symbol, pos.direction)
+            if logical is not None and not getattr(logical, "_reported_to_breaker", False):
+                self.orch.lifecycle.close_position(logical, pos.exit_price, pos.exit_reason)
+                self.orch._journal_record_exit(logical, pos.exit_price, pos.exit_reason)
+                self.orch.breaker.record_trade(pos.pnl_usdt)
+                logical._reported_to_breaker = True
+                log.info(
+                    f"Reconcile→breaker sync: {pos.symbol} {pos.direction} "
+                    f"pnl=${pos.pnl_usdt:.2f} reason={pos.exit_reason}"
+                )
+            # else: açık logical eşleşme yok → ya STEP5 zaten kapatıp saydı
+            # (logical flag set; same_direction_open kapalı pos için None döner),
+            # ya da bot-takipli bir trade hiç değildi (orphan/manual). Her iki
+            # durumda da breaker'a KAYDETME — cross-path double-count'u önler.
+        except Exception as e:
+            log.warning(f"Reconcile→breaker sync failed for {pos.symbol}: {e}")
+
     async def _persist_close(self, pos: Position) -> None:
         """Async DB write for reconciled closes (already emitted in OrderManager)."""
         pnl_pct = ((pos.exit_price - pos.entry) / pos.entry * 100) if pos.direction == "LONG" else \
@@ -522,6 +562,8 @@ class BotRunner:
             mae_pct=getattr(pos, "mae_pct", None),
             mfe_pct=getattr(pos, "mfe_pct", None),
         )
+        # Task 2: exchange-side kapanışı breaker'a idempotent bildir (Y2 fix)
+        self._sync_reconciled_close_to_logical(pos)
 
     # ─────────────────────────────────────────────────────────────
     # Public API for /api endpoints
