@@ -291,6 +291,7 @@ Değişmez kural: TP2 > TP1 (LONG) / TP2 < TP1 (SHORT) kesin, veya TP2 = na → 
 | `htfSlopePct` | 2.0 | bias fallback |
 | `dailyFilterStrict` | false | v1 davranışı |
 | `riskPerTradePct` | 1.0 | strateji pozisyon boyutu |
+| `moveSlToBe` | true | strateji: TP1 sonrası SL → break-even (entry) |
 
 ---
 
@@ -308,9 +309,14 @@ Değişmez kural: TP2 > TP1 (LONG) / TP2 < TP1 (SHORT) kesin, veya TP2 = na → 
    `strategy.entry qty` ile simüle edilir; gerçek borsa marj/leverage birebir değil.
 5. **MTF(1h) rolü:** V2'de zayıf; spec'te 4h ağırlıklı. Pine'da 1h opsiyonel.
 6. **TP1 likidite kümeleri:** Python tüm EQH/EQL kümelerini + tüm swing'leri tarar; Pine `htfBundle`
-   skaler sınırı nedeniyle yön başına **tek en-yakın** swing + **tek en-yakın** EQH/EQL + FVG_NEAR
-   yakın-kenarını taşır (3 skaler aday). Tam küme dizileri yok → kabul edilen sadeleştirme.
-   (Önceki tek-swing indirgemesine göre EQH/EQL + FVG_NEAR ile zenginleştirildi.)
+   skaler sınırı nedeniyle (request.security dizi döndüremez) yön başına **tek en-yakın** swing +
+   **tek skaler** EQH/EQL + FVG_NEAR yakın-kenarını taşır (3 skaler aday). Tam küme dizileri yok.
+   **EQH/EQL tespiti pencere-bazlı:** yeni pivot, son `eqWindow`(5) pivotun herhangi biriyle
+   `eqThr` (%0.1) içindeyse eşit-seviye sayılır — ardışık-OLMAYAN eşitlikleri de yakalar
+   (internal `var float[]` ring buffer; dönüş yine tek skaler `lastEqh`/`lastEql`).
+7. **SL → break-even (strateji):** `moveSlToBe=true` iken TP1 hedefine ulaşıldığında kalan
+   (runner) pozisyonun stop'u entry'e çekilir. V1 spec'inde yoktu; risk yönetimi iyileştirmesi.
+   Sadece strateji versiyonunda (indikatör pozisyon yaşam döngüsü tutmaz).
 
 ---
 

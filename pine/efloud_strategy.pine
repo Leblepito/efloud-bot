@@ -45,6 +45,7 @@ fibTp1      = input.float(1.272, "TP1 Fibo (price discovery)", group = grpRisk) 
 fibDiscTp2  = input.float(2.618, "TP2 Fibo (discovery ext)", group = grpRisk)     // discovery'de TP2
 riskPerTradePct = input.float(1.0, "Risk per trade %", minval = 0.01, group = grpRisk)
 tp1ClosePct     = input.float(50.0, "TP1'de kapanış %", minval = 1, maxval = 100, group = grpRisk)
+moveSlToBe      = input.bool(true, "TP1 sonrası SL → break-even (entry)", group = grpRisk)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HTF BUNDLE — 4h bağlamında (indikatörle birebir aynı)
@@ -63,20 +64,32 @@ htfBundle() =>
     if not na(pl)
         lastSL := pl
         refSL  := pl
-    // Equal-high/low likidite havuzu (smc.py:308-353 liquidity_pools tek-skaler karşılığı):
-    // ardışık iki pivot eqThr (%0.1) içindeyse → EQH/EQL likidite seviyesi.
-    var float prevPH  = na
-    var float prevPL  = na
+    // Equal-high/low likidite havuzu (smc.py:308-353 liquidity_pools karşılığı):
+    // yeni pivot, son eqWindow pivotun HERHANGİ biriyle eqThr (%0.1) içindeyse → EQH/EQL.
+    // (ardışık-OLMAYAN eşitlikleri de yakalar; tek skaler döner = en son bulunan EQ seviyesi)
+    var float[] recentPH = array.new_float()
+    var float[] recentPL = array.new_float()
     var float lastEqh = na
     var float lastEql = na
+    eqWindow = 5
     if not na(ph)
-        if not na(prevPH) and math.abs(ph - prevPH) <= prevPH * eqThr
-            lastEqh := math.max(ph, prevPH)
-        prevPH := ph
+        if array.size(recentPH) > 0
+            for k = 0 to array.size(recentPH) - 1
+                p = array.get(recentPH, k)
+                if math.abs(ph - p) <= p * eqThr
+                    lastEqh := math.max(ph, p)
+        array.push(recentPH, ph)
+        if array.size(recentPH) > eqWindow
+            array.shift(recentPH)
     if not na(pl)
-        if not na(prevPL) and math.abs(pl - prevPL) <= prevPL * eqThr
-            lastEql := math.min(pl, prevPL)
-        prevPL := pl
+        if array.size(recentPL) > 0
+            for k = 0 to array.size(recentPL) - 1
+                p = array.get(recentPL, k)
+                if math.abs(pl - p) <= p * eqThr
+                    lastEql := math.min(pl, p)
+        array.push(recentPL, pl)
+        if array.size(recentPL) > eqWindow
+            array.shift(recentPL)
     if not na(refSH) and close > refSH
         trend := 1
         refSH := na
@@ -299,6 +312,8 @@ var float curSl  = na
 var float curTp1 = na
 var float curTp2 = na
 var int   curDir = 0
+var float curEntry = na          // break-even için giriş fiyatı
+var bool  tp1Hit   = false       // TP1 dolduktan sonra SL'i BE'ye çekmek için
 
 if barstate.isconfirmed
     if chochBull
@@ -338,7 +353,7 @@ if barstate.isconfirmed
                     sl     = calcSl(dir, entry, zl, zh, anchor)
                     if not na(sl)
                         [tp1, tp2] = calcTp(dir, entry, sl)
-                        bool tpOk = dir == 1 ? tp1 > entry : tp1 < entry
+                        bool tpOk = not na(tp1) and (dir == 1 ? tp1 > entry : tp1 < entry)
                         if tpOk
                             stopDist = math.abs(entry - sl)
                             qty = stopDist > 0 ? (strategy.equity * riskPerTradePct / 100.0) / stopDist : na
@@ -348,6 +363,8 @@ if barstate.isconfirmed
                                 curTp1 := tp1
                                 curTp2 := tp2
                                 curDir := dir
+                                curEntry := entry
+                                tp1Hit   := false
                                 if dir == 1
                                     strategy.entry("Long", strategy.long, qty = qty)
                                 else
@@ -364,11 +381,15 @@ if barstate.isconfirmed
 
 // Aktif işlem çıkışları (her bar yenilenir)
 if strategy.position_size != 0 and not na(curSl) and not na(curTp1)
+    // TP1 dolduysa kalan (runner) SL'ini break-even'a (entry) çek
+    if moveSlToBe and not tp1Hit and (curDir == 1 ? high >= curTp1 : low <= curTp1)
+        tp1Hit := true
+    float effStop = (tp1Hit and moveSlToBe and not na(curEntry)) ? curEntry : curSl
     if not na(curTp2)
-        strategy.exit("TP1", limit = curTp1, stop = curSl, qty_percent = tp1ClosePct)
-        strategy.exit("TP2", limit = curTp2, stop = curSl)
+        strategy.exit("TP1", limit = curTp1, stop = effStop, qty_percent = tp1ClosePct)
+        strategy.exit("TP2", limit = curTp2, stop = effStop)
     else
-        strategy.exit("TP", limit = curTp1, stop = curSl)
+        strategy.exit("TP", limit = curTp1, stop = effStop)
 
 // Flat olunca seviyeleri temizle
 if strategy.position_size == 0
@@ -376,6 +397,8 @@ if strategy.position_size == 0
     curTp1 := na
     curTp2 := na
     curDir := 0
+    curEntry := na
+    tp1Hit   := false
 
 // ── Görsel (referans) ──
 plot(strategy.position_size != 0 ? curSl  : na, "SL",  color = color.new(color.red, 0),   style = plot.style_linebr)
