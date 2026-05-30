@@ -50,19 +50,19 @@ oteHi    = input.float(0.786, "OTE retrace hi",                       group = gr
 obSeq    = input.int(5,     "OB ardışık mum (max)",        minval = 1, group = grpSwing)
 rangeLb  = input.int(50,    "Range lookback",              minval = 2, group = grpSwing)
 htfSlope = input.float(2.0, "HTF bias slope fallback %",               group = grpSwing)
-useIntendedDeviation = input.bool(true, "Range deviation NİYET modu (bkz. başlık #5)", group = grpSwing)
+useIntendedDeviation = input.bool(false, "Range deviation NİYET modu (bkz. başlık #5)", group = grpSwing)
 
 grpConf = "Confluence"
-minConfluence = input.int(55, "Min confluence (eşik)", minval = 0, maxval = 100, group = grpConf)
+minConfluence = input.int(50, "Min confluence (eşik)", minval = 0, maxval = 100, group = grpConf)
 aiSentiment   = input.string("NONE", "AI macro sentiment (manuel)", options = ["NONE", "RISK_ON", "RISK_OFF"], group = grpConf)
 
 grpRisk = "Risk (SL / TP)"
 atrLen      = input.int(14,    "ATR length",                 minval = 1, group = grpRisk)
 slAtrBuffer = input.float(0.5, "SL ATR buffer (baz)",                    group = grpRisk)
 volAtrBuffer= input.float(0.75,"SL ATR buffer (yüksek vol)",             group = grpRisk)
-minRr       = input.float(1.5, "Min R:R (TP1)",                          group = grpRisk)
+minRr       = input.float(1.8, "Min R:R (TP1)",                          group = grpRisk)
 fibExt      = input.float(1.618,"TP2 fib extension",                     group = grpRisk)
-recencyBars = input.int(20,    "CHoCH/BOS recency (parite — içkin)", minval = 1, group = grpRisk)
+recencyBars = input.int(40,    "CHoCH/BOS recency (parite — içkin)", minval = 1, group = grpRisk)
 
 grpViz = "Görsel"
 showObs    = input.bool(true, "Aktif Order Block kutuları", group = grpViz)
@@ -500,6 +500,14 @@ if barstate.isconfirmed
                     tp2 := isLong ? entry + risk * 2.618 : entry - risk * 2.618
                 else
                     tp2 := isLong ? entry + risk * fibExt : entry - risk * fibExt
+
+                // Target-inversion guard (Python _enforce_tp2_beyond_tp1 ile birebir)
+                if isLong
+                    if tp2 <= tp1
+                        tp2 := math.max(tp2, tp1 + risk * 0.5, entry + risk * 2.618)
+                else
+                    if tp2 >= tp1
+                        tp2 := math.min(tp2, tp1 - risk * 0.5, entry - risk * 2.618)
 
                 // ── RR filtre + TP doğru taraf ──
                 bool tpSide = isLong ? tp1 > entry : tp1 < entry

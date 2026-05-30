@@ -434,11 +434,12 @@ Değilse OTE içindeyse: OTE kenarına çek. (Confluence skoru **orijinal** brea
 ## A.7 — ÇEVRİLEMEYEN / SAPMA (V1'e özel — dürüst liste)
 
 1. **Gemini AI Structure Validation** (confidence ≥0.70 gate, `signals.py:120-212`) → ÇEVRİLEMEZ. Yerine kural-tabanlı confluence eşiği + manuel `aiSentiment` input'u (RISK_ON/OFF → ±5).
-2. **Tüm-geçmiş tarama → bar-bar:** Python her çağrıda tüm break'leri tarar (recency penceresi gerekir); Pine break OLUŞTUĞU bar'da değerlendirir → recency içkin, `recencyBars` input'u parite-amaçlı.
+2. **Tüm-geçmiş tarama → bar-bar:** Python her çağrıda tüm break'leri tarar (recency penceresi gerekir); Pine break OLUŞTUĞU bar'da değerlendiriri → recency içkin, `recencyBars` input'u parite-amaçlı.
 3. **HTF likidite TP:** Python tüm swing-high + eq-high tarar; Pine en-yakın tek HTF swing'e indirger (V2 §12 ile aynı sadeleştirme).
 4. **MTF CHoCH:** Python son 5 CHoCH; Pine en-son MTF CHoCH yönü.
-5. **Range deviation ÖLÜ KOD:** `smc.py:280-282` range-min'i CURRENT bar dahil hesaplar → `dev_bull/dev_bear` pratikte HİÇ tetiklenmez. Pine portu **niyeti** yansıtır (prior-range, current hariç penetrasyon+reclaim); `useIntendedDeviation=false` ile Python'a sadık (hep false) moda dönülür. **→ Bilinçli davranış farkı.**
+5. **Range deviation ÖLÜ KOD:** `smc.py:280-282` range-min'i CURRENT bar dahil hesaplar → `dev_bull/dev_bear` pratikte HİÇ tetiklenmez. Pine portu **niyeti** yansıtır (prior-range, current hariç penetrasyon+reclaim); `useIntendedDeviation=false` ile Python'a sadık (hep false) moda dönülür. **→ Bilinçli davranış farkı. (FIXED 2026-05-30: Default false yapılarak Python ölü-kod davranışı ile birebir hizalanmıştır - S4).**
 6. **PA Level confluence** (Major Opening / Stacked Zone, `signals.py:422-436`, +5/+8) → inject edilen harici seviye gerektirir, ATLANDI.
+7. **Target-Inversion Prevention (Y5):** Python `_enforce_tp2_beyond_tp1` ile TP2'yi daima TP1'den uzağa zorlar. Pine V1 signal ve strategy dosyalarına bu guard birebir eklenmiştir. **(FIXED 2026-05-30: Borsa immediate trigger rejects koruması - S3).**
 
 ## A.8 — V1 input'ları (indikatör ↔ strateji AYNI isim)
 
@@ -449,13 +450,15 @@ Değilse OTE içindeyse: OTE kenarına çek. (Confluence skoru **orijinal** brea
 | `rangeLb` | 50 | `smc.py:111` |
 | `oteLo` / `oteHi` | 0.618 / 0.786 | `smc.py:111-112` |
 | `htfSlope` | 2.0 | bias fallback |
-| `minConfluence` | **55** | root `config.yaml` / CLAUDE.md |
+| `minConfluence` | **50** (FIXED 2026-05-30) | `config.phase2_1k.yaml:96` (production-active - S1) |
 | `aiSentiment` | NONE | Gemini sentiment karşılığı (manuel) |
 | `atrLen` | 14 | `smc.py` |
 | `slAtrBuffer` / `volAtrBuffer` | 0.5 / 0.75 | `signals.py:472,477` |
-| `minRr` | **1.5** | `signals.py:223` default |
+| `minRr` | **1.8** (FIXED 2026-05-30) | `config.phase2_1k.yaml:95` (production-active - S2) |
 | `fibExt` | 1.618 | `signals.py:223` |
+| `recencyBars` | **40** (FIXED 2026-05-30) | `config.phase2_1k.yaml:97` (production-active - S2) |
 | `useDaily` / `dailyStrict` | false / false | `signals.py` opsiyonel 4. TF |
+| `useIntendedDeviation` | **false** (FIXED 2026-05-30) | Python ölü kod uyumu (S4) |
 | `riskPerTradePct` (strateji) | 1.0 | pozisyon boyutu |
 | `tp1ClosePct` (strateji) | 50.0 | TP1'de %50 kapanış |
 | `moveSlToBe` (strateji) | true | TP1 sonrası SL → break-even (entry) |
