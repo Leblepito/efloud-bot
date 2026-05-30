@@ -11,7 +11,7 @@ hizalanır. Buradaki sınır koşulları invalidation buffer ve FVG fill
 boundary'sini test eder.
 """
 
-from engine.signals import _resolve_deviation_tp2
+from engine.signals import _enforce_tp2_beyond_tp1, _resolve_deviation_tp2
 
 
 # ── Base cases ────────────────────────────────────────────────────────────
@@ -153,28 +153,47 @@ def test_short_tp2_collapse_falls_back_to_extension():
 # ── Inversion Protection Invariant (Y5 Fix) ───────────────────
 
 def test_general_long_target_inversion_protection():
-    """Assert that a LONG tp2 that is closer than tp1 is pushed further than tp1."""
+    """LONG tp2 closer than tp1 is pushed further than tp1 (REAL helper call)."""
     price, risk = 100.0, 2.0
     tp1 = 110.0  # FVG target far away
     tp2 = 103.2  # Raw 1.618R target close to entry (TP2 < TP1!)
-    
-    # Simulate the logic we added to signals.py:
-    if tp2 <= tp1:
-        tp2 = max(tp2, tp1 + risk * 0.5, price + risk * 2.618)
-        
-    assert tp2 == tp1 + risk * 0.5  # 111.0, which is further than tp1 (110.0)
-    assert tp2 > tp1
+
+    result = _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long=True)
+
+    assert result == tp1 + risk * 0.5  # 111.0, which is further than tp1 (110.0)
+    assert result > tp1
 
 
 def test_general_short_target_inversion_protection():
-    """Assert that a SHORT tp2 that is closer than tp1 is pushed further than tp1."""
+    """SHORT tp2 closer than tp1 is pushed further than tp1 (REAL helper call)."""
     price, risk = 100.0, 2.0
     tp1 = 90.0   # FVG target far away
     tp2 = 96.8   # Raw 1.618R target close to entry (TP2 > TP1!)
-    
-    # Simulate the logic:
-    if tp2 >= tp1:
-        tp2 = min(tp2, tp1 - risk * 0.5, price - risk * 2.618)
-        
-    assert tp2 == tp1 - risk * 0.5  # 89.0, which is further than tp1 (90.0)
-    assert tp2 < tp1
+
+    result = _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long=False)
+
+    assert result == tp1 - risk * 0.5  # 89.0, which is further than tp1 (90.0)
+    assert result < tp1
+
+
+def test_trx_short_inversion_real_case():
+    """TRX/USDT prod case: SHORT, fib_ext tp2 closer to entry than tp1 → -2021
+    immediate-trigger reject. Helper must push tp2 beyond tp1 (REAL helper call)."""
+    price, sl = 0.3451, 0.3454
+    risk = abs(price - sl)  # 0.0003
+    tp1 = 0.3391
+    raw_tp2 = 0.3445  # fib_ext, closer than tp1 (raw_tp2 > tp1 for SHORT = inverted)
+
+    result = _enforce_tp2_beyond_tp1(raw_tp2, tp1, price, risk, is_long=False)
+
+    expected = min(raw_tp2, tp1 - risk * 0.5, price - risk * 2.618)
+    assert result == expected
+    assert result < tp1  # guard pushed it beyond (below) tp1
+
+
+def test_valid_tp2_not_touched():
+    """No-op: tp2 already correctly beyond tp1 returns unchanged (LONG & SHORT)."""
+    # LONG: tp2 (110) already further than tp1 (104) → untouched
+    assert _enforce_tp2_beyond_tp1(110.0, 104.0, 100.0, 2.0, is_long=True) == 110.0
+    # SHORT: tp2 (90) already further than tp1 (96) → untouched
+    assert _enforce_tp2_beyond_tp1(90.0, 96.0, 100.0, 2.0, is_long=False) == 90.0
