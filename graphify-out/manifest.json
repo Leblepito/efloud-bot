@@ -5,7 +5,7 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\main.py": {
-    "mtime": 1779974088.390056,
+    "mtime": 1779976784.1904376,
     "ast_hash": "16499145e7aa4b774ade0806c9500aff",
     "semantic_hash": ""
   },
@@ -410,8 +410,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_order_manager_atomicity.py": {
-    "mtime": 1778584772.7820833,
-    "ast_hash": "8d4b538c67033bd7ddea732d479cf783",
+    "mtime": 1779984693.5605893,
+    "ast_hash": "b92cddae0f84d4a8bc53073c8991ee7b",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_order_manager_clock_unification.py": {
@@ -920,8 +920,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\exchange\\__init__.py": {
-    "mtime": 1779974191.5599284,
-    "ast_hash": "372b7f3f841e487f28c416b829726136",
+    "mtime": 1779984693.5663662,
+    "ast_hash": "390946edcdc40c7d5a278963237707fb",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\next-env.d.ts": {
@@ -1480,8 +1480,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\CLAUDE.md": {
-    "mtime": 1779975001.0689518,
-    "ast_hash": "8ac20dc219efcd5bda73b9ff2fa8fee2",
+    "mtime": 1780025744.526056,
+    "ast_hash": "81657c34693b0fb57f750a779c4ec73e",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\CLAUDE.original.md": {
@@ -1490,8 +1490,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\config.yaml": {
-    "mtime": 1779803273.9888442,
-    "ast_hash": "f754e2b2f0a79203490c9f55c1f11f5a",
+    "mtime": 1779988554.4708707,
+    "ast_hash": "60e9bc92b0addd438363bde19999a089",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docker-compose.prod.yml": {
@@ -1505,8 +1505,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\HERMES.md": {
-    "mtime": 1779975016.4839566,
-    "ast_hash": "1df5d6594edd86e3572333ca81454dac",
+    "mtime": 1779976784.1822495,
+    "ast_hash": "cdbcbeff099191e3c3ade099a54670c1",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\HERMES.original.md": {
@@ -1600,8 +1600,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\configs\\config.phase2_1k.yaml": {
-    "mtime": 1779940780.9497654,
-    "ast_hash": "9a9e592f444a49dd6e1b58fe0056bb52",
+    "mtime": 1779988554.4738557,
+    "ast_hash": "17204a04ffb471173b5dc0b320103d65",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\configs\\config.phase2_1k_h1c_conf80.yaml": {
@@ -1670,8 +1670,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\skill_log.md": {
-    "mtime": 1779972584.0091875,
-    "ast_hash": "e2921c8a6c28d82037455f9a7117d7d2",
+    "mtime": 1779978301.019326,
+    "ast_hash": "996e3982b2c6cf5edfa413ed32ac1823",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\strategy-evolution.md": {
@@ -2050,8 +2050,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\InteractiveChart.tsx": {
-    "mtime": 1779876481.0771759,
-    "ast_hash": "f5744cb75d192fc2fea5ed62db3422c5",
+    "mtime": 1780034737.4306424,
+    "ast_hash": "ee4fdec61abce3115132fe8b78d8db44",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\optimize_strategy.py": {
@@ -2465,8 +2465,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_main_om_wiring.py": {
-    "mtime": 1779974067.897849,
-    "ast_hash": "222c462be7c215df5e5ac602d5027783",
+    "mtime": 1779976784.182822,
+    "ast_hash": "b7507406f1be04374e09a74b0ac140f0",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_report_doctrine_engine_gap.py": {
@@ -2485,8 +2485,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_sl_retry.py": {
-    "mtime": 1779974136.1182315,
-    "ast_hash": "4d1a4d3ea00d32bbb0566a8d9e1022a3",
+    "mtime": 1779976784.1833696,
+    "ast_hash": "5565172ca10598144260329fb1f0ce3f",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_social_research_runs.py": {
@@ -2515,8 +2515,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\.hermes\\plans\\2026-05-28_sltp-delivery-bugfixes.md": {
-    "mtime": 1779974047.279878,
-    "ast_hash": "e36013cd2c415796968693035da114b2",
+    "mtime": 1779976784.1742356,
+    "ast_hash": "e76165f41b98580468e363f288bb50ca",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\PROJECT_OPERATING_SYSTEM_2026-05-28.md": {
@@ -2535,8 +2535,38 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\.hermes\\pr_body_sltp.md": {
-    "mtime": 1779974981.719879,
-    "ast_hash": "92ba12fa370fbc19c7dbae13fc4febf4",
+    "mtime": 1779978301.0136967,
+    "ast_hash": "08da7a8059a6eead217e57ec5d9c560b",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_tp_unreachable.py": {
+    "mtime": 1779984693.5611148,
+    "ast_hash": "0de436554c72fa4ed8cceccf3c8ac58a",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_tp_unreachable_sentinel_guards.py": {
+    "mtime": 1779984693.5616283,
+    "ast_hash": "51c6680658d3f21fa5507ddd2e7854b9",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\.hermes\\pr_body_102a.md": {
+    "mtime": 1779980411.3870614,
+    "ast_hash": "6222010192564ef1eac4889e47929a0b",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\CLAUDE.python.md": {
+    "mtime": 1780025740.8130033,
+    "ast_hash": "330a07c9ae771b2954cf7b4ebd04e0b4",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\pine\\PINE_SPEC.md": {
+    "mtime": 1780036414.3723152,
+    "ast_hash": "a72eed457a4d8dc652bcb3e338f5e8f6",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\pine\\prompts_for_claude.md": {
+    "mtime": 1780025749.4794943,
+    "ast_hash": "cae310f79c18a47abb03a639d947778a",
     "semantic_hash": ""
   }
 }

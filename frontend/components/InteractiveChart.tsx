@@ -17,7 +17,9 @@ class PositionOverlayPrimitive {
   constructor(
     private entryPrice: number,
     private slPrice: number,
-    private tpPrice: number,
+    private tp1Price: number,
+    private tp2Price: number,
+    private tp1Hit: boolean,
     private entryTime: number,
     private exitTime: number | null,
     private isLong: boolean
@@ -36,7 +38,10 @@ class PositionOverlayPrimitive {
             const entryY = this._series.priceToCoordinate(this.entryPrice);
             
             const slY = this.slPrice ? this._series.priceToCoordinate(this.slPrice) : null;
-            const tpY = this.tpPrice ? this._series.priceToCoordinate(this.tpPrice) : null;
+            const tp1Y = this.tp1Price ? this._series.priceToCoordinate(this.tp1Price) : null;
+            const tp2Y = this.tp2Price ? this._series.priceToCoordinate(this.tp2Price) : null;
+            // Profit zone extends to the farthest valid target (TP2 if present, else TP1)
+            const furthestTpY = tp2Y !== null ? tp2Y : tp1Y;
 
             if (entryX === null) {
               if (visibleRange && (this.entryTime < (visibleRange.from as number))) {
@@ -71,17 +76,17 @@ class PositionOverlayPrimitive {
                 lossHeight = slY - entryY;
                 lossYStart = entryY;
               }
-              if (tpY !== null) {
-                profitHeight = entryY - tpY;
-                profitYStart = tpY;
+              if (furthestTpY !== null) {
+                profitHeight = entryY - furthestTpY;
+                profitYStart = furthestTpY;
               }
             } else {
               if (slY !== null) {
                 lossHeight = entryY - slY;
                 lossYStart = slY;
               }
-              if (tpY !== null) {
-                profitHeight = tpY - entryY;
+              if (furthestTpY !== null) {
+                profitHeight = furthestTpY - entryY;
                 profitYStart = entryY;
               }
             }
@@ -105,7 +110,8 @@ class PositionOverlayPrimitive {
             context.lineWidth = 1;
 
             const lossPct = this.entryPrice ? Math.abs(((this.slPrice - this.entryPrice) / this.entryPrice) * 100) : 0;
-            const profitPct = this.entryPrice ? Math.abs(((this.tpPrice - this.entryPrice) / this.entryPrice) * 100) : 0;
+            const tp1Pct = this.entryPrice && this.tp1Price ? Math.abs(((this.tp1Price - this.entryPrice) / this.entryPrice) * 100) : 0;
+            const tp2Pct = this.entryPrice && this.tp2Price ? Math.abs(((this.tp2Price - this.entryPrice) / this.entryPrice) * 100) : 0;
 
             const labelEndX = Math.min(rectEndX, mediaSize.width);
 
@@ -146,15 +152,28 @@ class PositionOverlayPrimitive {
               drawPriceTag(slY, `SL: ${this.slPrice.toFixed(4)} (-${lossPct.toFixed(2)}%)`, "rgba(220, 38, 38, 0.85)");
             }
 
-            // Take Profit Line
-            if (tpY !== null) {
-              context.strokeStyle = "rgba(16, 185, 129, 0.4)";
+            // Take Profit 1 Line (dashed; dimmed + ✓ once already hit)
+            if (tp1Y !== null) {
+              context.strokeStyle = this.tp1Hit ? "rgba(16, 185, 129, 0.25)" : "rgba(16, 185, 129, 0.45)";
+              context.setLineDash([5, 3]);
               context.beginPath();
-              context.moveTo(entryX, tpY);
-              context.lineTo(rectEndX, tpY);
+              context.moveTo(entryX, tp1Y);
+              context.lineTo(rectEndX, tp1Y);
+              context.stroke();
+              context.setLineDash([]);
+
+              drawPriceTag(tp1Y, `TP1${this.tp1Hit ? " ✓" : ""}: ${this.tp1Price.toFixed(4)} (+${tp1Pct.toFixed(2)}%)`, this.tp1Hit ? "rgba(5, 150, 105, 0.55)" : "rgba(5, 150, 105, 0.85)");
+            }
+
+            // Take Profit 2 Line (solid)
+            if (tp2Y !== null) {
+              context.strokeStyle = "rgba(16, 185, 129, 0.5)";
+              context.beginPath();
+              context.moveTo(entryX, tp2Y);
+              context.lineTo(rectEndX, tp2Y);
               context.stroke();
 
-              drawPriceTag(tpY, `TP: ${this.tpPrice.toFixed(4)} (+${profitPct.toFixed(2)}%)`, "rgba(5, 150, 105, 0.85)");
+              drawPriceTag(tp2Y, `TP2: ${this.tp2Price.toFixed(4)} (+${tp2Pct.toFixed(2)}%)`, "rgba(5, 150, 105, 0.9)");
             }
 
             // Entry Line
@@ -227,7 +246,8 @@ class PositionOverlayPrimitive {
                 drawBadge(middleX, lossYStart + lossHeight / 2, `SL: -${lossPct.toFixed(2)}%`, "rgba(220, 38, 38, 0.75)", "#ffffff");
               }
               if (profitHeight > 16) {
-                drawBadge(middleX, profitYStart + profitHeight / 2, `TP: +${profitPct.toFixed(2)}%`, "rgba(5, 150, 105, 0.75)", "#ffffff");
+                const farPct = this.tp2Price ? tp2Pct : tp1Pct;
+                drawBadge(middleX, profitYStart + profitHeight / 2, `TP: +${farPct.toFixed(2)}%`, "rgba(5, 150, 105, 0.75)", "#ffffff");
               }
             }
 
@@ -742,13 +762,13 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
       const entryTime = alignTimestampToTimeframe(rawEntryTime, timeframe);
       const exitTime = rawExitTime ? alignTimestampToTimeframe(rawExitTime, timeframe) : null;
       
-      const targetTp = displayPos.tp2 || displayPos.tp1;
-
       if (entryTime && displayPos.entry) {
         positionPrimitive = new PositionOverlayPrimitive(
           displayPos.entry,
           displayPos.sl,
-          targetTp,
+          displayPos.tp1,
+          displayPos.tp2,
+          Boolean(displayPos.tp1_hit),
           entryTime,
           exitTime,
           isLong

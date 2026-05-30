@@ -1,0 +1,541 @@
+//@version=6
+// =============================================================================
+// EFloud Signals — SMC v1 port (INDIKATÖR)
+// Kaynak: engine/smc.py + engine/signals.py + engine/confluence.py
+// Spec referansı: pine/PINE_SPEC.md §0 (V1 vs V2 tablosu)
+//
+// V1 = TEK-GEÇİŞ confluence makinesi (V2 durum makinesi DEĞİL):
+//   4-TF akış → her aligned CHoCH/BOS anında 0-100 confluence skoru → eşik (55) →
+//   SL/TP/RR filtre → sinyal. Bekleme/pullback-onay state'i YOK.
+//
+// V2'den farkları: confluence skoru VAR, CHoCH **veya** BOS girer (anlık snap),
+//   SL clamp'lenir (V2 >5×ATR ise reddeder), minRr=1.5 (V2=1.8).
+//
+// ── ÇEVRİLEMEYEN / SADELEŞTİRİLEN (Python ↔ Pine farkları) ──────────────────
+//  1) Gemini AI Structure Validation (confidence ≥0.70 gate) → ÇEVRİLEMEZ.
+//     Yerine: kural-tabanlı confluence eşiği. AI macro sentiment opsiyonel input.
+//  2) Python her çağrıda TÜM geçmiş break'leri tarar (recency penceresi gerekir);
+//     Pine bar-bar çalışır → break OLUŞTUĞU bar'da değerlendirilir, recency içkin.
+//  3) HTF likidite TP: Python tüm swing-high'ları + eq-high'ları tarar; Pine
+//     en-yakın tek HTF swing'e indirger (V2 ile aynı sadeleştirme, spec §12).
+//  4) MTF CHoCH onayı: Python son 5 CHoCH'a bakar; Pine en-son MTF CHoCH yönünü
+//     kullanır.
+//  5) Range deviation: Python kodunda range-min CURRENT bar dahil hesaplandığı
+//     için dev_bull/dev_bear PRATİKTE HİÇ tetiklenmez (ölü kod). Bu port NİYETİ
+//     yansıtır: prior-range (current hariç) penetrasyon+reclaim. → DAVRANIŞ FARKI,
+//     `useIntendedDeviation` ile kapatılabilir (false = Python'a sadık, hep false).
+//  6) PA Level confluence (Major Opening / Stacked Zone, +5/+8) → inject edilen
+//     harici seviye gerektirir, ATLANDI.
+//
+// !!! Derleme bu oturumda MCP ile yapılamadı — Pine Editor'da derlenecek. !!!
+// Repaint güvenliği: HTF/MTF lookahead_off + tüm state mutasyonu barstate.isconfirmed.
+// =============================================================================
+indicator("EFloud Signals v1", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INPUTS  (strateji dosyasıyla AYNI isimler — senkron şart)
+// ─────────────────────────────────────────────────────────────────────────────
+grpTF   = "Timeframe Chain"
+htfTf   = input.timeframe("240", "HTF (4h) — bias / FVG / likidite", group = grpTF)
+mtfTf   = input.timeframe("60",  "MTF (1h) — CHoCH onay",            group = grpTF)
+// LTF / Entry = grafik TF'i (15m beklenir).
+useDaily    = input.bool(false, "Daily (1d) makro filtre kullan",        group = grpTF)
+dailyTf     = input.timeframe("1D", "Daily TF",                          group = grpTF)
+dailyStrict = input.bool(false, "Daily filtre SERT (ters yön reddet)",   group = grpTF)
+
+grpSwing = "SMC Primitifleri"
+swingLb  = input.int(5,     "Swing lookback (pivot L/R)", minval = 1, group = grpSwing)
+oteLo    = input.float(0.618, "OTE retrace lo",                       group = grpSwing)
+oteHi    = input.float(0.786, "OTE retrace hi",                       group = grpSwing)
+obSeq    = input.int(5,     "OB ardışık mum (max)",        minval = 1, group = grpSwing)
+rangeLb  = input.int(50,    "Range lookback",              minval = 2, group = grpSwing)
+htfSlope = input.float(2.0, "HTF bias slope fallback %",               group = grpSwing)
+useIntendedDeviation = input.bool(true, "Range deviation NİYET modu (bkz. başlık #5)", group = grpSwing)
+
+grpConf = "Confluence"
+minConfluence = input.int(55, "Min confluence (eşik)", minval = 0, maxval = 100, group = grpConf)
+aiSentiment   = input.string("NONE", "AI macro sentiment (manuel)", options = ["NONE", "RISK_ON", "RISK_OFF"], group = grpConf)
+
+grpRisk = "Risk (SL / TP)"
+atrLen      = input.int(14,    "ATR length",                 minval = 1, group = grpRisk)
+slAtrBuffer = input.float(0.5, "SL ATR buffer (baz)",                    group = grpRisk)
+volAtrBuffer= input.float(0.75,"SL ATR buffer (yüksek vol)",             group = grpRisk)
+minRr       = input.float(1.5, "Min R:R (TP1)",                          group = grpRisk)
+fibExt      = input.float(1.618,"TP2 fib extension",                     group = grpRisk)
+recencyBars = input.int(20,    "CHoCH/BOS recency (parite — içkin)", minval = 1, group = grpRisk)
+
+grpViz = "Görsel"
+showObs    = input.bool(true, "Aktif Order Block kutuları", group = grpViz)
+showLevels = input.bool(true, "Entry/SL/TP çizgileri",      group = grpViz)
+showBias   = input.bool(true, "HTF bias arka plan tonu",    group = grpViz)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTF BUNDLE (4h) — repaint-safe skaler demet
+//   trendOrig (yapısal, slope-öncesi), bias (slope-sonrası), son swing H/L,
+//   en yakın unmitige BULL/BEAR FVG (confluence + TP için).
+// ─────────────────────────────────────────────────────────────────────────────
+htfBundle() =>
+    ph = ta.pivothigh(swingLb, swingLb)
+    pl = ta.pivotlow(swingLb, swingLb)
+
+    var float lastSH = na
+    var float lastSL = na
+    var int   trend  = 0          // yapısal trend (CHoCH/BOS güncellemesi)
+    var float refSH  = na
+    var float refSL  = na
+
+    if not na(ph)
+        lastSH := ph
+        refSH  := ph
+    if not na(pl)
+        lastSL := pl
+        refSL  := pl
+
+    if not na(refSH) and close > refSH
+        trend := 1
+        refSH := na
+    if not na(refSL) and close < refSL
+        trend := -1
+        refSL := na
+
+    int trendOrig = trend         // slope fallback ÖNCESİ (TP "ranging" dalı için)
+    int bias = trend
+    if bias == 0 and bar_index > 40
+        chg = (close - close[40]) / close[40] * 100.0
+        bias := chg > htfSlope ? 1 : chg < -htfSlope ? -1 : 0
+
+    // En yakın unmitige FVG (3-bar imbalance)
+    var float bullFvgBot = na
+    var float bullFvgTop = na
+    var float bearFvgBot = na
+    var float bearFvgTop = na
+    if low > high[2]
+        bullFvgBot := high[2]
+        bullFvgTop := low
+    if high < low[2]
+        bearFvgBot := high
+        bearFvgTop := low[2]
+    if not na(bullFvgBot) and low <= bullFvgBot
+        bullFvgBot := na
+        bullFvgTop := na
+    if not na(bearFvgTop) and high >= bearFvgTop
+        bearFvgBot := na
+        bearFvgTop := na
+
+    [trendOrig, bias, lastSH, lastSL, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
+
+[htfTrendOrig, htfBias, htfSwingHigh, htfSwingLow, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MTF BUNDLE (1h) — son CHoCH yönü (confluence onayı)
+// ─────────────────────────────────────────────────────────────────────────────
+mtfBundle() =>
+    ph = ta.pivothigh(swingLb, swingLb)
+    pl = ta.pivotlow(swingLb, swingLb)
+    var float refSH = na
+    var float refSL = na
+    var int   trend = 0
+    var int   lastChoch = 0
+    if not na(ph)
+        refSH := ph
+    if not na(pl)
+        refSL := pl
+    if not na(refSH) and close > refSH
+        if trend <= 0
+            lastChoch := 1            // BEAR/UNDEF → BULL = CHoCH
+        trend := 1
+        refSH := na
+    if not na(refSL) and close < refSL
+        if trend >= 0
+            lastChoch := -1
+        trend := -1
+        refSL := na
+    lastChoch
+
+mtfChochDir = request.security(syminfo.tickerid, mtfTf, mtfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+
+// Daily bias (opsiyonel, slope-bazlı — V2 ile aynı)
+dailyBias = 0
+if useDaily
+    db = request.security(syminfo.tickerid, dailyTf, (close - close[30]) / close[30] * 100.0, lookahead = barmerge.lookahead_off)
+    dailyBias := db > 5.0 ? 1 : db < -5.0 ? -1 : 0
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTRY TF (15m, grafik) — indikatör hesapları (her bar, tutarlı çağrı)
+// ─────────────────────────────────────────────────────────────────────────────
+phL = ta.pivothigh(swingLb, swingLb)
+plL = ta.pivotlow(swingLb, swingLb)
+
+atr14   = ta.atr(atrLen)                       // true-range ATR (SL buffer)
+obAtr   = ta.sma(high - low, 14)               // high-low SMA (OB body eşiği — Python ile birebir)
+
+// Volatilite-hizalı buffer çarpanı (signals.py §470)
+hlSpread    = ta.sma(high - low, 14)
+closeSpread = math.abs(close - close[14])
+bufferMult  = closeSpread > 1.2 * hlSpread ? volAtrBuffer : slAtrBuffer
+buf         = bufferMult * atr14
+
+// Range (rolling rangeLb)
+rngHi = ta.highest(high, rangeLb)
+rngLo = ta.lowest(low,  rangeLb)
+rngEq = (rngHi + rngLo) / 2.0
+discount = close < rngEq
+premium  = close > rngEq
+// Deviation (niyet modu = prior-range, current hariç) — bkz. başlık #5
+priorLo = ta.lowest(low,  rangeLb)[1]
+priorHi = ta.highest(high, rangeLb)[1]
+devBull = useIntendedDeviation and not na(priorLo) and low  < priorLo and close > priorLo
+devBear = useIntendedDeviation and not na(priorHi) and high > priorHi and close < priorHi
+
+// SL için local 20-bar ekstremi (break bar'dan ÖNCEKİ 20 bar ≈ [1] kaydırma)
+local20Lo = ta.lowest(low, 20)[1]
+local20Hi = ta.highest(high, 20)[1]
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTRY TF state (var) — pivot izleri, yapı, SFP, OB dizileri
+// ─────────────────────────────────────────────────────────────────────────────
+var float eLastSH = na          // OTE / OB-near-swing için son swing high
+var float eLastSL = na
+var float eRefSH  = na          // yapı kırılımı için aktif swing
+var float eRefSL  = na
+var int   eTrend  = 0
+var int   lastBullSfpBar = na
+var int   lastBearSfpBar = na
+
+// Aktif Order Block paralel dizileri (sondan eklenir, mitige olunca silinir)
+var int[]   obDir = array.new_int()     // 1 BULL, -1 BEAR
+var float[] obTop = array.new_float()
+var float[] obBot = array.new_float()
+var float[] obEqA = array.new_float()
+var bool[]  obNS  = array.new_bool()
+maxObs = 50
+
+// Son sinyal (çizim + alarm)
+var float lastEntry = na
+var float lastSl    = na
+var float lastTp1   = na
+var float lastTp2   = na
+var int   lastDir   = 0
+var int   lastScore = 0
+bool firedLong  = false
+bool firedShort = false
+
+if barstate.isconfirmed
+    // ── pivot izleri ──
+    if not na(phL)
+        eLastSH := phL
+        eRefSH  := phL
+    if not na(plL)
+        eLastSL := plL
+        eRefSL  := plL
+
+    // ── SFP (likidite süpürme) ──
+    if not na(eLastSL) and low < eLastSL and close > eLastSL
+        lastBullSfpBar := bar_index
+    if not na(eLastSH) and high > eLastSH and close < eLastSH
+        lastBearSfpBar := bar_index
+
+    // ── OB mitigasyonu (sondan başa güvenli silme) ──
+    if array.size(obDir) > 0
+        for i = array.size(obDir) - 1 to 0
+            d  = array.get(obDir, i)
+            tp = array.get(obTop, i)
+            bt = array.get(obBot, i)
+            bool mit = d == 1 ? close < bt : close > tp
+            if mit
+                array.remove(obDir, i)
+                array.remove(obTop, i)
+                array.remove(obBot, i)
+                array.remove(obEqA, i)
+                array.remove(obNS,  i)
+
+    // ── Yeni OB tespiti (body > 1.5×obAtr + ardışık ters mumlar) ──
+    body = math.abs(close - open)
+    if close > open and body > 1.5 * obAtr            // BULL breakout
+        int cnt = 0
+        float ot = 0.0
+        float ob = 1e20
+        for k = 1 to obSeq
+            if close[k] < open[k]                     // bearish (body_mode: top=open, bot=close)
+                ct = open[k]
+                cb = close[k]
+                if cnt == 0
+                    ot := ct
+                    ob := cb
+                else
+                    ot := math.max(ot, ct)
+                    ob := math.min(ob, cb)
+                cnt += 1
+            else if cnt > 0
+                break
+        if cnt >= 1 and ot > ob
+            bool ns = not na(eLastSL) and math.abs(ob - eLastSL) / eLastSL < 0.015
+            array.push(obDir, 1)
+            array.push(obTop, ot)
+            array.push(obBot, ob)
+            array.push(obEqA, (ot + ob) / 2.0)
+            array.push(obNS,  ns)
+    if close < open and body > 1.5 * obAtr            // BEAR breakout
+        int cnt = 0
+        float ot = 0.0
+        float ob = 1e20
+        for k = 1 to obSeq
+            if close[k] > open[k]                      // bullish (body_mode: top=close, bot=open)
+                ct = close[k]
+                cb = open[k]
+                if cnt == 0
+                    ot := ct
+                    ob := cb
+                else
+                    ot := math.max(ot, ct)
+                    ob := math.min(ob, cb)
+                cnt += 1
+            else if cnt > 0
+                break
+        if cnt >= 1 and ot > ob
+            bool ns = not na(eLastSH) and math.abs(ot - eLastSH) / eLastSH < 0.015
+            array.push(obDir, -1)
+            array.push(obTop, ot)
+            array.push(obBot, ob)
+            array.push(obEqA, (ot + ob) / 2.0)
+            array.push(obNS,  ns)
+    // OB dizisi cap (en eski sil)
+    while array.size(obDir) > maxObs
+        array.remove(obDir, 0)
+        array.remove(obTop, 0)
+        array.remove(obBot, 0)
+        array.remove(obEqA, 0)
+        array.remove(obNS,  0)
+
+    // ── Yapı kırılımı (CHoCH veya BOS) ──
+    int   breakDir  = 0
+    int   breakKind = 0           // 1 CHoCH, 2 BOS
+    float breakPx   = na
+    if not na(eRefSH) and close > eRefSH
+        breakDir  := 1
+        breakKind := eTrend <= 0 ? 1 : 2
+        breakPx   := close
+        eTrend    := 1
+        eRefSH    := na
+    if not na(eRefSL) and close < eRefSL
+        breakDir  := -1
+        breakKind := eTrend >= 0 ? 1 : 2
+        breakPx   := close
+        eTrend    := -1
+        eRefSL    := na
+
+    // ── Sinyal değerlendirmesi: break aligned mı? ──
+    bool aligned = breakDir != 0 and htfBias != 0 and breakDir == htfBias
+    if aligned
+        bool isLong = breakDir == 1
+        float trigPx = breakPx    // confluence orijinal break fiyatında hesaplanır
+
+        // in_htf_fvg (htf_bias yönünde)
+        bool inHtfFvg = isLong ? (not na(bullFvgBot) and trigPx >= bullFvgBot and trigPx <= bullFvgTop) : (not na(bearFvgBot) and trigPx >= bearFvgBot and trigPx <= bearFvgTop)
+
+        // OTE (entry TF, eTrend break yönünde güncel)
+        float oteTopE = na
+        float oteBotE = na
+        if not na(eLastSH) and not na(eLastSL) and eLastSH > eLastSL
+            d = eLastSH - eLastSL
+            if isLong
+                oteTopE := eLastSH - d * oteLo
+                oteBotE := eLastSH - d * oteHi
+            else
+                oteTopE := eLastSL + d * oteHi
+                oteBotE := eLastSL + d * oteLo
+        float oteLoB = na
+        float oteHiB = na
+        if not na(oteTopE)
+            oteLoB := math.min(oteTopE, oteBotE)
+            oteHiB := math.max(oteTopE, oteBotE)
+        bool inOte = not na(oteLoB) and trigPx >= oteLoB and trigPx <= oteHiB
+
+        // MTF CHoCH onayı
+        bool mtfConf = mtfChochDir != 0 and mtfChochDir == htfBias
+
+        // SFP (break yönünde, son 10 bar)
+        bool hasSfp = isLong ? (not na(lastBullSfpBar) and (bar_index - lastBullSfpBar) < 10) : (not na(lastBearSfpBar) and (bar_index - lastBearSfpBar) < 10)
+
+        // OB retest (aktif OB içinde mi)
+        bool  inOb   = false
+        bool  obNsM  = false
+        bool  obEqM  = false
+        float obTopM = na
+        float obBotM = na
+        if array.size(obDir) > 0
+            for i = 0 to array.size(obDir) - 1
+                if array.get(obDir, i) == breakDir
+                    tp = array.get(obTop, i)
+                    bt = array.get(obBot, i)
+                    bool near = isLong ? (trigPx >= bt and trigPx <= tp * 1.02) : (trigPx >= bt * 0.98 and trigPx <= tp)
+                    if near
+                        inOb   := true
+                        obNsM  := array.get(obNS, i)
+                        eqv    = array.get(obEqA, i)
+                        obEqM  := math.abs(trigPx - eqv) / eqv < 0.003
+                        obTopM := tp
+                        obBotM := bt
+                        break
+
+        bool correctZone = (isLong and discount) or (not isLong and premium)
+        bool hasDev      = (isLong and devBull) or (not isLong and devBear)
+
+        // ── Confluence skoru (confluence.py) ──
+        int score = 25                                  // bias aligned (filtrelendi → daima)
+        if mtfConf
+            score += 20
+        if inHtfFvg
+            score += 15
+        if inOb
+            score += 10
+            if obNsM
+                score += 5
+            if obEqM
+                score += 3
+        if inOte
+            score += 10
+        if hasSfp
+            score += 10
+        if correctZone
+            score += 5
+        if hasDev
+            score += 5
+        // AI macro sentiment (manuel input — Gemini yerine kural-tabanlı karşılık)
+        if aiSentiment == "RISK_ON"
+            score += isLong ? 5 : -5
+        if aiSentiment == "RISK_OFF"
+            score += isLong ? -5 : 5
+        // Daily filtre bonus/penaltı
+        if useDaily and dailyBias != 0
+            score += dailyBias == htfBias ? 5 : -5
+        score := math.max(0, math.min(100, score))
+
+        // Daily SERT filtre (confluence öncesi reddedilir)
+        bool dailyReject = useDaily and dailyStrict and dailyBias != 0 and dailyBias != htfBias
+
+        if not dailyReject and score >= minConfluence
+            // ── Entry refinement (pullback: OB > OTE) ──
+            float entry = trigPx
+            if inOb
+                entry := isLong ? math.min(obTopM, trigPx) : math.max(obBotM, trigPx)
+            else if inOte and not na(oteTopE)
+                entry := isLong ? math.min(oteTopE, trigPx) : math.max(oteBotE, trigPx)
+
+            // ── SL (local 20-bar ekstremi ↔ son ters swing, clamp'li) ──
+            float sl = na
+            if isLong
+                float ll = local20Lo - buf
+                float sw = eLastSL                       // son swing low (proxy: en güncel pivot low)
+                sl := na(sw) ? ll : math.max(sw, ll)     // tighter (yüksek) tarafı seç
+                if hasDev
+                    sl := math.min(sl, rngLo - buf)
+                sl := math.min(sl, entry * 0.999)        // güvenlik clamp (≥0.1% altı)
+            else
+                float lh = local20Hi + buf
+                float sw = eLastSH
+                sl := na(sw) ? lh : math.min(sw, lh)
+                if hasDev
+                    sl := math.max(sl, rngHi + buf)
+                sl := math.max(sl, entry * 1.001)
+
+            float risk = math.abs(entry - sl)
+            if risk > 0
+                // ── TP1 ──
+                float tp1 = na
+                bool  discovery = false
+                if isLong
+                    float minTp = entry + risk * minRr
+                    float liq = (not na(htfSwingHigh) and htfSwingHigh >= minTp) ? htfSwingHigh : na
+                    float fvgT = (not na(bullFvgTop) and bullFvgTop >= minTp) ? bullFvgTop : na
+                    if hasDev
+                        tp1 := math.max(rngEq, minTp)
+                    else if htfTrendOrig == 0 and not na(liq)
+                        tp1 := liq                       // ranging: sadece likidite
+                    else
+                        // trending: en yakın FVG / likidite hedefi
+                        float t = na
+                        if not na(liq) and not na(fvgT)
+                            t := math.min(liq, fvgT)
+                        else
+                            t := not na(liq) ? liq : fvgT
+                        if not na(t)
+                            tp1 := t
+                        else
+                            tp1 := entry + risk * 1.272  // price discovery
+                            discovery := true
+                else
+                    float minTp = entry - risk * minRr
+                    float liq = (not na(htfSwingLow) and htfSwingLow <= minTp) ? htfSwingLow : na
+                    float fvgB = (not na(bearFvgBot) and bearFvgBot <= minTp) ? bearFvgBot : na
+                    if hasDev
+                        tp1 := math.min(rngEq, minTp)
+                    else if htfTrendOrig == 0 and not na(liq)
+                        tp1 := liq
+                    else
+                        float t = na
+                        if not na(liq) and not na(fvgB)
+                            t := math.max(liq, fvgB)
+                        else
+                            t := not na(liq) ? liq : fvgB
+                        if not na(t)
+                            tp1 := t
+                        else
+                            tp1 := entry - risk * 1.272
+                            discovery := true
+
+                // ── TP2 ──
+                float tp2 = na
+                if hasDev
+                    tp2 := isLong ? rngHi : rngLo
+                else if discovery
+                    tp2 := isLong ? entry + risk * 2.618 : entry - risk * 2.618
+                else
+                    tp2 := isLong ? entry + risk * fibExt : entry - risk * fibExt
+
+                // ── RR filtre + TP doğru taraf ──
+                bool tpSide = isLong ? tp1 > entry : tp1 < entry
+                float rr1 = math.abs(tp1 - entry) / risk
+                if tpSide and rr1 >= minRr
+                    lastEntry := entry
+                    lastSl    := sl
+                    lastTp1   := tp1
+                    lastTp2   := tp2
+                    lastDir   := breakDir
+                    lastScore := score
+                    firedLong  := isLong
+                    firedShort := not isLong
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GÖRSEL
+// ─────────────────────────────────────────────────────────────────────────────
+plotshape(firedLong,  title = "LONG entry",  style = shape.triangleup,   location = location.belowbar, color = color.new(color.teal, 0), size = size.small)
+plotshape(firedShort, title = "SHORT entry", style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0),  size = size.small)
+
+if showLevels and (firedLong or firedShort)
+    col = lastDir == 1 ? color.teal : color.red
+    line.new(bar_index, lastEntry, bar_index + 6, lastEntry, color = color.new(color.gray, 0),  width = 1)
+    line.new(bar_index, lastSl,    bar_index + 6, lastSl,    color = color.new(color.red, 0),   width = 1, style = line.style_dashed)
+    line.new(bar_index, lastTp1,   bar_index + 6, lastTp1,   color = color.new(color.green, 0), width = 1)
+    label.new(bar_index + 6, lastEntry, "Entry (" + str.tostring(lastScore) + ")", style = label.style_label_left, color = color.new(col, 80),          textcolor = color.white, size = size.tiny)
+    label.new(bar_index + 6, lastSl,    "SL",  style = label.style_label_left, color = color.new(color.red, 80),   textcolor = color.white, size = size.tiny)
+    label.new(bar_index + 6, lastTp1,   "TP1", style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny)
+    if not na(lastTp2)
+        line.new(bar_index, lastTp2, bar_index + 6, lastTp2, color = color.new(color.green, 30), width = 1)
+        label.new(bar_index + 6, lastTp2, "TP2", style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny)
+
+// Aktif OB kutuları
+if showObs and barstate.islast and array.size(obDir) > 0
+    for i = 0 to array.size(obDir) - 1
+        d  = array.get(obDir, i)
+        tp = array.get(obTop, i)
+        bt = array.get(obBot, i)
+        c  = d == 1 ? color.new(color.teal, 85) : color.new(color.red, 85)
+        box.new(bar_index - 5, tp, bar_index + 2, bt, border_color = color.new(color.gray, 60), bgcolor = c)
+
+// HTF bias arka plan tonu
+bgcolor(showBias ? (htfBias == 1 ? color.new(color.teal, 95) : htfBias == -1 ? color.new(color.red, 95) : na) : na, title = "HTF bias")
+
+// ── Alerts ──
+alertcondition(firedLong,  title = "EFloud V1 LONG",  message = "EFloud V1 LONG signal (confluence >= threshold)")
+alertcondition(firedShort, title = "EFloud V1 SHORT", message = "EFloud V1 SHORT signal (confluence >= threshold)")
