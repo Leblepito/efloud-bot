@@ -117,7 +117,7 @@ operation:
 # ── Safety: agresif (bütün cüzdan kullanılabilir, %10 daily loss tolerans) ──
 safety:
   daily_loss_limit_pct: 10.0          # $200 günlük max kayıp ($2000 × 10%)
-  weekly_drawdown_limit_pct: 15.0     # $300 haftalık DD → HALT
+  weekly_drawdown_limit_pct: 20.0     # $400 haftalık DD → HALT
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
   starting_balance: 2000              # $2000 başlangıç (gerçek cüzdan, $1000 + $1000 ek transfer)
