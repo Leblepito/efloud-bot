@@ -21,6 +21,16 @@ from enum import Enum
 log = logging.getLogger("efloud.breaker")
 
 
+def _parse_dt(value) -> Optional[datetime]:
+    """Parse an ISO datetime string back to datetime; pass through None/datetime."""
+    if value is None or isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+
+
 class BreakerState(Enum):
     OPEN = "OPEN"              # Trade açık, normal akış
     TRIPPED = "TRIPPED"          # Geçici durdurma (belli süre)
@@ -230,5 +240,73 @@ class CircuitBreaker:
             "consecutive_losses": self.consecutive_losses,
             "current_balance": round(self.current_balance, 2),
             "peak_balance": round(self.peak_balance, 2),
+            # tripped_at / resume_at make the HALTED/TRIPPED state recoverable
+            # after a restart. Without them, restore_from_dict could not tell a
+            # cooldown that already elapsed from one still pending, and a HALT's
+            # audit trail (when it tripped) would be lost. ISO strings so the
+            # dict survives a plain json.dump without a custom serializer.
+            "tripped_at": self.status.tripped_at.isoformat() if self.status.tripped_at else None,
+            "resume_at": self.status.resume_at.isoformat() if self.status.resume_at else None,
             "metrics": self.status.metrics,
         }
+
+    def restore_from_dict(self, d: dict) -> None:
+        """Rebuild breaker state from a persisted to_dict() payload.
+
+        Full-fidelity counterpart to to_dict(): restores not just the balance /
+        peak / consecutive-loss counters (which the old partial restore handled)
+        but the actual OPEN/TRIPPED/HALTED *state*, its reason, and the
+        tripped_at / resume_at timestamps. This is the fix for the restart-
+        un-halt safety gap (incident 2026-05-14): a HALTED breaker that is not
+        restored as HALTED would let the bot resume trading on the next cycle
+        without operator acknowledgment.
+
+        Tolerant of legacy payloads written before this field set existed: if
+        there is no usable "state" key, the balance/consec fields are still
+        restored and the breaker stays OPEN (prior behavior).
+        """
+        # Legacy numeric/counter fields — restored regardless of state.
+        self.current_balance = d.get("current_balance", self.current_balance)
+        self.peak_balance = d.get("peak_balance", self.peak_balance)
+        self.consecutive_losses = d.get("consecutive_losses", self.consecutive_losses)
+
+        state_str = d.get("state")
+        if not state_str:
+            # Pre-fix breaker.json — no state recorded. Keep OPEN default.
+            return
+        try:
+            state = BreakerState(state_str)
+        except ValueError:
+            log.warning(f"Unknown breaker state '{state_str}' in persisted dict — defaulting OPEN")
+            return
+
+        if state == BreakerState.OPEN:
+            self.status = BreakerStatus(BreakerState.OPEN, metrics=d.get("metrics", {}))
+            return
+
+        self.status = BreakerStatus(
+            state=state,
+            reason=d.get("reason", ""),
+            tripped_at=_parse_dt(d.get("tripped_at")),
+            resume_at=_parse_dt(d.get("resume_at")),
+            metrics=d.get("metrics", {}),
+        )
+        log.info(f"♻️  Restored breaker {state.value} state: {self.status.reason}")
+
+    def restore_from_db_row(self, row: Optional[dict]) -> None:
+        """Apply a breaker_state DB-mirror row (migration 010) as a HALT fallback.
+
+        Summary-level: the DB row only mirrors the halt flag + reason + timestamp,
+        not the full TRIPPED cooldown machinery. Used on a box where the primary
+        file StateStore was lost (VPS rebuild) so a HALT acknowledged by the
+        operator is not silently forgotten. A non-halted (or missing) row is a
+        no-op — the file StateStore stays authoritative.
+        """
+        if not row or not row.get("halted"):
+            return
+        self.status = BreakerStatus(
+            state=BreakerState.HALTED,
+            reason=row.get("halted_reason") or "restored from DB mirror",
+            tripped_at=_parse_dt(row.get("halted_at")),
+        )
+        log.warning(f"♻️  Restored HALTED state from DB mirror: {self.status.reason}")

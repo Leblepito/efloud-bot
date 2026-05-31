@@ -237,10 +237,28 @@ class BotRunner:
             order_manager=self.order_mgr,  # ← borsaya gerçek emir göndermek için
             trade_journal=trade_journal,
             setup_state_store=setup_state_store,
+            breaker_state_sink=self._mirror_breaker_to_db,  # best-effort DB mirror
         )
 
         # Capture the running loop so executor-thread callbacks can schedule DB writes
         self.loop = asyncio.get_running_loop()
+
+        # DB-mirror HALT fallback: the file StateStore (restored in the
+        # orchestrator ctor above) is primary. But on a box where the state
+        # volume was lost (VPS rebuild, 2026-05-15), the file is gone — so if the
+        # breaker came up OPEN yet the Supabase breaker_state mirror says HALTED,
+        # honor the operator-acknowledged HALT instead of silently resuming.
+        try:
+            if self.orch.breaker.status.state.value == "OPEN":
+                db_row = await db.load_breaker_state()
+                if db_row and db_row.get("halted"):
+                    self.orch.breaker.restore_from_db_row(db_row)
+                    log.warning(
+                        "⛔ Breaker restored to HALTED from DB mirror (file state "
+                        "absent): %s", self.orch.breaker.status.reason,
+                    )
+        except Exception as e:
+            log.warning(f"DB-mirror breaker fallback skipped: {e}")
 
         # Bind audit engine to the live DB pool now that backend.db is connected.
         # Pool may still be None in degraded mode (no DATABASE_URL); engine no-ops.
@@ -403,6 +421,23 @@ class BotRunner:
     # ─────────────────────────────────────────────────────────────
     # Event handlers
     # ─────────────────────────────────────────────────────────────
+
+    def _mirror_breaker_to_db(self, breaker_dict: dict) -> None:
+        """Sync sink wired into SafeOrchestrator._persist_state — schedules a
+        best-effort UPSERT of the breaker summary into Supabase breaker_state.
+
+        Cross-thread safe (run_coroutine_threadsafe), fire-and-forget, and fully
+        guarded: a missing pool/loop or any failure is swallowed so it can never
+        perturb the trading cycle. Disk StateStore remains authoritative.
+        """
+        if not self.loop or not db.pool:
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(
+                db.upsert_breaker_state(breaker_dict), self.loop,
+            )
+        except Exception as e:
+            log.warning(f"_mirror_breaker_to_db schedule failed (ignored): {e}")
 
     def _on_position_change(self, event_type: str, pos: Position) -> None:
         """Sync callback from OrderManager — bridge to async event bus + DB.

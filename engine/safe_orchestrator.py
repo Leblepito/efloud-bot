@@ -15,7 +15,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import Callable, Optional, TYPE_CHECKING
 from dataclasses import dataclass
 
 import pandas as pd
@@ -139,7 +139,8 @@ class SafeOrchestrator:
                   freshness_check: bool = True,
                   persist: bool = True,
                   trade_journal: Optional[TradeJournal] = None,
-                  setup_state_store: Optional["SetupStateStore"] = None):
+                  setup_state_store: Optional["SetupStateStore"] = None,
+                  breaker_state_sink: Optional[Callable[[dict], None]] = None):
         """
         permission_mgr: PermissionManager instance (opsiyonel)
         notification_mgr: NotificationManager instance (opsiyonel)
@@ -172,6 +173,10 @@ class SafeOrchestrator:
         self.client = order_manager.client if order_manager is not None else None
         self.freshness_check = freshness_check
         self.persist = persist
+        # Optional best-effort hook to mirror breaker state to an external store
+        # (e.g. the Supabase breaker_state table). None → file StateStore only.
+        # Invoked from _persist_state; must never raise into the trading cycle.
+        self.breaker_state_sink = breaker_state_sink
 
         # Core engines
         sc = config["structure"]
@@ -255,12 +260,14 @@ class SafeOrchestrator:
         breaker_state = self.store.load("breaker")
         if breaker_state:
             try:
-                self.breaker.current_balance = breaker_state.get("current_balance",
-                                                                   self.breaker.current_balance)
-                self.breaker.peak_balance = breaker_state.get("peak_balance",
-                                                                 self.breaker.peak_balance)
-                self.breaker.consecutive_losses = breaker_state.get("consecutive_losses", 0)
-                log.info(f"♻️  Restored breaker state: balance=${self.breaker.current_balance:.2f}, "
+                # Full-fidelity restore: balance/peak/consec AND the OPEN/
+                # TRIPPED/HALTED state + reason + timestamps. Restoring only the
+                # counters (the old behavior) silently un-halted a HALTED breaker
+                # on restart — incident 2026-05-14 (bot resumed trading and left
+                # bare positions on Binance).
+                self.breaker.restore_from_dict(breaker_state)
+                log.info(f"♻️  Restored breaker state: {self.breaker.status.state.value}, "
+                         f"balance=${self.breaker.current_balance:.2f}, "
                          f"consec_losses={self.breaker.consecutive_losses}")
             except Exception as e:
                 log.warning(f"Could not restore breaker state: {e}")
@@ -364,7 +371,15 @@ class SafeOrchestrator:
         """State'i diske yaz."""
         if not self.persist:
             return
-        self.store.save("breaker", self.breaker.to_dict())
+        breaker_dict = self.breaker.to_dict()
+        self.store.save("breaker", breaker_dict)
+        # Best-effort mirror to the external store (DB). Disk is authoritative;
+        # a sink failure must never break persistence or the cycle.
+        if self.breaker_state_sink is not None:
+            try:
+                self.breaker_state_sink(breaker_dict)
+            except Exception as e:
+                log.warning(f"breaker_state_sink failed (ignored): {e}")
         # Use lossless to_full_dict so a restart can rebuild lifecycle.positions
         # with full entries/exits — the compact to_dict() is for UI snapshots
         # and loses the data that PositionGuard needs to enforce duplicate-direction.

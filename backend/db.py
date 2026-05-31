@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import json
+from datetime import datetime
 from typing import Any, Optional
 
 import asyncpg
@@ -237,6 +238,83 @@ class Database:
                 )
         except Exception as e:
             log.warning(f"log_audit failed: {e}")
+
+    # ─────────────────────────────────────────────────────────────
+    # Circuit-breaker state mirror (migration 010)
+    # ─────────────────────────────────────────────────────────────
+    # The file-based StateStore is the PRIMARY, full-fidelity breaker
+    # persistence. This is a best-effort SUMMARY mirror in Supabase so the halt
+    # status survives a total loss of the state volume (VPS rebuild, incident
+    # 2026-05-15) and is queryable for observability. Single-row table keyed on
+    # a constant id=1.
+
+    async def upsert_breaker_state(self, breaker: dict[str, Any]) -> None:
+        """Mirror a CircuitBreaker.to_dict() payload into breaker_state.
+
+        Best-effort: no-op without a pool, swallows errors so a DB hiccup never
+        propagates into the trading cycle.
+        """
+        if not self.pool:
+            return
+        try:
+            state = breaker.get("state", "OPEN")
+            halted = state == "HALTED"
+            # Reason is only meaningful while the breaker is not OPEN.
+            halted_reason = breaker.get("reason") or None if state != "OPEN" else None
+            halted_at = _parse_dt(breaker.get("tripped_at"))
+            reset_at = _parse_dt(breaker.get("resume_at"))
+            metrics = breaker.get("metrics") or {}
+            daily_loss = metrics.get("daily_pct")
+            weekly_loss = metrics.get("drawdown_pct")
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO breaker_state
+                        (id, daily_loss, weekly_loss, halted, halted_reason,
+                         halted_at, reset_at, updated_at)
+                    VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                        daily_loss = EXCLUDED.daily_loss,
+                        weekly_loss = EXCLUDED.weekly_loss,
+                        halted = EXCLUDED.halted,
+                        halted_reason = EXCLUDED.halted_reason,
+                        halted_at = EXCLUDED.halted_at,
+                        reset_at = EXCLUDED.reset_at,
+                        updated_at = NOW()
+                    """,
+                    daily_loss, weekly_loss, halted, halted_reason,
+                    halted_at, reset_at,
+                )
+        except Exception as e:
+            log.warning(f"upsert_breaker_state failed: {e}")
+
+    async def load_breaker_state(self) -> Optional[dict[str, Any]]:
+        """Read the mirrored breaker row, or None if absent / unavailable."""
+        if not self.pool:
+            return None
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT daily_loss, weekly_loss, halted, halted_reason,
+                           halted_at, reset_at, updated_at
+                    FROM breaker_state WHERE id = 1
+                    """
+                )
+                return dict(row) if row else None
+        except Exception as e:
+            log.warning(f"load_breaker_state failed: {e}")
+            return None
+
+
+def _parse_dt(value):
+    """ISO-string → datetime; pass through datetime/None. Best-effort."""
+    if value is None or isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
 
 
 # Module singleton
