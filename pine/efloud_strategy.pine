@@ -15,7 +15,11 @@ strategy("EFloud Strategy v2", overlay = true, initial_capital = 10000, currency
 // INPUTS  (indikatör dosyasıyla AYNI isimler — senkron şart)
 // ─────────────────────────────────────────────────────────────────────────────
 grpTF   = "Timeframe Chain"
-htfTf   = input.timeframe("240", "HTF (bias / anchor / likidite)", group = grpTF)
+// ── Trade-Horizon Profili (V2 = 2-TF: htf + entry; mtf YOK) — signals(v2) + bot ile senkron ──
+//   scalp = 5m/.../12h · mid = 15m/.../4h · long = 1h/.../1w · custom = aşağıdaki input
+profileMode = input.string("mid", "Trade-Horizon Profili", options = ["scalp", "mid", "long", "custom"], group = grpTF)
+customHtf   = input.timeframe("240", "Custom HTF (profile=custom)", group = grpTF)
+htfTf     = profileMode == "scalp" ? "720" : profileMode == "mid" ? "240" : profileMode == "long" ? "W"   : customHtf
 useDaily   = input.bool(false, "Daily makro filtre kullan", group = grpTF)
 dailyTf    = input.timeframe("1D", "Daily TF", group = grpTF)
 dailyStrict= input.bool(false, "Daily filtre SERT (ters yön reddet)", group = grpTF)

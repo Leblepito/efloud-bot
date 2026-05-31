@@ -36,9 +36,17 @@ indicator("EFloud Signals v1", overlay = true, max_lines_count = 500, max_labels
 // INPUTS  (strateji dosyasıyla AYNI isimler — senkron şart)
 // ─────────────────────────────────────────────────────────────────────────────
 grpTF   = "Timeframe Chain"
-htfTf   = input.timeframe("240", "HTF (4h) — bias / FVG / likidite", group = grpTF)
-mtfTf   = input.timeframe("60",  "MTF (1h) — CHoCH onay",            group = grpTF)
-// LTF / Entry = grafik TF'i (15m beklenir).
+// ── Trade-Horizon Profili (bot config.timeframes ile senkron) ──
+//   scalp = 5m/1h/12h · mid = 15m/1h/4h · long = 1h/8h/1w · custom = aşağıdaki inputlar
+//   Entry = GRAFİK TF'i. Grafik TF profil entry'siyle eşleşmeli (uyarı tablosu en altta).
+profileMode = input.string("mid", "Trade-Horizon Profili", options = ["scalp", "mid", "long", "custom"], group = grpTF)
+customMtf   = input.timeframe("60",  "Custom MTF (profile=custom)", group = grpTF)
+customHtf   = input.timeframe("240", "Custom HTF (profile=custom)", group = grpTF)
+// Profil → TF çözümleme (Pine TF kodu: 12h=720, 8h=480, 4h=240, 1h=60, 1w=W)
+profEntry = profileMode == "scalp" ? "5"   : profileMode == "mid" ? "15"  : profileMode == "long" ? "60"  : ""
+mtfTf     = profileMode == "scalp" ? "60"  : profileMode == "mid" ? "60"  : profileMode == "long" ? "480" : customMtf
+htfTf     = profileMode == "scalp" ? "720" : profileMode == "mid" ? "240" : profileMode == "long" ? "W"   : customHtf
+// LTF / Entry = grafik TF'i (profile entry ile eşleşmeli).
 useDaily    = input.bool(false, "Daily (1d) makro filtre kullan",        group = grpTF)
 dailyTf     = input.timeframe("1D", "Daily TF",                          group = grpTF)
 dailyStrict = input.bool(false, "Daily filtre SERT (ters yön reddet)",   group = grpTF)
@@ -69,6 +77,8 @@ showObs    = input.bool(true, "Aktif Order Block kutuları", group = grpViz)
 showLevels = input.bool(true, "Entry/SL/TP çizgileri",      group = grpViz)
 showSmcCtx = input.bool(true, "Sinyalde SMC bağlamı (OB/OTE/Liq)", group = grpViz)
 showBias   = input.bool(true, "HTF bias arka plan tonu",    group = grpViz)
+keepMode   = input.string("Otomatik (timeframe)", "Çizim saklama modu", options = ["Otomatik (timeframe)", "Manuel sinyal sayısı"], group = grpViz)
+keepManual = input.int(3, "Manuel: saklanacak sinyal sayısı", minval = 1, maxval = 20, group = grpViz)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HTF BUNDLE (4h) — repaint-safe skaler demet
@@ -529,46 +539,119 @@ if barstate.isconfirmed
                     firedShort := not isLong
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GÖRSEL
+// GÖRSEL — yalnızca SON N sinyalin çizimleri tutulur (eskiler silinir).
+//   keepN ve lookback penceresi grafik TF'ine göre otomatik ölçeklenir:
+//   düşük TF = sık/gürültülü sinyal → daha az tut; yüksek TF = nadir → daha fazla.
+//   Böylece çizimler her zaman güncel yapıyla senkron kalır, cap'e takılıp
+//   eski objelerin garbage-collect edilmesiyle oluşan "senkronsuz" görüntü biter.
 // ─────────────────────────────────────────────────────────────────────────────
 plotshape(firedLong,  title = "LONG entry",  style = shape.triangleup,   location = location.belowbar, color = color.new(color.teal, 0), size = size.small)
 plotshape(firedShort, title = "SHORT entry", style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0),  size = size.small)
 
-if showLevels and (firedLong or firedShort)
+// ── Saklama yapılandırması (TF-adaptif) ──
+tfSec = timeframe.in_seconds()
+bool autoKeep = keepMode == "Otomatik (timeframe)"
+// keepN: ≤5m→2, ≤30m→3, ≤2h→4, ≤6h→5, üstü→6
+int keepN = autoKeep ? (tfSec <= 300 ? 2 : tfSec <= 1800 ? 3 : tfSec <= 7200 ? 4 : tfSec <= 21600 ? 5 : 6) : keepManual
+// lookback (bar): TF tier'ına göre ~sabit takvim aralığı (≤15m→5g, ≤4h→20g, üstü→60g)
+int spanBars = autoKeep ? int((tfSec <= 900 ? 5.0 : tfSec <= 14400 ? 20.0 : 60.0) * 86400.0 / tfSec) : na
+
+// ── Tutulan sinyal çizim havuzu (paralel diziler + sinyal-başı sayaçlar) ──
+var array<line>  vLn  = array.new<line>()
+var array<label> vLb  = array.new<label>()
+var array<box>   vBx  = array.new<box>()
+var array<int>   gLn  = array.new<int>()    // sinyal başına line sayısı
+var array<int>   gLb  = array.new<int>()    // sinyal başına label sayısı
+var array<int>   gBx  = array.new<int>()    // sinyal başına box sayısı
+var array<int>   gBar = array.new<int>()    // sinyalin tetiklendiği bar_index
+
+if firedLong or firedShort
     col = lastDir == 1 ? color.teal : color.red
-    line.new(bar_index, lastEntry, bar_index + 6, lastEntry, color = color.new(color.gray, 0),  width = 1)
-    line.new(bar_index, lastSl,    bar_index + 6, lastSl,    color = color.new(color.red, 0),   width = 1, style = line.style_dashed)
-    line.new(bar_index, lastTp1,   bar_index + 6, lastTp1,   color = color.new(color.green, 0), width = 1)
-    label.new(bar_index + 6, lastEntry, "Entry (" + str.tostring(lastScore) + ")", style = label.style_label_left, color = color.new(col, 80),          textcolor = color.white, size = size.tiny)
-    label.new(bar_index + 6, lastSl,    "SL",  style = label.style_label_left, color = color.new(color.red, 80),   textcolor = color.white, size = size.tiny)
-    label.new(bar_index + 6, lastTp1,   "TP1", style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny)
-    if not na(lastTp2)
-        line.new(bar_index, lastTp2, bar_index + 6, lastTp2, color = color.new(color.green, 30), width = 1)
-        label.new(bar_index + 6, lastTp2, "TP2", style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny)
+    int nLn = 0
+    int nLb = 0
+    int nBx = 0
+    // Entry / SL / TP1 / (TP2) çizgileri + etiketleri
+    if showLevels
+        array.push(vLn, line.new(bar_index, lastEntry, bar_index + 6, lastEntry, color = color.new(color.gray, 0),  width = 1))
+        nLn += 1
+        array.push(vLn, line.new(bar_index, lastSl,    bar_index + 6, lastSl,    color = color.new(color.red, 0),   width = 1, style = line.style_dashed))
+        nLn += 1
+        array.push(vLn, line.new(bar_index, lastTp1,   bar_index + 6, lastTp1,   color = color.new(color.green, 0), width = 1))
+        nLn += 1
+        array.push(vLb, label.new(bar_index + 6, lastEntry, "Entry (" + str.tostring(lastScore) + ")", style = label.style_label_left, color = color.new(col, 80),          textcolor = color.white, size = size.tiny))
+        nLb += 1
+        array.push(vLb, label.new(bar_index + 6, lastSl,    "SL",  style = label.style_label_left, color = color.new(color.red, 80),   textcolor = color.white, size = size.tiny))
+        nLb += 1
+        array.push(vLb, label.new(bar_index + 6, lastTp1,   "TP1", style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny))
+        nLb += 1
+        if not na(lastTp2)
+            array.push(vLn, line.new(bar_index, lastTp2, bar_index + 6, lastTp2, color = color.new(color.green, 30), width = 1))
+            nLn += 1
+            array.push(vLb, label.new(bar_index + 6, lastTp2, "TP2", style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny))
+            nLb += 1
+    // SMC bağlamı: eşleşen OB kutusu + OTE bandı + likidite çizgisi
+    if showSmcCtx
+        if not na(lastObTop) and not na(lastObBot)
+            array.push(vBx, box.new(bar_index - 3, lastObTop, bar_index + 6, lastObBot, border_color = color.new(color.blue, 40), bgcolor = color.new(color.blue, 88)))
+            nBx += 1
+            array.push(vLb, label.new(bar_index + 6, (lastObTop + lastObBot) / 2.0, "OB", style = label.style_label_left, color = color.new(color.blue, 70), textcolor = color.white, size = size.tiny))
+            nLb += 1
+        if not na(lastOteLo) and not na(lastOteHi)
+            array.push(vBx, box.new(bar_index - 3, lastOteHi, bar_index + 6, lastOteLo, border_color = color.new(color.purple, 40), bgcolor = color.new(color.purple, 90)))
+            nBx += 1
+            array.push(vLb, label.new(bar_index + 6, (lastOteLo + lastOteHi) / 2.0, "OTE", style = label.style_label_left, color = color.new(color.purple, 70), textcolor = color.white, size = size.tiny))
+            nLb += 1
+        if not na(lastLiq)
+            array.push(vLn, line.new(bar_index - 3, lastLiq, bar_index + 6, lastLiq, color = color.new(color.orange, 0), width = 1, style = line.style_dotted))
+            nLn += 1
+            array.push(vLb, label.new(bar_index + 6, lastLiq, "LIQ", style = label.style_label_left, color = color.new(color.orange, 60), textcolor = color.white, size = size.tiny))
+            nLb += 1
+    // grup sayaçlarını kaydet (4 dizi hizalı kalır — sinyal başına bir giriş)
+    array.push(gLn, nLn)
+    array.push(gLb, nLb)
+    array.push(gBx, nBx)
+    array.push(gBar, bar_index)
 
-// Sinyal anındaki SMC bağlamı: eşleşen OB kutusu + OTE bandı + likidite çizgisi
-if showSmcCtx and (firedLong or firedShort)
-    if not na(lastObTop) and not na(lastObBot)
-        box.new(bar_index - 3, lastObTop, bar_index + 6, lastObBot, border_color = color.new(color.blue, 40), bgcolor = color.new(color.blue, 88))
-        label.new(bar_index + 6, (lastObTop + lastObBot) / 2.0, "OB", style = label.style_label_left, color = color.new(color.blue, 70), textcolor = color.white, size = size.tiny)
-    if not na(lastOteLo) and not na(lastOteHi)
-        box.new(bar_index - 3, lastOteHi, bar_index + 6, lastOteLo, border_color = color.new(color.purple, 40), bgcolor = color.new(color.purple, 90))
-        label.new(bar_index + 6, (lastOteLo + lastOteHi) / 2.0, "OTE", style = label.style_label_left, color = color.new(color.purple, 70), textcolor = color.white, size = size.tiny)
-    if not na(lastLiq)
-        line.new(bar_index - 3, lastLiq, bar_index + 6, lastLiq, color = color.new(color.orange, 0), width = 1, style = line.style_dotted)
-        label.new(bar_index + 6, lastLiq, "LIQ", style = label.style_label_left, color = color.new(color.orange, 60), textcolor = color.white, size = size.tiny)
+// ── Eski sinyalleri buda: keepN'i aşan VEYA lookback penceresinden eski ──
+while array.size(gBar) > 0 and (array.size(gBar) > keepN or (not na(spanBars) and (bar_index - array.get(gBar, 0)) > spanBars))
+    int nl = array.shift(gLn)
+    int nb = array.shift(gLb)
+    int nx = array.shift(gBx)
+    array.shift(gBar)
+    int c = 0
+    while c < nl and array.size(vLn) > 0
+        line.delete(array.shift(vLn))
+        c += 1
+    c := 0
+    while c < nb and array.size(vLb) > 0
+        label.delete(array.shift(vLb))
+        c += 1
+    c := 0
+    while c < nx and array.size(vBx) > 0
+        box.delete(array.shift(vBx))
+        c += 1
 
-// Aktif OB kutuları
-if showObs and barstate.islast and array.size(obDir) > 0
-    for i = 0 to array.size(obDir) - 1
-        d  = array.get(obDir, i)
-        tp = array.get(obTop, i)
-        bt = array.get(obBot, i)
-        c  = d == 1 ? color.new(color.teal, 85) : color.new(color.red, 85)
-        box.new(bar_index - 5, tp, bar_index + 2, bt, border_color = color.new(color.gray, 60), bgcolor = c)
+// ── Aktif OB kutuları (son barda her tick yeniden çizilir → öncekiler silinir, sızıntı yok) ──
+var array<box> obViz = array.new<box>()
+if barstate.islast
+    while array.size(obViz) > 0
+        box.delete(array.shift(obViz))
+    if showObs and array.size(obDir) > 0
+        for i = 0 to array.size(obDir) - 1
+            d  = array.get(obDir, i)
+            tp = array.get(obTop, i)
+            bt = array.get(obBot, i)
+            c  = d == 1 ? color.new(color.teal, 85) : color.new(color.red, 85)
+            array.push(obViz, box.new(bar_index - 5, tp, bar_index + 2, bt, border_color = color.new(color.gray, 60), bgcolor = c))
 
 // HTF bias arka plan tonu
 bgcolor(showBias ? (htfBias == 1 ? color.new(color.teal, 95) : htfBias == -1 ? color.new(color.red, 95) : na) : na, title = "HTF bias")
+
+// ── Yanlış grafik TF uyarısı (grafik TF profil entry'siyle eşleşmeli) ──
+//   profEntry == "" → custom profil, uyarı yok.
+var table warnTbl = table.new(position.top_right, 1, 1)
+if barstate.islast and profEntry != "" and timeframe.period != profEntry
+    table.cell(warnTbl, 0, 0, "⚠️ YANLIŞ ZAMAN DİLİMİ\nGrafik TF=" + timeframe.period + " · profil(" + profileMode + ") entry=" + profEntry, bgcolor = color.new(color.red, 10), text_color = color.white, text_size = size.normal)
 
 // ── Alerts ──
 alertcondition(firedLong,  title = "EFloud V1 LONG",  message = "EFloud V1 LONG signal (confluence >= threshold)")

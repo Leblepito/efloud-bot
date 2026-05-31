@@ -14,6 +14,7 @@ from backtest.engine import run_backtest
 from backtest.grid import GridRunner, expand_grid, config_hash
 from backtest.reproducibility import capture_provenance
 from data.cache import OHLCVCache
+from data.timeframes import resolve_timeframes
 
 
 def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohlcv", verify_sha=True):
@@ -43,6 +44,7 @@ def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohl
 def cmd_single(args):
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    resolve_timeframes(cfg)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
     data = _load_data_for_period([args.symbol], tfs, args.period_days)
 
@@ -68,6 +70,7 @@ def cmd_single(args):
 def cmd_portfolio(args):
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    resolve_timeframes(cfg)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     data = _load_data_for_period(symbols, tfs, args.period_days)
@@ -109,6 +112,7 @@ def _grid_run_one(cfg_with_meta: dict) -> dict:
     symbols = cfg_with_meta["symbols"]
     period_days = cfg_with_meta["period_days"]
     balance = cfg_with_meta["balance"]
+    resolve_timeframes(cfg)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
     data = _load_data_for_period(symbols, tfs, period_days, verify_sha=False)
     result = run_backtest(symbols=symbols, data=data, config=cfg, initial_balance=balance)
@@ -187,6 +191,7 @@ def cmd_compare(args):
 
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    resolve_timeframes(cfg)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     data = _load_data_for_period(symbols, tfs, args.period_days)

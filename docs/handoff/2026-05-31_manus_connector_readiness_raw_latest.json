@@ -1,0 +1,121 @@
+{
+  "has_more": false,
+  "messages": [
+    {
+      "id": "5D3NURFOetS4HpNQd7gpTM",
+      "status_update": {
+        "agent_status": "stopped",
+        "brief": "Manus finished working",
+        "description": "Manus has completed the current task and is ready for new requests or revisions."
+      },
+      "timestamp": "1780216810893",
+      "type": "status_update"
+    },
+    {
+      "assistant_message": {
+        "attachments": [
+          {
+            "content_type": "text/markdown; charset=utf-8",
+            "filename": "u2algo_connector_readiness_report.md",
+            "type": "file",
+            "url": "https://private-us-east-1.manuscdn.com/sessionFile/E7QVJtksM6c9xhFafxKkqZ/sandbox/GxzWokTw9y1JAhq5en7SsY_1780216809382_na1fn_L2hvbWUvdWJ1bnR1L3UyYWxnb19yZWFkaW5lc3MvdTJhbGdvX2Nvbm5lY3Rvcl9yZWFkaW5lc3NfcmVwb3J0.md?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvRTdRVkp0a3NNNmM5eGhGYWZ4S2txWi9zYW5kYm94L0d4eldva1R3OXkxSkFocTVlbjdTc1lfMTc4MDIxNjgwOTM4Ml9uYTFmbl9MMmh2YldVdmRXSjFiblIxTDNVeVlXeG5iMTl5WldGa2FXNWxjM012ZFRKaGJHZHZYMk52Ym01bFkzUnZjbDl5WldGa2FXNWxjM05mY21Wd2IzSjAubWQiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTg3NjE2MDB9fX1dfQ__&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=Ephdq2itFdtRzLU4s63zfMUYtNG16ojpZ~77~PLewPORdsOIt4e2YdO96bE55euwd0O2-hjVegxB4rqCY3U~ZuxgeMep8mPD7eBY~4p6GoP4Hyty8B8hLUOeSmWdNnA7wf207Ms4tizErqZeFhbOkFkRftm3y4QV1hIkzpb4QLq1HM2rgjiGH1RSy2Egee5rWmcwku9pOergJidfUKV2q4kXRpI9O95AjF6SY8hP-GGSFsEluxSmbL3JLWDOvf-4TQzWuJTAnQibYPre3UmIw2eKlpmTPdPxsmrlOMfvDBeFs5EgFc-sC5xxnJFB5rSvqLoFmJ1iXNrbQoq98O5tAA__"
+          }
+        ],
+        "content": "PRIVATE, DRY-RUN ONLY kapsamındaki connector readiness kontrolünü tamamladım. Hiçbir platforma yayın yapılmadı, post oluşturulmadı, mesaj gönderilmedi veya dış aksiyon alınmadı. Ayrıntılı Türkçe raporu ekte bulabilirsiniz.\n\nÖzet karar: Sistem **kısmen hazır, yayın için bloklu**. Kritik blokajlar: Instagram connector şu anda hedef @u2algo yerine @leblepito hesabını okuyor; Google Drive yeniden yetkilendirme istiyor; Make/Zapier OAuth doğrulaması tamamlanmamış; u2algo.com 404, www.u2algo.com TLS hostname hatası veriyor."
+      },
+      "id": "04TlBw14tw7nINtmtTq7Do",
+      "timestamp": "1780216810652",
+      "type": "assistant_message"
+    },
+    {
+      "assistant_message": {
+        "content": "The selected browser client does not allow connections from other clients."
+      },
+      "id": "dXsdmpQjmfHPrvYbuJz5VF",
+      "timestamp": "1780216646172",
+      "type": "assistant_message"
+    },
+    {
+      "id": "urQN84qbCAcHd87IGO8bch",
+      "status_update": {
+        "agent_status": "running",
+        "brief": "Manus is running",
+        "description": "Manus is working on your request"
+      },
+      "timestamp": "1780216475396",
+      "type": "status_update"
+    },
+    {
+      "id": "thChVXg2HgQ8UnCCdLY8Uo",
+      "status_update": {
+        "agent_status": "running",
+        "brief": "Manus is running",
+        "description": "Manus is working on your request"
+      },
+      "timestamp": "1780216475371",
+      "type": "status_update"
+    },
+    {
+      "id": "uPrHb5CggXtoBNfnmHQgvX",
+      "status_update": {
+        "agent_status": "waiting",
+        "brief": "Manus is waiting for your reply",
+        "description": "Manus will continue working after your reply",
+        "status_detail": {
+          "confirm_input_schema": {
+            "properties": {
+              "accept": {
+                "type": "boolean"
+              },
+              "selectedAccountIds": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "accept"
+            ],
+            "type": "object"
+          },
+          "waiting_description": "Meta ads action completed successfully",
+          "waiting_for_event_id": "nzqrJ2gF9I9f0lloI5Nm5X",
+          "waiting_for_event_type": "metaMarketingAction"
+        }
+      },
+      "timestamp": "1780216414637",
+      "type": "status_update"
+    },
+    {
+      "assistant_message": {
+        "content": "Talebinizi aldım. Hiçbir dış aksiyon, yayın, post, mesaj gönderimi veya platform işlemi yapmadan; yalnızca bu hesaptaki bağlantı durumlarını ve ilk paylaşım hattı için eksikleri **PRIVATE, DRY-RUN ONLY** kapsamında kontrol edeceğim."
+      },
+      "id": "A0CBkZZjGRKDyMdxQU79UG",
+      "timestamp": "1780216194343",
+      "type": "assistant_message"
+    },
+    {
+      "id": "ccVuS2GuHcFMLpEczgIDuL-1",
+      "status_update": {
+        "agent_status": "running",
+        "brief": "Manus is running",
+        "description": "Manus is working on your request"
+      },
+      "timestamp": "1780216191439",
+      "type": "status_update"
+    },
+    {
+      "id": "RCNBYwlAwBFW8VwuukUfmA",
+      "timestamp": "1780216190295",
+      "type": "user_message",
+      "user_message": {
+        "content": "u2algo connector readiness kontrolü — PRIVATE, DRY-RUN ONLY.\n\nHiçbir platforma yayın yapma, post oluşturma, mesaj gönderme veya dış aksiyon alma.\nSadece bu Manus hesabındaki connector durumunu ve ilk paylaşım pipeline'ı için eksikleri kontrol et.\n\nHedef sistem:\n- Web: https://u2algo-site-production.up.railway.app şu an canlı.\n- Custom domainler Railway'e eklendi: u2algo.com ve www.u2algo.com, ancak DNS/TLS yayılımı henüz doğrulanmadı.\n- Sosyal: X/Twitter @Ualgobot, Telegram @Ualgo_bot, Instagram @u2algo, YouTube @Leblepito.\n- Öncelik: Instagram native connector, Meta Ads Manager raporlama, Make/Zapier/n8n fallback, Google Drive asset deposu.\n\nLütfen raporla:\n1) Bu hesapta kullanılması gereken connector adları ve id'leri.\n2) İlk yayın öncesi hangi connector'ların Manus web app içinde authorize edilmesi gerekiyor?\n3) Otomatik yayın kapalı/draft-only kalacak şekilde güvenli pipeline önerisi.\n4) DNS hazır olmadan hangi paylaşımlar bekletilmeli?\n5) Platformlara göre asset formatları: X, Instagram carousel/reel, Telegram, YouTube Shorts.\n\nCompliance: Türkçe, kâr/getiri garantisi yok, fon yönetimi/para toplama iması yok, yatırım tavsiyesi değildir/DYOR/risk vurgusu korunacak.",
+        "message_type": "text"
+      }
+    }
+  ],
+  "ok": true,
+  "request_id": "62cfe139ce50da8a7d339b02c24a1e3e",
+  "task_id": "E7QVJtksM6c9xhFafxKkqZ"
+}

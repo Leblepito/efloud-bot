@@ -50,6 +50,8 @@ def main() -> int:
 
     with open(config_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    from data.timeframes import resolve_timeframes
+    resolve_timeframes(cfg)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
 
     # Symbol list resolution: prefer config's symbols.fixed_core (so aggressive_v1
