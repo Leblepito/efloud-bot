@@ -56,3 +56,4 @@ external_repos/
 configs/candidate_*.yaml
 
 
+.env.supabase
