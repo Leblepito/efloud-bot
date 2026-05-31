@@ -1,0 +1,34 @@
+{
+  "v1": {
+    "smc_version": "v1",
+    "initial_balance": 2000.0,
+    "final_balance": 2180.0,
+    "win_rate": 0.50,
+    "avg_realized_rr": 1.55,
+    "max_drawdown_pct": 10.0,
+    "stop_hunt_rate": 0.40,
+    "sharpe_like": 1.00,
+    "trades": []
+  },
+  "v2": {
+    "smc_version": "v2",
+    "initial_balance": 2000.0,
+    "final_balance": 2260.0,
+    "win_rate": 0.55,
+    "avg_realized_rr": 1.70,
+    "max_drawdown_pct": 9.0,
+    "stop_hunt_rate": 0.15,
+    "sharpe_like": 1.10,
+    "trades": []
+  },
+  "deltas": {},
+  "gates": {
+    "win_rate": "pass",
+    "avg_realized_rr": "pass",
+    "max_drawdown_pct": "pass",
+    "stop_hunt_rate": "pass",
+    "sharpe_like": "pass"
+  },
+  "hypothesis": "v2 single-target reduces stop-hunts without sacrificing RR",
+  "doctrine_tags": ["smc-v2", "phase2"]
+}
