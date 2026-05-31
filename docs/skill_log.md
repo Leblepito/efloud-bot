@@ -54,6 +54,8 @@
 | 2026-05-28 | Claude Opus 4.7 | brainstorming + worktree | Open-items close-out (PR #96-98) | ✅ | orta | Faz 0.3 ✅ + skill_log session log (#96), research_runs aggregator backend + tests (#97), Social Learning Center verdict badges frontend (#98). 25 yeşil test. Verdict-badges follow-up kapatıldı. |
 | 2026-05-28 | Claude Opus 4.7 | code-review (Hermes mode) | Reviewer follow-up fixes on #96-98 | ✅ | kısa | İki minor: research_runs docstring monotonic-claim düzeltmesi + isinstance guards (#97), verdictStyle fallback (#98). Hepsi aynı PR'lara amend commit. |
 | 2026-05-28 | Claude Opus 4.7 | efloud-risk-ops-reviewer + deploy | PR #99 live deploy (SL/TP delivery fix) | ✅ | uzun | Risk-ops APPROVE-WITH-CONDITIONS, 13/13 new tests yeşil. Merge bfd2724 → VPS git pull 58041c9→bfd2724 → docker compose -f docker-compose.prod.yml up -d --build (recreate). Container `Started 14:02:10 UTC`, healthcheck 503 = bot trading loop kapalı (EFLOUD_AUTOSTART=0 design — operator manuel başlatacak). |
+| 2026-05-31 | Antigravity (Orchestrator) | test-driven-development + TradingView MCP | Trade-Horizon Profiles & TV Desktop MCP Bridge | ✅ | orta | Trade-Horizon Profiles spec, resolution logic, 14 green unit tests, efloud_signals_v1.pine compiled with zero errors in TV Desktop via MCP bridge. |
+
 
 ## Skill Etkinlik Özeti (Aylık Güncellenir)
 

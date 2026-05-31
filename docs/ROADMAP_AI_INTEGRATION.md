@@ -72,6 +72,9 @@
 | ✅ 3.4 | Serverless cron | Cloud Scheduler + Functions | TAMAMLANDI — BigQuery sync ve manual cron runbook talimatları eklendi (2026-05-26) |
 | ✅ 3.5 | Forex adapter | `ExchangeAdapter` protocol + MT5/OANDA concrete impl | TAMAMLANDI — ExchangeAdapter Protocol, MT5Client ve OandaClient concrete FX adapter'ları ve unit testleri yazıldı (2026-05-26) |
 | ✅ 3.6 | Hedge Mode & Cross Margin | Çift yönlü LONG/SHORT pozisyon açma (Hedge Mode) ve Cross Margin desteği | TAMAMLANDI — Çift yönlü paralel emirler ve marjin geçişi tamamlandı (2026-05-26) |
+| ✅ 3.7 | Trade-Horizon Profiles | scalp/mid/long profilleri ile fail-fast monotonic guard ve Pine Script v6 dropdown/uyarı entegrasyonu | TAMAMLANDI — scalp, mid ve long (1h/8h/1w) profilleri, 14 passed unit test ve Pine warnings eklendi (2026-05-31) |
+
+
 
 ### Faz 4 — Ajan Kendini Geliştirme Döngüsü (Sürekli)
 

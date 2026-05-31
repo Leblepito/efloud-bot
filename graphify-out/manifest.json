@@ -5,8 +5,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\main.py": {
-    "mtime": 1779976784.1904376,
-    "ast_hash": "16499145e7aa4b774ade0806c9500aff",
+    "mtime": 1780203823.8770208,
+    "ast_hash": "9d582e85ebb9e43d18d5c285fc6ccb57",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\preflight.py": {
@@ -85,8 +85,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\bot_runner.py": {
-    "mtime": 1779951324.922503,
-    "ast_hash": "dbaa8e7e49de66a578f4f4a40b96b4c4",
+    "mtime": 1780203738.1065452,
+    "ast_hash": "377f2cf60ffbec1d97a24a6b077b5717",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\db.py": {
@@ -500,7 +500,7 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_reverse_guard.py": {
-    "mtime": 1779803273.9841247,
+    "mtime": 1780136505.7507827,
     "ast_hash": "8dfe2fc4940ea6465040ba0ba16e64d3",
     "semantic_hash": ""
   },
@@ -645,8 +645,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backtest\\cli.py": {
-    "mtime": 1779956312.6175277,
-    "ast_hash": "0192c9f05f2783f6082f7f04ed66a4d2",
+    "mtime": 1780203797.017796,
+    "ast_hash": "c9120dbd2d9b8188455cbc869c094c88",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backtest\\compare_live.py": {
@@ -715,8 +715,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\data\\timeframes.py": {
-    "mtime": 1778203222.5665567,
-    "ast_hash": "5c3e26c19dcce6a7cb73083c119bbcff",
+    "mtime": 1780203682.566735,
+    "ast_hash": "ba2d10a6eafbd85430a6573bc035f6e0",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\data\\__init__.py": {
@@ -790,8 +790,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\engine\\signals.py": {
-    "mtime": 1779970973.5638523,
-    "ast_hash": "097621a0477872549b690a0ffc0be4bc",
+    "mtime": 1780145911.4927025,
+    "ast_hash": "aef9e59e48ccb773ab39e39a8a4de431",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\engine\\smc.py": {
@@ -855,7 +855,7 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\engine\\safety\\position_guard.py": {
-    "mtime": 1779803274.0090775,
+    "mtime": 1780136505.7579062,
     "ast_hash": "da6ca51eb7746fd62721531ff3f77d48",
     "semantic_hash": ""
   },
@@ -920,8 +920,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\exchange\\__init__.py": {
-    "mtime": 1779984693.5663662,
-    "ast_hash": "390946edcdc40c7d5a278963237707fb",
+    "mtime": 1780138820.5095203,
+    "ast_hash": "c457b2aeb769a9ccd83608f4fdb976ff",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\next-env.d.ts": {
@@ -1235,8 +1235,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\run_phase_a.py": {
-    "mtime": 1778203222.5835896,
-    "ast_hash": "9d27ba9d084ddcb56f428de053881c6a",
+    "mtime": 1780203814.177784,
+    "ast_hash": "c59241e3f4f019db1ff99c2cfdc07522",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\run_phase_c.py": {
@@ -1480,8 +1480,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\CLAUDE.md": {
-    "mtime": 1780025744.526056,
-    "ast_hash": "81657c34693b0fb57f750a779c4ec73e",
+    "mtime": 1780147333.5097873,
+    "ast_hash": "c09dff46701cc32fa37b66390e289083",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\CLAUDE.original.md": {
@@ -1490,8 +1490,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\config.yaml": {
-    "mtime": 1779988554.4708707,
-    "ast_hash": "60e9bc92b0addd438363bde19999a089",
+    "mtime": 1780147624.6246245,
+    "ast_hash": "f754e2b2f0a79203490c9f55c1f11f5a",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docker-compose.prod.yml": {
@@ -1600,8 +1600,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\configs\\config.phase2_1k.yaml": {
-    "mtime": 1779988554.4738557,
-    "ast_hash": "17204a04ffb471173b5dc0b320103d65",
+    "mtime": 1780203828.9222825,
+    "ast_hash": "be2cbaf21cb71ea5c639f436f6d98f6e",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\configs\\config.phase2_1k_h1c_conf80.yaml": {
@@ -2050,8 +2050,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\InteractiveChart.tsx": {
-    "mtime": 1780034737.4306424,
-    "ast_hash": "ee4fdec61abce3115132fe8b78d8db44",
+    "mtime": 1780147333.5185504,
+    "ast_hash": "2a50955b120a1523e4920ea15a450cd3",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\optimize_strategy.py": {
@@ -2340,8 +2340,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\tests\\engine\\test_price_action_levels.py": {
-    "mtime": 1779859684.3497427,
-    "ast_hash": "8851b75c3b5835ea280f79787d6a07c3",
+    "mtime": 1780138820.5135975,
+    "ast_hash": "49d46e19161a69a881877ccad8e59a7a",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\frontend\\components\\MarketIndicators.tsx": {
@@ -2550,23 +2550,68 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\.hermes\\pr_body_102a.md": {
-    "mtime": 1779980411.3870614,
-    "ast_hash": "6222010192564ef1eac4889e47929a0b",
+    "mtime": 1780147333.5064888,
+    "ast_hash": "126235d1e3cb796c33dfe7d0de75ba0f",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\CLAUDE.python.md": {
-    "mtime": 1780025740.8130033,
-    "ast_hash": "330a07c9ae771b2954cf7b4ebd04e0b4",
+    "mtime": 1780147333.5108292,
+    "ast_hash": "7330837446c9e92e2b739b92541fad9c",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\pine\\PINE_SPEC.md": {
-    "mtime": 1780036414.3723152,
-    "ast_hash": "a72eed457a4d8dc652bcb3e338f5e8f6",
+    "mtime": 1780185431.4395936,
+    "ast_hash": "46da252e7c904806628fcb08b9fd8fd5",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\pine\\prompts_for_claude.md": {
-    "mtime": 1780025749.4794943,
-    "ast_hash": "cae310f79c18a47abb03a639d947778a",
+    "mtime": 1780147333.5927627,
+    "ast_hash": "86ef3b2574c86c9d5e702c3d14e583bc",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_cli_reconcile_parity.py": {
+    "mtime": 1780149867.1737978,
+    "ast_hash": "bc8badcce22aa131aee9c71155a2d909",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_reconcile_breaker_sync.py": {
+    "mtime": 1780138820.4897926,
+    "ast_hash": "f7c85a0dabbdeb24875a22a68bb442a1",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_signals_deviation_tp.py": {
+    "mtime": 1780145911.4873896,
+    "ast_hash": "2dd189dfca05c90f2e0610fdbc63b906",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_sl_repair_precision.py": {
+    "mtime": 1780138820.4924538,
+    "ast_hash": "bf29d7f13a577b4c3f6ca84b2061d7d8",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-30-pine-v1-fidelity-fixes-spec.md": {
+    "mtime": 1780149802.9235344,
+    "ast_hash": "d1b94fdbf81b0026606d4a627a453bdf",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\plans\\2026-05-30-critical-ops-safety-integration.md": {
+    "mtime": 1780138736.252934,
+    "ast_hash": "9d5c9ec844108db361bcac62d457c50f",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_timeframe_profiles.py": {
+    "mtime": 1780203581.1489959,
+    "ast_hash": "61a84d70f112bd816840098b457e69ec",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_hermes-capability-map.md": {
+    "mtime": 1780203041.30748,
+    "ast_hash": "49bb9b568e6d6059d09bd714479bd116",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\specs\\2026-05-31-trade-horizon-profiles-design-spec.md": {
+    "mtime": 1780203548.720455,
+    "ast_hash": "8147c3fbe0659099a1c7377e1d5daecb",
     "semantic_hash": ""
   }
 }

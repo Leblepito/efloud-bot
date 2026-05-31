@@ -1,0 +1,673 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: var(--font-inter), Inter, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), 'JetBrains Mono', monospace;
+  --font-display: var(--font-outfit), 'Outfit', system-ui, sans-serif;
+}
+
+/* ══════════════════════════════════════════════════════════
+   U2Algo Design Token System — CSS Custom Properties
+   Synced with lib/design-tokens.ts
+   ══════════════════════════════════════════════════════════ */
+
+:root {
+  /* Brand */
+  --u2-primary: #06b6d4;
+  --u2-primary-light: #22d3ee;
+  --u2-primary-dark: #0891b2;
+  --u2-primary-muted: rgba(6, 182, 212, 0.1);
+  --u2-primary-border: rgba(6, 182, 212, 0.3);
+  --u2-secondary: #3b82f6;
+  --u2-secondary-dark: #2563eb;
+  --u2-accent: #a855f7;
+  --u2-accent-muted: rgba(168, 85, 247, 0.1);
+
+  /* CLAUDE.md Design System — exact brand colors */
+  --u2-cyan: #00f0ff;
+  --u2-green: #00ff88;
+  --u2-red: #ff3366;
+  --u2-yellow: #ffaa00;
+
+  /* Status */
+  --u2-success: #34d399;
+  --u2-success-bg: rgba(52, 211, 153, 0.1);
+  --u2-danger: #f87171;
+  --u2-danger-bg: rgba(248, 113, 113, 0.1);
+  --u2-warning: #fbbf24;
+  --u2-warning-bg: rgba(251, 191, 36, 0.1);
+
+  /* Surfaces */
+  --u2-surface-base: #000000;
+  --u2-surface-raised: rgba(15, 23, 42, 0.6);
+  --u2-surface-overlay: rgba(30, 41, 59, 0.4);
+  --u2-surface-hover: rgba(30, 41, 59, 0.6);
+  --u2-nav-bg: rgba(15, 23, 42, 0.5);
+
+  /* Borders */
+  --u2-border-subtle: rgba(255, 255, 255, 0.05);
+  --u2-border-default: rgba(255, 255, 255, 0.1);
+  --u2-border-hover: rgba(255, 255, 255, 0.2);
+
+  /* Text */
+  --u2-text-primary: #f8fafc;
+  --u2-text-secondary: #94a3b8;
+  --u2-text-muted: #94a3b8;
+
+  /* Effects */
+  --u2-glass-blur: 24px;
+  --u2-shadow-glow: 0 0 20px rgba(6, 182, 212, 0.25);
+  --u2-shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+  /* Radius */
+  --u2-radius-sm: 6px;
+  --u2-radius-md: 8px;
+  --u2-radius-lg: 12px;
+  --u2-radius-xl: 16px;
+
+  /* shadcn/ui tokens — trading dark-first theme */
+
+  --background: oklch(0.065 0.01 265);       /* #0a0a0f deep dark */
+
+  --foreground: oklch(0.97 0.005 265);       /* #f8fafc near-white */
+
+  --card: oklch(0.1 0.012 265);             /* #12121a card surface */
+
+  --card-foreground: oklch(0.97 0.005 265);
+
+  --popover: oklch(0.1 0.012 265);
+
+  --popover-foreground: oklch(0.97 0.005 265);
+
+  --primary: oklch(0.585 0.22 264);          /* #6366f1 indigo */
+
+  --primary-foreground: oklch(0.985 0 0);
+
+  --secondary: oklch(0.155 0.012 265);       /* dark secondary surface */
+
+  --secondary-foreground: oklch(0.97 0.005 265);
+
+  --muted: oklch(0.145 0.012 265);           /* #1e1e2e muted bg */
+
+  --muted-foreground: oklch(0.6 0.01 265);   /* subdued text */
+
+  --accent: oklch(0.53 0.22 293);            /* #8b5cf6 purple accent */
+
+  --accent-foreground: oklch(0.985 0 0);
+
+  --destructive: oklch(0.63 0.22 25);        /* #ef4444 red */
+
+  --destructive-foreground: oklch(0.985 0 0);
+
+  --border: oklch(0.22 0.012 265);           /* #2e2e3e subtle border */
+
+  --input: oklch(0.22 0.012 265);
+
+  --ring: oklch(0.585 0.22 264);             /* indigo focus ring */
+
+  --chart-1: oklch(0.809 0.105 251.813);
+
+  --chart-2: oklch(0.623 0.214 259.815);
+
+  --chart-3: oklch(0.546 0.245 262.881);
+
+  --chart-4: oklch(0.488 0.243 264.376);
+
+  --chart-5: oklch(0.424 0.199 265.638);
+
+  --radius: 0.625rem;
+
+  --sidebar: oklch(0.1 0.012 265);
+
+  --sidebar-foreground: oklch(0.97 0.005 265);
+
+  --sidebar-primary: oklch(0.585 0.22 264);
+
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+
+  --sidebar-accent: oklch(0.145 0.012 265);
+
+  --sidebar-accent-foreground: oklch(0.97 0.005 265);
+
+  --sidebar-border: oklch(0.22 0.012 265);
+
+  --sidebar-ring: oklch(0.585 0.22 264);
+
+  /* Trading status tokens */
+  --success: oklch(0.625 0.19 142);          /* #22c55e green LONG/profit */
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.72 0.18 60);            /* #f59e0b amber */
+  --warning-foreground: oklch(0.1 0 0);
+
+  /* Legacy aliases — will be removed after full migration */
+  --u2-primary: var(--primary);
+  --u2-primary-light: oklch(0.65 0.22 264);
+  --u2-primary-dark: oklch(0.52 0.22 264);
+  --u2-primary-muted: oklch(0.585 0.22 264 / 10%);
+  --u2-primary-border: oklch(0.585 0.22 264 / 30%);
+  --u2-accent: var(--accent);
+  --u2-accent-muted: oklch(0.53 0.22 293 / 10%);
+  --u2-success: var(--success);
+  --u2-success-bg: oklch(0.625 0.19 142 / 10%);
+  --u2-danger: var(--destructive);
+  --u2-danger-bg: oklch(0.63 0.22 25 / 10%);
+  --u2-warning: var(--warning);
+  --u2-warning-bg: oklch(0.72 0.18 60 / 10%);
+  --u2-surface-base: var(--background);
+  --u2-surface-raised: oklch(0.1 0.012 265 / 60%);
+  --u2-surface-overlay: oklch(0.155 0.012 265 / 40%);
+  --u2-surface-hover: oklch(0.155 0.012 265 / 60%);
+  --u2-nav-bg: oklch(0.1 0.012 265 / 50%);
+  --u2-border-subtle: oklch(1 0 0 / 5%);
+  --u2-border-default: oklch(1 0 0 / 10%);
+  --u2-border-hover: oklch(1 0 0 / 20%);
+  --u2-text-primary: var(--foreground);
+  --u2-text-secondary: oklch(0.6 0.01 265);
+  --u2-text-muted: oklch(0.48 0.01 265);
+  --u2-shadow-glow: 0 0 20px oklch(0.585 0.22 264 / 25%);
+
+  /* Contextual palettes — Full Site Redesign 2026-03-25 */
+
+  /* Landing cinematic */
+  --u2-hero-gradient-start: #0a0a1a;
+  --u2-hero-gradient-mid: #0d1b2a;
+  --u2-hero-gradient-end: #1b2838;
+  --u2-hero-glow: rgba(0, 240, 255, 0.15);
+  --u2-hero-accent: #00f0ff;
+
+  /* Education warm */
+  --u2-edu-surface: #1a1a2e;
+  --u2-edu-accent: #7c3aed;
+  --u2-edu-warm: #f59e0b;
+  --u2-edu-success: #22c55e;
+  --u2-edu-fun: #ec4899;
+
+  /* Trading pro */
+  --u2-trade-surface: #0a0a0f;
+  --u2-trade-grid: rgba(255, 255, 255, 0.02);
+  --u2-trade-bullish: #00ff88;
+  --u2-trade-bearish: #ff3366;
+  --u2-trade-neutral: #64748b;
+
+  /* ══════════════════════════════════════════════════════════
+     Phase 1 Design System Additions (Claude Design tool)
+     Source: docs/superpowers/plans/2026-04-21-design-system-v2-integration.md
+     Canonical names per HANDOFF.md — do not rename.
+     ══════════════════════════════════════════════════════════ */
+
+  /* Brand companions (gradient stops) */
+  --u2-cyan-alt: #0080ff;                                    /* electric blue, end of cyan→blue gradient */
+  --u2-gradient-cyan: linear-gradient(135deg, #00f0ff 0%, #0080ff 100%);
+  --u2-gradient-text: linear-gradient(90deg, #00f0ff 0%, #0080ff 50%, #a855f7 100%);
+
+  /* Hero canvas — three layered radials (drop on body, background-attachment: fixed) */
+  --u2-bg-hero:
+    radial-gradient(ellipse 70% 55% at 15% 20%, rgba(0, 240, 255, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 45% at 85% 30%, rgba(99, 102, 241, 0.07) 0%, transparent 65%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(168, 85, 247, 0.06) 0%, transparent 70%);
+  --u2-bg-base: #050510;                                     /* near-black blue-tinted, behind hero */
+
+  /* Card surface (canonical — over hero, not over #000) */
+  --u2-card-bg: rgba(255, 255, 255, 0.03);
+  --u2-card-bg-raised: rgba(255, 255, 255, 0.05);
+  --u2-card-border: rgba(255, 255, 255, 0.06);
+  --u2-card-border-hover: rgba(255, 255, 255, 0.12);
+
+  /* Motion durations */
+  --u2-dur-fast: 150ms;
+  --u2-dur-base: 300ms;
+  --u2-dur-slow: 500ms;
+
+  /* Easing curves */
+  --u2-ease-standard: cubic-bezier(0.16, 1, 0.3, 1);          /* out-expo-ish, default for transitions */
+  --u2-ease-emphasized: cubic-bezier(0.34, 1.56, 0.64, 1);    /* overshoot, playful affordances */
+
+  /* Calibrated motion durations — domain-specific */
+  --u2-flash-pricecell: 600ms;                                /* PriceCell green/red wash; do not change */
+
+  /* Font aliases for direct CSS use (mirror @theme --font-* values) */
+  --u2-font-display: var(--font-outfit), 'Outfit', system-ui, sans-serif;
+  --u2-font-body: var(--font-inter), Inter, system-ui, sans-serif;
+  --u2-font-mono: var(--font-jetbrains), 'JetBrains Mono', monospace;
+}
+
+/* ── Light Mode ──────────────────────────────────────── */
+.light {
+  --u2-surface-base: #f8fafc;
+  --u2-surface-raised: rgba(255, 255, 255, 0.85);
+  --u2-surface-overlay: rgba(255, 255, 255, 0.6);
+  --u2-surface-hover: rgba(241, 245, 249, 0.8);
+  --u2-nav-bg: rgba(255, 255, 255, 0.9);
+  --u2-border-subtle: rgba(0, 0, 0, 0.06);
+  --u2-border-default: rgba(0, 0, 0, 0.10);
+  --u2-border-hover: rgba(0, 0, 0, 0.18);
+  --u2-text-primary: #0f172a;
+  --u2-text-secondary: #334155;
+  --u2-text-muted: #94a3b8;
+  --u2-shadow-glow: 0 0 20px rgba(6, 182, 212, 0.12);
+  --u2-shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+  --u2-primary-muted: rgba(6, 182, 212, 0.08);
+  --u2-success-bg: rgba(22, 163, 74, 0.08);
+  --u2-danger-bg: rgba(220, 38, 38, 0.08);
+  --u2-warning-bg: rgba(202, 138, 4, 0.08);
+  --background: var(--u2-surface-base);
+  --foreground: var(--u2-text-primary);
+}
+
+/* Light mode class-based overrides (backward compat with existing Tailwind classes) */
+.light .bg-black { background: var(--u2-surface-base) !important; }
+.light .bg-slate-900\/60, .light .bg-slate-900\/50, .light .bg-slate-900\/30 { background: var(--u2-surface-raised) !important; }
+.light .bg-slate-800\/40 { background: var(--u2-surface-overlay) !important; }
+.light .border-white\/5, .light .border-white\/10 { border-color: var(--u2-border-default) !important; }
+.light .text-white { color: var(--u2-text-primary) !important; }
+.light .text-slate-200 { color: var(--u2-text-secondary) !important; }
+.light .text-slate-300 { color: #475569 !important; }
+.light .text-slate-400 { color: var(--u2-text-muted) !important; }
+.light .text-slate-500 { color: #94a3b8 !important; }
+.light .text-slate-600 { color: #475569 !important; }
+.light .bg-white\/5 { background: rgba(0, 0, 0, 0.04) !important; }
+.light .bg-white\/10 { background: rgba(0, 0, 0, 0.06) !important; }
+.light nav { background: var(--u2-nav-bg) !important; backdrop-filter: blur(12px); }
+.light .shadow-2xl { box-shadow: var(--u2-shadow-lg) !important; }
+
+/* Light mode — hardcoded bg/border/text overrides for inline dark values */
+.light .bg-\[\#0d1117\] { background: #ffffff !important; }
+.light .bg-\[\#0a0a0f\]\/90 { background: rgba(255, 255, 255, 0.92) !important; }
+.light .border-white\/\[0\.06\] { border-color: rgba(0, 0, 0, 0.10) !important; }
+.light .bg-white\/\[0\.02\] { background: rgba(0, 0, 0, 0.03) !important; }
+.light .bg-white\/\[0\.03\] { background: rgba(0, 0, 0, 0.03) !important; }
+.light .bg-white\/\[0\.04\] { background: rgba(0, 0, 0, 0.04) !important; }
+.light .hover\:bg-white\/\[0\.04\]:hover { background: rgba(0, 0, 0, 0.05) !important; }
+.light .hover\:bg-white\/\[0\.02\]:hover { background: rgba(0, 0, 0, 0.03) !important; }
+.light .hover\:text-white:hover { color: var(--u2-text-primary) !important; }
+.light .hover\:border-\[\#00f0ff\]\/30:hover { border-color: rgba(6, 182, 212, 0.35) !important; }
+.light .bg-\[\#00f0ff\]\/10 { background: rgba(6, 182, 212, 0.08) !important; }
+.light .bg-\[\#00f0ff\]\/\[0\.03\] { background: rgba(6, 182, 212, 0.05) !important; }
+
+/* Light mode — background gradient fix */
+.light .from-black { --tw-gradient-from: #f8fafc !important; }
+.light .via-black { --tw-gradient-via: #f0f4f8 !important; }
+.light .to-black { --tw-gradient-to: #e2e8f0 !important; }
+
+/* Light mode — selection */
+.light ::selection { background: rgba(6, 182, 212, 0.15); color: #0e7490; }
+
+/* Light mode — modal overlay */
+.light .bg-black\/60 { background: rgba(0, 0, 0, 0.3) !important; }
+
+/* Light mode — glow effects toned down */
+.light .shadow-lg.shadow-\[\#00f0ff\]\/25 { box-shadow: 0 4px 14px -3px rgba(6, 182, 212, 0.2) !important; }
+
+/* Light mode — hover:text-white on colored links */
+.light .hover\:text-white:hover { color: var(--u2-text-primary) !important; }
+
+/* ── Tailwind Theme Binding ──────────────────────────── */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ── Utility Classes ─────────────────────────────────── */
+@layer utilities {
+  .glass-panel {
+    background: var(--u2-surface-raised);
+    backdrop-filter: blur(var(--u2-glass-blur));
+    border: 1px solid var(--u2-border-default);
+    box-shadow: var(--u2-shadow-lg);
+  }
+
+  .glass-card {
+    background: var(--u2-surface-overlay);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--u2-border-subtle);
+    transition: all 300ms ease-out;
+  }
+  .glass-card:hover {
+    background: var(--u2-surface-hover);
+    border-color: var(--u2-primary-border);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600;
+  }
+
+  .nav-link-default {
+    color: var(--u2-text-muted);
+  }
+  .nav-link-default:hover {
+    color: var(--u2-text-primary);
+    background: var(--u2-surface-hover);
+  }
+}
+
+/* ── Base ────────────────────────────────────────────── */
+body {
+  background: var(--u2-surface-base);
+  color: var(--u2-text-primary);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Animations ──────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.25s ease-out; }
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up { animation: slide-up 0.5s ease-out; }
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 0.2; }
+}
+.animate-glow-pulse { animation: glow-pulse 4s ease-in-out infinite; }
+
+@keyframes cta-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 240, 255, 0.25), 0 0 40px rgba(0, 240, 255, 0.1); }
+  50% { box-shadow: 0 0 30px rgba(0, 240, 255, 0.4), 0 0 60px rgba(0, 240, 255, 0.15); }
+}
+.animate-cta-glow { animation: cta-glow 3s ease-in-out infinite; }
+
+@keyframes hero-ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes hero-gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite ease-in-out;
+}
+.light .skeleton-shimmer {
+  background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
+  background-size: 200% 100%;
+}
+
+/* Bot Dashboard — Terminal Luxe */
+@keyframes stagger-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-stagger-in { animation: stagger-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(6px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.animate-count-up { animation: count-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes live-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px transparent; }
+}
+.animate-live-dot { animation: live-dot 2s ease-in-out infinite; }
+
+@keyframes glow-border {
+  0%, 100% { border-color: rgba(0, 240, 255, 0.2); box-shadow: 0 0 15px rgba(0, 240, 255, 0.05); }
+  50% { border-color: rgba(0, 240, 255, 0.4); box-shadow: 0 0 25px rgba(0, 240, 255, 0.1); }
+}
+.animate-glow-border { animation: glow-border 3s ease-in-out infinite; }
+
+.bot-grid-bg {
+  background-image:
+    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.light .bot-grid-bg {
+  background-image:
+    linear-gradient(rgba(6, 182, 212, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.06) 1px, transparent 1px);
+}
+
+.font-mono-nums { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.font-display { font-family: var(--font-outfit), 'Outfit', system-ui, sans-serif; }
+
+/* Scroll-triggered animation base */
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+.scroll-reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Trading dot-grid background */
+.trading-grid-bg {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.light .trading-grid-bg {
+  background-image: radial-gradient(circle, rgba(0,0,0,0.04) 1px, transparent 1px);
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide { scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Modal / Dropdown animations */
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-content-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes thinkingBounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ── Mobile ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+  button, a { min-height: 36px; }
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .overflow-x-auto::-webkit-scrollbar { display: none; }
+}
+
+/* ── PWA Safe Area ───────────────────────────────────── */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ── Accessibility: focus-visible ring ── */
+:focus-visible {
+  outline: 2px solid var(--u2-cyan);
+  outline-offset: 2px;
+  border-radius: var(--u2-radius-sm);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--u2-cyan);
+  outline-offset: 2px;
+}
+
+/* Remove default outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.dark {
+  /* Dark mode — same as :root since we are dark-first */
+  --background: oklch(0.065 0.01 265);
+  --foreground: oklch(0.97 0.005 265);
+  --card: oklch(0.1 0.012 265);
+  --card-foreground: oklch(0.97 0.005 265);
+  --popover: oklch(0.1 0.012 265);
+  --popover-foreground: oklch(0.97 0.005 265);
+  --primary: oklch(0.585 0.22 264);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.155 0.012 265);
+  --secondary-foreground: oklch(0.97 0.005 265);
+  --muted: oklch(0.145 0.012 265);
+  --muted-foreground: oklch(0.6 0.01 265);
+  --accent: oklch(0.53 0.22 293);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.63 0.22 25);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.22 0.012 265);
+  --input: oklch(0.22 0.012 265);
+  --ring: oklch(0.585 0.22 264);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.1 0.012 265);
+  --sidebar-foreground: oklch(0.97 0.005 265);
+  --sidebar-primary: oklch(0.585 0.22 264);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.145 0.012 265);
+  --sidebar-accent-foreground: oklch(0.97 0.005 265);
+  --sidebar-border: oklch(0.22 0.012 265);
+  --sidebar-ring: oklch(0.585 0.22 264);
+  --success: oklch(0.625 0.19 142);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.72 0.18 60);
+  --warning-foreground: oklch(0.1 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Strategy code preview syntax highlighting */
+.code-keyword { color: #ff79c6; }
+.code-string { color: #f1fa8c; }
+.code-comment { color: #6272a4; }
+.code-number { color: #bd93f9; }
+.code-function { color: #50fa7b; }
+
+@keyframes orb-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes grid-drift {
+  0% { background-position: 0 0; }
+  100% { background-position: 60px 60px; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   Phase 1 Design System Keyframes (from Claude Design tool)
+   Replaces runtime-injected keyframes from src/primitives.jsx.
+   Per HANDOFF.md — preserve durations exactly.
+   ══════════════════════════════════════════════════════════ */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+/* PriceCell flash — 600ms wash on price change. Calibrated; do not change duration. */
+@keyframes price-flash-green {
+  0%   { background-color: rgba(0, 255, 136, 0.20); }
+  100% { background-color: transparent; }
+}
+
+@keyframes price-flash-red {
+  0%   { background-color: rgba(255, 51, 102, 0.20); }
+  100% { background-color: transparent; }
+}
