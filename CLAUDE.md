@@ -40,13 +40,14 @@ TradingView Pine Script v6'ya çevirmek — hem INDIKATÖR hem de STRATEGY (back
    - Next.js 15 ve Node.js 20 tabanlı pazarlama sayfası Railway üzerinde `considerate-intuition` projesi (`u2algo-site` servisi) altında yayındadır.
    - Canlı URL: `https://u2algo-site-production.up.railway.app`
 
-2. **Supabase & Postgres Fallback Entegrasyonu**:
+2. **Supabase REST & Fallback Entegrasyonu**:
    - `server.js` backend katmanı 3'lü veritabanı korumasıyla güncellendi:
-     1. `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` varsa Supabase REST API ile kayıt.
+     1. `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` varsa Supabase REST API ile kayıt. (Canlıda şu an bu aktif!).
      2. `DATABASE_URL` veya `SUPABASE_DATABASE_URL` varsa doğrudan PostgreSQL (`pg` driver) ile kayıt ve otomatik tablo migrasyonu (`ensureWaitlistTable`).
      3. Her iki DB bağlantısı koptuğunda veya erişilemez olduğunda `local-jsonl` (`data/waitlist_leads.jsonl`) fallback korumasıyla kesintisiz `200 OK` yanıtı.
-   - Supabase direct host bağlantısı IPv6-only olduğu için local ve Railway ortamlarında `ENETUNREACH` vermektedir. Çözüm olarak Supabase Dashboard'dan alınacak **IPv4 pooler DSN** ile `DATABASE_URL` güncellenmelidir.
+   - **Mevcut Canlı Durum**: Kırık direct Postgres bağlantısı (`DATABASE_URL`) kaldırıldı. `SUPABASE_URL` ve Key'ler Railway'e başarıyla bağlandı. REST API yetkilendirmesi çalışıyor (health check `PGRST205` dönüyor; yani tablo henüz hazır değil). Tablo oluşturulana kadar waitlist kayıtları yerel JSONL fallback'ine güvenle yazılıyor.
 
 3. **Hermes MCP Postgres Sunucusu**:
    - Local makinede `supabase_postgres` MCP server kuruldu (7 tool: `health`, `list_tables`, `table_columns`, `ensure_waitlist_leads`, `waitlist_count`, `waitlist_list`, `waitlist_insert`).
+
 
