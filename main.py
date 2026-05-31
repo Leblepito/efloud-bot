@@ -141,10 +141,16 @@ def setup_logging(level: str = "INFO", log_file: str = "efloud_bot.log",
 # ═══════════════════════════════════════════════
 
 def load_config(path: str = "config.yaml") -> dict:
+    from data.timeframes import resolve_timeframes
     if not Path(path).exists():
         raise FileNotFoundError(f"Config not found: {path}")
     with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    # Resolve trade-horizon profile → concrete entry/mtf/htf in place, so every
+    # consumer reading cfg["timeframes"] sees the resolved chain (fail-fast on
+    # unknown profile or non-monotonic chain). No `profile` key → unchanged.
+    resolve_timeframes(cfg)
+    return cfg
 
 
 def validate_config(cfg: dict) -> bool:
@@ -241,7 +247,8 @@ def print_banner(cfg: dict, api_key: str, symbols: Optional[list] = None):
     sym_str = ", ".join(symbols) if symbols else "[resolved at startup]"
     if len(sym_str) > 50:
         sym_str = sym_str[:47] + "..."
-    chain = f'{cfg["timeframes"]["entry"]} → {cfg["timeframes"]["mtf"]} → {cfg["timeframes"]["htf"]}'
+    _prof = cfg["timeframes"].get("profile", "custom")
+    chain = f'[{_prof}] {cfg["timeframes"]["entry"]} → {cfg["timeframes"]["mtf"]} → {cfg["timeframes"]["htf"]}'
     mode = f"{dry} | {net}{watch}"
 
     log = logging.getLogger("efloud.main")

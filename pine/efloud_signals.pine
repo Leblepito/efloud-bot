@@ -14,8 +14,13 @@ indicator("EFloud Signals v2", overlay = true, max_lines_count = 500, max_labels
 // INPUTS  (strateji dosyasıyla AYNI isimler — senkron şart)
 // ─────────────────────────────────────────────────────────────────────────────
 grpTF   = "Timeframe Chain"
-htfTf   = input.timeframe("240", "HTF (bias / anchor / likidite)", group = grpTF)   // 4h
-// LTF = grafik TF'i (15m beklenir). Daily filtre opsiyonel:
+// ── Trade-Horizon Profili (V2 = 2-TF: htf + entry; mtf YOK) — bot config ile senkron ──
+//   scalp = 5m/.../12h · mid = 15m/.../4h · long = 1h/.../1w · custom = aşağıdaki input
+profileMode = input.string("mid", "Trade-Horizon Profili", options = ["scalp", "mid", "long", "custom"], group = grpTF)
+customHtf   = input.timeframe("240", "Custom HTF (profile=custom)", group = grpTF)
+profEntry = profileMode == "scalp" ? "5"   : profileMode == "mid" ? "15"  : profileMode == "long" ? "60"  : ""
+htfTf     = profileMode == "scalp" ? "720" : profileMode == "mid" ? "240" : profileMode == "long" ? "W"   : customHtf
+// LTF = grafik TF'i (profile entry ile eşleşmeli). Daily filtre opsiyonel:
 useDaily   = input.bool(false, "Daily makro filtre kullan", group = grpTF)
 dailyTf    = input.timeframe("1D", "Daily TF", group = grpTF)
 dailyStrict= input.bool(false, "Daily filtre SERT (ters yön reddet)", group = grpTF)
@@ -435,6 +440,12 @@ if showZones and barstate.islast and array.size(sDir) > 0
 
 // HTF bias arka plan tonu
 bgcolor(htfBias == 1 ? color.new(color.teal, 95) : htfBias == -1 ? color.new(color.red, 95) : na, title = "HTF bias")
+
+// ── Yanlış grafik TF uyarısı (grafik TF profil entry'siyle eşleşmeli) ──
+//   profEntry == "" → custom profil, uyarı yok.
+var table warnTbl = table.new(position.top_right, 1, 1)
+if barstate.islast and profEntry != "" and timeframe.period != profEntry
+    table.cell(warnTbl, 0, 0, "⚠️ YANLIŞ ZAMAN DİLİMİ\nGrafik TF=" + timeframe.period + " · profil(" + profileMode + ") entry=" + profEntry, bgcolor = color.new(color.red, 10), text_color = color.white, text_size = size.normal)
 
 // ── Alerts ──
 alertcondition(firedLong,  title = "EFloud V2 LONG",  message = "EFloud V2 LONG entry confirmed")

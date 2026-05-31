@@ -106,6 +106,15 @@ class BotRunner:
             return
 
         self.cfg = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8"))
+        # Resolve trade-horizon profile in place (parity with main.load_config) —
+        # daemon path must not silently read a stale/unresolved timeframe chain.
+        from data.timeframes import resolve_timeframes
+        try:
+            resolve_timeframes(self.cfg)
+        except ValueError as e:
+            log.error(f"⛔ Timeframe profile resolution failed: {e}")
+            self.last_error = f"Timeframe profile resolution failed: {e}"
+            return
 
         try:
             validate_config(self.cfg)
