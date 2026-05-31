@@ -5,7 +5,7 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\main.py": {
-    "mtime": 1780203823.8770208,
+    "mtime": 1780220061.1675694,
     "ast_hash": "9d582e85ebb9e43d18d5c285fc6ccb57",
     "semantic_hash": ""
   },
@@ -85,7 +85,7 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\bot_runner.py": {
-    "mtime": 1780203738.1065452,
+    "mtime": 1780220060.9515727,
     "ast_hash": "377f2cf60ffbec1d97a24a6b077b5717",
     "semantic_hash": ""
   },
@@ -645,7 +645,7 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backtest\\cli.py": {
-    "mtime": 1780203797.017796,
+    "mtime": 1780220060.957698,
     "ast_hash": "c9120dbd2d9b8188455cbc869c094c88",
     "semantic_hash": ""
   },
@@ -715,7 +715,7 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\data\\timeframes.py": {
-    "mtime": 1780203682.566735,
+    "mtime": 1780220060.9656196,
     "ast_hash": "ba2d10a6eafbd85430a6573bc035f6e0",
     "semantic_hash": ""
   },
@@ -1235,7 +1235,7 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\scripts\\run_phase_a.py": {
-    "mtime": 1780203814.177784,
+    "mtime": 1780220061.1898618,
     "ast_hash": "c59241e3f4f019db1ff99c2cfdc07522",
     "semantic_hash": ""
   },
@@ -1525,8 +1525,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\README.md": {
-    "mtime": 1778584772.7726667,
-    "ast_hash": "19888533c76fb557d2f5e81d2f393e9e",
+    "mtime": 1780220060.9472542,
+    "ast_hash": "2761a6db30dfecfb59f9fd8ed3e776ec",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\requirements.txt": {
@@ -1600,7 +1600,7 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\configs\\config.phase2_1k.yaml": {
-    "mtime": 1780203828.9222825,
+    "mtime": 1780220060.9615314,
     "ast_hash": "be2cbaf21cb71ea5c639f436f6d98f6e",
     "semantic_hash": ""
   },
@@ -1665,12 +1665,12 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\ROADMAP_AI_INTEGRATION.md": {
-    "mtime": 1780205468.5109818,
+    "mtime": 1780220060.9697344,
     "ast_hash": "ff6e50879b3ef924af3f4999edfd732c",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\skill_log.md": {
-    "mtime": 1780205461.389837,
+    "mtime": 1780220060.9902418,
     "ast_hash": "0003701c2e7b689c6a9ac61ed065d8c2",
     "semantic_hash": ""
   },
@@ -2595,303 +2595,313 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\plans\\2026-05-30-critical-ops-safety-integration.md": {
-    "mtime": 1780138736.252934,
+    "mtime": 1780220060.9912734,
     "ast_hash": "9d5c9ec844108db361bcac62d457c50f",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\backend\\tests\\test_timeframe_profiles.py": {
-    "mtime": 1780203581.1489959,
-    "ast_hash": "61a84d70f112bd816840098b457e69ec",
+    "mtime": 1780220060.9527357,
+    "ast_hash": "288148a741a4c34fc24238f883566f39",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_hermes-capability-map.md": {
-    "mtime": 1780203041.30748,
-    "ast_hash": "49bb9b568e6d6059d09bd714479bd116",
+    "mtime": 1780220060.971322,
+    "ast_hash": "bce19b9231edbc7d255a6f4dff6e0daf",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\specs\\2026-05-31-trade-horizon-profiles-design-spec.md": {
-    "mtime": 1780203548.720455,
-    "ast_hash": "8147c3fbe0659099a1c7377e1d5daecb",
+    "mtime": 1780220060.9922836,
+    "ast_hash": "8863d51d7aaf36035a2e899ac15a5da7",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus_connector_readiness_raw.json": {
-    "mtime": 1780216362.5864296,
+    "mtime": 1780220060.9751186,
     "ast_hash": "e9298af151c93e4247bd339d01f6a0a6",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\package.json": {
-    "mtime": 1780213562.0344875,
-    "ast_hash": "74f81581d1ba3040965c40b80999d29e",
+    "mtime": 1780223026.8457732,
+    "ast_hash": "771ba679395d20d83cf2a90dd1077a4d",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\railway.json": {
-    "mtime": 1780212239.3158808,
-    "ast_hash": "ee294badbf4246c5d86e8ca4245587de",
+    "mtime": 1780220061.239282,
+    "ast_hash": "b9baac93de0122a1276db0c5883e95cf",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\server.js": {
-    "mtime": 1780218630.311223,
-    "ast_hash": "3097394b2e50881d9b5296f8934d6c08",
+    "mtime": 1780223293.8260252,
+    "ast_hash": "9fd80a4e8c2cbd569f4f300dfd49f6b2",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\css\\postcss.config.mjs": {
-    "mtime": 1780207475.611641,
+    "mtime": 1780220061.2048817,
     "ast_hash": "481fac0fdecd70e1821cc30b86030c1a",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\css\\root-layout.tsx": {
-    "mtime": 1780207475.7281222,
+    "mtime": 1780220061.2059658,
     "ast_hash": "178e78dfef4368c3b802d32e2f53af5c",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\ComparisonTable.tsx": {
-    "mtime": 1780207475.9015076,
+    "mtime": 1780220061.2077856,
     "ast_hash": "2e3d370c60f7a9adf74eaffab5709980",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\CTABanner.tsx": {
-    "mtime": 1780207475.947332,
+    "mtime": 1780220061.2066772,
     "ast_hash": "366a39764243149a954b4819a1086b23",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\DashboardPreview.tsx": {
-    "mtime": 1780207475.9914067,
+    "mtime": 1780220061.2088783,
     "ast_hash": "d4a02a4d7f610955d403dec22d89923a",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\FAQ.tsx": {
-    "mtime": 1780207476.0671918,
+    "mtime": 1780220061.2094233,
     "ast_hash": "cf9dd9bec7435b573710fbbc74382392",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\FAQSection.tsx": {
-    "mtime": 1780207476.1741512,
+    "mtime": 1780220061.2099721,
     "ast_hash": "b32f5a6cbd852c5d1584ec6c5d9fe0ab",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\FeatureCards.tsx": {
-    "mtime": 1780207476.248474,
+    "mtime": 1780220061.2105134,
     "ast_hash": "318b1c19d7b75080c665bf13685c71c7",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\HeroSection.tsx": {
-    "mtime": 1780207476.3156219,
+    "mtime": 1780220061.2115881,
     "ast_hash": "a0c812b8eb57d172f02ef4f15fe26ee3",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\LiveStatsBanner.tsx": {
-    "mtime": 1780207476.402192,
+    "mtime": 1780220061.212122,
     "ast_hash": "0b45a0d02f51da9db47189b35ce19a98",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\MarketChartHero.tsx": {
-    "mtime": 1780207476.4551334,
+    "mtime": 1780220061.2132137,
     "ast_hash": "65d1f718896f5a488add84cd8c4bdaba",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\PartnerLogoBanner.tsx": {
-    "mtime": 1780207476.5102258,
+    "mtime": 1780220061.2137806,
     "ast_hash": "a9ef75e6a87be2f205b14cf9e029e2a5",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\PricingTable.tsx": {
-    "mtime": 1780207476.5824032,
+    "mtime": 1780220061.2143207,
     "ast_hash": "8537c79ced83ffaeed9f7655c70d8c34",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\RiskDisclaimer.tsx": {
-    "mtime": 1780207476.6284323,
+    "mtime": 1780220061.2159483,
     "ast_hash": "e11cdedceb7b24f25546cfd38a7220a6",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\ROICalculator.tsx": {
-    "mtime": 1780207476.673972,
+    "mtime": 1780220061.2154016,
     "ast_hash": "3aafb4897439d8bc18c6a48e0420ca4b",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\SocialProofTicker.tsx": {
-    "mtime": 1780207476.7416005,
+    "mtime": 1780220061.2166617,
     "ast_hash": "ea64c6c313efe3d3778e5d2932ec1e76",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\Testimonials.tsx": {
-    "mtime": 1780207476.8079731,
+    "mtime": 1780220061.2177165,
     "ast_hash": "4b8a5d9722e7472f3e3ce69c63103859",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\TrustStrip.tsx": {
-    "mtime": 1780207476.8683674,
+    "mtime": 1780220061.2182698,
     "ast_hash": "47fe020904f02246ba4c353b26cfac89",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\VideoShowcaseStrip.tsx": {
-    "mtime": 1780207476.9032962,
+    "mtime": 1780220061.2193363,
     "ast_hash": "b5525750156e30bb693a39de9f180836",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\VideoTestimonial.tsx": {
-    "mtime": 1780207476.957657,
+    "mtime": 1780220061.2204144,
     "ast_hash": "a9daa22b2943455fd79fff5eb605b152",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\scripts\\smoke.js": {
-    "mtime": 1780216031.6545808,
-    "ast_hash": "8adb99463bfda76ed16cb1d7a529a162",
+    "mtime": 1780220061.2426534,
+    "ast_hash": "d524338bc182afa3ef10e9c3e8a09e6e",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\supabase\\waitlist_leads.sql": {
-    "mtime": 1780213759.219328,
-    "ast_hash": "a5cb836b0e434f1620cbac23befa5e60",
+    "mtime": 1780220061.2454157,
+    "ast_hash": "4f527a407bfb893288c073eb15aa516e",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\web\\package.json": {
-    "mtime": 1780212939.9363694,
-    "ast_hash": "c3725cb366040ebeab9ff36ed0599ff3",
+    "mtime": 1780220061.247146,
+    "ast_hash": "3dcaf50f132b31a15a8fdcc5decbdc0f",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus-connectors-task-distribution.md": {
-    "mtime": 1780211199.6820564,
-    "ast_hash": "0d96bd6de9a1a9e5916f3fa237b7a153",
+    "mtime": 1780220060.9724054,
+    "ast_hash": "eec16ef2ff33cb4252d36c608d134d41",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus-launch-draft-raw.txt": {
-    "mtime": 1780215948.032102,
+    "mtime": 1780220060.9729483,
     "ast_hash": "b75397aa2f6a8857dd0c881de0c0f35d",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus-mcp-bridge.md": {
-    "mtime": 1780211317.5670266,
-    "ast_hash": "a2d9578a876776f9a470e69bff2aef67",
+    "mtime": 1780220060.9734905,
+    "ast_hash": "6ad40f520da9935c5fe188b2987a4a17",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_trade-horizon-profiles-complete.md": {
-    "mtime": 1780205473.4675333,
-    "ast_hash": "799d6ffd61d78078fd2925555ff9c599",
+    "mtime": 1780220060.9761984,
+    "ast_hash": "8e50b126f5086f5464d451c52fbbab7c",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_u2algo-railway-live.md": {
-    "mtime": 1780213776.1677601,
-    "ast_hash": "a2226c39ff7aed31123e1f5e3766eccf",
+    "mtime": 1780220060.9767263,
+    "ast_hash": "6664c917119f73e490862031a7d867e4",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_u2algo_launch_draft_only.md": {
-    "mtime": 1780215982.6941972,
-    "ast_hash": "0a21895f3a484cd707b11862ce794e78",
+    "mtime": 1780220060.9783502,
+    "ast_hash": "e17483b38e9c73bebc76e1c7cec2b6f0",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_u2algo_launch_readiness.md": {
-    "mtime": 1780216347.7221808,
-    "ast_hash": "230098467ecf0f1b1f0e2c8056a9e048",
+    "mtime": 1780220060.9788878,
+    "ast_hash": "c23e8d0881434031d01e743d5e14f6fe",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\index.html": {
-    "mtime": 1780215037.8800175,
+    "mtime": 1780220061.22588,
     "ast_hash": "843d149e9c6056827c359e83d28a0e60",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\robots.txt": {
-    "mtime": 1780216003.8066015,
-    "ast_hash": "a2825581e6906917c4a21127a31d5f28",
+    "mtime": 1780220061.2404776,
+    "ast_hash": "012e930082702f4aac5ede212117653b",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\BRAND.md": {
-    "mtime": 1780207536.9683862,
-    "ast_hash": "b20cf083d52898f7eb21a3ff7d54bd02",
+    "mtime": 1780220061.191994,
+    "ast_hash": "43cadbe99775b3737d8af53ab3485cb7",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand\\logo-horizontal.svg": {
-    "mtime": 1780207404.283,
+    "mtime": 1780220061.2220514,
     "ast_hash": "6fe9c1d0b41dd18731fd5fc896f7b787",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand\\logo-mark.svg": {
-    "mtime": 1780207404.2518399,
+    "mtime": 1780220061.2226052,
     "ast_hash": "9496179f51b7d5d5bf7f34aaa5a1bf22",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\icon-192.png": {
-    "mtime": 1780207475.750916,
+    "mtime": 1780220061.1953156,
     "ast_hash": "68ea5c58b7646c7af3a7bb1069e33db4",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\icon-512-maskable.png": {
-    "mtime": 1780207475.7845285,
+    "mtime": 1780220061.1969848,
     "ast_hash": "7345f5ac54895f6af471d6cb77b92a58",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\icon-512.png": {
-    "mtime": 1780207475.7669427,
+    "mtime": 1780220061.1992278,
     "ast_hash": "5e6ac1dedfd90e7e4426d9583a3392f6",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\logo-horizontal.svg": {
-    "mtime": 1780207475.8000574,
+    "mtime": 1780220061.2004013,
     "ast_hash": "6fe9c1d0b41dd18731fd5fc896f7b787",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\logo-mark.svg": {
-    "mtime": 1780207475.8030481,
+    "mtime": 1780220061.201044,
     "ast_hash": "9496179f51b7d5d5bf7f34aaa5a1bf22",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus_connector_readiness_raw_latest.json": {
-    "mtime": 1780218362.0401442,
+    "mtime": 1780220060.975666,
     "ast_hash": "5690726596a4ced75c46a858b190e024",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\scripts\\generate-launch-assets.js": {
-    "mtime": 1780218668.396667,
-    "ast_hash": "a7fa951fa78311e0cf39aa2a8001d4fc",
+    "mtime": 1780220061.2410145,
+    "ast_hash": "9e699306df237fbfd6e69e31ca1a281d",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\scripts\\generate-launch-pngs.py": {
-    "mtime": 1780219003.1632414,
-    "ast_hash": "bc117e975169a2f18a10fca579462051",
+    "mtime": 1780220061.242106,
+    "ast_hash": "beb7a07774e5633f05869ed0ccf753f9",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus_connector_readiness_0_u2algo_connector_readiness_report.md": {
-    "mtime": 1780218363.135442,
-    "ast_hash": "e058c259649996a7451c0e1fdb3ee77f",
+    "mtime": 1780220060.974571,
+    "ast_hash": "9d4a565a3d01e4c407867a997c763e6f",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_u2algo_final_social_approval_pack.md": {
-    "mtime": 1780219069.7066207,
-    "ast_hash": "1b3e5fe37dfb0fa8119389e113e5c029",
+    "mtime": 1780220060.9772763,
+    "ast_hash": "999607822f6983a2e9ac6fe4b6e25708",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\captions.md": {
-    "mtime": 1780219033.5986102,
-    "ast_hash": "fdab402f77bc120226a292cca261964b",
+    "mtime": 1780220061.2275019,
+    "ast_hash": "44f459402c63f1b4cbce4b1a28ff34bb",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\instagram-carousel-cover-1080x1080.png": {
-    "mtime": 1780219034.0096292,
+    "mtime": 1780220061.2292995,
     "ast_hash": "66e362aec383cc73e23bb1a3dca3d801",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\instagram-carousel-cover-1080x1080.svg": {
-    "mtime": 1780219033.5976105,
-    "ast_hash": "fda777dd9f013f9ba50f7905b84eb203",
+    "mtime": 1780220061.2304077,
+    "ast_hash": "0d8b4c12c281b157890cc851b79ac66b",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\shorts-cover-1080x1920.png": {
-    "mtime": 1780219034.1446795,
+    "mtime": 1780220061.2332547,
     "ast_hash": "8687b63d8e84b3b794bd3dc729cb7f88",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\shorts-cover-1080x1920.svg": {
-    "mtime": 1780219033.5986102,
-    "ast_hash": "54d99946cdfb0391d2d45c49c2f045f3",
+    "mtime": 1780220061.233805,
+    "ast_hash": "80fbcb0109c263bdae02996fc3bf923a",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\x-launch-1600x900.png": {
-    "mtime": 1780219033.9196336,
+    "mtime": 1780220061.2360308,
     "ast_hash": "4341fdf21cc28adf2254c8fcbf951e3f",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\x-launch-1600x900.svg": {
-    "mtime": 1780219033.5976105,
-    "ast_hash": "aba61e54a6736c1630590ce7558e66f8",
+    "mtime": 1780220061.2365785,
+    "ast_hash": "3dec0b6b53659cb6d7ca3b53f90cae1c",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_supabase_postgres_mcp_and_waitlist.md": {
+    "mtime": 1780223438.9751053,
+    "ast_hash": "50de86c6589f29e1ac7628b6ef2e0db8",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\images\\u2algo_premium_banner.png": {
+    "mtime": 1780220060.985913,
+    "ast_hash": "f5d7f7f26759b4705d5b15bcb246fffc",
     "semantic_hash": ""
   }
 }
