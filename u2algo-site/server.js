@@ -8,6 +8,7 @@ const root = __dirname;
 const port = Number(process.env.PORT || 3000);
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const localWaitlistPath = process.env.LOCAL_WAITLIST_PATH || path.join(root, 'data', 'waitlist_leads.jsonl');
 const supabase = supabaseUrl && supabaseServiceRoleKey
   ? createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: { persistSession: false },
@@ -51,6 +52,31 @@ function normalizeEmail(value) {
 
 function validEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+}
+
+async function appendLocalWaitlistLead(lead) {
+  await fs.promises.mkdir(path.dirname(localWaitlistPath), { recursive: true });
+  await fs.promises.appendFile(localWaitlistPath, `${JSON.stringify(lead)}\n`, 'utf8');
+}
+
+async function saveWaitlistLead(lead) {
+  if (!supabase) {
+    await appendLocalWaitlistLead({ ...lead, backend: 'local-jsonl' });
+    return { ok: true, backend: 'local-jsonl' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('waitlist_leads')
+      .upsert(lead, { onConflict: 'email' });
+    if (!error) return { ok: true, backend: 'supabase' };
+    console.error('waitlist_insert_failed', error.message);
+  } catch (err) {
+    console.error('waitlist_insert_failed', err && err.message ? err.message : err);
+  }
+
+  await appendLocalWaitlistLead({ ...lead, backend: 'local-jsonl-fallback' });
+  return { ok: true, backend: 'local-jsonl-fallback' };
 }
 
 async function ensureWaitlistTable() {
@@ -108,18 +134,18 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/waitlist/health') {
     if (!supabase) {
-      sendJson(res, 503, { ok: false, service: 'u2algo-waitlist', database: 'missing_supabase_env' });
+      sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'not_configured', fallback: 'local-jsonl' });
       return;
     }
     try {
       const { error } = await supabase.from('waitlist_leads').select('id', { count: 'exact', head: true }).limit(1);
       if (error) {
-        sendJson(res, 503, { ok: false, service: 'u2algo-waitlist', database: 'unhealthy', error: error.code || 'query_failed' });
+        sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'unhealthy', fallback: 'local-jsonl', error: error.code || 'query_failed' });
         return;
       }
-      sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'ready' });
+      sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'ready', fallback: 'local-jsonl' });
     } catch (err) {
-      sendJson(res, 503, { ok: false, service: 'u2algo-waitlist', database: 'unreachable' });
+      sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'unreachable', fallback: 'local-jsonl' });
     }
     return;
   }
@@ -132,24 +158,14 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, error: 'invalid_email' });
         return;
       }
-      if (!supabase) {
-        sendJson(res, 503, { ok: false, error: 'waitlist_not_configured' });
-        return;
-      }
       await ensureWaitlistTable();
-      const { error } = await supabase
-        .from('waitlist_leads')
-        .upsert({
-          email,
-          source: 'u2algo-site',
-          user_agent: String(req.headers['user-agent'] || '').slice(0, 500)
-        }, { onConflict: 'email' });
-      if (error) {
-        console.error('waitlist_insert_failed', error.message);
-        sendJson(res, 500, { ok: false, error: 'waitlist_insert_failed' });
-        return;
-      }
-      sendJson(res, 200, { ok: true });
+      const result = await saveWaitlistLead({
+        email,
+        source: 'u2algo-site',
+        user_agent: String(req.headers['user-agent'] || '').slice(0, 500),
+        created_at: new Date().toISOString()
+      });
+      sendJson(res, 200, { ok: true, backend: result.backend });
     } catch (err) {
       const message = err && err.message ? err.message : 'bad_request';
       sendJson(res, message === 'payload_too_large' ? 413 : 400, { ok: false, error: message });

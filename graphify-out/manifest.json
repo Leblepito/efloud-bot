@@ -1665,13 +1665,13 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\ROADMAP_AI_INTEGRATION.md": {
-    "mtime": 1779972584.0059493,
-    "ast_hash": "0a40951c3f939c1103fdff441cd05a18",
+    "mtime": 1780205468.5109818,
+    "ast_hash": "ff6e50879b3ef924af3f4999edfd732c",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\skill_log.md": {
-    "mtime": 1779978301.019326,
-    "ast_hash": "996e3982b2c6cf5edfa413ed32ac1823",
+    "mtime": 1780205461.389837,
+    "ast_hash": "0003701c2e7b689c6a9ac61ed065d8c2",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\strategy-evolution.md": {
@@ -2612,6 +2612,226 @@
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\superpowers\\specs\\2026-05-31-trade-horizon-profiles-design-spec.md": {
     "mtime": 1780203548.720455,
     "ast_hash": "8147c3fbe0659099a1c7377e1d5daecb",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus_connector_readiness_raw.json": {
+    "mtime": 1780216362.5864296,
+    "ast_hash": "e9298af151c93e4247bd339d01f6a0a6",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\package.json": {
+    "mtime": 1780213562.0344875,
+    "ast_hash": "74f81581d1ba3040965c40b80999d29e",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\railway.json": {
+    "mtime": 1780212239.3158808,
+    "ast_hash": "ee294badbf4246c5d86e8ca4245587de",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\server.js": {
+    "mtime": 1780213690.8524477,
+    "ast_hash": "16f0266842543909ea9cb7f5d20b9377",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\css\\postcss.config.mjs": {
+    "mtime": 1780207475.611641,
+    "ast_hash": "481fac0fdecd70e1821cc30b86030c1a",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\css\\root-layout.tsx": {
+    "mtime": 1780207475.7281222,
+    "ast_hash": "178e78dfef4368c3b802d32e2f53af5c",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\ComparisonTable.tsx": {
+    "mtime": 1780207475.9015076,
+    "ast_hash": "2e3d370c60f7a9adf74eaffab5709980",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\CTABanner.tsx": {
+    "mtime": 1780207475.947332,
+    "ast_hash": "366a39764243149a954b4819a1086b23",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\DashboardPreview.tsx": {
+    "mtime": 1780207475.9914067,
+    "ast_hash": "d4a02a4d7f610955d403dec22d89923a",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\FAQ.tsx": {
+    "mtime": 1780207476.0671918,
+    "ast_hash": "cf9dd9bec7435b573710fbbc74382392",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\FAQSection.tsx": {
+    "mtime": 1780207476.1741512,
+    "ast_hash": "b32f5a6cbd852c5d1584ec6c5d9fe0ab",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\FeatureCards.tsx": {
+    "mtime": 1780207476.248474,
+    "ast_hash": "318b1c19d7b75080c665bf13685c71c7",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\HeroSection.tsx": {
+    "mtime": 1780207476.3156219,
+    "ast_hash": "a0c812b8eb57d172f02ef4f15fe26ee3",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\LiveStatsBanner.tsx": {
+    "mtime": 1780207476.402192,
+    "ast_hash": "0b45a0d02f51da9db47189b35ce19a98",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\MarketChartHero.tsx": {
+    "mtime": 1780207476.4551334,
+    "ast_hash": "65d1f718896f5a488add84cd8c4bdaba",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\PartnerLogoBanner.tsx": {
+    "mtime": 1780207476.5102258,
+    "ast_hash": "a9ef75e6a87be2f205b14cf9e029e2a5",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\PricingTable.tsx": {
+    "mtime": 1780207476.5824032,
+    "ast_hash": "8537c79ced83ffaeed9f7655c70d8c34",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\RiskDisclaimer.tsx": {
+    "mtime": 1780207476.6284323,
+    "ast_hash": "e11cdedceb7b24f25546cfd38a7220a6",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\ROICalculator.tsx": {
+    "mtime": 1780207476.673972,
+    "ast_hash": "3aafb4897439d8bc18c6a48e0420ca4b",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\SocialProofTicker.tsx": {
+    "mtime": 1780207476.7416005,
+    "ast_hash": "ea64c6c313efe3d3778e5d2932ec1e76",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\Testimonials.tsx": {
+    "mtime": 1780207476.8079731,
+    "ast_hash": "4b8a5d9722e7472f3e3ce69c63103859",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\TrustStrip.tsx": {
+    "mtime": 1780207476.8683674,
+    "ast_hash": "47fe020904f02246ba4c353b26cfac89",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\VideoShowcaseStrip.tsx": {
+    "mtime": 1780207476.9032962,
+    "ast_hash": "b5525750156e30bb693a39de9f180836",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\landing-reference\\VideoTestimonial.tsx": {
+    "mtime": 1780207476.957657,
+    "ast_hash": "a9daa22b2943455fd79fff5eb605b152",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\scripts\\smoke.js": {
+    "mtime": 1780216031.6545808,
+    "ast_hash": "8adb99463bfda76ed16cb1d7a529a162",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\supabase\\waitlist_leads.sql": {
+    "mtime": 1780213759.219328,
+    "ast_hash": "a5cb836b0e434f1620cbac23befa5e60",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\web\\package.json": {
+    "mtime": 1780212939.9363694,
+    "ast_hash": "c3725cb366040ebeab9ff36ed0599ff3",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus-connectors-task-distribution.md": {
+    "mtime": 1780211199.6820564,
+    "ast_hash": "0d96bd6de9a1a9e5916f3fa237b7a153",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus-launch-draft-raw.txt": {
+    "mtime": 1780215948.032102,
+    "ast_hash": "b75397aa2f6a8857dd0c881de0c0f35d",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus-mcp-bridge.md": {
+    "mtime": 1780211317.5670266,
+    "ast_hash": "a2d9578a876776f9a470e69bff2aef67",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_trade-horizon-profiles-complete.md": {
+    "mtime": 1780205473.4675333,
+    "ast_hash": "799d6ffd61d78078fd2925555ff9c599",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_u2algo-railway-live.md": {
+    "mtime": 1780213776.1677601,
+    "ast_hash": "a2226c39ff7aed31123e1f5e3766eccf",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_u2algo_launch_draft_only.md": {
+    "mtime": 1780215982.6941972,
+    "ast_hash": "0a21895f3a484cd707b11862ce794e78",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_u2algo_launch_readiness.md": {
+    "mtime": 1780216347.7221808,
+    "ast_hash": "230098467ecf0f1b1f0e2c8056a9e048",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\index.html": {
+    "mtime": 1780215037.8800175,
+    "ast_hash": "843d149e9c6056827c359e83d28a0e60",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\robots.txt": {
+    "mtime": 1780216003.8066015,
+    "ast_hash": "a2825581e6906917c4a21127a31d5f28",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\BRAND.md": {
+    "mtime": 1780207536.9683862,
+    "ast_hash": "b20cf083d52898f7eb21a3ff7d54bd02",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand\\logo-horizontal.svg": {
+    "mtime": 1780207404.283,
+    "ast_hash": "6fe9c1d0b41dd18731fd5fc896f7b787",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand\\logo-mark.svg": {
+    "mtime": 1780207404.2518399,
+    "ast_hash": "9496179f51b7d5d5bf7f34aaa5a1bf22",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\icon-192.png": {
+    "mtime": 1780207475.750916,
+    "ast_hash": "68ea5c58b7646c7af3a7bb1069e33db4",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\icon-512-maskable.png": {
+    "mtime": 1780207475.7845285,
+    "ast_hash": "7345f5ac54895f6af471d6cb77b92a58",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\icon-512.png": {
+    "mtime": 1780207475.7669427,
+    "ast_hash": "5e6ac1dedfd90e7e4426d9583a3392f6",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\logo-horizontal.svg": {
+    "mtime": 1780207475.8000574,
+    "ast_hash": "6fe9c1d0b41dd18731fd5fc896f7b787",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\logo-mark.svg": {
+    "mtime": 1780207475.8030481,
+    "ast_hash": "9496179f51b7d5d5bf7f34aaa5a1bf22",
     "semantic_hash": ""
   }
 }
