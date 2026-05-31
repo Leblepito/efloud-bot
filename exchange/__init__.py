@@ -324,10 +324,17 @@ class OrderManager:
                  on_position_change=None, state_dir: Optional[str] = None,
                  orphan_protector=None,
                  trade_journal: "Optional[TradeJournal]" = None,
-                 hedge_mode: bool = False):
+                 hedge_mode: bool = False,
+                 max_entry_drift_pct: float = 0.0):
         self.client = client
         self.hedge_mode = hedge_mode
         self.dry_run = dry_run
+        # Entry-drift guard: reject a market entry when the LIVE price has run
+        # more than this % from the signal entry (or already past TP1), which
+        # would leave the position SL-only with a TP that Binance rejects as
+        # -2021 'would immediately trigger'. 0.0 = disabled (backward-compat).
+        # See test_entry_drift_guard.py for the 2026-05-31 live incident.
+        self.max_entry_drift_pct = max_entry_drift_pct
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
@@ -392,6 +399,36 @@ class OrderManager:
             "would immediately trigger",
         )
         return any(m in err for m in unreachable_markers)
+
+    @staticmethod
+    def _entry_drift_rejection(direction: str, live_price: float, entry: float,
+                              tp1: float, max_drift_pct: float) -> Optional[str]:
+        """Return a rejection reason if the live price has drifted too far from
+        the signal entry to safely open, else None (allow).
+
+        Two independent conditions, either of which rejects:
+          1. |live - entry| / entry exceeds max_drift_pct — the market ran away
+             from the signal; entering now chases a degraded reward.
+          2. The live price has already reached/passed TP1 in the profit
+             direction (LONG: live >= tp1, SHORT: live <= tp1) — the take-profit
+             is unplaceable (Binance -2021) and the position would be SL-only.
+
+        Fail-open: a non-positive entry/live or max_drift_pct <= 0 (disabled)
+        returns None — a missing price or disabled guard must never block trading.
+        """
+        if max_drift_pct <= 0 or entry <= 0 or live_price <= 0:
+            return None
+        drift_pct = abs(live_price - entry) / entry * 100.0
+        if drift_pct > max_drift_pct:
+            return (f"entry drift {drift_pct:.2f}% > max {max_drift_pct:.2f}% "
+                    f"(signal={entry:.6g}, live={live_price:.6g})")
+        if tp1 and tp1 > 0:
+            past_tp1 = ((direction == "LONG" and live_price >= tp1)
+                        or (direction == "SHORT" and live_price <= tp1))
+            if past_tp1:
+                return (f"live {live_price:.6g} already past TP1 {tp1:.6g} "
+                        f"({direction}) — TP unplaceable")
+        return None
 
     @staticmethod
     def _is_real_oid(oid) -> bool:
@@ -816,6 +853,23 @@ class OrderManager:
             self._persist()
             self._emit("position_opened", pos)
             return pos
+
+        # Entry-drift guard — reject if the live price has run too far from the
+        # signal before we market-enter (would otherwise open SL-only with a TP
+        # Binance rejects as -2021). Best-effort: a price-fetch failure must NOT
+        # block trading (fail-open), so swallow and proceed on error.
+        if self.max_entry_drift_pct > 0:
+            try:
+                live_price = float(self.client.get_price(symbol))
+            except Exception as e:
+                live_price = 0.0
+                log.warning(f"Entry-drift guard: live price fetch failed for {symbol}: {e} — proceeding")
+            reject_reason = self._entry_drift_rejection(
+                direction, live_price, entry, tp1, self.max_entry_drift_pct,
+            )
+            if reject_reason:
+                log.warning(f"🚫 [{symbol}] Entry rejected — {reject_reason}")
+                return None
 
         # CCXT'nin futures route'una gitmesi için symbol'i collateral notation ile sar
         ccxt_sym = self.client.to_ccxt_symbol(symbol)

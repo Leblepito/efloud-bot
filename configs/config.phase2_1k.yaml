@@ -146,6 +146,12 @@ safety:
 
   min_seconds_between_symbol_fetches: 0.5
 
+  # Entry-drift guard (2026-05-31 incident): signal entry bir bar-close'a çapalı,
+  # market fill ise canlı fiyat. Canlı fiyat signal'den bu %'den fazla kaçmışsa
+  # VEYA zaten TP1'i geçmişse giriş REDDEDİLİR (yoksa pozisyon SL-only kalır,
+  # TP Binance -2021 ile reddedilir). 0 = kapalı. Gevşetmek/sıkmak operatör kararı.
+  max_entry_drift_pct: 1.0
+
   # ── Safety Integration (2026-05-30 plan) ──
   reverse_min_profit_pct: 0.2          # kontra sinyal: karda + %0.2 buffer üstünde reverse
   pause_new_entries: false             # true = yeni giriş durdur (mevcut pozisyonlar yönetilir)

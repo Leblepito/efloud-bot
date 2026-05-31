@@ -626,6 +626,7 @@ def main():
         orphan_protector=orphan_protector,
         trade_journal=trade_journal,
         hedge_mode=cfg.get("exchange", {}).get("hedge_mode", False),
+        max_entry_drift_pct=cfg.get("safety", {}).get("max_entry_drift_pct", 0.0),
     )
 
     orch = SafeOrchestrator(cfg, state_dir=state_dir,

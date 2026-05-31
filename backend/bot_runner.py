@@ -214,6 +214,7 @@ class BotRunner:
             orphan_protector=orphan_protector,
             trade_journal=trade_journal,
             hedge_mode=self.cfg.get("exchange", {}).get("hedge_mode", False),
+            max_entry_drift_pct=self.cfg.get("safety", {}).get("max_entry_drift_pct", 0.0),
         )
 
         # PR #S6 wiring (hotfix): instantiate SetupStateStore when smc_version=v2.
