@@ -276,6 +276,11 @@ async def breaker_reset(reason: str = "manual via dashboard") -> dict:
     prior_state = runner.orch.breaker.status.state.value
     prior_reason = runner.orch.breaker.status.reason
     runner.orch.breaker.manual_reset(reason)
+    # Mirror the now-OPEN state to the DB immediately (best-effort). manual_reset
+    # happens outside the trading cycle, so without this the breaker_state mirror
+    # would stay HALTED until the next ~30s cycle — and a restart-with-file-loss
+    # inside that window would re-apply the stale HALT from the mirror fallback.
+    await db.upsert_breaker_state(runner.orch.breaker.to_dict())
     await db.log_audit(
         "breaker_reset",
         {"prior_state": prior_state, "prior_reason": prior_reason, "reset_reason": reason},
