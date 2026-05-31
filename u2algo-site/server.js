@@ -3,16 +3,27 @@ const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
+const { Pool } = require('pg');
 
 const root = __dirname;
 const port = Number(process.env.PORT || 3000);
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL || '';
 const localWaitlistPath = process.env.LOCAL_WAITLIST_PATH || path.join(root, 'data', 'waitlist_leads.jsonl');
 const supabase = supabaseUrl && supabaseServiceRoleKey
   ? createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: { persistSession: false },
       realtime: { transport: WebSocket }
+    })
+  : null;
+const pgPool = databaseUrl
+  ? new Pool({
+      connectionString: databaseUrl,
+      max: 3,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 12000,
+      ssl: databaseUrl.includes('sslmode=disable') ? false : { rejectUnauthorized: false }
     })
   : null;
 
@@ -60,35 +71,85 @@ async function appendLocalWaitlistLead(lead) {
 }
 
 async function saveWaitlistLead(lead) {
-  if (!supabase) {
-    await appendLocalWaitlistLead({ ...lead, backend: 'local-jsonl' });
-    return { ok: true, backend: 'local-jsonl' };
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('waitlist_leads')
+        .upsert(lead, { onConflict: 'email' });
+      if (!error) return { ok: true, backend: 'supabase' };
+      console.error('waitlist_insert_failed', error.message);
+    } catch (err) {
+      console.error('waitlist_insert_failed', err && err.message ? err.message : err);
+    }
   }
 
-  try {
-    const { error } = await supabase
-      .from('waitlist_leads')
-      .upsert(lead, { onConflict: 'email' });
-    if (!error) return { ok: true, backend: 'supabase' };
-    console.error('waitlist_insert_failed', error.message);
-  } catch (err) {
-    console.error('waitlist_insert_failed', err && err.message ? err.message : err);
+  if (pgPool) {
+    try {
+      await pgPool.query(
+        `insert into public.waitlist_leads (email, source, user_agent, created_at)
+         values ($1, $2, $3, coalesce($4::timestamptz, now()))
+         on conflict (email) do update set
+           source = excluded.source,
+           user_agent = excluded.user_agent,
+           updated_at = now()`,
+        [lead.email, lead.source || 'u2algo-site', lead.user_agent || null, lead.created_at || null]
+      );
+      return { ok: true, backend: 'postgres' };
+    } catch (err) {
+      console.error('waitlist_pg_insert_failed', err && err.message ? err.message : err);
+    }
   }
 
-  await appendLocalWaitlistLead({ ...lead, backend: 'local-jsonl-fallback' });
-  return { ok: true, backend: 'local-jsonl-fallback' };
+  await appendLocalWaitlistLead({ ...lead, backend: supabase || pgPool ? 'local-jsonl-fallback' : 'local-jsonl' });
+  return { ok: true, backend: supabase || pgPool ? 'local-jsonl-fallback' : 'local-jsonl' };
 }
 
 async function ensureWaitlistTable() {
-  // Supabase REST cannot create tables; table is expected to exist.
-  // SQL for dashboard:
-  // create table if not exists public.waitlist_leads (
-  //   id uuid primary key default gen_random_uuid(),
-  //   email text unique not null,
-  //   source text not null default 'u2algo-site',
-  //   user_agent text,
-  //   created_at timestamptz not null default now()
-  // );
+  if (!pgPool) return;
+  await pgPool.query('create extension if not exists pgcrypto');
+  await pgPool.query(`
+    create table if not exists public.waitlist_leads (
+      id uuid primary key default gen_random_uuid(),
+      email text unique not null,
+      source text not null default 'u2algo-site',
+      user_agent text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `);
+  await pgPool.query(`
+    create or replace function public.set_updated_at()
+    returns trigger
+    language plpgsql
+    as $$
+    begin
+      new.updated_at = now();
+      return new;
+    end;
+    $$
+  `);
+  await pgPool.query('drop trigger if exists waitlist_leads_set_updated_at on public.waitlist_leads');
+  await pgPool.query(`
+    create trigger waitlist_leads_set_updated_at
+    before update on public.waitlist_leads
+    for each row execute function public.set_updated_at()
+  `);
+  await pgPool.query('alter table public.waitlist_leads enable row level security');
+  await pgPool.query(`
+    do $$
+    begin
+      if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'waitlist_leads'
+          and policyname = 'Allow public insert'
+      ) then
+        create policy "Allow public insert" on public.waitlist_leads
+          for insert with check (true);
+      end if;
+    end
+    $$
+  `);
 }
 
 const types = {
@@ -133,20 +194,28 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === '/api/waitlist/health') {
-    if (!supabase) {
-      sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'not_configured', fallback: 'local-jsonl' });
-      return;
+    if (supabase) {
+      try {
+        const { error } = await supabase.from('waitlist_leads').select('id', { count: 'exact', head: true }).limit(1);
+        if (!error) {
+          sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'ready', backend: 'supabase', fallback: 'local-jsonl' });
+          return;
+        }
+      } catch {}
     }
-    try {
-      const { error } = await supabase.from('waitlist_leads').select('id', { count: 'exact', head: true }).limit(1);
-      if (error) {
-        sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'unhealthy', fallback: 'local-jsonl', error: error.code || 'query_failed' });
+
+    if (pgPool) {
+      try {
+        await pgPool.query('select 1 from public.waitlist_leads limit 1');
+        sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'ready', backend: 'postgres', fallback: 'local-jsonl' });
+        return;
+      } catch (err) {
+        sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'unhealthy', backend: 'postgres', fallback: 'local-jsonl', error: err && err.code ? err.code : 'query_failed' });
         return;
       }
-      sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'ready', fallback: 'local-jsonl' });
-    } catch (err) {
-      sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'unreachable', fallback: 'local-jsonl' });
     }
+
+    sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'not_configured', fallback: 'local-jsonl' });
     return;
   }
 
@@ -158,7 +227,11 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, error: 'invalid_email' });
         return;
       }
-      await ensureWaitlistTable();
+      try {
+        await ensureWaitlistTable();
+      } catch (err) {
+        console.error('waitlist_table_ensure_failed', err && err.message ? err.message : err);
+      }
       const result = await saveWaitlistLead({
         email,
         source: 'u2algo-site',
