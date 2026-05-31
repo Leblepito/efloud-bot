@@ -194,14 +194,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === '/api/waitlist/health') {
+    let supabaseError = null;
     if (supabase) {
       try {
-        const { error } = await supabase.from('waitlist_leads').select('id', { count: 'exact', head: true }).limit(1);
-        if (!error) {
+        const { data, error } = await supabase.from('waitlist_leads').select('id').limit(1);
+        if (!error && Array.isArray(data)) {
           sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'ready', backend: 'supabase', fallback: 'local-jsonl' });
           return;
         }
-      } catch {}
+        supabaseError = error || new Error('unexpected_supabase_response');
+      } catch (err) {
+        supabaseError = err;
+      }
     }
 
     if (pgPool) {
@@ -213,6 +217,18 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'unhealthy', backend: 'postgres', fallback: 'local-jsonl', error: err && err.code ? err.code : 'query_failed' });
         return;
       }
+    }
+
+    if (supabaseError) {
+      sendJson(res, 200, {
+        ok: true,
+        service: 'u2algo-waitlist',
+        database: 'unhealthy',
+        backend: 'supabase',
+        fallback: 'local-jsonl',
+        error: supabaseError.code || supabaseError.name || 'query_failed'
+      });
+      return;
     }
 
     sendJson(res, 200, { ok: true, service: 'u2algo-waitlist', database: 'not_configured', fallback: 'local-jsonl' });
