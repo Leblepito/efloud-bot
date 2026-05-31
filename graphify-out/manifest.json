@@ -2630,8 +2630,8 @@
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\server.js": {
-    "mtime": 1780213690.8524477,
-    "ast_hash": "16f0266842543909ea9cb7f5d20b9377",
+    "mtime": 1780218630.311223,
+    "ast_hash": "3097394b2e50881d9b5296f8934d6c08",
     "semantic_hash": ""
   },
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\css\\postcss.config.mjs": {
@@ -2832,6 +2832,66 @@
   "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\brand-kit\\assets\\logo-mark.svg": {
     "mtime": 1780207475.8030481,
     "ast_hash": "9496179f51b7d5d5bf7f34aaa5a1bf22",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus_connector_readiness_raw_latest.json": {
+    "mtime": 1780218362.0401442,
+    "ast_hash": "5690726596a4ced75c46a858b190e024",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\scripts\\generate-launch-assets.js": {
+    "mtime": 1780218668.396667,
+    "ast_hash": "a7fa951fa78311e0cf39aa2a8001d4fc",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\scripts\\generate-launch-pngs.py": {
+    "mtime": 1780219003.1632414,
+    "ast_hash": "bc117e975169a2f18a10fca579462051",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_manus_connector_readiness_0_u2algo_connector_readiness_report.md": {
+    "mtime": 1780218363.135442,
+    "ast_hash": "e058c259649996a7451c0e1fdb3ee77f",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\docs\\handoff\\2026-05-31_u2algo_final_social_approval_pack.md": {
+    "mtime": 1780219069.7066207,
+    "ast_hash": "1b3e5fe37dfb0fa8119389e113e5c029",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\captions.md": {
+    "mtime": 1780219033.5986102,
+    "ast_hash": "fdab402f77bc120226a292cca261964b",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\instagram-carousel-cover-1080x1080.png": {
+    "mtime": 1780219034.0096292,
+    "ast_hash": "66e362aec383cc73e23bb1a3dca3d801",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\instagram-carousel-cover-1080x1080.svg": {
+    "mtime": 1780219033.5976105,
+    "ast_hash": "fda777dd9f013f9ba50f7905b84eb203",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\shorts-cover-1080x1920.png": {
+    "mtime": 1780219034.1446795,
+    "ast_hash": "8687b63d8e84b3b794bd3dc729cb7f88",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\shorts-cover-1080x1920.svg": {
+    "mtime": 1780219033.5986102,
+    "ast_hash": "54d99946cdfb0391d2d45c49c2f045f3",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\x-launch-1600x900.png": {
+    "mtime": 1780219033.9196336,
+    "ast_hash": "4341fdf21cc28adf2254c8fcbf951e3f",
+    "semantic_hash": ""
+  },
+  "C:\\Users\\utkuc\\Downloads\\efloud-bot\\u2algo-site\\launch-assets\\2026-05-31-first-share\\x-launch-1600x900.svg": {
+    "mtime": 1780219033.5976105,
+    "ast_hash": "aba61e54a6736c1630590ce7558e66f8",
     "semantic_hash": ""
   }
 }

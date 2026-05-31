@@ -1,333 +1,170 @@
-# Efloud SMC Bot
+# 🏛️ Efloud SMC & u2algo Ecosystem
 
-Binance USDT-M futures üzerinde çalışan Efloud SMC (Smart Money Concepts) trade botu.
-Güncel odak: **Ualgo Telegram sinyal entegrasyonu + canlı operasyon güvenliği**.
+![u2algo Premium Banner](docs/images/u2algo_premium_banner.png)
 
-- **Bugün:** Binance futures / crypto execution
-- **Yakın dönem:** dashboard, test coverage, daily brief ve ops kalitesi
-- **Roadmap:** pluggable exchange adapter ile MT5/OANDA forex desteği
-- **Rafta:** U2algo_bot (u2Algo.com içerik paylaşım botu)
-
-> Production canlıdır. Risk, mainnet, deploy ve açık pozisyonları etkileyen değişiklikler
-> Hermes/Utku onayı olmadan yapılmaz.
+> **Efloud SMC Trade Bot v2.1** represents a state-of-the-art, institutional-grade algoritmik trade infrastructure designed for **Binance USDT-M Futures** paired with the **u2algo** public web and automated social marketing engine. 
 
 ---
 
-## Pausing new entries
+## 🌐 Ecosystem Architecture
 
-The bot supports pausing **new market entries** while keeping existing position
-protection active.
+The ecosystem merges automated algorithmic execution, high-fidelity chart visualization, serverless web hosting, and AI-driven compliance content pipelines:
 
-### What it does
+```mermaid
+graph TD
+    %% Core Trading Engine
+    subgraph Core ["🤖 EFLOUD PYTHON ENGINE (v2.1)"]
+        A[main.py / Daemon] --> B[SafeOrchestrator]
+        B --> C[SymbolUniverse]
+        B --> D[SMCEngine & Signals]
+        B --> E[PositionLifecycle]
+        B --> F[Safety Layer / CircuitBreaker]
+        E --> G[OrderManager]
+        G --> H[Binance CCXT Client]
+    end
 
-- Blocks new entries before exchange order submission.
-- Keeps reconcile running.
-- Keeps lifecycle/SL/TP management running.
-- Keeps breaker/equity updates running.
-- Keeps notifications and status reporting running.
+    %% Web / Frontend Layer
+    subgraph Web ["🌐 WEB & OPERATOR DASHBOARD"]
+        I[FastAPI Backend :8080] <--> J[Next.js 15 Operator Dashboard]
+        K[u2algo-site landing page] -->|Railway Deploy| L[Supabase DB / waitlist]
+        K -.->|DB Offline Fallback| M[Local JSONL Backup]
+    end
 
-### What it does not do
+    %% High Fidelity Charts
+    subgraph Pine ["📊 TRADINGVIEW & PINE SCRIPT v6"]
+        N[Desktop MCP Bridge] --> O[Pine Smart Compiler]
+        P[Trade-Horizon Profiles] -->|Monotonic Verification| Q[Chart Visuals & Signals]
+        Q -->|Signal Viz Retention| R[Leak-free Drawing Engine]
+        Q -->|Wrong Timeframe Warning| S[Visual Alert Tables]
+    end
 
-- Does not close existing positions.
-- Does not cancel existing SL/TP orders.
-- Does not stop the bot.
-- Does not replace `dry_run`.
-- Does not provide runtime hot-flip without container recreate.
+    %% Social and AI
+    subgraph Social ["📣 MANUS SOCIAL CONTENT PIPELINE"]
+        T[Event Fired / Signal] --> U[Manus MCP Connectors]
+        U --> V[Compliance & Risk Scan]
+        V -->|Strict DYOR Gate| W[Draft Captions / Media]
+        W -->|Manual Approval| X[Multi-Platform Publish]
+    end
 
-### Config activation
-
-```yaml
-safety:
-  pause_new_entries: true
+    %% Connections
+    H <-->|Execution & Reconcile| N
+    B <-->|Daemon Parity| I
+    T <==|Signal Stream| B
 ```
 
-Production activation requires Hermes/Utku approval.
+---
 
-### Env override
+## 🌟 Key Features & Innovations
 
+### 1. Trade-Horizon Profiles (Faz 3.7) 📊
+A complete timeframe management overhaul featuring predefined profiles with **fail-fast monotonic guards** to prevent misconfigured executions across Entry, Medium, and High Timeframes:
+* **Scalp Profile**: 5m Entry · 1h MTF · 12h HTF
+* **Mid Profile**: 15m Entry · 1h MTF · 4h HTF (Inert default, zero regression)
+* **Long Profile**: 1h Entry · 8h MTF · 1w HTF (Mapped to `"W"` on TradingView to prevent compile errors)
+* **Validation Guard**: In-place mutation rules enforce `Entry < MTF < HTF` before launch. Auto-caps HTF weekly kline requests to `250` limits to protect performance.
+
+### 2. High-Fidelity TradingView Integration 📈
+Connected via a secure **Desktop MCP Bridge** allowing real-time pine compiles:
+* **Dynamic Visualization Dropdowns**: Scalp/Mid/Long/Custom dropdown parameters in Pine script directly control the multi-timeframe feeds.
+* **Fidelity Protection**: Active Order Block boxes dynamically refresh without graphic leaks, and past visual drawings automatically scale/cleanup by chart TF.
+* **Visual Safety Banners**: Embedded warning tables (`⚠️ YANLIŞ ZAMAN DİLİMİ`) draw prominent warnings on active charts when the current timeframe mismatch is detected.
+
+### 3. Bulletproof Live Ops Safety & Circuit Breakers 🛡️
+* **Idempotent Reconcile-to-Breaker Sync**: Resolves manual/exchange-side exits and automatically registers them into `CircuitBreaker` daily/consecutive-loss counters, preventing double-counting while preserving execution safety.
+* **Orphan Position Protection**: Automatic discovery and SL coverage (`place_missing_sl`) for untracked open positions.
+* **SL Repair Precision Rounding**: Matches lot sizes against exchange decimal precision to avoid stepSize order rejections.
+* **Pause New Entries**: Emergency halt (`pause_new_entries: true` or `EFLOUD_PAUSE_NEW_ENTRIES=true`) blocks new positions while gracefully managing existing SL/TPs.
+
+### 4. u2algo Landing Site & Local Backup Fallbacks 💻
+A premium public-facing marketing and waitlist portal deployed on **Railway**:
+* **Tech Stack**: Next.js 15, PostCSS, Supabase DB.
+* **Fail-Safe local-jsonl Fallback**: In the event of a Supabase connection outage or rate limits, the waitlist form automatically saves leads into a local `jsonl` file and completes requests with a clean `200 OK` response to prevent public 500 errors.
+
+---
+
+## 📂 Repository Directory Map
+
+| Path | Responsibility | Area |
+| :--- | :--- | :--- |
+| **`main.py`** | Bot CLI startup, configuration loading, and primary loop | Core Engine |
+| **`engine/safe_orchestrator.py`** | Core engine loop manager, state management, and safety wiring | Core Engine |
+| **`engine/lifecycle.py`** | Multi-target TP/SL, Break-Even, and weakness exit management | Core Engine |
+| **`engine/safety/`** | Circuit Breaker, Position Guards, and Mainnet protection rules | Core Engine |
+| **`exchange/`** | CCXT Binance integration, order managers, and reconcile loop | Exchange |
+| **`data/timeframes.py`** | Scalp/Mid/Long profile math and monotonic timeframe resolvers | Data |
+| **`pine/`** | Indicators and strategy source code in Pine Script v6 | TradingView |
+| **`u2algo-site/`** | Web source code, database sql migrations, and Railway manifests | Web Page |
+| **`u2algo-site/launch-assets/`** | SVG & PNG design visual assets generated for social launch | Social |
+| **`docs/handoff/`** | System handoff plans, capability maps, and social launch packs | Handoffs |
+
+---
+
+## ⚡ Setup, Verification & Testing
+
+### 1. Run Unit Tests (TDD Coverage)
+Validate all timeframe profiles, precision models, and idempotent synchronization states:
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+.venv\Scripts\python -m pytest backend/tests/test_timeframe_profiles.py -v
+.venv\Scripts\python -m pytest backend/tests/test_reconcile_breaker_sync.py -v
+.venv\Scripts\python -m pytest backend/tests/test_sl_repair_precision.py -v
+```
+
+### 2. Verify Entire Test Suite
+Ensure no regression exists across the 78+ core tests:
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+.venv\Scripts\python -m pytest
+.venv\Scripts\python test_safety.py
+```
+
+### 3. Verify Landing Page Build
+Validate server, syntax, and asset pipelines:
 ```bash
-EFLOUD_PAUSE_NEW_ENTRIES=true
+cd u2algo-site
+npm install
+npm run smoke
+node --check server.js
+node --check scripts/generate-launch-assets.js
 ```
-
-Env has precedence over config. Accepted true values: `1`, `true`, `yes`, `on`.
-Accepted false values: `0`, `false`, `no`, `off`, and empty string.
-Unknown env values are ignored with a warning and the config value is used.
-
-Important: Docker env changes require container recreate:
-
-```bash
-docker compose -f docker-compose.prod.yml up -d efloud-bot
-```
-
-Do **not** use `docker restart` for env/config pickup.
-
-### Verification
-
-Startup logs include the effective value and source:
-
-```text
-pause_new_entries config loaded: effective=True source=env (config=False, env='true')
-```
-
-Blocked signals log `reason=pause_new_entries` and the source
-(`EFLOUD_PAUSE_NEW_ENTRIES` or `safety.pause_new_entries`).
-
-## Orphan position auto-protection
-
-When the bot detects an exchange position that is not in local lifecycle state
-(an orphan), it can optionally place a close-position `STOP_MARKET` stop-loss so
-the position is protected even though the bot cannot manage the full lifecycle.
-
-### What this does not do
-
-- Does not import the orphan into lifecycle state.
-- Does not place take-profit orders.
-- Does not cancel any existing orders.
-- Does not auto-fix wrong-direction or non-reduceOnly SL orders; those produce
-  critical warnings only.
-
-### Modes
-
-- `warn_only` (default): observe and log, no orders placed.
-- `place_missing_sl`: place `closePosition=true STOP_MARKET reduceOnly=true` SL
-  for unprotected orphan positions.
-
-### Activation
-
-Start with observation only:
-
-```yaml
-safety:
-  orphan_protection:
-    enabled: true
-    mode: warn_only
-```
-
-Then recreate the container; do not use `docker restart` for config pickup:
-
-```bash
-docker compose -f docker-compose.prod.yml up -d efloud-bot
-```
-
-Observe one full cycle of `orphan_protection.warn_only` logs. If clean, switch
-`mode` to `place_missing_sl` and recreate again. Production activation requires
-Hermes/Utku approval.
-
-### Why no env override
-
-Auto-placing orders is not an emergency hot-flip. It requires deliberate operator
-review, so this feature intentionally uses config only.
 
 ---
 
-## Current Status
+## 🏁 Verification & Compliance Gate
 
-- Production: Hetzner VPS + `docker-compose.prod.yml`
-- Aktif çalışma alanı: **Ualgo_bot + Efloud-bot**
-- PR-B daily brief audit tamamlandı; günlük brifing lifecycle state, WEAKNESS count ve GitHub özetini kullanır.
-- Test altyapısı root-level pytest discovery + regression guard testleriyle güncellendi.
-- UI tarafında destructive controls (Stop / Kill Switch) erişilebilirlik ve güvenlik iyileştirmeleri yapıldı.
-
-### Recent Changes
-
-- **PR #30** — WEAKNESS churn guard + `log_audit` JSONB serialization fix
-- **PR #31** — `CLAUDE.md` project memory + temel Claude agents/skills
-- **PR #32** — opsiyonel Claude extras (explorer, UI/UX audit, forex research, `/review` command)
-- **PR #33** — root-level `test_*.py` dosyalarını pytest collection'a dahil etme
-- **PR #34** — `test_safety.py` helper rename; pytest fixture confusion fix
-- **PR #35** — lifecycle/audit/reconcile/breaker regression guard testleri
-- **PR #36** — Stop / Kill Switch UI accessibility & safety improvements
+All social posts, landing metrics, and automation plans are subjected to a strict local **Compliance Gate**:
+* **Strict Disclosures**: Public communication must clearly declare that u2algo is a research-oriented analytics infrastructure, not financial advice.
+* **DYOR (Do Your Own Risk) Policy**: Mandatory disclaimer headers on all public captions.
+* **Forbidden Hits Check**: Automatic rejection of absolute performance/ROI promises, fund collection, or trade guarantees.
 
 ---
 
-## What It Does
+## ⚠️ Live Ops Guardrails (MANDATORY)
 
-- Efloud SMC sinyal üretimi: CHoCH/BOS, Order Block, FVG, SFP, OTE, range context
-- Multi-timeframe karar akışı: HTF bias → MTF onay → entry timeframe
-- Confluence scoring + regime detection
-- Binance futures execution via CCXT / Binance API
-- Server-side SL/TP ve reduce-only order yönetimi
-- Position lifecycle: TP1/TP2, break-even SL, WEAKNESS partial exits, reconcile
-- Safety layer: circuit breaker, position guard, mainnet guard, state persistence
-- FastAPI backend + Next.js dashboard
-- Telegram alerter, audit log, daily reports / morning brief
+> [!CAUTION]
+> **Production is live.** The core engine executes live accounts (`dry_run: false`) on Binance.
 
----
-
-## Architecture
-
-```text
-main.py
-  └── SafeOrchestrator (engine/__init__.py)
-        ├── SymbolUniverse (engine/universe.py)
-        ├── SMCEngine + signal pipeline (engine/smc.py, engine/signals.py)
-        ├── Regime detector (engine/regimes/)
-        ├── Confluence scoring (engine/confluence.py)
-        ├── PositionLifecycle (engine/lifecycle.py)
-        ├── Safety layer (engine/safety/)
-        └── BinanceClient + OrderManager (exchange/__init__.py)
-
-backend/             → FastAPI, WebSocket, DB, migrations, notifications
-frontend/            → Next.js dashboard (static export)
-ops/                 → Telegram alerter, daily reports
-backtest/            → walk-forward/backtest engine
-configs/             → strategy profiles
-state*/              → runtime state volumes / local state directories
-```
-
-Useful entry points:
-
-- `main.py` — bot startup
-- `engine/safe_orchestrator.py` / `engine/__init__.py` — main cycle orchestration
-- `exchange/__init__.py` — Binance client, order manager, reconcile path
-- `engine/lifecycle.py` — position lifecycle and WEAKNESS handling
-- `engine/safety/breaker.py` — circuit breaker
-- `backend/api.py` — dashboard/backend API
-- `backend/migrate.py` — migration runner
-- `frontend/` — dashboard UI
-
-Line numbers in docs are approximate; verify with `rg`, `grep`, or by reading the file before editing.
+1. **Production Configuration**: Never edit `config.yaml`, `.env`, or `docker-compose.prod.yml` without explicit human confirmation.
+2. **Docker Environment Updates**: Remember that `docker restart` or `docker compose restart` does **not** pick up environment file modifications. You must recreate containers:
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d efloud-bot
+   ```
+3. **Database Migrations**: Run migrations manually in production:
+   ```bash
+   docker exec efloud-bot python3 -m backend.migrate up
+   ```
 
 ---
 
-## Live Ops Guardrails
+## 🏛️ AI & Operator Workflow Splits
 
-**Production is live. Treat this as a trading system, not a demo script.**
-
-- Live deploy, VPS/SSH operations, risk parameter changes, mainnet/dry_run/testnet changes require Hermes/Utku approval.
-- `EFLOUD_ALLOW_MAINNET=1` is required for intentional mainnet use.
-- Keep `dry_run: true` unless a live trading rollout has been explicitly approved.
-- Secrets live in env files or platform secrets — never commit API keys or tokens.
-
-### Docker Compose env changes
-
-`docker restart` or `docker compose restart` does **not** reload changed env vars.
-
-Use recreate instead:
-
-```bash
-cd /opt/efloud-bot
-docker compose -f docker-compose.prod.yml up -d
-```
-
-### Database migrations
-
-Migration runner does not auto-run in production. After adding new `.sql` migrations:
-
-```bash
-docker exec efloud-bot python3 -m backend.migrate up
-```
-
-Copy the migration output into the PR/deploy notes.
-
-### Conditional order caveat
-
-`ccxt.fetch_open_orders()` may not show Binance conditional/algo TP/SL orders.
-For SL/TP/order reconcile checks, cross-check with Binance algo endpoints or the Binance UI.
-Do not assume “0 open orders” from `fetch_open_orders()` means there are no TP/SL orders.
+* **Hermes / Operator**: Manages live configurations, executes VPS/SSH deployment tasks, performs DNS modifications, audits dual-side position modes, and signs off final social publication triggers.
+* **Antigravity (Orchestrator Agent)**: Autonomously performs test-driven development, builds specs, implements precise logic fixes, manages local repository history, compiles Pine scripts via TV Desktop MCP bridge, and drafts handoff briefs.
 
 ---
 
-## Configuration
-
-Primary config lives in `config.yaml` / `configs/` strategy profiles. Environment values override file config where implemented.
-
-Common env vars:
-
-- `BINANCE_API_KEY`
-- `BINANCE_API_SECRET`
-- `DATABASE_URL`
-- `EFLOUD_ALLOW_MAINNET`
-- `EFLOUD_TELEGRAM_TOKEN`
-- `EFLOUD_TELEGRAM_CHAT_ID`
-- SMTP vars for daily reports, if email reporting is enabled
-
-Risk and safety config changes must be reviewed as trading-risk changes, not ordinary config edits.
-
----
-
-## Tests
-
-Default command:
-
-```bash
-python3 -m pytest
-```
-
-Useful targeted examples:
-
-```bash
-python3 -m pytest tests/ backend/tests/ -q
-python3 -m pytest backend/tests/test_lifecycle_weakness_churn.py -q
-python3 -m pytest backend/tests/test_log_audit_jsonb_serialization.py -q
-python3 -m pytest backend/tests/test_reconcile_algo_orders_visibility.py -q
-python3 -m pytest test_safety.py -v
-```
-
-Notes:
-
-- Pytest discovery includes root-level `test_*.py` files.
-- Some legacy/manual backtest scripts are intentionally ignored by pytest config.
-- Default tests must not require live Binance/Supabase/API credentials.
-- Live/integration tests should be opt-in and clearly named (for example `test_real_*`).
-
----
-
-## Claude / Hermes Workflow
-
-This repo includes project memory and reusable Claude assets:
-
-- `CLAUDE.md` — project memory: architecture, ops rules, current state
-- `.claude/agents/` — project-specific review/test/risk agents
-- `.claude/skills/` — bugfix, deploy-safety and trading-risk workflows
-- `.claude/commands/` — optional workflow commands
-
-Role split:
-
-- **Hermes:** live ops, deploy, VPS/SSH, risk decisions, mainnet changes, incident response, final merge/deploy coordination.
-- **Claude Code:** docs, tests, refactor proposals, read-only research, PR preparation and code review support.
-
-Claude Code should not run production commands, change live risk config, merge/deploy, or bypass mainnet guards.
-
----
-
-## Forex Roadmap
-
-Forex support is planned but not implemented yet.
-
-Current execution is Binance-bound. The intended path is a pluggable adapter interface:
-
-- `BinanceAdapter` — current crypto futures path
-- `MT5Adapter` — likely first forex candidate because of broker availability / practical usage
-- `OandaAdapter` — cleaner API-native option for later evaluation
-
-Key design questions before implementation:
-
-- Symbol mapping: `BTC/USDT` vs `EURUSD` / `XAUUSD`
-- Lot size, pip value, spread and market-hours handling
-- Server-side SL/TP behavior per broker
-- Position/reconcile semantics
-- Demo/paper validation before any live pilot
-
-Forex work should start with a separate design/spec PR before code changes.
-
----
-
-## DON'T
-
-- Do not commit secrets, API keys, Telegram tokens or private SSH material.
-- Do not change `testnet`, `dry_run`, leverage, sizing or risk limits without explicit approval.
-- Do not deploy env changes with only `docker restart`.
-- Do not mix bugfix + refactor + feature in one PR.
-- Do not write default tests that hit live Binance/Supabase APIs.
-- Do not trust `ccxt.fetch_open_orders()` alone for conditional TP/SL visibility.
-- Do not edit active production config casually while live positions are open.
-
----
-
-## Related Docs
-
-- `CLAUDE.md` — always-read project memory for Claude sessions
-- `RISK_MAP.md` — failure modes and risk analysis
-- `docs/` — plans, specs, runbooks and historical notes
-- `.claude/` — project-local Claude agents, skills and commands
+## 📝 Recent Releases & Commits
+* **`feat(u2algo)`** (Commit `4562e03`) — Added local JSONL waitlist database fallback, built premium social launch assets, and drafted the final social approval pack.
+* **`feat(u2algo)`** (Commit `e25f922`) — Integrated u2algo landing site, sitemap/robot maps, and Hermes onboarding matrices.
+* **`feat(timeframes)`** (Commit `984a7dc`) — Implemented Scalp/Mid/Long Trade-Horizon Profiles, monotonic safety constraints, and TV warning tables.
+* **`feat(pine)`** (Commit `af02683`) — Applied Pine V1 fidelity fixes and target-inversion protection.
