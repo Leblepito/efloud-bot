@@ -264,6 +264,12 @@ class Position:
     exit_reason: str = ""   # "TP1" | "TP2" | "SL" | "MANUAL" | "RECONCILED"
     exit_price: float = 0.0
     pnl_usdt: float = 0.0
+    # PR C — exchange-truth PnL reconciliation. Defaults keep _restore() of
+    # pre-PR-C order_manager_positions.json backward-compatible.
+    realized_pnl_exchange: float = 0.0   # net realizedPnl pulled from Binance income endpoint
+    commission_paid: float = 0.0         # summed COMMISSION income for this position's fills
+    funding_paid: float = 0.0            # summed FUNDING_FEE income over the position lifetime
+    pnl_source: str = "estimated"        # "estimated" until reconciled, then "exchange"
     trace_id: Optional[str] = None       # log correlation across orchestrator → DB
     bar_ts_ms: Optional[int] = None      # bar-aligned timestamp (UTC ms epoch)
 
