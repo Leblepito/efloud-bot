@@ -36,7 +36,6 @@ async def fetch_and_save_sentiment(api_key: str, db_url: str = None) -> dict:
 
     # 2. Gemini AI Studio Entegrasyonu (canonical: shared GeminiClient)
     sentiment_data = None
-
     if api_key:
         prompt = (
             "Analyze the cryptocurrency market sentiment. "
@@ -54,7 +53,7 @@ async def fetch_and_save_sentiment(api_key: str, db_url: str = None) -> dict:
                 # Imported lazily so ``engine.ai.sentiment`` still imports in
                 # environments where ``engine.agents`` is unavailable.
                 from engine.agents.gemini_client import GeminiClient
-                client = GeminiClient(api_key=api_key, model="gemini-1.5-flash")
+                client = GeminiClient(api_key=api_key, model="gemini-3.1-flash")
                 # complete_json is sync; offload so the event loop stays alive.
                 sentiment_data = await asyncio.to_thread(
                     client.complete_json, prompt

@@ -219,7 +219,7 @@ safety:
 agent_team:
   enabled: true          # team runs (verdicts are logged + persisted)
   gating: false          # REJECT does NOT block the signal (shadow)
-  model: gemini-1.5-flash
+  model: gemini-3.1-flash
   post_mortem:
     enabled: true
     # schedule: API-tetiklemeli (POST /api/ai/post-mortem). Bot içinde

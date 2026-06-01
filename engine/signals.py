@@ -233,7 +233,7 @@ Do not include any markdown backticks or extra text, just the raw JSON.
     # where engine.agents is not on the path (legacy unit tests).
     from engine.agents.gemini_client import GeminiClient
 
-    client = GeminiClient(api_key=api_key, model="gemini-1.5-flash")
+    client = GeminiClient(api_key=api_key, model="gemini-3.1-flash")
     result = client.complete_json(prompt, timeout=10.0)
 
     if not result:

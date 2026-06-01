@@ -244,7 +244,7 @@ def validate_config(cfg: dict) -> bool:
                 raise ValueError(
                     f"agent_team.{bool_key} must be a bool, got {type(v).__name__}"
                 )
-        model = at.get("model", "gemini-1.5-flash")
+        model = at.get("model", "gemini-3.1-flash")
         if not isinstance(model, str) or not model.strip():
             raise ValueError("agent_team.model must be a non-empty string")
         # gating=True with shadow-mode observation is the recommended
