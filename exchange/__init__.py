@@ -1428,12 +1428,37 @@ class OrderManager:
             return pos.entry
 
     def _record_close(self, pos: Position, exit_price: float, reason: str) -> None:
-        """Pozisyon kapanış metadata'sını doldur ve event emit et."""
+        """Pozisyon kapanış metadata'sını doldur ve event emit et.
+
+        PR C: prefer Binance net realizedPnl (realizedPnl - commission - funding)
+        over the gross estimate. Falls back to the estimate (and tags
+        pnl_source="estimated") when the exchange read soft-fails.
+        """
         is_long = pos.direction == "LONG"
         pnl_pct = ((exit_price - pos.entry) / pos.entry * 100) if is_long else \
                   ((pos.entry - exit_price) / pos.entry * 100)
-        pnl_usdt = (exit_price - pos.entry) * pos.size if is_long else \
-                   (pos.entry - exit_price) * pos.size
+        est_pnl_usdt = (exit_price - pos.entry) * pos.size if is_long else \
+                       (pos.entry - exit_price) * pos.size
+
+        # Exchange-truth PnL (soft-fail → keep estimate).
+        pnl_usdt = est_pnl_usdt
+        pos.pnl_source = "estimated"
+        try:
+            since_ms = int(pd.Timestamp(pos.opened_at).value // 1_000_000) if pos.opened_at else 0
+        except Exception:
+            since_ms = 0
+        try:
+            res = self.client.fetch_realized_pnl(pos.symbol, since_ms=since_ms)
+        except Exception:
+            res = {"ok": False}
+        # isinstance guard: a real BinanceClient returns a dict; mock/absent
+        # clients (or anything non-dict) fall through to the estimate.
+        if isinstance(res, dict) and res.get("ok"):
+            pnl_usdt = res["net"]
+            pos.realized_pnl_exchange = res.get("realized_pnl", 0.0)
+            pos.commission_paid = res.get("commission", 0.0)
+            pos.funding_paid = res.get("funding", 0.0)
+            pos.pnl_source = "exchange"
 
         pos.closed_at = pd.Timestamp.now(tz="UTC").isoformat()
         pos.exit_reason = reason
@@ -1443,7 +1468,7 @@ class OrderManager:
         log.info(
             f"{reason}: {pos.symbol} {pos.direction} | "
             f"Entry={pos.entry:.4f} Exit={exit_price:.4f} | "
-            f"PnL={pnl_pct:+.2f}% (${pnl_usdt:+.2f})"
+            f"PnL={pnl_pct:+.2f}% (${pnl_usdt:+.2f}) [{pos.pnl_source}]"
         )
 
         self.closed_positions.append(pos)
