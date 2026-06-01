@@ -165,9 +165,13 @@ def main():
         open_orders = ex.fetch_open_orders()
         n_pos, n_ord = len(positions), len(open_orders)
     except Exception as e:
-        print(f"  [5/5] Flat-book gate: ⚠️ pozisyon/emir sorgulanamadı ({e})")
+        # Fail-open: a read error must not block the operator. This is only an
+        # ADVISORY preflight check — Binance's own rejection + the startup abort
+        # in _enforce_margin_setup are the authoritative guards. Treat a ⚠️ here
+        # as inconclusive and verify flatness manually (runbook step 4).
+        print(f"  [5/5] Flat-book gate: ⚠️ pozisyon/emir sorgulanamadı ({e}) — manuel doğrula")
         n_pos = n_ord = 0
-        mode_change_needed = False   # don't block on a read failure
+        mode_change_needed = False
     ok, msg = evaluate_flat_book(mode_change_needed, n_pos, n_ord)
     if not ok:
         print(f"  [5/5] Flat-book gate: ❌ {msg}")

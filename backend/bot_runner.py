@@ -45,7 +45,12 @@ def _enforce_margin_setup(client, tradeable, margin_mode, leverage, hedge_mode):
     """
     for sym in tradeable:
         try:
-            client.set_margin_mode(sym, margin_mode)
+            # set_margin_mode returns False on a genuine failure (it only RAISES
+            # on the unexpected). It treats benign -4046 'no need to change' as
+            # True internally, so a False here is a real ISOLATED-apply failure
+            # that must abort — not just a swallowed exception.
+            if not client.set_margin_mode(sym, margin_mode):
+                return False, f"Margin mode setup failed for {sym} (set_margin_mode returned False)"
         except Exception as e:
             return False, f"Margin mode setup failed for {sym}: {e}"
         try:

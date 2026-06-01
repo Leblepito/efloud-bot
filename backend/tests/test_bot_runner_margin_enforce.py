@@ -50,6 +50,24 @@ def test_margin_mode_success_returns_ok():
     assert ("BTC/USDT", "ISOLATED") in client.calls
 
 
+def test_margin_mode_false_return_aborts_startup():
+    """set_margin_mode returns False on a genuine failure (it does NOT raise) —
+    enforce must abort, not silently proceed half-crossed."""
+    from backend.bot_runner import _enforce_margin_setup
+
+    class _FalseReturnClient(_FailMarginClient):
+        def set_margin_mode(self, sym, mode):
+            self.calls.append((sym, mode))
+            return False   # genuine failure surfaces as False, not an exception
+
+    ok, err = _enforce_margin_setup(
+        _FalseReturnClient(), tradeable=["BTC/USDT"], margin_mode="ISOLATED",
+        leverage=5, hedge_mode=False,
+    )
+    assert ok is False
+    assert "margin" in err.lower()
+
+
 def test_position_mode_failure_aborts():
     from backend.bot_runner import _enforce_margin_setup
 
