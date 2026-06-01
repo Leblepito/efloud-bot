@@ -83,6 +83,13 @@ class TradeSnapshot:
     error_tags: List[str] = field(default_factory=list)
     lessons: List[str] = field(default_factory=list)
 
+    # PR C — PnL reconciliation provenance. "estimated" = gross price-diff;
+    # "exchange" = net realizedPnl - commission - funding from Binance income.
+    pnl_source: str = "estimated"
+    realized_pnl_exchange: float = 0.0
+    commission_paid: float = 0.0
+    funding_paid: float = 0.0
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 

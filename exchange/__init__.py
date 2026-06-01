@@ -1506,6 +1506,10 @@ class OrderManager:
                 intent_score_entry=0,
                 intent_label_entry="",
                 confluence_score=0,
+                pnl_source=pos.pnl_source,
+                realized_pnl_exchange=pos.realized_pnl_exchange,
+                commission_paid=pos.commission_paid,
+                funding_paid=pos.funding_paid,
             )
             self.trade_journal.record_entry(snap)
             self.trade_journal.record_exit(
