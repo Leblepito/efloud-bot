@@ -129,6 +129,12 @@ class Signal:
     in_ob: bool = False
     has_sfp: bool = False
     zone: str = ""
+    # Per-signal free-form metadata bag. The Runtime Agent Team (Part A
+    # of the agent-team plan) writes its verdict here so downstream
+    # code (journal, DB) can persist it without changing the schema.
+    # Always a plain dict — never assume the key set; downstream readers
+    # should use ``.get("agent_review")`` and tolerate ``None``.
+    meta: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -169,10 +175,17 @@ def validate_signal_with_gemini(
     df_entry: pd.DataFrame,
     api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Validate a trade signal's market structure using Gemini 1.5 Flash."""
+    """Validate a trade signal's market structure using Gemini 1.5 Flash.
+
+    Public signature is stable; the internal HTTP call is delegated to
+    :class:`engine.agents.GeminiClient` (canonical A0 refactor). Behaviour
+    is unchanged: missing key, timeout, or parse error → fall back to
+    ``{"valid": True, "confidence": 1.0, ...}`` so downstream signal
+    generation is not blocked.
+    """
     if not api_key:
         api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        
+
     if not api_key:
         # Graceful degradation fallback if no API key is configured
         log.warning("Gemini API key not found. Skipping structure validation (degrades gracefully).")
@@ -215,42 +228,30 @@ Do not include any markdown backticks or extra text, just the raw JSON.
     if cached:
         return cached
 
-    # Synchronous HTTPX request to eliminate complex loop collisions
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ]
-    }
+    # Canonical A0: delegate the HTTP call to the shared GeminiClient.
+    # Imported lazily to keep engine.signals importable in environments
+    # where engine.agents is not on the path (legacy unit tests).
+    from engine.agents.gemini_client import GeminiClient
 
-    try:
-        resp = httpx.post(url, headers=headers, json=payload, timeout=10.0)
-        if resp.status_code == 200:
-            data = resp.json()
-            raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            
-            # Clean markdown JSON wraps
-            if raw_text.startswith("```"):
-                lines = raw_text.split("\n")
-                raw_text = "\n".join([line for line in lines if not line.startswith("```")])
-            
-            result = json.loads(raw_text)
-            
-            # Cache the parsed result
-            _struct_cache.set(prompt, result)
-            return result
-        else:
-            log.warning(f"Gemini API returned error status {resp.status_code}: {resp.text}")
-    except Exception as e:
-        log.warning(f"Exception during Gemini signal structure validation: {e}")
+    client = GeminiClient(api_key=api_key, model="gemini-1.5-flash")
+    result = client.complete_json(prompt, timeout=10.0)
 
-    # Fallback to keep signal on API failure / timeout
-    return {"valid": True, "confidence": 1.0, "reasoning": "Fallback due to API failure or timeout."}
+    if not result:
+        # Fail-safe: no key, HTTP error, parse failure — all converge here.
+        log.warning("Gemini signal validation unavailable — falling back to pass-through.")
+        return {"valid": True, "confidence": 1.0,
+                "reasoning": "Fallback due to API failure or timeout."}
+
+    # Defensive: ensure the schema is what callers expect. If the LLM
+    # returned something missing the keys, the SignalValidatorAgent
+    # contract is "we don't know" — same fallback.
+    if not all(k in result for k in ("valid", "confidence", "reasoning")):
+        log.warning(f"Gemini validation returned unexpected schema: {result!r}")
+        return {"valid": True, "confidence": 1.0,
+                "reasoning": "Fallback due to unexpected LLM schema."}
+
+    _struct_cache.set(prompt, result)
+    return result
 
 
 def generate_signals(
