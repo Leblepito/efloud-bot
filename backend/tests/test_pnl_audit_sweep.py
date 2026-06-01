@@ -73,3 +73,31 @@ def test_audit_skips_already_reconciled():
 
     assert corrected == 0
     assert pos.pnl_usdt == 5.0   # untouched
+
+
+def test_reconcile_runs_audit_every_n_cycles(monkeypatch):
+    m = _audit_mgr(_AuditClient(net=0.0))
+    m.enable_pnl_audit = True
+    m.pnl_audit_every_cycles = 3
+    m._pnl_audit_cycle = 0
+
+    calls = {"n": 0}
+    monkeypatch.setattr(m, "audit_realized_pnl",
+                        lambda **k: calls.__setitem__("n", calls["n"] + 1) or 0)
+
+    for _ in range(7):
+        m._maybe_run_pnl_audit()
+
+    assert calls["n"] == 2   # cycles 3 and 6
+
+
+def test_audit_disabled_never_runs():
+    m = _audit_mgr(_AuditClient(net=0.0))
+    m.enable_pnl_audit = False
+    m.pnl_audit_every_cycles = 1
+    m._pnl_audit_cycle = 0
+    calls = {"n": 0}
+    m.audit_realized_pnl = lambda **k: calls.__setitem__("n", calls["n"] + 1) or 0
+    for _ in range(5):
+        m._maybe_run_pnl_audit()
+    assert calls["n"] == 0

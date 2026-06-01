@@ -136,6 +136,11 @@ operation:
 
 # ── Safety (v2.1) ──
 safety:
+  # PnL reconcile audit (PR C, 2026-06-01) — correct estimated closes to
+  # Binance net realizedPnl on a periodic reconcile sweep.
+  enable_pnl_audit: true
+  pnl_audit_every_cycles: 20
+
   # Circuit Breaker
   daily_loss_limit_pct: 3.0
   weekly_drawdown_limit_pct: 8.0

@@ -381,6 +381,10 @@ class OrderManager:
         # -2021 'would immediately trigger'. 0.0 = disabled (backward-compat).
         # See test_entry_drift_guard.py for the 2026-05-31 live incident.
         self.max_entry_drift_pct = max_entry_drift_pct
+        # PR C — periodic PnL audit sweep (overridden by bot_runner wiring).
+        self.enable_pnl_audit = True
+        self.pnl_audit_every_cycles = 20
+        self._pnl_audit_cycle = 0
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
@@ -1274,6 +1278,7 @@ class OrderManager:
 
         # Always persist after a reconcile pass so disk reflects latest exchange-derived
         # state (closes removed from list, tp1_hit flags flipped, sl_order_id updated).
+        self._maybe_run_pnl_audit()
         self._persist()
         return closed_now
 
@@ -1474,6 +1479,18 @@ class OrderManager:
         self.closed_positions.append(pos)
         self._journal_record_close(pos, exit_price, reason)
         self._emit("position_closed", pos)
+
+    def _maybe_run_pnl_audit(self) -> None:
+        """Tick the cycle counter; run the audit sweep every N cycles."""
+        if not self.enable_pnl_audit:
+            return
+        self._pnl_audit_cycle += 1
+        if self._pnl_audit_cycle % max(1, self.pnl_audit_every_cycles) != 0:
+            return
+        try:
+            self.audit_realized_pnl(window_hours=24)
+        except Exception as e:
+            log.warning(f"pnl_audit sweep failed: {e}")
 
     def audit_realized_pnl(self, window_hours: int = 24) -> int:
         """Re-reconcile recently-closed positions still tagged 'estimated'.
