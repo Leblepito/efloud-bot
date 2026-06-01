@@ -33,8 +33,12 @@ exchange:
   api_secret: ""           # Railway env: BINANCE_API_SECRET
   testnet: false           # MAINNET
   leverage: 5              # 5x kaldıraç (orta-agresif, $2000 cüzdan için) — unchanged
-  margin_mode: ISOLATED    # PR A: was CROSSED — per-symbol risk isolation
-  hedge_mode: false        # PR A: was true — ONE-WAY; Binance blocks long+short on one symbol
+  margin_mode: CROSSED     # PR A DEFERRED (2026-06-01): kept CROSSED for phased deploy —
+                           # book not flat (7 open positions). Flip to ISOLATED in a
+                           # dedicated flat-book maintenance window (PR A runbook).
+  hedge_mode: true         # PR A DEFERRED: kept HEDGE (one-way switch needs flat book).
+                           # PR A code/guards stay; startup enforce is a no-op while
+                           # config matches the live exchange regime (CROSSED+hedge).
 
 # ── SMC v2 feature flag (PR #S6 + cycle 4 hotfix) ──
 # Inert default: smc_version=v1, smc_v2_symbols=[] → v1 path active, v2 dormant.
