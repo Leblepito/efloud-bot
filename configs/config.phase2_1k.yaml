@@ -159,6 +159,16 @@ safety:
   enable_pnl_audit: true
   pnl_audit_every_cycles: 20
 
+  # ── SL/TP post-placement verify (PR B, 2026-06-01) ──
+  # After entry fills + SL/TP placed, re-query the exchange ~2.5s later to
+  # confirm the protection orders actually landed; repair missing legs. If SL
+  # can't be confirmed after N attempts → market-close (never hold bare). If
+  # only TP is missing → tolerate + let reconcile keep retrying.
+  enable_post_placement_verify: true
+  verify_delay_sec: 2.5
+  verify_max_attempts: 3
+  rollback_on_sl_failure: true
+
   # ── Safety Integration (2026-05-30 plan) ──
   reverse_min_profit_pct: 0.2          # kontra sinyal: karda + %0.2 buffer üstünde reverse
   pause_new_entries: false             # true = yeni giriş durdur (mevcut pozisyonlar yönetilir)
