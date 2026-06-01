@@ -249,6 +249,17 @@ class SafeOrchestrator:
         # Machine Learning Regime Auto-Training Pipeline Integration
         self.last_regime_training_time = None
 
+        # Runtime Agent Team (canonical Part A.4 — additive advisory layer).
+        # ``enabled: false`` (the default) is a no-op; ``gating: false`` keeps
+        # the verdict advisory only. We construct eagerly so the team
+        # surface is available to the API endpoints (``/api/ai/agents``,
+        # ``/api/ai/post-mortem``) and the post-step 3.5 review call below.
+        from engine.agents.team import AgentTeam
+        self.agent_team = AgentTeam(
+            config.get("agent_team", {}),
+            state_dir=state_dir,
+        )
+
     def _get_planner(self, symbol: str) -> ScenarioPlanner:
         """Sembol başına ScenarioPlanner — senaryolar karışmasın."""
         if symbol not in self._planners:
@@ -406,7 +417,8 @@ class SafeOrchestrator:
 
     # ── Trade journal hooks ───────────────────────────────────────────────
 
-    def _journal_record_entry(self, pos: Position) -> None:
+    def _journal_record_entry(self, pos: Position,
+                               agent_review: Optional[dict] = None) -> None:
         """Record a freshly-opened position to the trade journal.
 
         No-op when self.trade_journal is None (backwards-compat for backtest
@@ -415,6 +427,11 @@ class SafeOrchestrator:
         a follow-up PR will feed those from the signal context. The
         minimum-viable snapshot is enough to make Phase 0 evidence
         extraction return journal_rows > 0.
+
+        ``agent_review`` (canonical A7) is the AgentTeam verdict produced
+        before this position opened, so post-mortem analysis can
+        correlate team verdicts with realised PnL. ``None`` when the
+        team was disabled or didn't run for this symbol.
         """
         if self.trade_journal is None:
             return
@@ -437,6 +454,11 @@ class SafeOrchestrator:
             intent_label_entry="",
             confluence_score=0,
             scenario_name=pos.scenario_id,
+            # Canonical A7: persist the AgentTeam verdict alongside the
+            # trade so post-mortem analysis can correlate team verdicts
+            # with realised PnL. The caller (``_journal_record_entry``
+            # below) passes the dict; the snapshot just stores it.
+            agent_review=agent_review,
         )
         try:
             self.trade_journal.record_entry(snap)
@@ -795,249 +817,305 @@ class SafeOrchestrator:
 
         elif signals:
             latest = signals[-1]
-            # Time-windowed dedup: aynı signal 1 saat içinde iki kez açılmasın
-            # Ama 1 saat sonra aynı sinyal yine üretilirse (ikinci CHoCH) açabilir
-            import time as _time
-            now_ts = _time.time()
-            sig_key = (symbol, latest.direction, round(latest.entry, 2))
-
-            # Eski kayıtları temizle (>1 saat)
-            self._processed_signals = {
-                k: ts for k, ts in self._processed_signals.items()
-                if now_ts - ts < 3600
-            } if isinstance(self._processed_signals, dict) else {}
-
-            if sig_key in self._processed_signals:
-                age_min = (now_ts - self._processed_signals[sig_key]) / 60
-                log.info(f"🔁 [{symbol}] Signal already processed {age_min:.0f}min ago — skipping")
-            else:
-                self._processed_signals[sig_key] = now_ts
-                # Persist dedup cache immediately so a mid-cycle restart can't
-                # re-open the same signal (SOL double-open, 2026-05-08).
-                self._persist_state()
-
-                # Sembol tradeable mi? (read-only ise notification gönder, trade etme)
-                is_tradeable = True
-                if self.permission_mgr is not None:
-                    is_tradeable = self.permission_mgr.is_tradeable(symbol)
-
-                if not is_tradeable:
-                    # Read-only sembol → manuel trader'a bildir
-                    if self.notification_mgr:
-                        self.notification_mgr.signal_readonly(
-                            symbol=symbol, direction=latest.direction,
-                            entry=latest.entry, sl=latest.sl,
-                            tp1=latest.tp1, tp2=latest.tp2,
-                            confluence=latest.confluence,
-                            reasons=latest.reasons,
-                        )
-                    actions.append(f"[READONLY] Signal {latest.direction} @ {latest.entry:.2f} (notify only)")
-
-                else:
-                    # Tradeable → normal akış: pozisyon aç
-                    actual_balance = balance if balance is not None else 10000.0
-
-                    # Opt-in: reverse-from-risk position sizing (cherry-picked v2.2.0)
-                    if risk_cfg.get("position_size_calculation") == "reverse_from_risk":
-                        from engine.risk.custom_calculator import CustomRiskCalculator
-                        calc = CustomRiskCalculator(
-                            max_loss_usdt=risk_cfg["max_loss_per_trade_usdt"],
-                            leverage=self.config["exchange"].get("leverage", 1),
-                            target_stop_pct=risk_cfg["target_stop_distance_pct"] / 100.0,
-                        )
-                        notional = calc.calculate_position_size(actual_balance)
-                        # Convert notional (USDT) → contract size (asset units)
-                        size = notional / latest.entry if latest.entry > 0 else 0.0
-                    else:
-                        from risk import calc_position_size
-                        max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
-                        # Choose sizing balance: 'total' (default) or 'available'
-                        sizing_source = risk_cfg.get("sizing_balance_source", "total")
-                        sizing_bal = _sizing_balance(
-                            self.client, sizing_source, actual_balance
-                        )
-                        size = calc_position_size(
-                            sizing_bal, risk_cfg["risk_per_trade_pct"],
-                            latest.entry, latest.sl,
-                            self.config["exchange"].get("leverage", 1),
-                            max_notional_pct=max_notional,
-                        )
-                        if sizing_source == "available" and sizing_bal < actual_balance:
-                            log.info(
-                                f"sizing: source=available balance=${sizing_bal:.2f} "
-                                f"(vs total=${actual_balance:.2f}, "
-                                f"delta=${actual_balance-sizing_bal:.2f} locked)"
-                            )
-
-                    atr = self.intent._atr(df_entry, 14)
-                    guard_check = self.pos_guard.can_open_position(
-                        balance=actual_balance,
-                        entry=latest.entry, size=size, sl=latest.sl, atr=atr,
-                        direction=latest.direction, symbol=symbol,
-                        existing_positions=self.lifecycle.positions,
-                        leverage=self.config["exchange"].get("leverage", 1),
+            # === Runtime Agent Team pre-review (canonical A4) ===
+            # Advisory layer; never touches the deterministic guard pipeline.
+            # ``enabled`` controls whether the team runs at all; ``gating``
+            # controls whether a hard REJECT actually blocks the trade
+            # (default off — shadow mode only).
+            agent_team_review = None
+            if self.agent_team is not None and self.agent_team.cfg.get("enabled", False):
+                try:
+                    agent_team_review = self.agent_team.review_trade({
+                        "symbol": symbol,
+                        "direction": latest.direction,
+                        "entry": float(latest.entry),
+                        "sl": float(latest.sl),
+                        "tp1": float(latest.tp1),
+                        "confluence": int(latest.confluence),
+                        "htf_bias": htf_bias,
+                        "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
+                        "rr": float(latest.rr1) if latest.rr1 else 0.0,
+                        "size_notional_pct": 0.0,  # sized later; refine in follow-up
+                    })
+                    # Attach to signal so journal/DB can persist (canonical A7)
+                    if isinstance(latest.meta, dict):
+                        latest.meta["agent_review"] = agent_team_review
+                    log.info(
+                        f"🤖 AgentTeam[{symbol}] verdict={agent_team_review.get('team_verdict')} "
+                        f"score={agent_team_review.get('score', 0.0):.2f}"
                     )
+                except Exception as e:
+                    log.warning(f"AgentTeam review failed (ignored): {e!r}")
+                    agent_team_review = None
 
-                    # Reverse-on-profit branch: an opposite-direction position
-                    # blocks can_open_position. Re-evaluate with the live price
-                    # — if currently profitable beyond the buffer threshold,
-                    # close the existing side and let the open flow continue.
-                    reversed_from: Optional[str] = None
-                    if (not guard_check.allowed
-                        and guard_check.reason.startswith("OPPOSITE_DIRECTION_EXISTS")):
-                        opposite = next(
-                            (p for p in self.lifecycle.positions
-                             if p.is_open and p.symbol == symbol
-                             and p.direction != latest.direction
-                             and p.scenario_id is None),
-                            None,
-                        )
-                        if opposite is None:
-                            log.warning(
-                                f"[{symbol}] OPPOSITE_DIRECTION_EXISTS but no "
-                                f"matching open position — race; rejecting."
+            # === Hard-veto gating (default off) ===
+            _agent_veto = (
+                self.agent_team is not None
+                and self.agent_team.cfg.get("gating", False)
+                and (agent_team_review or {}).get("team_verdict") == "REJECT"
+            )
+            if _agent_veto:
+                log.info(
+                    f"🛑 [{symbol}] AgentTeam REJECT veto — signal blocked, "
+                    f"score={(agent_team_review or {}).get('score', 0.0):.2f}"
+                )
+                actions.append(
+                    f"[{symbol}] AgentTeam veto "
+                    f"(score={(agent_team_review or {}).get('score', 0.0):.2f})"
+                )
+            else:
+
+                # Time-windowed dedup: aynı signal 1 saat içinde iki kez açılmasın
+                # Ama 1 saat sonra aynı sinyal yine üretilirse (ikinci CHoCH) açabilir
+                import time as _time
+                now_ts = _time.time()
+                sig_key = (symbol, latest.direction, round(latest.entry, 2))
+
+                # Eski kayıtları temizle (>1 saat)
+                self._processed_signals = {
+                    k: ts for k, ts in self._processed_signals.items()
+                    if now_ts - ts < 3600
+                } if isinstance(self._processed_signals, dict) else {}
+
+                if sig_key in self._processed_signals:
+                    age_min = (now_ts - self._processed_signals[sig_key]) / 60
+                    log.info(f"🔁 [{symbol}] Signal already processed {age_min:.0f}min ago — skipping")
+                else:
+                    self._processed_signals[sig_key] = now_ts
+                    # Persist dedup cache immediately so a mid-cycle restart can't
+                    # re-open the same signal (SOL double-open, 2026-05-08).
+                    self._persist_state()
+
+                    # Sembol tradeable mi? (read-only ise notification gönder, trade etme)
+                    is_tradeable = True
+                    if self.permission_mgr is not None:
+                        is_tradeable = self.permission_mgr.is_tradeable(symbol)
+
+                    if not is_tradeable:
+                        # Read-only sembol → manuel trader'a bildir
+                        if self.notification_mgr:
+                            self.notification_mgr.signal_readonly(
+                                symbol=symbol, direction=latest.direction,
+                                entry=latest.entry, sl=latest.sl,
+                                tp1=latest.tp1, tp2=latest.tp2,
+                                confluence=latest.confluence,
+                                reasons=latest.reasons,
                             )
+                        actions.append(f"[READONLY] Signal {latest.direction} @ {latest.entry:.2f} (notify only)")
+
+                    else:
+                        # Tradeable → normal akış: pozisyon aç
+                        actual_balance = balance if balance is not None else 10000.0
+
+                        # Opt-in: reverse-from-risk position sizing (cherry-picked v2.2.0)
+                        if risk_cfg.get("position_size_calculation") == "reverse_from_risk":
+                            from engine.risk.custom_calculator import CustomRiskCalculator
+                            calc = CustomRiskCalculator(
+                                max_loss_usdt=risk_cfg["max_loss_per_trade_usdt"],
+                                leverage=self.config["exchange"].get("leverage", 1),
+                                target_stop_pct=risk_cfg["target_stop_distance_pct"] / 100.0,
+                            )
+                            notional = calc.calculate_position_size(actual_balance)
+                            # Convert notional (USDT) → contract size (asset units)
+                            size = notional / latest.entry if latest.entry > 0 else 0.0
                         else:
-                            reverse_check = self.pos_guard.can_reverse_position(
-                                opposite, current_price
+                            from risk import calc_position_size
+                            max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
+                            # Choose sizing balance: 'total' (default) or 'available'
+                            sizing_source = risk_cfg.get("sizing_balance_source", "total")
+                            sizing_bal = _sizing_balance(
+                                self.client, sizing_source, actual_balance
                             )
-                            if not reverse_check.allowed:
+                            size = calc_position_size(
+                                sizing_bal, risk_cfg["risk_per_trade_pct"],
+                                latest.entry, latest.sl,
+                                self.config["exchange"].get("leverage", 1),
+                                max_notional_pct=max_notional,
+                            )
+                            if sizing_source == "available" and sizing_bal < actual_balance:
                                 log.info(
-                                    f"🚫 [{symbol}] Reverse rejected: "
-                                    f"{reverse_check.reason}"
+                                    f"sizing: source=available balance=${sizing_bal:.2f} "
+                                    f"(vs total=${actual_balance:.2f}, "
+                                    f"delta=${actual_balance-sizing_bal:.2f} locked)"
                                 )
-                                warnings.append(
-                                    f"Reverse blocked: {reverse_check.reason}"
+
+                        atr = self.intent._atr(df_entry, 14)
+                        guard_check = self.pos_guard.can_open_position(
+                            balance=actual_balance,
+                            entry=latest.entry, size=size, sl=latest.sl, atr=atr,
+                            direction=latest.direction, symbol=symbol,
+                            existing_positions=self.lifecycle.positions,
+                            leverage=self.config["exchange"].get("leverage", 1),
+                        )
+
+                        # Reverse-on-profit branch: an opposite-direction position
+                        # blocks can_open_position. Re-evaluate with the live price
+                        # — if currently profitable beyond the buffer threshold,
+                        # close the existing side and let the open flow continue.
+                        reversed_from: Optional[str] = None
+                        if (not guard_check.allowed
+                            and guard_check.reason.startswith("OPPOSITE_DIRECTION_EXISTS")):
+                            opposite = next(
+                                (p for p in self.lifecycle.positions
+                                 if p.is_open and p.symbol == symbol
+                                 and p.direction != latest.direction
+                                 and p.scenario_id is None),
+                                None,
+                            )
+                            if opposite is None:
+                                log.warning(
+                                    f"[{symbol}] OPPOSITE_DIRECTION_EXISTS but no "
+                                    f"matching open position — race; rejecting."
                                 )
                             else:
-                                log.info(
-                                    f"🔄 [{symbol}] Reverse approved: "
-                                    f"{reverse_check.reason}"
+                                reverse_check = self.pos_guard.can_reverse_position(
+                                    opposite, current_price
                                 )
-                                if self._handle_reverse(opposite, symbol, current_price):
-                                    reversed_from = opposite.direction
-                                    actions.append(
-                                        f"Reversed {opposite.direction} → "
-                                        f"{latest.direction} ({reverse_check.reason})"
+                                if not reverse_check.allowed:
+                                    log.info(
+                                        f"🚫 [{symbol}] Reverse rejected: "
+                                        f"{reverse_check.reason}"
                                     )
-                                    # Re-evaluate the guard now that opposite is gone.
-                                    guard_check = self.pos_guard.can_open_position(
-                                        balance=actual_balance,
-                                        entry=latest.entry, size=size, sl=latest.sl,
-                                        atr=atr,
-                                        direction=latest.direction, symbol=symbol,
-                                        existing_positions=self.lifecycle.positions,
-                                        leverage=self.config["exchange"].get("leverage", 1),
+                                    warnings.append(
+                                        f"Reverse blocked: {reverse_check.reason}"
                                     )
                                 else:
-                                    warnings.append(
-                                        f"Reverse close failed for {symbol} — "
-                                        f"open aborted"
+                                    log.info(
+                                        f"🔄 [{symbol}] Reverse approved: "
+                                        f"{reverse_check.reason}"
                                     )
-                                    # Drop the dedup entry so the next cycle can retry.
-                                    # Persist immediately: a SIGKILL between here and
-                                    # the cycle's natural _persist_state would leave
-                                    # the cache still claiming this signal was processed,
-                                    # blocking the retry on restart.
-                                    self._processed_signals.pop(sig_key, None)
-                                    self._persist_state()
-
-                    if not guard_check.allowed:
-                        log.warning(f"🚫 Position blocked: {guard_check.reason}")
-                        warnings.append(f"Signal rejected: {guard_check.reason}")
-                    else:
-                        pause_signal = type("PauseSignal", (), {
-                            "symbol": symbol,
-                            "side": latest.direction.lower(),
-                        })()
-                        pause_decision = self.pos_guard.is_new_entry_allowed(pause_signal)
-                        if not pause_decision.allowed:
-                            log.warning(
-                                f"🚫 Position blocked: {pause_decision.reason} "
-                                f"source={pause_decision.source}"
-                            )
-                            warnings.append(f"Signal rejected: {pause_decision.reason}")
-                            # Pause is operator-driven; surface it in actions/telemetry.
-                            # Routine risk-math rejections stay warnings-only.
-                            actions.append(f"Signal rejected: {pause_decision.reason}")
-                        else:
-                            # ── 0) Trace ID for log correlation across orchestrator → DB ──
-                            trace_id = new_trace_id()
-                            set_trace_id(trace_id)
-                            log.info(
-                                "signal_promoted_to_trade",
-                                extra={"symbol": symbol, "direction": latest.direction,
-                                       "confluence": latest.confluence},
-                            )
-
-                            # ── 1) Borsaya gerçek emir gönder (varsa) ──
-                            exchange_ok = True
-                            if self.order_manager is not None:
-                                try:
-                                    # Phase 3.2: build confluence_details for DB warehouse
-                                    _conf_details = {
-                                        "score": latest.confluence,
-                                        "reasons": getattr(latest, "reasons", []),
-                                        "htf_bias": htf_bias,
-                                        "regime": regime_analysis.regime,
-                                        "adx": float(regime_analysis.adx),
-                                        "atr_ratio": float(regime_analysis.atr_ratio),
-                                    } if latest is not None else None
-                                    exchange_pos = self.order_manager.open_position(
-                                        symbol, latest.direction, size,
-                                        latest.entry, latest.sl, latest.tp1, latest.tp2,
-                                        trace_id=trace_id,
-                                        atr_value=float(atr) if atr is not None else None,
-                                        confluence_details=_conf_details,
-                                    )
-                                except Exception as e:
-                                    log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
-                                    exchange_pos = None
-
-                                if exchange_pos is None:
-                                    log.warning(
-                                        f"🚫 [{symbol}] Exchange order failed — "
-                                        f"local position NOT opened (no logical state mismatch)"
-                                    )
-                                    if reversed_from is not None:
-                                        # Reverse close succeeded but open failed —
-                                        # the symbol is intentionally flat. Trader
-                                        # must know they're sitting on no exposure
-                                        # so they can decide whether to retry manually.
-                                        flat_msg = (
-                                            f"Reverse close succeeded but open failed "
-                                            f"for {symbol} — symbol flat, awaiting next signal"
+                                    if self._handle_reverse(opposite, symbol, current_price):
+                                        reversed_from = opposite.direction
+                                        actions.append(
+                                            f"Reversed {opposite.direction} → "
+                                            f"{latest.direction} ({reverse_check.reason})"
                                         )
-                                        warnings.append(flat_msg)
-                                        if self.notification_mgr is not None:
-                                            try:
-                                                self.notification_mgr.alert(flat_msg)
-                                            except Exception:
-                                                pass
+                                        # Re-evaluate the guard now that opposite is gone.
+                                        guard_check = self.pos_guard.can_open_position(
+                                            balance=actual_balance,
+                                            entry=latest.entry, size=size, sl=latest.sl,
+                                            atr=atr,
+                                            direction=latest.direction, symbol=symbol,
+                                            existing_positions=self.lifecycle.positions,
+                                            leverage=self.config["exchange"].get("leverage", 1),
+                                        )
                                     else:
                                         warnings.append(
-                                            f"Order failed for {symbol}: exchange rejected"
+                                            f"Reverse close failed for {symbol} — "
+                                            f"open aborted"
                                         )
-                                    exchange_ok = False
+                                        # Drop the dedup entry so the next cycle can retry.
+                                        # Persist immediately: a SIGKILL between here and
+                                        # the cycle's natural _persist_state would leave
+                                        # the cache still claiming this signal was processed,
+                                        # blocking the retry on restart.
+                                        self._processed_signals.pop(sig_key, None)
+                                        self._persist_state()
 
-                            # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──
-                            if exchange_ok:
-                                pos = self.lifecycle.open_position(
-                                    symbol, latest.direction, latest.entry, size,
-                                    latest.sl, latest.tp1, latest.tp2
+                        if not guard_check.allowed:
+                            log.warning(f"🚫 Position blocked: {guard_check.reason}")
+                            warnings.append(f"Signal rejected: {guard_check.reason}")
+                        else:
+                            pause_signal = type("PauseSignal", (), {
+                                "symbol": symbol,
+                                "side": latest.direction.lower(),
+                            })()
+                            pause_decision = self.pos_guard.is_new_entry_allowed(pause_signal)
+                            if not pause_decision.allowed:
+                                log.warning(
+                                    f"🚫 Position blocked: {pause_decision.reason} "
+                                    f"source={pause_decision.source}"
                                 )
-                                self._journal_record_entry(pos)
-                                log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
-                                         f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
-                                         f"TP2={latest.tp2:.4f} Conf={latest.confluence}")
-                                if self.notification_mgr:
-                                    self.notification_mgr.position_opened(
-                                        symbol, latest.direction, latest.entry,
-                                        size, latest.sl, latest.tp1, latest.confluence
+                                warnings.append(f"Signal rejected: {pause_decision.reason}")
+                                # Pause is operator-driven; surface it in actions/telemetry.
+                                # Routine risk-math rejections stay warnings-only.
+                                actions.append(f"Signal rejected: {pause_decision.reason}")
+                            else:
+                                # ── 0) Trace ID for log correlation across orchestrator → DB ──
+                                trace_id = new_trace_id()
+                                set_trace_id(trace_id)
+                                log.info(
+                                    "signal_promoted_to_trade",
+                                    extra={"symbol": symbol, "direction": latest.direction,
+                                           "confluence": latest.confluence},
+                                )
+
+                                # ── 1) Borsaya gerçek emir gönder (varsa) ──
+                                exchange_ok = True
+                                if self.order_manager is not None:
+                                    try:
+                                        # Phase 3.2: build confluence_details for DB warehouse
+                                        _conf_details = {
+                                            "score": latest.confluence,
+                                            "reasons": getattr(latest, "reasons", []),
+                                            "htf_bias": htf_bias,
+                                            "regime": regime_analysis.regime,
+                                            "adx": float(regime_analysis.adx),
+                                            "atr_ratio": float(regime_analysis.atr_ratio),
+                                        } if latest is not None else None
+                                        exchange_pos = self.order_manager.open_position(
+                                            symbol, latest.direction, size,
+                                            latest.entry, latest.sl, latest.tp1, latest.tp2,
+                                            trace_id=trace_id,
+                                            atr_value=float(atr) if atr is not None else None,
+                                            confluence_details=_conf_details,
+                                        )
+                                    except Exception as e:
+                                        log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
+                                        exchange_pos = None
+
+                                    if exchange_pos is None:
+                                        log.warning(
+                                            f"🚫 [{symbol}] Exchange order failed — "
+                                            f"local position NOT opened (no logical state mismatch)"
+                                        )
+                                        if reversed_from is not None:
+                                            # Reverse close succeeded but open failed —
+                                            # the symbol is intentionally flat. Trader
+                                            # must know they're sitting on no exposure
+                                            # so they can decide whether to retry manually.
+                                            flat_msg = (
+                                                f"Reverse close succeeded but open failed "
+                                                f"for {symbol} — symbol flat, awaiting next signal"
+                                            )
+                                            warnings.append(flat_msg)
+                                            if self.notification_mgr is not None:
+                                                try:
+                                                    self.notification_mgr.alert(flat_msg)
+                                                except Exception:
+                                                    pass
+                                        else:
+                                            warnings.append(
+                                                f"Order failed for {symbol}: exchange rejected"
+                                            )
+                                        exchange_ok = False
+
+                                # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──
+                                if exchange_ok:
+                                    pos = self.lifecycle.open_position(
+                                        symbol, latest.direction, latest.entry, size,
+                                        latest.sl, latest.tp1, latest.tp2
                                     )
-                                actions.append(f"Opened {latest.direction} @ {latest.entry:.2f} "
-                                               f"(size={size:.4f})")
-                                warnings.extend(guard_check.warnings)
+                                    # Canonical A7: pass the AgentTeam verdict
+                                    # (attached to the signal in STEP 3.5) so
+                                    # the journal row carries the team's call.
+                                    self._journal_record_entry(
+                                        pos,
+                                        agent_review=(latest.meta.get("agent_review")
+                                                      if isinstance(latest.meta, dict)
+                                                      else None),
+                                    )
+                                    log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
+                                             f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
+                                             f"TP2={latest.tp2:.4f} Conf={latest.confluence}")
+                                    if self.notification_mgr:
+                                        self.notification_mgr.position_opened(
+                                            symbol, latest.direction, latest.entry,
+                                            size, latest.sl, latest.tp1, latest.confluence
+                                        )
+                                    actions.append(f"Opened {latest.direction} @ {latest.entry:.2f} "
+                                                   f"(size={size:.4f})")
+                                    warnings.extend(guard_check.warnings)
 
         # ═══ STEP 7: Scenario-based Piramit ═══
         if can_trade:
