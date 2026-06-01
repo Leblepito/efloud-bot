@@ -242,7 +242,7 @@ class BinanceClient:
         return [p for p in positions if float(p.get("contracts", 0)) > 0]
 
     def fetch_realized_pnl(self, symbol: str, since_ms: int,
-                           until_ms: int = None) -> dict:
+                           until_ms: Optional[int] = None) -> dict:
         """Sum REALIZED_PNL / COMMISSION / FUNDING_FEE for a symbol+window.
 
         Reads the USD-M income endpoint (fapiPrivateGetIncome). Soft-fails:
@@ -1498,6 +1498,12 @@ class OrderManager:
         Pulls exchange income for each estimated close within the window and
         upgrades pnl_usdt to net exchange truth. Returns the number corrected.
         Soft-fails per position so one bad read never aborts the sweep.
+
+        Limitation: closed_positions is in-memory (not persisted/restored), so
+        the sweep only reaches closes from the current process lifetime. A close
+        that soft-failed to 'estimated' just before a restart keeps its estimate
+        in the journal. Acceptable given the breaker is not back-corrected either
+        (reporting-only PR); a future journal-sourced audit could close this gap.
         """
         try:
             cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=window_hours)
@@ -1514,10 +1520,15 @@ class OrderManager:
                 if closed_ts < cutoff:
                     continue
                 since_ms = int(pd.Timestamp(pos.opened_at).value // 1_000_000)
+                # Bound the income window to THIS position's lifetime (+5s for
+                # fill-time posting lag) so a later trade on the same symbol
+                # cannot have its realizedPnl/commission misattributed here.
+                until_ms = int(closed_ts.value // 1_000_000) + 5_000
             except Exception:
                 continue
             try:
-                res = self.client.fetch_realized_pnl(pos.symbol, since_ms=since_ms)
+                res = self.client.fetch_realized_pnl(
+                    pos.symbol, since_ms=since_ms, until_ms=until_ms)
             except Exception:
                 res = {"ok": False}
             if not (isinstance(res, dict) and res.get("ok")):
@@ -1533,7 +1544,16 @@ class OrderManager:
                 "pnl_audit: corrected %s %s est=%.4f → exchange=%.4f",
                 pos.symbol, pos.direction, old, pos.pnl_usdt,
             )
-            self._journal_record_close(pos, pos.exit_price, f"{pos.exit_reason}_AUDIT")
+            # Idempotent in-place journal update — NOT _journal_record_close,
+            # which would append a duplicate entry row (no dedup in record_entry).
+            if self.trade_journal is not None:
+                trade_id = pos.order_id or f"{pos.symbol}-{pos.opened_at}"
+                self.trade_journal.update_realized_pnl(
+                    trade_id, realized_pnl=pos.pnl_usdt, pnl_source="exchange",
+                    realized_pnl_exchange=pos.realized_pnl_exchange,
+                    commission_paid=pos.commission_paid,
+                    funding_paid=pos.funding_paid,
+                )
         return corrected
 
     def _journal_record_close(self, pos: Position, exit_price: float, reason: str) -> None:

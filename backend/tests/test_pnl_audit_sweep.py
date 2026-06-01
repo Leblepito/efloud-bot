@@ -91,6 +91,60 @@ def test_reconcile_runs_audit_every_n_cycles(monkeypatch):
     assert calls["n"] == 2   # cycles 3 and 6
 
 
+class _WindowClient:
+    """Records the (since_ms, until_ms) it was called with."""
+    def __init__(self, net):
+        self._net = net
+        self.calls = []
+
+    def fetch_realized_pnl(self, symbol, since_ms, until_ms=None):
+        self.calls.append((since_ms, until_ms))
+        return {"ok": True, "net": self._net, "realized_pnl": self._net,
+                "commission": -0.2, "funding": -0.1}
+
+
+def test_audit_bounds_income_window_to_position_lifetime():
+    client = _WindowClient(net=-2.5)
+    m = _audit_mgr(client)
+    pos = _recent_pos(pnl_usdt=3.0, pnl_source="estimated")
+    m.closed_positions.append(pos)
+
+    m.audit_realized_pnl(window_hours=24)
+
+    assert len(client.calls) == 1
+    since_ms, until_ms = client.calls[0]
+    # until_ms must be bounded (not None) so a later same-symbol trade's income
+    # cannot be misattributed to this position.
+    assert until_ms is not None
+    assert until_ms > since_ms
+
+
+def test_audit_updates_journal_in_place_no_duplicate(tmp_path):
+    from engine.journal import TradeJournal
+
+    journal = TradeJournal(str(tmp_path / "trade_journal.jsonl"))
+    m = _audit_mgr(_AuditClient(net=-2.5))
+    m.trade_journal = journal
+
+    # Journal an ESTIMATED close first (what _record_close would have written).
+    pos = _recent_pos(order_id="E1", pnl_usdt=3.0, pnl_source="estimated",
+                      exit_price=85.0, exit_reason="TP1", mfe_pct=0.0, mae_pct=0.0)
+    m._journal_record_close(pos, pos.exit_price, pos.exit_reason)
+    m.closed_positions.append(pos)
+    assert len(journal.all_closed()) == 1
+
+    # Audit upgrades it to exchange truth.
+    corrected = m.audit_realized_pnl(window_hours=24)
+
+    assert corrected == 1
+    closed = journal.all_closed()
+    assert len(closed) == 1                       # NO duplicate row
+    assert closed[0].pnl_source == "exchange"
+    assert closed[0].realized_pnl == -2.5
+    # And no phantom open (entry-only) row was appended.
+    assert len([s for s in journal._cache if s.exit_timestamp is None]) == 0
+
+
 def test_audit_disabled_never_runs():
     m = _audit_mgr(_AuditClient(net=0.0))
     m.enable_pnl_audit = False
