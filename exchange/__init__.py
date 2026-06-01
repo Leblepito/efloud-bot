@@ -385,6 +385,11 @@ class OrderManager:
         self.enable_pnl_audit = True
         self.pnl_audit_every_cycles = 20
         self._pnl_audit_cycle = 0
+        # PR B — post-placement protection verification (overridden by bot_runner).
+        self.enable_post_placement_verify = True
+        self.verify_delay_sec = 2.5
+        self.verify_max_attempts = 3
+        self.rollback_on_sl_failure = True
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
@@ -1479,6 +1484,34 @@ class OrderManager:
         self.closed_positions.append(pos)
         self._journal_record_close(pos, exit_price, reason)
         self._emit("position_closed", pos)
+
+    def _fetch_protection_order_ids(self, symbol: str):
+        """Return (set_of_order_ids, ok). Merges regular open orders + algo
+        (server-side TP/SL) orders, matching reconcile()'s fetch shape:
+        fetch_open_orders(sym) -> [{id}], fapiPrivateGetOpenAlgoOrders({}) ->
+        [{algoId}]. ok=False on fetch failure so the caller does not misread a
+        transient error as 'all orders gone'.
+        """
+        ccxt_sym = self.client.to_ccxt_symbol(symbol)
+        ids = set()
+        try:
+            for o in (self.client.exchange.fetch_open_orders(ccxt_sym) or []):
+                oid = o.get("id") if isinstance(o, dict) else None
+                if oid is not None:
+                    ids.add(str(oid))
+        except Exception as e:
+            log.warning(f"verify: fetch_open_orders failed for {symbol}: {e}")
+            return set(), False
+        try:
+            algo = self.client.exchange.fapiPrivateGetOpenAlgoOrders({}) or []
+            for a in algo:
+                oid = a.get("algoId") or a.get("id") if isinstance(a, dict) else None
+                if oid is not None:
+                    ids.add(str(oid))
+        except Exception as e:
+            # Algo fetch is best-effort; regular open orders already retrieved.
+            log.debug(f"verify: algo-order fetch failed for {symbol}: {e}")
+        return ids, True
 
     def _maybe_run_pnl_audit(self) -> None:
         """Tick the cycle counter; run the audit sweep every N cycles."""
