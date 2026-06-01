@@ -32,9 +32,9 @@ exchange:
   api_key: ""              # Railway env: BINANCE_API_KEY
   api_secret: ""           # Railway env: BINANCE_API_SECRET
   testnet: false           # MAINNET
-  leverage: 5              # 5x kaldıraç (orta-agresif, $2000 cüzdan için)
-  margin_mode: CROSSED     # CROSSED margin mode
-  hedge_mode: true         # Enable Hedge Position mode
+  leverage: 5              # 5x kaldıraç (orta-agresif, $2000 cüzdan için) — unchanged
+  margin_mode: ISOLATED    # PR A: was CROSSED — per-symbol risk isolation
+  hedge_mode: false        # PR A: was true — ONE-WAY; Binance blocks long+short on one symbol
 
 # ── SMC v2 feature flag (PR #S6 + cycle 4 hotfix) ──
 # Inert default: smc_version=v1, smc_v2_symbols=[] → v1 path active, v2 dormant.

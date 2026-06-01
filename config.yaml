@@ -12,9 +12,9 @@ exchange:
   api_key: ""              # Prefer env var BINANCE_API_KEY
   api_secret: ""           # Prefer env var BINANCE_API_SECRET
   testnet: true            # İlk testlerde true bırak
-  leverage: 3
-  margin_mode: CROSSED     # CROSSED margin mode
-  hedge_mode: true         # Enable Hedge Position mode
+  leverage: 5              # PR A: 3 -> 5 for consistency with active prod config
+  margin_mode: ISOLATED    # PR A: was CROSSED — per-symbol risk isolation
+  hedge_mode: false        # PR A: was true — ONE-WAY; Binance blocks long+short on one symbol
 
 # ── SMC v2 feature flag (PR #S6) ──
 # Inert default: smc_version=v1, smc_v2_symbols=[] → v1 path active, v2 dormant.
