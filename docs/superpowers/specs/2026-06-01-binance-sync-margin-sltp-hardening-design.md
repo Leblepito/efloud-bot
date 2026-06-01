@@ -216,7 +216,11 @@ isolation.
 exchange:
   margin_mode: ISOLATED   # was CROSSED
   hedge_mode: false       # was true → one-way; Binance blocks long+short on one symbol
+  leverage: 5             # unchanged (live is already 5x — confirmed on VPS)
 ```
+> **Leverage = 5x (confirmed, unchanged).** Live `configs/config.phase2_1k.yaml:35`
+> already runs `leverage: 5`. Decision: keep 5x. For consistency, bump the passive
+> root `config.yaml` from 3 → 5. ISOLATED enforce sets 5x per symbol.
 
 ### Startup enforcement (`bot_runner.py:165–193`)
 - Already loops symbols calling `set_margin_mode` + `set_leverage` and calls
@@ -241,9 +245,18 @@ exchange:
   still behave correctly in one-way mode (they should — net position makes
   opposite entries reduce/close rather than stack).
 
-### Deploy (operator runbook, not code)
-- Stop bot → confirm flat book on Binance (no positions, no open orders) →
-  deploy config → start → preflight confirms ISOLATED + one-way applied.
+### Deploy (operator runbook, not code) — flat-book maintenance window
+Binance rejects margin-type / position-mode changes while any position or
+pending order exists. Operator (Utku) steps, in order:
+1. Stop the bot (so it places no new orders).
+2. On Binance: market-close every open position (e.g. the open BCH/USDT SHORT).
+3. On Binance: cancel all pending SL/TP/limit orders for every symbol.
+4. Verify flat book (0 positions, 0 open orders).
+5. Deploy the new config (ISOLATED + hedge off, 5x).
+6. Start the bot → `preflight.py` flat-book check passes → startup enforce applies
+   ISOLATED + one-way + 5x per symbol; health endpoint confirms.
+If preflight fails (residual position/order), it aborts with the flat-book
+message — repeat steps 2–4.
 
 ### Tests
 - Extend `test_exchange_futures_methods.py`: `set_position_mode(dual_side=False)`
@@ -271,10 +284,12 @@ TDD per PR (red → green). Full suite (`pytest backend/tests -v`) must stay gre
 (baseline ~1139 tests). Each PR adds its own focused tests above. No live-mainnet
 test calls — mock the exchange client.
 
-## Open Items (confirm before/at deploy)
+## Open Items — RESOLVED (2026-06-01)
 
-1. Confirm live VPS `EFLOUD_CONFIG_PATH` matches the committed `.env`
-   (`configs/config.phase2_1k.yaml`) — apply config edits to the truly-active file.
-2. Confirm live leverage value to bake into ISOLATED enforce (audit said 5x;
-   committed `config.yaml` says 3 — reconcile which is intended).
-3. PR A deploy needs a scheduled flat-book maintenance window.
+1. ✅ **Active config path:** Confirmed on the live VPS container env —
+   `EFLOUD_CONFIG_PATH=configs/config.phase2_1k.yaml`. All config edits target
+   that file; mirror to root `config.yaml` for consistency.
+2. ✅ **Leverage:** Live config is `leverage: 5` (`configs/config.phase2_1k.yaml:35`).
+   Decision: **keep 5x**; bump passive root `config.yaml` 3 → 5 for consistency.
+3. ✅ **Flat-book window:** Captured as the PR A deploy runbook above; operator
+   closes positions + cancels orders before deploying PR A.
