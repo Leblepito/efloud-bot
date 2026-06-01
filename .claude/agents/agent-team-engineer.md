@@ -32,15 +32,52 @@ You are the runtime agent team specialist for efloud-bot. You own
 3. **No LLM in the hot path** that isn't already wrapped in the team
    layer. Don't sprinkle `httpx.post(...generateContent...)` calls
    elsewhere — extend `engine/agents/` instead.
-4. **Context isolation**: each role's `filter_context` MUST be
-   restrictive. Anti-echoing is the primary defence against
-   verification collapse. Tests in `TestContextIsolation` enforce this.
+4. **Context isolation — honest scope.** Per-role `filter_context` is a
+   *passive whitelist* (prompt-level field selection), not an enforced
+   isolation. The Overseer is the only agent with a real isolation
+   guarantee (it sees only sub-agent verdicts, never the raw trade
+   context). If you add a role, write a `filter_context` that drops
+   anything that role shouldn't see, and document the rule in the
+   class docstring. Tests in `TestContextIsolation` assert the
+   whitelist, not absence-of-leak.
 5. **Persistence**: new agent outputs land in
    `state/agent_disagreements.jsonl` AND in the trade journal's
    `agent_review` field. Don't break either.
 6. **Deterministic stats in PostMortemAgent**: the LLM only
    interprets; the stats are computed by `_summarize_trades`. Never
    let the LLM hallucinate win-rate numbers.
+
+## Known limits (do NOT silently paper over; surface them)
+
+These are real limitations of the current implementation, not just
+stylistic. Any PR that "fixes" one of them must include the test
+that the fix relies on.
+
+- **`min_team_score` is gone** — was a dead config. A weighted
+  arbitration policy that uses a score threshold will land in a
+  future PR, with tests.
+- **No data-freshness guard** — the `GeminiClient.complete_json`
+  contract is "any failure → ``{}``". There is no timestamp check.
+  A 15-min stale guard is a follow-up.
+- **No memory-poisoning filter** — `ctx["history"]` (if ever set
+  by the orchestrator) flows straight into prompts. PnL-tagged
+  history filtering is a follow-up.
+- **RiskReviewerAgent is notional-blind at the pre-sizing point**
+  — the STEP 3.5 review runs BEFORE sizing, so the
+  `size_notional_pct: 0.0` it sees can't trigger the
+  "notional > 8% → REJECT" rule. The signal carries
+  `meta["risk_review_was_notional_blind"] = True` so the shadow
+  data isn't mis-interpreted later. A 2-pass review (post-sizing)
+  is the proper fix.
+- **Hard veto is at the orchestrator, not the team** — the team
+  returns the Overseer's verdict; the orchestrator decides
+  whether to gate on it. When `gating: true` is eventually
+  enabled, the policy needs explicit design (e.g. score
+  threshold, majority vote, or a real sub-agent-REJECT-override)
+  rather than relying on the Overseer's LLM call alone.
+- **Dedup cache is not written on veto** — when `gating: true`
+  vetoes a signal, the next cycle can re-evaluate the same
+  signal and hit the LLM again. Cheap to add; tracked.
 
 ## Workflow
 

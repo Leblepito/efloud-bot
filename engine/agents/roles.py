@@ -11,14 +11,17 @@ The five roles mirror the canonical plan A2:
   and emits a markdown report under ``reports/``.
 
 Context filters on the three per-trade roles are intentionally
-restrictive — they are the primary defence against "inter-agent
-echoing": without a filter, the LLM sees the previous agent's
-confidence and tends to mirror it (verification collapse). With a
-filter, each role only has evidence from its own lens.
+restrictive: each ``filter_context`` is a passive whitelist that
+selects only the fields the role is allowed to see, before the
+prompt is built. That is *prompt-level field selection*, not an
+enforced isolation — a sub-agent's prompt is built from a smaller
+dict, but the underlying ctx object is the same shared instance
+passed by ``team.py``. The Overseer is the only agent with a real
+isolation guarantee: it sees only the sub-agent verdict list, not
+the trade context.
 
-The Overseer does NOT see the raw trade context — only the sub-agent
-verdicts. The PostMortemAgent is independent of the per-cycle path
-and runs on a daily/weekly schedule.
+The PostMortemAgent is independent of the per-cycle path and is
+triggered manually via the API (the bot has no built-in scheduler).
 """
 
 from __future__ import annotations

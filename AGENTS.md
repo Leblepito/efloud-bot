@@ -27,13 +27,19 @@ There is a runtime multi-agent LLM layer under `engine/agents/`:
 - `GeminiClient` — single source of truth for all Gemini REST calls.
 - `BaseAgent` / `AgentVerdict` — uniform per-role verdict schema.
 - `SignalValidatorAgent` / `RiskReviewerAgent` / `RegimeAgent` /
-  `OverseerAgent` — per-trade advisory roles (anti-echoing via
-  `filter_context`).
+  `OverseerAgent` — per-trade advisory roles. Per-role
+  `filter_context` is a *passive whitelist* (prompt-level field
+  selection), not an enforced isolation; the Overseer is the only
+  agent with a real isolation guarantee (sees only the sub-agent
+  verdicts).
 - `PostMortemAgent` — cycle-external; reads the trade journal and
-  writes a markdown report under `reports/`.
-- `AgentTeam` — wires the sub-agents, applies hard-veto policy when
-  `gating: true`, and persists the disagreement log
-  (`state/agent_disagreements.jsonl`).
+  writes a markdown report under `reports/`. The bot has no
+  built-in scheduler — post-mortem is triggered manually via
+  `POST /api/ai/post-mortem?schedule=daily|weekly`.
+- `AgentTeam` — wires the sub-agents and persists the disagreement
+  log (`state/agent_disagreements.jsonl`). The orchestrator applies
+  the `gating: true` hard-veto check; the team itself does not
+  implement a sub-agent-override rule.
 
 By default `agent_team.gating` is `false` — the team runs in **shadow
 mode**: verdicts are logged and persisted, but the deterministic

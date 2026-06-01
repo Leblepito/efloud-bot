@@ -4,12 +4,23 @@ The team is an **advisory** layer (per the canonical A3 contract). It
 NEVER modifies the deterministic guard/breaker pipeline. When
 ``cfg.gating`` is False (the default), the verdict is logged and
 persisted but the signal flows through unchanged. When ``gating`` is
-True, a hard ``REJECT`` from any sub-agent blocks the signal — but the
-breaker/guard/orphan layers are still in charge of every other safety
-decision.
+True, the team_verdict is forwarded to the orchestrator's hard-veto
+gate (``engine/safe_orchestrator.py``); the team itself does not
+implement a "hard veto over Overseer" rule. The breaker/guard/orphan
+layers are still in charge of every other safety decision.
 
 Default model is ``gemini-1.5-flash`` per the canonical plan; override
 via ``config["agent_team"]["model"]``.
+
+NOTE — historical claims removed in the push-prep fixup:
+  * "Data Freshness Assertion" / 15-min guard was claimed in the
+    handoff but never implemented in the canonical A0 client. The
+    client returns ``{}`` on any failure (no key, HTTP, parse,
+    timeout) — there is no timestamp check.
+  * "Memory poisoning prevention" / ``_filter_pnl_tagged`` was
+    claimed but never implemented in the canonical team. The
+    orchestrator passes ``ctx`` as-is to the team; if you want a
+    PnL-tagged history filter, that's a follow-up.
 """
 
 from __future__ import annotations
@@ -88,6 +99,10 @@ class AgentTeam:
         """
         if not self.cfg.get("enabled", False):
             return {"team_verdict": "NEUTRAL", "agents": [], "score": 0.0}
+
+        # NOTE — no PnL-tagged history filter. If the orchestrator ever
+        # adds a "history" key to ctx, it will flow straight into the
+        # LLM prompts. A memory-poisoning guard is a follow-up.
 
         try:
             verdicts: List[Any] = [

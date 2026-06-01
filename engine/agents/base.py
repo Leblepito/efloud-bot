@@ -50,8 +50,12 @@ class BaseAgent:
     """Skeleton for all role agents.
 
     Subclasses MUST override :meth:`build_prompt` and MAY override
-    :meth:`filter_context` (the latter is the primary anti-echoing
-    defence — restrict the context to the slice the role should see).
+    :meth:`filter_context`. The filter is a *passive whitelist* —
+    it does not raise on extra fields, it just drops them before
+    the prompt is built. That's a *prompt-level field selection*,
+    not an enforced isolation. The Overseer, which does not see the
+    raw trade context, is the only agent with a real isolation
+    guarantee (it sees only the sub-agent verdicts).
     """
 
     name: str = "base"

@@ -840,6 +840,14 @@ class SafeOrchestrator:
                     # Attach to signal so journal/DB can persist (canonical A7)
                     if isinstance(latest.meta, dict):
                         latest.meta["agent_review"] = agent_team_review
+                        # Mark the risk agent as notional-blind so downstream
+                        # consumers (post-mortem, dashboards) know the
+                        # "notional > 8% → REJECT" rule could not have fired
+                        # on this review. The fix is a 2-pass review
+                        # (post-sizing) — see engine.agents.agent-team-engineer
+                        # "Known limits". This flag is a shadow-data safety
+                        # net, not a runtime fix.
+                        latest.meta["risk_review_was_notional_blind"] = True
                     log.info(
                         f"🤖 AgentTeam[{symbol}] verdict={agent_team_review.get('team_verdict')} "
                         f"score={agent_team_review.get('score', 0.0):.2f}"
