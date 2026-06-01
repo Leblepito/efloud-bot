@@ -188,14 +188,61 @@ async def orders() -> list[dict]:
     return out
 
 
+def read_journal_history(journal_path: str, limit: int = 100) -> list[dict]:
+    """Read closed trades from trade_journal.jsonl, newest first.
+
+    DB-less fallback for /history and /equity. A trade is 'closed' when it has
+    an exit_timestamp. Returns [] when the file is absent or unreadable — never
+    raises into the request handler.
+    """
+    import json as _json
+    import os as _os
+    if not journal_path or not _os.path.exists(journal_path):
+        return []
+    rows: list[dict] = []
+    try:
+        with open(journal_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+                if obj.get("exit_timestamp"):
+                    rows.append(obj)
+    except OSError:
+        return []
+    rows.sort(key=lambda r: r.get("exit_timestamp", ""), reverse=True)
+    return rows[:limit]
+
+
+def _journal_path() -> str:
+    import os as _os
+    return _os.environ.get("EFLOUD_TRADE_JOURNAL", "./state/trade_journal.jsonl")
+
+
 @router.get("/history", dependencies=[Depends(require_auth)])
 async def history(limit: int = 50) -> list[dict]:
-    return await db.fetch_recent_trades(limit=min(limit, 500))
+    trades = await db.fetch_recent_trades(limit=min(limit, 500))
+    if not trades:
+        trades = read_journal_history(_journal_path(), limit=min(limit, 500))
+    return trades
 
 
 @router.get("/equity", dependencies=[Depends(require_auth)])
 async def equity(days: int = 7) -> list[dict]:
-    return await db.fetch_equity_history(days=min(max(days, 1), 90))
+    series = await db.fetch_equity_history(days=min(max(days, 1), 90))
+    if not series:
+        # Derive a cumulative-PnL curve from reconciled journal closes.
+        rows = list(reversed(read_journal_history(_journal_path(), limit=1000)))
+        cum = 0.0
+        series = []
+        for r in rows:
+            cum += float(r.get("realized_pnl", 0) or 0)
+            series.append({"t": r.get("exit_timestamp"), "equity": cum})
+    return series
 
 
 @router.get("/ai/sentiment", dependencies=[Depends(require_auth)])
