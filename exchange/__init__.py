@@ -175,10 +175,31 @@ class BinanceClient:
         if self.market_type != "futures":
             return False
         binance_sym = symbol.replace("/", "")
+        target = mode.upper()  # CROSSED | ISOLATED
+
+        # GET-first (like set_position_mode): skip the POST when the symbol is
+        # already in the target margin mode. A redundant POST on a symbol that
+        # has open positions/orders returns -4047 "Margin type cannot be changed
+        # if there exists open orders" instead of the benign -4046 — which would
+        # falsely look like a real failure. Checking first avoids that entirely
+        # (and only the genuine flat-book change actually POSTs).
+        try:
+            risk = self.exchange.fapiPrivateV2GetPositionRisk({"symbol": binance_sym})
+            cur = ""
+            if isinstance(risk, list) and risk:
+                cur = str(risk[0].get("marginType", "")).upper()  # CROSS | ISOLATED
+            if cur == "CROSS":
+                cur = "CROSSED"
+            if cur and cur == target:
+                log.debug(f"Margin mode already {target} for {symbol} (GET-first)")
+                return True
+        except Exception as e:
+            log.debug(f"Margin GET-first check failed for {symbol}: {e} — will POST")
+
         try:
             self.exchange.fapiPrivatePostMarginType({
                 "symbol": binance_sym,
-                "marginType": mode.upper(),
+                "marginType": target,
             })
             log.info(f"✅ Margin mode set: {symbol} → {mode}")
             return True
@@ -188,6 +209,10 @@ class BinanceClient:
             if "no need" in err_str or "already" in err_str or "-4046" in err_str:
                 log.debug(f"Margin mode already {mode} for {symbol}")
                 return True
+            # -4047 = can't change with open orders. If we reach here the GET-first
+            # check did not confirm a match (genuine mismatch on a non-flat book),
+            # so this IS a real failure — keep it fatal so a true ISOLATED flip on
+            # a non-flat book aborts startup rather than running half-applied.
             log.warning(f"Margin mode set failed for {symbol}: {e}")
             return False
 
