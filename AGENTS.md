@@ -21,3 +21,44 @@ When the user types `/optimize` or requests strategy optimization:
 - Run the infinite self-optimizing training and backtest evaluation loop autonomously.
 - Log results in `scripts/autoresearch/results.tsv`.
 
+## Runtime Agent Team (canonical Part A)
+
+There is a runtime multi-agent LLM layer under `engine/agents/`:
+- `GeminiClient` — single source of truth for all Gemini REST calls.
+- `BaseAgent` / `AgentVerdict` — uniform per-role verdict schema.
+- `SignalValidatorAgent` / `RiskReviewerAgent` / `RegimeAgent` /
+  `OverseerAgent` — per-trade advisory roles (anti-echoing via
+  `filter_context`).
+- `PostMortemAgent` — cycle-external; reads the trade journal and
+  writes a markdown report under `reports/`.
+- `AgentTeam` — wires the sub-agents, applies hard-veto policy when
+  `gating: true`, and persists the disagreement log
+  (`state/agent_disagreements.jsonl`).
+
+By default `agent_team.gating` is `false` — the team runs in **shadow
+mode**: verdicts are logged and persisted, but the deterministic
+guard/breaker pipeline is **not** modified. Do not flip `gating` to
+`true` without a documented shadow-mode observation period.
+
+When the user types `/agents` or asks for the latest verdicts, hit
+`GET /api/ai/agents` (FastAPI). To trigger a post-mortem manually,
+`POST /api/ai/post-mortem?schedule=daily|weekly`.
+
+## Dev-time Claude Code team (canonical Part B)
+
+The `.claude/` directory contains:
+- `agents/*.md` — subagent definitions (existing `efloud-*` agents +
+  the five from Part B: `smc-strategy-reviewer`, `risk-safety-auditor`,
+  `backtest-runner`, `api-integration`, `agent-team-engineer`).
+- `skills/writing-plans/` — `obra/superpowers`-style implementation
+  plan writer.
+- `skills/claude-automation-recommender/` — read-only repo analyser
+  for Claude Code automations.
+- `settings.json` — hooks (graphify nudge) + experimental agent
+  teams flag.
+
+When the user asks to plan a multi-step change, use the
+`writing-plans` skill. When the user asks "what Claude Code
+automations should I add?", use `claude-automation-recommender`.
+
+
