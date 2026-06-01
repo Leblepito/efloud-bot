@@ -1513,6 +1513,129 @@ class OrderManager:
             log.debug(f"verify: algo-order fetch failed for {symbol}: {e}")
         return ids, True
 
+    def _verify_and_repair_protection(self, pos: "Position") -> dict:
+        """Confirm SL/TP orders are live on the exchange shortly after entry.
+
+        Re-places missing legs (transient), then applies the fallback decision:
+        - SL still unconfirmed → market-close the position (never hold bare).
+        - only TP unconfirmed   → tolerate; blank the TP id so reconcile's
+          _repair_missing_protection_orders keeps retrying in the background.
+
+        Gated by enable_post_placement_verify. No-op (skipped) when disabled or
+        dry_run. Returns a dict summary for logging/tests.
+        """
+        if not getattr(self, "enable_post_placement_verify", False) or self.dry_run:
+            return {"skipped": True, "sl_ok": True}
+
+        ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
+        reverse_side = "sell" if pos.direction == "LONG" else "buy"
+        sl_ok = tp1_ok = tp2_ok = False
+
+        for attempt in range(1, max(1, self.verify_max_attempts) + 1):
+            if self.verify_delay_sec > 0:
+                _time.sleep(self.verify_delay_sec)
+            ids, fetched_ok = self._fetch_protection_order_ids(pos.symbol)
+            if not fetched_ok:
+                # Couldn't read — don't misjudge as 'missing'; try next attempt.
+                continue
+
+            sl_ok = (not self._is_real_oid(pos.sl_order_id)) or pos.sl_order_id in ids
+            tp1_ok = (not self._is_real_oid(pos.tp1_order_id)) or pos.tp1_order_id in ids
+            tp2_ok = (pos.tp2 is None) or (not self._is_real_oid(pos.tp2_order_id)) \
+                or pos.tp2_order_id in ids
+
+            # SL absent → re-place (highest priority).
+            if not sl_ok:
+                sl_params = {"stopPrice": pos.sl}
+                if self.hedge_mode:
+                    sl_params["positionSide"] = pos.direction
+                else:
+                    sl_params["reduceOnly"] = True
+                new_sl = self._retry_tp_order(
+                    ccxt_sym=ccxt_sym, order_type="STOP_MARKET", side=reverse_side,
+                    amount=pos.size, params=sl_params, label="SL",
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry_order_id=pos.order_id, sl_order_id="", price_display=pos.sl,
+                )
+                if self._is_real_oid(new_sl):
+                    pos.sl_order_id = new_sl
+                    sl_ok = True
+
+            # TP1 absent → re-place.
+            if not tp1_ok:
+                tp1_params = {"stopPrice": pos.tp1}
+                if self.hedge_mode:
+                    tp1_params["positionSide"] = pos.direction
+                else:
+                    tp1_params["reduceOnly"] = True
+                tp1_size = pos.size if pos.tp2 is None else pos.size / 2
+                new_tp1 = self._retry_tp_order(
+                    ccxt_sym=ccxt_sym, order_type="TAKE_PROFIT_MARKET", side=reverse_side,
+                    amount=tp1_size, params=tp1_params, label="TP1",
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry_order_id=pos.order_id, sl_order_id=pos.sl_order_id,
+                    price_display=pos.tp1,
+                )
+                if self._is_real_oid(new_tp1):
+                    pos.tp1_order_id = new_tp1
+                    tp1_ok = True
+                elif new_tp1 == _TP_UNREACHABLE_SENTINEL:
+                    pos.tp1_order_id = ""   # permanent → leave for reconcile, tolerate
+                    tp1_ok = True
+
+            # TP2 absent (only when it exists) → re-place.
+            if pos.tp2 is not None and not tp2_ok:
+                tp2_params = {"stopPrice": pos.tp2}
+                if self.hedge_mode:
+                    tp2_params["positionSide"] = pos.direction
+                else:
+                    tp2_params["reduceOnly"] = True
+                new_tp2 = self._retry_tp_order(
+                    ccxt_sym=ccxt_sym, order_type="TAKE_PROFIT_MARKET", side=reverse_side,
+                    amount=pos.size / 2, params=tp2_params, label="TP2",
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry_order_id=pos.order_id, sl_order_id=pos.sl_order_id,
+                    price_display=pos.tp2, tp1_order_id=pos.tp1_order_id,
+                )
+                if self._is_real_oid(new_tp2):
+                    pos.tp2_order_id = new_tp2
+                    tp2_ok = True
+                elif new_tp2 == _TP_UNREACHABLE_SENTINEL:
+                    pos.tp2_order_id = ""
+                    tp2_ok = True
+
+            if sl_ok and tp1_ok and tp2_ok:
+                return {"skipped": False, "sl_ok": True, "tp1_ok": True,
+                        "tp2_ok": True, "attempts": attempt}
+
+        # Attempts exhausted — fallback decision.
+        if not sl_ok and self.rollback_on_sl_failure:
+            log.critical(
+                "verify.sl_unconfirmed_rollback: %s %s entry=%s — market-closing "
+                "to avoid a bare position", pos.symbol, pos.direction, pos.order_id,
+                extra={"event": "verify.sl_unconfirmed_rollback",
+                       "symbol": pos.symbol, "direction": pos.direction},
+            )
+            try:
+                self._rollback_entry_after_protection_failure(
+                    ccxt_sym=ccxt_sym, rollback_side=reverse_side,
+                    rollback_size=pos.size, symbol=pos.symbol,
+                    direction=pos.direction, entry_order_id=pos.order_id,
+                    original_error=Exception("SL unconfirmed after post-placement verify"),
+                )
+            finally:
+                if pos in self.positions:
+                    self.positions.remove(pos)
+                self._persist()
+            return {"skipped": False, "sl_ok": False, "rolled_back": True}
+
+        if not (tp1_ok and tp2_ok):
+            log.warning(
+                "verify.tp_unconfirmed_tolerated: %s %s — SL is live; reconcile "
+                "will keep retrying TP", pos.symbol, pos.direction,
+            )
+        return {"skipped": False, "sl_ok": sl_ok, "tp1_ok": tp1_ok, "tp2_ok": tp2_ok}
+
     def _maybe_run_pnl_audit(self) -> None:
         """Tick the cycle counter; run the audit sweep every N cycles."""
         if not self.enable_pnl_audit:
