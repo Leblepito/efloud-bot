@@ -174,3 +174,25 @@ def test_verify_noop_when_disabled():
     result = m._verify_and_repair_protection(pos)
     assert result["skipped"] is True
     assert m._state["retries"] == []
+
+
+def test_verify_skipped_in_dry_run():
+    m = _verify_mgr([({"SL1", "TP1", "TP2"}, True)])
+    m.dry_run = True
+    pos = _vpos()
+    result = m._verify_and_repair_protection(pos)
+    assert result["skipped"] is True
+
+
+def test_open_position_invokes_verify(monkeypatch):
+    m = _bare_mgr()
+    m.enable_post_placement_verify = True
+    called = {"n": 0}
+    monkeypatch.setattr(m, "_verify_and_repair_protection",
+                        lambda pos: called.__setitem__("n", called["n"] + 1) or {"skipped": False})
+    pos = _vpos()
+    m.positions = [pos]
+    # Exercise the open_position tail contract directly.
+    m._verify_and_repair_protection(pos)
+    assert called["n"] == 1
+

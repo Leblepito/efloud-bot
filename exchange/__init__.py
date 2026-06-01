@@ -385,8 +385,11 @@ class OrderManager:
         self.enable_pnl_audit = True
         self.pnl_audit_every_cycles = 20
         self._pnl_audit_cycle = 0
-        # PR B — post-placement protection verification (overridden by bot_runner).
-        self.enable_post_placement_verify = True
+        # PR B — post-placement protection verification. Default OFF in code
+        # (like max_entry_drift_pct); bot_runner enables it from config (default
+        # true) so unit tests that don't wire config keep the old behavior and
+        # take no 2.5s verify sleeps.
+        self.enable_post_placement_verify = False
         self.verify_delay_sec = 2.5
         self.verify_max_attempts = 3
         self.rollback_on_sl_failure = True
@@ -1092,6 +1095,14 @@ class OrderManager:
         )
         self.positions.append(pos)
         self._persist()
+        # PR B — confirm SL/TP actually landed on the exchange within seconds.
+        # May market-close + remove pos from self.positions if SL can't be
+        # confirmed (returns rolled_back); return None so callers treat the
+        # entry as not-opened (same contract as the entry-drift reject).
+        verify_result = self._verify_and_repair_protection(pos)
+        if verify_result.get("rolled_back"):
+            self._emit("position_rolled_back", pos)
+            return None
         self._emit("position_opened", pos)
         return pos
 
