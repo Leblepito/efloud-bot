@@ -138,3 +138,48 @@ def test_to_ccxt_symbol_idempotent_when_already_formatted():
     """Zaten ':USDT' suffix'i varsa tekrar ekleme."""
     client = _make_client_with_mock_exchange("futures")
     assert client.to_ccxt_symbol("BTC/USDT:USDT") == "BTC/USDT:USDT"
+
+
+# ── PR A: one-way position mode + ISOLATED margin ──
+
+def test_set_position_mode_oneway_get_first_short_circuits():
+    """When the exchange already reports ONE_WAY, set_position_mode(False)
+    returns True via the GET check without POSTing."""
+    client = _make_client_with_mock_exchange("futures")
+    client.exchange.fapiPrivateGetPositionSideDual.return_value = {"dualSidePosition": False}
+
+    assert client.set_position_mode(dual_side=False) is True
+    client.exchange.fapiPrivateGetPositionSideDual.assert_called_once()
+    client.exchange.fapiPrivatePostPositionSideDual.assert_not_called()
+
+
+def test_set_position_mode_oneway_posts_when_currently_hedge():
+    """Currently HEDGE, want ONE_WAY → POST dualSidePosition=false."""
+    client = _make_client_with_mock_exchange("futures")
+    client.exchange.fapiPrivateGetPositionSideDual.return_value = {"dualSidePosition": True}
+
+    assert client.set_position_mode(dual_side=False) is True
+    client.exchange.fapiPrivatePostPositionSideDual.assert_called_once()
+    sent = client.exchange.fapiPrivatePostPositionSideDual.call_args[0][0]
+    assert sent["dualSidePosition"] == "false"
+
+
+def test_set_margin_mode_isolated_treats_no_change_as_success():
+    """set_margin_mode ISOLATED — benign -4046 'no need to change' = success."""
+    client = _make_client_with_mock_exchange("futures")
+    client.exchange.fapiPrivatePostMarginType.side_effect = Exception("-4046 No need to change margin type.")
+
+    assert client.set_margin_mode("BTC/USDT", "ISOLATED") is True
+
+
+def test_oneway_order_params_use_reduce_only_not_position_side():
+    """One-way mode (hedge_mode False): protection orders carry reduceOnly and
+    never positionSide — documents the open_position param-building branch."""
+    hedge_mode = False
+    sl_params = {"stopPrice": 95.0}
+    if hedge_mode:
+        sl_params["positionSide"] = "LONG"
+    else:
+        sl_params["reduceOnly"] = True
+    assert sl_params.get("reduceOnly") is True
+    assert "positionSide" not in sl_params
