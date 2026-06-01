@@ -18,3 +18,58 @@ def test_tradesnapshot_has_pnl_source_field():
     assert hasattr(snap, "pnl_source")
     assert snap.pnl_source == "estimated"
     assert hasattr(snap, "realized_pnl_exchange")
+
+
+from exchange import OrderManager, Position
+import pandas as pd
+
+
+class _AuditClient:
+    def __init__(self, net):
+        self._net = net
+
+    def fetch_realized_pnl(self, symbol, since_ms, until_ms=None):
+        return {"ok": True, "net": self._net, "realized_pnl": self._net,
+                "commission": 0.0, "funding": 0.0}
+
+
+def _audit_mgr(client):
+    m = OrderManager.__new__(OrderManager)
+    m.client = client
+    m.closed_positions = []
+    m.trade_journal = None
+    m.on_position_change = None
+    return m
+
+
+def _recent_pos(**over):
+    now = pd.Timestamp.now(tz="UTC")
+    base = dict(symbol="SOL/USDT", direction="LONG", entry=82.0, sl=80.0,
+                tp1=85.0, tp2=88.0, size=1.0,
+                opened_at=(now - pd.Timedelta(hours=2)).isoformat(),
+                closed_at=(now - pd.Timedelta(hours=1)).isoformat())
+    base.update(over)
+    return Position(**base)
+
+
+def test_audit_upgrades_estimated_closed_positions():
+    m = _audit_mgr(_AuditClient(net=-2.5))
+    pos = _recent_pos(pnl_usdt=3.0, pnl_source="estimated")
+    m.closed_positions.append(pos)
+
+    corrected = m.audit_realized_pnl(window_hours=24)
+
+    assert corrected == 1
+    assert pos.pnl_source == "exchange"
+    assert pos.pnl_usdt == -2.5
+
+
+def test_audit_skips_already_reconciled():
+    m = _audit_mgr(_AuditClient(net=99.0))
+    pos = _recent_pos(pnl_usdt=5.0, pnl_source="exchange")
+    m.closed_positions.append(pos)
+
+    corrected = m.audit_realized_pnl(window_hours=24)
+
+    assert corrected == 0
+    assert pos.pnl_usdt == 5.0   # untouched

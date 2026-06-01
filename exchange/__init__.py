@@ -1475,6 +1475,50 @@ class OrderManager:
         self._journal_record_close(pos, exit_price, reason)
         self._emit("position_closed", pos)
 
+    def audit_realized_pnl(self, window_hours: int = 24) -> int:
+        """Re-reconcile recently-closed positions still tagged 'estimated'.
+
+        Pulls exchange income for each estimated close within the window and
+        upgrades pnl_usdt to net exchange truth. Returns the number corrected.
+        Soft-fails per position so one bad read never aborts the sweep.
+        """
+        try:
+            cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=window_hours)
+        except Exception:
+            return 0
+        corrected = 0
+        for pos in self.closed_positions:
+            if pos.pnl_source == "exchange":
+                continue
+            if not pos.closed_at:
+                continue
+            try:
+                closed_ts = pd.Timestamp(pos.closed_at)
+                if closed_ts < cutoff:
+                    continue
+                since_ms = int(pd.Timestamp(pos.opened_at).value // 1_000_000)
+            except Exception:
+                continue
+            try:
+                res = self.client.fetch_realized_pnl(pos.symbol, since_ms=since_ms)
+            except Exception:
+                res = {"ok": False}
+            if not (isinstance(res, dict) and res.get("ok")):
+                continue
+            old = pos.pnl_usdt
+            pos.pnl_usdt = res["net"]
+            pos.realized_pnl_exchange = res.get("realized_pnl", 0.0)
+            pos.commission_paid = res.get("commission", 0.0)
+            pos.funding_paid = res.get("funding", 0.0)
+            pos.pnl_source = "exchange"
+            corrected += 1
+            log.info(
+                "pnl_audit: corrected %s %s est=%.4f → exchange=%.4f",
+                pos.symbol, pos.direction, old, pos.pnl_usdt,
+            )
+            self._journal_record_close(pos, pos.exit_price, f"{pos.exit_reason}_AUDIT")
+        return corrected
+
     def _journal_record_close(self, pos: Position, exit_price: float, reason: str) -> None:
         """Write a full TradeSnapshot (entry+exit atomically) to TradeJournal.
 
