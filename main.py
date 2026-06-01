@@ -229,6 +229,37 @@ def validate_config(cfg: dict) -> bool:
         )
 
     log.info(f"✅ Config validated: leverage={leverage}x, margin={margin_mode}")
+
+    # 6. Runtime Agent Team (canonical A5). Validate the agent_team block
+    # if present; the block is OPTIONAL (backwards-compat with configs
+    # that pre-date the agent team). When present, ``enabled`` and
+    # ``gating`` must be bool, ``model`` must be a non-empty string.
+    at = cfg.get("agent_team")
+    if at is not None:
+        if not isinstance(at, dict):
+            raise ValueError("agent_team must be a mapping (or omitted entirely)")
+        for bool_key in ("enabled", "gating"):
+            v = at.get(bool_key, False)
+            if not isinstance(v, bool):
+                raise ValueError(
+                    f"agent_team.{bool_key} must be a bool, got {type(v).__name__}"
+                )
+        model = at.get("model", "gemini-1.5-flash")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("agent_team.model must be a non-empty string")
+        # gating=True with shadow-mode observation is the recommended
+        # transition path; we just log the choice for the operator.
+        if at.get("gating"):
+            log.warning(
+                "🛡️  agent_team.gating=True — hard REJECT will block signals. "
+                "Use only after shadow-mode observation."
+            )
+        else:
+            log.info(
+                "🛰️  agent_team shadow mode (gating=False) — verdicts logged, "
+                "trade execution unchanged."
+            )
+
     return True
 
 

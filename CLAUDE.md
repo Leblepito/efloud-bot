@@ -7,7 +7,12 @@ TradingView Pine Script v6'ya çevirmek — hem INDIKATÖR hem de STRATEGY (back
 
 ## Çalışma Kuralları
 - Pine kodları `pine/` klasörüne yazılır: `pine/efloud_signals.pine`, `pine/efloud_strategy.pine`.
-- Python kaynak mantığını DEĞİŞTİRME. Sadece oku ve referans al.
+- Python kaynak mantığını DEĞİŞTİRME. Sadece oku ve referans al. *(İstisna: bu
+  repo şu sıralar paralel olarak `engine/agents/` altına çalışan bir LLM danışma
+  katmanı ekliyor. Bu katman **additive**'dir — `safe_orchestrator.py` trade
+  mantığına dokunmaz, sadece sinyal sonrası bir danışma (advisory) çağrısı ekler.
+  Mevcut breaker / guard / orphan koruması değişmez. Detay için `AGENTS.md` →
+  "Runtime Agent Team" bölümüne bak.)*
 - Çeviri kararlarını ve teknik haritaları `pine/PINE_SPEC.md` içinde belgele.
 - Pine Script v6 syntax ZORUNLU: `indicator()`/`strategy()`, `ta.ema()`/`ta.rsi()`/`ta.atr()`, doğru `var`/`series` tiplemesi. Asla legacy (`study()`, `ema()`) kullanma.
 - Her değişiklikte indikatör ve strateji versiyonlarını SENKRON tut (aynı input isimleri).
@@ -30,9 +35,10 @@ TradingView Pine Script v6'ya çevirmek — hem INDIKATÖR hem de STRATEGY (back
   - TP2: Karşı Range Extreme (deviation'da) veya 1.618 / 2.618 Fibo uzantısı.
 
 ## Pine Script Kısıtları (Python'da olup Pine'a tam çevrilemeyecekler)
-- Harici API çağrıları (Gemini AI Structure Validation, sentiment, REST/websocket) → Pine'da atlanmalı, kural tabanlı statik karşılıklar veya input parametreleri eklenmeli.
+- Harici API çağrıları (Gemini AI Structure Validation, sentiment, REST/websocket) → Pine'da atlanmalı, kural tabanlı statik karşılıklar veya input parametreleri eklenmeli. **Not:** `engine/agents/` Python tarafında bu çağrıları ortak bir `GeminiClient` üzerinden toplar; Pine'a çevirirken bu katman **atlanır** (Pine LLM çağrısı yapamaz), kural tabanlı karşılıklar yazılır.
 - CCXT, DB erişimi, dosya I/O → Pine'da sadece grafikte çizim ve strateji emri olur.
 - pandas tabanlı look-ahead hesaplar → Pine'da repaint riskine dikkat (sadece kapanmış bar `[1]` veya barstate.isconfirmed kullanılmalı).
+
 
 ## 🚀 Son Durum & Güncel Gelişmeler (2026-05-31)
 
