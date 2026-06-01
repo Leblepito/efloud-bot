@@ -241,6 +241,46 @@ class BinanceClient:
         positions = self.exchange.fetch_positions([symbol] if symbol else None)
         return [p for p in positions if float(p.get("contracts", 0)) > 0]
 
+    def fetch_realized_pnl(self, symbol: str, since_ms: int,
+                           until_ms: int = None) -> dict:
+        """Sum REALIZED_PNL / COMMISSION / FUNDING_FEE for a symbol+window.
+
+        Reads the USD-M income endpoint (fapiPrivateGetIncome). Soft-fails:
+        any transport/API error returns ok=False with zeroed sums so the
+        caller can fall back to its estimate — never raises into reconcile.
+        """
+        if self.market_type != "futures":
+            return {"realized_pnl": 0.0, "commission": 0.0, "funding": 0.0,
+                    "net": 0.0, "ok": False}
+        try:
+            bn_sym = self.exchange.market(self.to_ccxt_symbol(symbol))["id"]
+        except Exception:
+            bn_sym = symbol.replace("/", "")
+
+        totals = {"REALIZED_PNL": 0.0, "COMMISSION": 0.0, "FUNDING_FEE": 0.0}
+        for income_type in totals:
+            params = {"symbol": bn_sym, "incomeType": income_type,
+                      "startTime": int(since_ms), "limit": 1000}
+            if until_ms is not None:
+                params["endTime"] = int(until_ms)
+            try:
+                rows = self.exchange.fapiPrivateGetIncome(params)
+            except Exception as e:
+                log.warning(f"fetch_realized_pnl({symbol},{income_type}) failed: {e}")
+                return {"realized_pnl": 0.0, "commission": 0.0, "funding": 0.0,
+                        "net": 0.0, "ok": False}
+            for r in (rows or []):
+                try:
+                    totals[income_type] += float(r.get("income", 0) or 0)
+                except (TypeError, ValueError):
+                    continue
+
+        net = totals["REALIZED_PNL"] + totals["COMMISSION"] + totals["FUNDING_FEE"]
+        return {"realized_pnl": totals["REALIZED_PNL"],
+                "commission": totals["COMMISSION"],
+                "funding": totals["FUNDING_FEE"],
+                "net": net, "ok": True}
+
 
 @dataclass
 class Position:
