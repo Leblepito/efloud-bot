@@ -548,3 +548,75 @@ async def open_interest(symbol: str = "BTCUSDT") -> dict:
     }
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Runtime Agent Team (canonical A6)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _get_agent_team():
+    """Return the live ``AgentTeam`` instance, or None if not yet initialised.
+
+    The bot worker creates the SafeOrchestrator (and therefore the
+    AgentTeam) asynchronously. Until that happens, the AI endpoints
+    return 503 instead of crashing.
+    """
+    orch = getattr(runner, "orch", None)
+    if orch is None:
+        return None
+    return getattr(orch, "agent_team", None)
+
+
+@router.get("/ai/agents", dependencies=[Depends(require_auth)])
+async def ai_agents_recent() -> dict:
+    """Return the most recent in-memory AgentTeam verdicts.
+
+    Backed by ``AgentTeam.recent_reviews()`` (newest first). When the
+    bot has not yet produced a verdict (or is starting up), returns
+    ``{"reviews": [], "enabled": false}`` with HTTP 200 — the dashboard
+    can poll without flooding error logs.
+    """
+    team = _get_agent_team()
+    if team is None:
+        return {"enabled": False, "reviews": [], "message": "agent team not initialised"}
+    return {
+        "enabled": bool(team.cfg.get("enabled", False)),
+        "gating": bool(team.cfg.get("gating", False)),
+        "model": team.cfg.get("model", "gemini-1.5-flash"),
+        "reviews": team.recent_reviews(limit=20),
+    }
+
+
+@router.post("/ai/post-mortem", dependencies=[Depends(require_auth)])
+async def ai_post_mortem(schedule: str = "daily") -> dict:
+    """Trigger the PostMortemAgent and return the generated report path.
+
+    The agent is fail-safe: missing API key, no LLM response, or empty
+    journal all still produce a markdown report shell so the operator
+    has something to look at.
+    """
+    team = _get_agent_team()
+    if team is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="agent team not initialised (bot worker not started yet)",
+        )
+    if schedule not in ("daily", "weekly"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="schedule must be 'daily' or 'weekly'",
+        )
+    try:
+        journal_path = "state/trade_journal.jsonl"
+        out_path = team.run_post_mortem(
+            journal_path=journal_path,
+            reports_dir="reports",
+            schedule=schedule,
+        )
+    except Exception as e:
+        log.error(f"PostMortemAgent failed: {e!r}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"post-mortem failed: {e}",
+        )
+    return {"report_path": out_path, "schedule": schedule}
+

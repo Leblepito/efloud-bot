@@ -60,6 +60,13 @@ class TradeSnapshot:
     scenario_kind: Optional[str] = None   # "main" | "invalidation" | "plan_b"
     scenario_name: Optional[str] = None
 
+    # Runtime Agent Team verdict (canonical A7). Populated by
+    # SafeOrchestrator._journal_record_entry when an agent team is
+    # configured. ``None`` means the team was disabled or skipped.
+    # The full dict is preserved so downstream post-mortem analysis
+    # (PostMortemAgent) can mine the per-agent verdicts later.
+    agent_review: Optional[Dict[str, Any]] = None
+
     # Adaptations during life
     additions: List[Dict] = field(default_factory=list)
     partial_exits: List[Dict] = field(default_factory=list)
