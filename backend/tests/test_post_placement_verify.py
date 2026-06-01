@@ -28,7 +28,7 @@ class _OrdersExchange:
         self._algo = algo_orders
         self._raise = raise_exc
 
-    def fetch_open_orders(self, ccxt_sym):
+    def fetch_open_orders(self, ccxt_sym=None):
         if self._raise:
             raise self._raise
         return self._open
@@ -83,7 +83,8 @@ def _verify_mgr(snapshots):
     m.hedge_mode = False
     m.dry_run = False
 
-    state = {"snapshots": list(snapshots), "retries": [], "rollback": 0}
+    state = {"snapshots": list(snapshots), "retries": [], "rollback": 0,
+             "siblings_cancelled": 0}
 
     def _snap(symbol):
         return state["snapshots"].pop(0) if state["snapshots"] else (set(), True)
@@ -97,6 +98,11 @@ def _verify_mgr(snapshots):
     def _rollback(**kw):
         state["rollback"] += 1
     m._rollback_entry_after_protection_failure = _rollback
+
+    def _cancel_siblings(pos, ccxt_sym, reason):
+        state["siblings_cancelled"] += 1
+        return {}
+    m._cancel_position_siblings = _cancel_siblings
 
     m._persist = lambda: None
     m.client = type("C", (), {"to_ccxt_symbol": staticmethod(lambda s: s),
@@ -146,8 +152,21 @@ def test_verify_rolls_back_when_sl_never_confirmed():
 
     result = m._verify_and_repair_protection(pos)
     assert m._state["rollback"] == 1
+    assert m._state["siblings_cancelled"] == 1   # orphan TP1/TP2 cancelled first
     assert pos not in m.positions         # local tracking removed
     assert result["sl_ok"] is False
+
+
+def test_verify_no_rollback_when_all_reads_fail():
+    # Network partition: every fetch fails. SL is really live — must NOT close.
+    m = _verify_mgr([(set(), False), (set(), False)])
+    pos = _vpos()
+    m.positions = [pos]
+    result = m._verify_and_repair_protection(pos)
+    assert m._state["rollback"] == 0           # no false-close
+    assert m._state["retries"] == []           # nothing re-placed on failed reads
+    assert pos in m.positions                  # position retained
+    assert result.get("tolerated_no_read") is True
 
 
 def test_verify_tolerates_permanent_unreachable_tp():
@@ -163,7 +182,24 @@ def test_verify_tolerates_permanent_unreachable_tp():
     m._verify_and_repair_protection(pos)
     assert m._state["rollback"] == 0
     assert pos in m.positions
-    assert pos.tp1_order_id == ""         # blanked → reconcile keeps retrying
+    # Sentinel stored (NOT blank) so reconcile's repair skips it (no churn).
+    assert pos.tp1_order_id == exch_mod._TP_UNREACHABLE_SENTINEL
+
+
+def test_verify_replaces_each_missing_leg_at_most_once():
+    # SL stays missing on both reads + re-place fails → only ONE SL re-place
+    # attempt (no duplicate stacking), then rollback.
+    m = _verify_mgr([({"TP1", "TP2"}, True), ({"TP1", "TP2"}, True)])
+    pos = _vpos()
+    m.positions = [pos]
+
+    def _retry(**kw):
+        m._state["retries"].append(kw["label"])
+        return "" if kw["label"] == "SL" else "999"
+    m._retry_tp_order = _retry
+
+    m._verify_and_repair_protection(pos)
+    assert m._state["retries"].count("SL") == 1   # re-placed at most once
 
 
 def test_verify_noop_when_disabled():

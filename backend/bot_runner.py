@@ -497,6 +497,17 @@ class BotRunner:
                     exit_reason=pos.exit_reason or "UNKNOWN",
                     size=pos.size,
                 )
+            elif event_type == "position_rolled_back":
+                # PR B — post-placement verify force-closed the entry because SL
+                # could not be confirmed. Surface it as a close alert so the
+                # operator sees the forced flatten immediately (not just in logs).
+                self.notifier.notify_position_closed(
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry=pos.entry, exit_price=pos.exit_price or 0.0,
+                    pnl_usdt=pos.pnl_usdt or 0.0,
+                    exit_reason="VERIFY_ROLLBACK (SL unconfirmed)",
+                    size=pos.size,
+                )
         except Exception as e:
             log.warning(f"Telegram notification dispatch failed: {e}")
 
