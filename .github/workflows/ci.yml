@@ -30,24 +30,32 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
+      # --retries/--timeout harden against the transient pip/wheel/network
+      # hiccups that can fail a fresh runner even when the code is fine.
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install --retries 5 --timeout 120 -r requirements.txt
 
-      - name: Show environment
+      # Distinct step: if a heavy wheel didn't install, this fails with a
+      # clear name BEFORE pytest, so "install broke" vs "tests broke" is
+      # obvious from the Actions UI at a glance.
+      - name: Import smoke
         run: |
-          python --version
-          pip --version
+          python -c "import ccxt, pandas, numpy, pyarrow, fastapi, anthropic, httpx, asyncpg, yaml; print('imports OK')"
 
-      # Hermetic by design: no BINANCE/GEMINI/DATABASE secrets are
-      # provided. The agent layer falls back to NEUTRAL with no API key,
-      # and unit tests use stubs/pyfakefs — so the suite must pass without
-      # any external service. A test that needs a live service should be
-      # marked skip/xfail, not silently depended on.
+      # Distinct step: collection-only surfaces import/collection errors
+      # (the fast-fail class) separately from real test failures.
+      - name: Collect tests
+        run: python -m pytest --collect-only -q
+
+      # Hermetic by design: no BINANCE/GEMINI/DATABASE secrets are provided.
+      # The agent layer falls back to NEUTRAL with no API key, and unit tests
+      # use stubs/pyfakefs — so the suite must pass without external services.
+      # DB integration tests self-skip when DATABASE_URL is unset.
       - name: Run tests
         env:
           PYTHONDONTWRITEBYTECODE: '1'
           PYTHONUNBUFFERED: '1'
         run: |
-          python -m pytest -q --maxfail=0 --durations=10
+          python -m pytest -q --maxfail=0 -ra --tb=short --durations=10
