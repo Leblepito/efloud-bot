@@ -357,26 +357,51 @@ class SafeOrchestrator:
                 log.warning(f"Could not restore processed_signals: {e}")
                 self._processed_signals = {}
 
+    # A3: the sentiment loop refreshes every ~4h; treat a registry older than
+    # that (+15m grace) as stale and revert to NEUTRAL, so an old RISK_ON/OFF
+    # cannot keep injecting a ±5 confluence bias after a restart or a stalled loop.
+    _SENTIMENT_MAX_AGE_SEC = 4 * 3600 + 900
+
     def load_ai_sentiment(self):
         """Yapay zeka makro duygu durumunu local registry'den yukler."""
         try:
             registry_path = Path(self.store.dir) / "ai_sentiment_registry.json"
             if registry_path.exists():
                 with open(registry_path, encoding="utf-8") as f:
-                    self.sentiment_state = json.load(f)
-                    log.info(f"♻️  Loaded AI sentiment state: {self.sentiment_state.get('macro_sentiment', 'NEUTRAL')}")
+                    state = json.load(f)
+                if self._sentiment_is_stale(state):
+                    log.warning("AI sentiment registry stale — reverting to NEUTRAL")
+                else:
+                    self.sentiment_state = state
+                    log.info(f"♻️  Loaded AI sentiment state: {state.get('macro_sentiment', 'NEUTRAL')}")
                     return
         except Exception as e:
             log.warning(f"Could not load AI sentiment state: {e}")
-        
-        # Fallback default neutral
+
+        # Fallback default neutral (load failure OR stale registry)
         self.sentiment_state = {
             "macro_sentiment": "NEUTRAL",
             "confidence_score": 1.0,
             "fear_and_greed": 50.0,
             "bitcoin_trend": "NEUTRAL",
-            "reasoning": "Fallback default due to load failure."
+            "reasoning": "Fallback default (load failure or stale registry)."
         }
+
+    def _sentiment_is_stale(self, state: dict) -> bool:
+        """A3 freshness guard. True when ``last_updated`` is older than the
+        refresh window. Lenient on a missing/unparseable timestamp — legacy
+        registries load as-is (real ones always stamp ``last_updated``)."""
+        ts = state.get("last_updated")
+        if not ts:
+            return False
+        try:
+            dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return False
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - dt).total_seconds()
+        return age > self._SENTIMENT_MAX_AGE_SEC
 
     def _persist_state(self):
         """State'i diske yaz."""
