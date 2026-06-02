@@ -3,21 +3,32 @@ exchange whose fetch_open_orders() hits fapi.binance.com (futures), not
 api.binance.com (spot). Tests by intercepting the HTTP call before it
 goes out — no live exchange, no auth, no markets reload over the network.
 
-Note: the shared_markets fixture makes one real HTTP call to load Binance
-public markets metadata (~2s). CI without internet will fail-fast at the
-fixture; per the plan this is acceptable for a regression-pinning test.
+H1: the shared_markets fixture previously called boot.load_markets(), a LIVE
+api.binance.com/exchangeInfo call → HTTP 451 on GitHub's US runners (the test
+was --ignore'd in CI). It now loads vendored markets metadata from
+backend/tests/fixtures/binance_markets.json (FIL/USDT spot + FIL/USDT:USDT
+linear) — fully offline / hermetic.
 """
+import json
+from pathlib import Path
+
 import ccxt
 import pytest
 
 from exchange import BinanceClient
 
+_MARKETS_FIXTURE = Path(__file__).parent / "fixtures" / "binance_markets.json"
+
 
 @pytest.fixture(scope="module")
 def shared_markets():
-    """Load Binance markets once on a public client; share across tests."""
+    """Vendored Binance markets metadata — NO network (see H1)."""
+    data = json.loads(_MARKETS_FIXTURE.read_text(encoding="utf-8"))
     boot = ccxt.binance({"options": {"defaultType": "spot"}})
-    boot.load_markets()
+    boot.markets = data["markets"]
+    boot.markets_by_id = data["markets_by_id"]
+    boot.symbols = data["symbols"]
+    boot.ids = data["ids"]
     return boot
 
 

@@ -62,19 +62,16 @@ jobs:
       # stubs/pyfakefs; DB integration tests self-skip when DATABASE_URL is
       # unset.
       #
-      # The exclusions below are PRE-EXISTING, non-hermetic tests — NOT
-      # related to the agent-team feature. They cannot pass on a clean CI
-      # runner without code changes, and only passed locally due to the
-      # environment masking the assumption:
-      #   * backend/tests/test_binance_client_url_routing.py — makes a LIVE
-      #     api.binance.com/exchangeInfo call; GitHub's US runners get HTTP
-      #     451 (geo-restricted). Fix: mock the exchange in the fixture.
+      # The exclusion below is a PRE-EXISTING, non-hermetic test — NOT related
+      # to the agent-team feature. It only passed locally due to the environment
+      # masking the assumption:
       #   * tests/test_alerter_heartbeat.py::test_heartbeat_... — writes to a
       #     hardcoded absolute /app/state path (prod Docker WORKDIR);
       #     PermissionError on a bare runner. Fix: make the dedup DB path
-      #     configurable / use tmp_path.
-      # Both are tracked as follow-ups to make them hermetic; once fixed,
-      # remove these exclusions.
+      #     configurable / use tmp_path (H2, separate PR).
+      # (H1: backend/tests/test_binance_client_url_routing.py was made hermetic —
+      #  it now loads vendored markets from fixtures/binance_markets.json instead
+      #  of a live api.binance.com call — so its --ignore was removed.)
       - name: Run tests
         env:
           PYTHONDONTWRITEBYTECODE: '1'
@@ -82,7 +79,6 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -q --maxfail=0 -ra --tb=short --durations=10 \
-            --ignore=backend/tests/test_binance_client_url_routing.py \
             --deselect "tests/test_alerter_heartbeat.py::test_heartbeat_writes_alerter_heartbeat_ts_to_json_file" \
             2>&1 | tee -a /tmp/ci.log
 
