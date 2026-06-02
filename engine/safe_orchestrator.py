@@ -378,6 +378,22 @@ class SafeOrchestrator:
             "reasoning": "Fallback default due to load failure."
         }
 
+    @staticmethod
+    def _htf_slope_pct(df_htf, lookback: int = 20) -> float:
+        """A4: signed % change of HTF close over the last ``lookback`` bars — the
+        RegimeAgent's directional-strength input. The orchestrator previously
+        never supplied it, so the agent saw the field as absent (phantom)."""
+        try:
+            closes = df_htf["close"]
+            if len(closes) <= lookback:
+                return 0.0
+            prior = float(closes.iloc[-1 - lookback])
+            if prior == 0:
+                return 0.0
+            return (float(closes.iloc[-1]) - prior) / prior * 100.0
+        except Exception:
+            return 0.0
+
     def _persist_state(self):
         """State'i diske yaz."""
         if not self.persist:
@@ -833,6 +849,7 @@ class SafeOrchestrator:
                         "tp1": float(latest.tp1),
                         "confluence": int(latest.confluence),
                         "htf_bias": htf_bias,
+                        "htf_slope_pct": self._htf_slope_pct(df_htf),  # A4: was never supplied
                         "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
                         "rr": float(latest.rr1) if latest.rr1 else 0.0,
                         "size_notional_pct": 0.0,  # sized later; refine in follow-up
