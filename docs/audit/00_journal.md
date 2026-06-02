@@ -76,7 +76,38 @@
   `market-microstructure-expert`. Ölçülmüş/ölçülmemiş ayrımı net; LuxAlgo-kıyas;
   her öneri için "nasıl falsifiye ederiz?".
 - Phase 4 cleanup, Phase 5 roadmap, Phase 6 agent team.
-- ⚠️ GitHub creds hâlâ bad → tüm çıktı lokal. Push/draft-PR kullanıcı PAT yenileyince.
+
+### GitHub UNBLOCK (2026-06-02, oturum içi)
+- MCP github oturum içinde eski token'la kaldı (sunucu env restart gerektirir) →
+  kullanıcı PAT verdi → **lokal `git` + `gh` CLI + `GH_TOKEN` env** ile bypass.
+  Token hiçbir tracked dosyaya yazılmadı (gh credential helper, git config'e yazmaz).
+- `audit/codebase-and-strategy-review` branch master'dan açıldı, 00/01/02 commit
+  (`d9f7c93`), origin'e push. **Draft PR #118** (base: master, DO-NOT-MERGE).
+- Pre-commit hook graphify AST update çalıştı ama graphify-out/ gitignore'lu → commit'e girmedi.
+- ⚠️ Operatör: bu PAT sohbet geçmişinde → iş bitince ROTATE et.
+- Ders: MCP creds bozuksa ve token elde varsa, lokal gh + GH_TOKEN env temiz bypass
+  (audit branch push master'ı/Railway'i etkilemez).
+
+### API overload (2026-06-02)
+- Phase 3 strateji agent'ları (3x, sonra probe) tekrarlı **529 Overloaded** (0 tool-use) →
+  global model yoğunluğu, subagent spawn pool down. Benim kendi tool çağrılarım (git/Read/Grep) ÇALIŞIYOR.
+- **Ders + pivot:** subagent unavailable iken Phase 3'ü KENDİM yaptım (mimar/sentez rolü).
+  Doğrudan kaynak-okuma > overloaded subagent bekleme. docs/results/ backtest arşivi altın çıktı.
+
+### Phase 3 SONUÇ — strateji eleştirisi (03_strategy_review.md, kendim)
+- **🔴 SMOKING GUN (S1):** prod `min_confluence:50` (`config.phase2_1k.yaml:101`) =
+  ölçülmüş **−43.75% getiri / %44.24 DD** (2026-05-05 Phase-A, tam 10 prod sembolü).
+  Aynı sembol+periyot conf=80 = **+11.29% / %2.83 DD** (h1c). Eşik sweep'i (50/60/70/80)
+  50'nin felaket, 80'in karlı olduğunu NET ölçtü. Prod smc_v2_shadow=true → emirler v1
+  yolu = conf=50 backtest'i birebir temsil. Memory canlı "breaker OPEN, weekly DD %25"
+  ile tutarlı. **Aksiyon: config-only conf 50→80 (flat-book gerekmez), roadmap #1.**
+- Backtest **commission+funding YOK** (engine grep boş) → tüm getiriler gross/abartılı.
+- Regime ML **DAİRESEL** (train.py kural-etiketi öğreniyor).
+- Korelasyon **hesaba katılmıyor** (position_guard'da beta/correlation yok) → %44 DD = küme riski kanıtı.
+- OOS split / Monte Carlo YOK. Funding/OI dashboard-only (stratejiye girmiyor).
+- LuxAlgo envanteri: SFP/OTE/HTF-liquidity VAR; Volumetric OB / Inducement / Session / gerçek displacement YOK — ama hepsi "önce backtest'i fee+funding+OOS ile güvenilir yap, sonra ablate; kanıtsız ekleme".
+
+### Sıradaki: Phase 4 (cleanup) + 5 (roadmap) + 6 (agent team) — Phase 1 envanterinden kendim.
 
 ---
 
