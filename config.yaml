@@ -141,6 +141,13 @@ safety:
   enable_pnl_audit: true
   pnl_audit_every_cycles: 20
 
+  # SL/TP post-placement verify (PR B, 2026-06-01) — confirm protection orders
+  # landed within seconds of entry; market-close if SL unconfirmable.
+  enable_post_placement_verify: true
+  verify_delay_sec: 2.5
+  verify_max_attempts: 3
+  rollback_on_sl_failure: true
+
   # Circuit Breaker
   daily_loss_limit_pct: 3.0
   weekly_drawdown_limit_pct: 8.0

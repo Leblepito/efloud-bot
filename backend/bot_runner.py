@@ -222,6 +222,12 @@ class BotRunner:
         self.order_mgr.enable_pnl_audit = bool(_safety.get("enable_pnl_audit", True))
         self.order_mgr.pnl_audit_every_cycles = int(_safety.get("pnl_audit_every_cycles", 20))
 
+        # PR B — post-placement SL/TP verification config.
+        self.order_mgr.enable_post_placement_verify = bool(_safety.get("enable_post_placement_verify", True))
+        self.order_mgr.verify_delay_sec = float(_safety.get("verify_delay_sec", 2.5))
+        self.order_mgr.verify_max_attempts = int(_safety.get("verify_max_attempts", 3))
+        self.order_mgr.rollback_on_sl_failure = bool(_safety.get("rollback_on_sl_failure", True))
+
         # PR #S6 wiring (hotfix): instantiate SetupStateStore when smc_version=v2.
         # Inert default (smc_version=v1 or engine block absent): setup_state_store=None
         # → all v2 hooks short-circuit per PR #67 contract.
@@ -489,6 +495,17 @@ class BotRunner:
                     entry=pos.entry, exit_price=pos.exit_price or 0.0,
                     pnl_usdt=pos.pnl_usdt or 0.0,
                     exit_reason=pos.exit_reason or "UNKNOWN",
+                    size=pos.size,
+                )
+            elif event_type == "position_rolled_back":
+                # PR B — post-placement verify force-closed the entry because SL
+                # could not be confirmed. Surface it as a close alert so the
+                # operator sees the forced flatten immediately (not just in logs).
+                self.notifier.notify_position_closed(
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry=pos.entry, exit_price=pos.exit_price or 0.0,
+                    pnl_usdt=pos.pnl_usdt or 0.0,
+                    exit_reason="VERIFY_ROLLBACK (SL unconfirmed)",
                     size=pos.size,
                 )
         except Exception as e:

@@ -385,6 +385,14 @@ class OrderManager:
         self.enable_pnl_audit = True
         self.pnl_audit_every_cycles = 20
         self._pnl_audit_cycle = 0
+        # PR B — post-placement protection verification. Default OFF in code
+        # (like max_entry_drift_pct); bot_runner enables it from config (default
+        # true) so unit tests that don't wire config keep the old behavior and
+        # take no 2.5s verify sleeps.
+        self.enable_post_placement_verify = False
+        self.verify_delay_sec = 2.5
+        self.verify_max_attempts = 3
+        self.rollback_on_sl_failure = True
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
@@ -1087,6 +1095,14 @@ class OrderManager:
         )
         self.positions.append(pos)
         self._persist()
+        # PR B — confirm SL/TP actually landed on the exchange within seconds.
+        # May market-close + remove pos from self.positions if SL can't be
+        # confirmed (returns rolled_back); return None so callers treat the
+        # entry as not-opened (same contract as the entry-drift reject).
+        verify_result = self._verify_and_repair_protection(pos)
+        if verify_result.get("rolled_back"):
+            self._emit("position_rolled_back", pos)
+            return None
         self._emit("position_opened", pos)
         return pos
 
@@ -1479,6 +1495,199 @@ class OrderManager:
         self.closed_positions.append(pos)
         self._journal_record_close(pos, exit_price, reason)
         self._emit("position_closed", pos)
+
+    def _fetch_protection_order_ids(self, symbol: str):
+        """Return (set_of_order_ids, ok). Merges regular open orders + algo
+        (server-side TP/SL) orders, using the SAME account-wide fetch shape as
+        reconcile() (fetch_open_orders() -> [{id}], fapiPrivateGetOpenAlgoOrders({})
+        -> [{algoId}]) so a symbol-form mismatch can't read a live leg as
+        missing. Membership is tested by order-id, so account-wide is fine.
+        ok=False on the regular-orders fetch failure so the caller does not
+        misread a transient error as 'all orders gone' (and never force-closes
+        a healthy position on a read failure).
+        """
+        ids = set()
+        try:
+            for o in (self.client.exchange.fetch_open_orders() or []):
+                oid = o.get("id") if isinstance(o, dict) else None
+                if oid is not None:
+                    ids.add(str(oid))
+        except Exception as e:
+            log.warning(f"verify: fetch_open_orders failed for {symbol}: {e}")
+            return set(), False
+        try:
+            algo = self.client.exchange.fapiPrivateGetOpenAlgoOrders({}) or []
+            for a in algo:
+                oid = a.get("algoId") or a.get("id") if isinstance(a, dict) else None
+                if oid is not None:
+                    ids.add(str(oid))
+        except Exception as e:
+            # Algo fetch is best-effort; regular open orders already retrieved.
+            log.debug(f"verify: algo-order fetch failed for {symbol}: {e}")
+        return ids, True
+
+    def _verify_and_repair_protection(self, pos: "Position") -> dict:
+        """Confirm SL/TP orders are live on the exchange shortly after entry.
+
+        Per attempt: re-query live orders; latch each leg 'secured' once it is
+        confirmed present OR successfully (re)placed; re-place a confirmed-missing
+        leg AT MOST ONCE (avoids stacking duplicate SL/TP when the algo endpoint
+        merely lags). Fallback after attempts:
+        - SL never secured AND at least one read succeeded → cancel siblings +
+          market-close (never hold bare). The sibling-cancel is essential: TP1/TP2
+          may already be live, so closing without it would orphan reduceOnly orders.
+        - only TP unsecured → tolerate; store the -2021 sentinel (NOT blank) so
+          reconcile's repair skips it instead of churning.
+        - NO read ever succeeded (network partition) → DO NOT rollback. Forcing a
+          close on a position whose SL is really live would be the worst outcome;
+          tolerate and let reconcile handle it once reads recover (mirrors
+          reconcile's own 'missing != filled when fetch failed' rule).
+
+        Gated by enable_post_placement_verify. No-op (skipped) when disabled or
+        dry_run. Returns a dict summary for logging/tests.
+        """
+        if not getattr(self, "enable_post_placement_verify", False) or self.dry_run:
+            return {"skipped": True, "sl_ok": True}
+
+        ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
+        reverse_side = "sell" if pos.direction == "LONG" else "buy"
+        # Latching flags — once True they stay True (a later lagging read or a
+        # successful re-place can only confirm, never un-confirm, a leg).
+        sl_secured = tp1_secured = False
+        tp2_secured = pos.tp2 is None         # no TP2 leg = nothing to secure
+        sl_tried = tp1_tried = tp2_tried = False   # re-place at most once per leg
+        any_fetch_ok = False
+
+        for attempt in range(1, max(1, self.verify_max_attempts) + 1):
+            if self.verify_delay_sec > 0:
+                _time.sleep(self.verify_delay_sec)
+            ids, fetched_ok = self._fetch_protection_order_ids(pos.symbol)
+            if not fetched_ok:
+                continue                       # don't judge legs on a failed read
+            any_fetch_ok = True
+
+            # Confirm-present latches (a leg with no real id needs no protection).
+            if (not self._is_real_oid(pos.sl_order_id)) or pos.sl_order_id in ids:
+                sl_secured = True
+            if (not self._is_real_oid(pos.tp1_order_id)) or pos.tp1_order_id in ids:
+                tp1_secured = True
+            if pos.tp2 is not None and (
+                    (not self._is_real_oid(pos.tp2_order_id)) or pos.tp2_order_id in ids):
+                tp2_secured = True
+
+            if sl_secured and tp1_secured and tp2_secured:
+                return {"skipped": False, "sl_ok": True, "tp1_ok": True,
+                        "tp2_ok": True, "attempts": attempt}
+
+            # Re-place confirmed-missing legs, once each.
+            if not sl_secured and not sl_tried:
+                sl_tried = True
+                sl_params = {"stopPrice": pos.sl}
+                if self.hedge_mode:
+                    sl_params["positionSide"] = pos.direction
+                else:
+                    sl_params["reduceOnly"] = True
+                new_sl = self._retry_tp_order(
+                    ccxt_sym=ccxt_sym, order_type="STOP_MARKET", side=reverse_side,
+                    amount=pos.size, params=sl_params, label="SL",
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry_order_id=pos.order_id, sl_order_id="", price_display=pos.sl,
+                )
+                if self._is_real_oid(new_sl):
+                    pos.sl_order_id = new_sl
+                    sl_secured = True
+
+            if not tp1_secured and not tp1_tried:
+                tp1_tried = True
+                tp1_params = {"stopPrice": pos.tp1}
+                if self.hedge_mode:
+                    tp1_params["positionSide"] = pos.direction
+                else:
+                    tp1_params["reduceOnly"] = True
+                tp1_size = pos.size if pos.tp2 is None else pos.size / 2
+                new_tp1 = self._retry_tp_order(
+                    ccxt_sym=ccxt_sym, order_type="TAKE_PROFIT_MARKET", side=reverse_side,
+                    amount=tp1_size, params=tp1_params, label="TP1",
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry_order_id=pos.order_id, sl_order_id=pos.sl_order_id,
+                    price_display=pos.tp1,
+                )
+                if self._is_real_oid(new_tp1):
+                    pos.tp1_order_id = new_tp1
+                    tp1_secured = True
+                elif new_tp1 == _TP_UNREACHABLE_SENTINEL:
+                    # Price already past TP1 → unplaceable. Store the sentinel
+                    # (not blank) so reconcile/_is_real_oid skips it and does not
+                    # churn re-repairing (PR #102a contract).
+                    pos.tp1_order_id = _TP_UNREACHABLE_SENTINEL
+                    tp1_secured = True
+
+            if pos.tp2 is not None and not tp2_secured and not tp2_tried:
+                tp2_tried = True
+                tp2_params = {"stopPrice": pos.tp2}
+                if self.hedge_mode:
+                    tp2_params["positionSide"] = pos.direction
+                else:
+                    tp2_params["reduceOnly"] = True
+                new_tp2 = self._retry_tp_order(
+                    ccxt_sym=ccxt_sym, order_type="TAKE_PROFIT_MARKET", side=reverse_side,
+                    amount=pos.size / 2, params=tp2_params, label="TP2",
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry_order_id=pos.order_id, sl_order_id=pos.sl_order_id,
+                    price_display=pos.tp2, tp1_order_id=pos.tp1_order_id,
+                )
+                if self._is_real_oid(new_tp2):
+                    pos.tp2_order_id = new_tp2
+                    tp2_secured = True
+                elif new_tp2 == _TP_UNREACHABLE_SENTINEL:
+                    pos.tp2_order_id = _TP_UNREACHABLE_SENTINEL
+                    tp2_secured = True
+
+            if sl_secured and tp1_secured and tp2_secured:
+                return {"skipped": False, "sl_ok": True, "tp1_ok": True,
+                        "tp2_ok": True, "attempts": attempt}
+
+        # Attempts exhausted — fallback decision.
+        if not any_fetch_ok:
+            # Could not read the exchange at all → never force-close (would be
+            # the network-partition false-close). Tolerate; reconcile recovers.
+            log.warning(
+                "verify.no_read_tolerated: %s %s — could not confirm SL/TP "
+                "(all reads failed); leaving to reconcile", pos.symbol, pos.direction,
+            )
+            return {"skipped": False, "sl_ok": True, "tolerated_no_read": True}
+
+        if not sl_secured and self.rollback_on_sl_failure:
+            log.critical(
+                "verify.sl_unconfirmed_rollback: %s %s entry=%s — cancelling "
+                "siblings + market-closing to avoid a bare position",
+                pos.symbol, pos.direction, pos.order_id,
+                extra={"event": "verify.sl_unconfirmed_rollback",
+                       "symbol": pos.symbol, "direction": pos.direction},
+            )
+            try:
+                # Cancel any already-live TP1/TP2 (and SL) first so the market
+                # close does not leave orphaned reduceOnly orders on a flat symbol.
+                self._cancel_position_siblings(pos, ccxt_sym, reason="VERIFY_ROLLBACK")
+                self._rollback_entry_after_protection_failure(
+                    ccxt_sym=ccxt_sym, rollback_side=reverse_side,
+                    rollback_size=pos.size, symbol=pos.symbol,
+                    direction=pos.direction, entry_order_id=pos.order_id,
+                    original_error=Exception("SL unconfirmed after post-placement verify"),
+                )
+            finally:
+                if pos in self.positions:
+                    self.positions.remove(pos)
+                self._persist()
+            return {"skipped": False, "sl_ok": False, "rolled_back": True}
+
+        if not (tp1_secured and tp2_secured):
+            log.warning(
+                "verify.tp_unconfirmed_tolerated: %s %s — SL is live; reconcile "
+                "will keep retrying TP", pos.symbol, pos.direction,
+            )
+        return {"skipped": False, "sl_ok": sl_secured,
+                "tp1_ok": tp1_secured, "tp2_ok": tp2_secured}
 
     def _maybe_run_pnl_audit(self) -> None:
         """Tick the cycle counter; run the audit sweep every N cycles."""
