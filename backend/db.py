@@ -107,10 +107,12 @@ class Database:
             return
         try:
             async with self.pool.acquire() as conn:
-                # Note: trace_id and bar_ts_ms accepted at API boundary for forward
-                # compatibility, but the existing close-by-symbol logic is preserved.
-                # A future task can switch to close-by-trace_id when all open-side
-                # writes have trace_id.
+                # C5: prefer trace_id when provided so the correct open row is
+                # closed even when two same-symbol rows briefly coexist (reverse
+                # flip / fast SL→re-entry). Falls back to symbol-only when
+                # trace_id is NULL (older open-side rows). A duplicate close call
+                # (reconcile double-write) then no-ops: the trace_id row is
+                # already closed, so `closed_at IS NULL` excludes it.
                 await conn.execute(
                     """
                     UPDATE trades
@@ -120,12 +122,13 @@ class Database:
                         mfe_pct = COALESCE($7, mfe_pct)
                     WHERE id = (
                         SELECT id FROM trades
-                        WHERE symbol = $1 AND closed_at IS NULL
+                        WHERE closed_at IS NULL
+                          AND (($8::text IS NULL AND symbol = $1) OR trace_id = $8)
                         ORDER BY opened_at DESC LIMIT 1
                     )
                     """,
                     symbol, exit_price, pnl_usdt, pnl_pct, reason,
-                    mae_pct, mfe_pct,
+                    mae_pct, mfe_pct, trace_id,
                 )
         except Exception as e:
             log.warning(f"record_trade_close failed: {e}")
