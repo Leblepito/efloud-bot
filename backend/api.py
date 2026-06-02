@@ -581,7 +581,7 @@ async def ai_agents_recent() -> dict:
     return {
         "enabled": bool(team.cfg.get("enabled", False)),
         "gating": bool(team.cfg.get("gating", False)),
-        "model": team.cfg.get("model", "gemini-1.5-flash"),
+        "model": team.cfg.get("model", "gemini-3.5-flash"),
         "reviews": team.recent_reviews(limit=20),
     }
 

@@ -33,7 +33,7 @@ GEMINI_URL = (
 
 # Canonical default. ``gemini-2.0-flash`` is also stable on the v1beta
 # endpoint as of 2026-06; switch via config when ready.
-DEFAULT_MODEL = "gemini-1.5-flash"
+DEFAULT_MODEL = "gemini-3.5-flash"
 
 
 class GeminiClient:

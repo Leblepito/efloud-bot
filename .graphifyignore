@@ -1,0 +1,31 @@
+# .graphifyignore
+# Ignore external cloned repositories
+external_repos/
+
+# Ignore virtual environments
+.venv/
+venv/
+
+# Ignore caches and temporary directories
+cache/
+.tmp/
+tmp/
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Ignore runtime states, logs, and reports
+state/
+logs/
+reports/
+
+# Ignore IDE / Tool local configuration directories
+.vscode/
+.idea/
+.claude/
+.agents/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+desktop.ini

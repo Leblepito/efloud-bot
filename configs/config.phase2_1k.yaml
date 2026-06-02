@@ -32,9 +32,9 @@ exchange:
   api_key: ""              # Railway env: BINANCE_API_KEY
   api_secret: ""           # Railway env: BINANCE_API_SECRET
   testnet: false           # MAINNET
-  leverage: 5              # 5x kaldıraç (orta-agresif, $2000 cüzdan için)
-  margin_mode: CROSSED     # CROSSED margin mode
-  hedge_mode: true         # Enable Hedge Position mode
+  leverage: 5              # 5x kaldıraç (orta-agresif, $2000 cüzdan için) — unchanged
+  margin_mode: ISOLATED    # PR A ACTIVE (2026-06-02): flat-book deploy — per-symbol risk isolation
+  hedge_mode: false        # PR A ACTIVE: ONE-WAY; Binance blocks long+short on one symbol
 
 # ── SMC v2 feature flag (PR #S6 + cycle 4 hotfix) ──
 # Inert default: smc_version=v1, smc_v2_symbols=[] → v1 path active, v2 dormant.
@@ -122,7 +122,7 @@ operation:
 # ── Safety: agresif (bütün cüzdan kullanılabilir, %10 daily loss tolerans) ──
 safety:
   daily_loss_limit_pct: 10.0          # $200 günlük max kayıp ($2000 × 10%)
-  weekly_drawdown_limit_pct: 20.0     # $400 haftalık DD → HALT
+  weekly_drawdown_limit_pct: 25.0     # 2026-06-01: 20→25 (operator) — daha geniş haftalık DD toleransı
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
   starting_balance: 2000              # $2000 başlangıç (gerçek cüzdan, $1000 + $1000 ek transfer)

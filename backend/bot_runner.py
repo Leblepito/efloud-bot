@@ -33,6 +33,42 @@ log = logging.getLogger("efloud.runner")
 CONFIG_PATH_DEFAULT = "configs/config.phase2_micro.yaml"
 
 
+def _enforce_margin_setup(client, tradeable, margin_mode, leverage, hedge_mode):
+    """Apply margin mode + leverage per symbol, then position mode globally.
+
+    Returns (ok, error_message). PR A: margin-mode failure is FATAL (returns
+    False) — ISOLATED must be a real guarantee, not best-effort. set_margin_mode
+    already treats the benign -4046 'no need to change' as success internally, so
+    a raised exception here is a genuine failure that must abort startup rather
+    than silently run half-crossed. Leverage failure is non-fatal (set_leverage
+    swallows internally). Position-mode failure aborts (pre-existing behavior).
+    """
+    for sym in tradeable:
+        try:
+            # set_margin_mode returns False on a genuine failure (it only RAISES
+            # on the unexpected). It treats benign -4046 'no need to change' as
+            # True internally, so a False here is a real ISOLATED-apply failure
+            # that must abort — not just a swallowed exception.
+            if not client.set_margin_mode(sym, margin_mode):
+                return False, f"Margin mode setup failed for {sym} (set_margin_mode returned False)"
+        except Exception as e:
+            return False, f"Margin mode setup failed for {sym}: {e}"
+        try:
+            client.set_leverage(sym, leverage)
+        except Exception as e:
+            log.warning(f"Leverage setup warning for {sym}: {e}")
+    try:
+        if not client.set_position_mode(dual_side=hedge_mode):
+            return False, (
+                "Position mode setup failed! Binance rejected the change. "
+                "Ensure NO open positions and NO open orders on the entire "
+                "Futures account, then restart."
+            )
+    except Exception as e:
+        return False, f"Position mode setup failed with exception: {e}"
+    return True, ""
+
+
 class BotRunner:
     def __init__(self) -> None:
         self.task: Optional[asyncio.Task] = None
@@ -162,34 +198,18 @@ class BotRunner:
             except Exception as e:
                 log.warning(f"Permission detection failed: {e}")
 
-        # Leverage + margin mode setup
+        # Leverage + margin mode setup (PR A: margin failure now aborts startup)
         if ex_cfg["market_type"] == "futures" and api_key and not self.cfg["operation"].get("dry_run", True):
             margin_mode = ex_cfg.get("margin_mode", "ISOLATED").upper()
             tradeable = (permission_mgr.get_tradeable_symbols() if permission_mgr else symbols)
-            for sym in tradeable:
-                try:
-                    self.client.set_margin_mode(sym, margin_mode)
-                    self.client.set_leverage(sym, ex_cfg.get("leverage", 3))
-                except Exception as e:
-                    log.warning(f"Setup failed for {sym}: {e}")
-
-            # Hedge Mode position side configuration on exchange
             hedge_mode = ex_cfg.get("hedge_mode", False)
-            try:
-                success = self.client.set_position_mode(dual_side=hedge_mode)
-                if not success:
-                    msg = (
-                        "Position mode setup failed! Binance rejected the change. "
-                        "Make sure you have NO open positions and NO open orders on your entire Futures account, "
-                        "then try starting again."
-                    )
-                    log.error(f"⛔ {msg}")
-                    self.last_error = msg
-                    return
-            except Exception as e:
-                msg = f"Position mode setup failed with exception: {e}"
-                log.error(f"⛔ {msg}")
-                self.last_error = msg
+            ok, err = _enforce_margin_setup(
+                self.client, tradeable, margin_mode,
+                ex_cfg.get("leverage", 3), hedge_mode,
+            )
+            if not ok:
+                log.error(f"⛔ {err}")
+                self.last_error = err
                 return
 
         notif_mgr = NotificationManager(channels=["log"])  # WS push üzerinden ayrıca yapılır

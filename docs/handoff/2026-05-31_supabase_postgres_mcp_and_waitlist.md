@@ -1,88 +1,133 @@
 # Supabase/Postgres MCP + u2algo Waitlist Bağlantısı
 
 Tarih: 2026-05-31
-Durum: MCP kuruldu; direct Supabase host bağlantısı IPv6-only/ENETUNREACH nedeniyle canlı DB erişimi bloklu.
+Güncelleme: 2026-05-31
+Durum: Supabase Management API bağlantısı çalışıyor; repo migration'ları ve waitlist şeması `u2algo-efloud` içinde uygulanmış; Hermes MCP bağlantısı sağlıklı.
 
-## Yapılanlar
+## Proje
 
-1. Hermes local MCP server oluşturuldu:
-   - `C:/Users/utkuc/AppData/Local/hermes/mcp-servers/supabase_postgres/supabase_postgres_mcp.py`
-   - `C:/Users/utkuc/AppData/Local/hermes/mcp-servers/supabase_postgres/run_supabase_postgres_mcp.sh`
+- Supabase project: `u2algo-efloud`
+- Project ref: `trytjrtqdpmeekgxhhdb`
+- Local secret dosyası: `.env.supabase` (gitignored)
+- Token/secret değerleri bu dokümana yazılmadı.
 
-2. Hermes config'e MCP eklendi:
-   - server name: `supabase_postgres`
-   - tools discovered: 7
+## Uygulanan bağlantılar
 
-3. Secret local Hermes env'e eklendi:
-   - key: `SUPABASE_DATABASE_URL`
-   - değer bu belgeye yazılmadı.
+### 1. Supabase Management API helper
 
-4. MCP smoke:
-   - `hermes mcp test supabase_postgres` başarılı.
-   - 7 tool listelendi:
-     - `health`
-     - `list_tables`
-     - `table_columns`
-     - `ensure_waitlist_leads`
-     - `waitlist_count`
-     - `waitlist_list`
-     - `waitlist_insert`
+Repo içinde helper script'ler hazır:
 
-5. u2algo-site backend güncellendi:
-   - `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` varsa Supabase REST ile yazar.
-   - `SUPABASE_DATABASE_URL` veya `DATABASE_URL` varsa doğrudan PostgreSQL ile yazar.
-   - DB erişilemezse local JSONL fallback ile public form 200 döner.
-   - `ensureWaitlistTable()` PostgreSQL bağlantısı varsa `public.waitlist_leads` migration'ını otomatik uygular.
+- `scripts/supabase_mgmt.py`
+  - `.env.supabase` içinden `SUPABASE_ACCESS_TOKEN` ve `SUPABASE_PROJECT_REF` okur.
+  - `User-Agent: curl/8.0` header'ı kullanır; Supabase Management API `/database/query` endpoint'inde Cloudflare 1010 engelini önler.
+  - Komutlar:
+    - `python3 scripts/supabase_mgmt.py tables`
+    - `python3 scripts/supabase_mgmt.py sql "select 1;"`
+    - `python3 scripts/supabase_mgmt.py sqlfile path/to/file.sql`
 
-6. Railway variable eklendi:
-   - service: `u2algo-site`
-   - key: `DATABASE_URL`
-   - değer stdin üzerinden verildi, log'a yazılmadı.
+- `scripts/supabase_apply.py`
+  - `backend/migrations/*.sql` dosyalarını stem sırasıyla uygular.
+  - `schema_migrations(version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ)` kaydı tutar.
+  - `u2algo-site/supabase/waitlist_leads.sql` dosyasını ayrıca uygular.
+  - Komutlar:
+    - `python3 scripts/supabase_apply.py --dry-run`
+    - `python3 scripts/supabase_apply.py`
 
-## Canlı doğrulama
+### 2. Hermes MCP server
 
-Railway deployment:
-- service: `u2algo-site`
-- latest deployment: `09000f5b-c5f1-4b6c-945f-dd93be34698e`
-- status: SUCCESS
+Hermes local MCP server mevcut ve test başarılı:
 
-Endpointler:
-- `/healthz` -> 200
-- `/api/waitlist/health` -> 200 ama database unhealthy, backend postgres, error ENETUNREACH
-- `POST /api/waitlist` -> 200, backend local-jsonl-fallback
+- MCP server name: `supabase_postgres`
+- Transport: stdio üzerinden local bash wrapper
+- Test komutu:
+  - `hermes mcp test supabase_postgres`
+- Son doğrulama sonucu:
+  - Connected: başarılı
+  - Tools discovered: 7
 
-## Blokaj
+Keşfedilen tool'lar:
 
-Verilen direct Supabase host DNS'te IPv6-only döndü. Local Windows ve Railway runtime IPv6 route ile Postgres'e erişemedi.
+- `health` — DB connectivity check
+- `list_tables` — schema içindeki tabloları listeler
+- `table_columns` — tablo kolonlarını gösterir
+- `ensure_waitlist_leads` — `public.waitlist_leads` tablosunu create/repair eder
+- `waitlist_count` — waitlist lead sayısı
+- `waitlist_list` — son lead'leri email local-part redaction ile listeler
+- `waitlist_insert` — açık kullanıcı talebiyle lead insert/upsert
 
-Görülen hata tipi:
-- local MCP: host resolve / IPv6 unreachable
-- Railway: `ENETUNREACH` IPv6 address port 5432
+Not: Bu MCP tool'ları yeni Hermes session/restart sonrası agent tool listesine `mcp_supabase_postgres_*` prefiksiyle düşer. Mevcut session içinde görünmüyorsa Hermes'i yeniden başlatmak yeterli.
 
-Bu, uygulama kodu veya MCP discovery problemi değil; Supabase direct database host'un IPv6-only olması veya kullanılabilir IPv4 pooler DSN'in eksik olmasıyla ilgili.
+## Supabase tablo durumu
 
-## Çözüm seçenekleri
+Son doğrulama komutları:
 
-En iyi çözüm: Supabase Dashboard > Project Settings > Database > Connection string ekranından IPv4 uyumlu pooler connection string alınmalı.
+```bash
+python3 scripts/supabase_apply.py --dry-run
+python3 scripts/supabase_mgmt.py tables
+python3 scripts/supabase_mgmt.py sql "select version, applied_at from schema_migrations order by version;"
+```
 
-Genelde gerekli bilgi:
-- Transaction/session pooler host
-- Region-specific pooler hostname
-- User formatı (`postgres.<project-ref>` veya dashboard'un verdiği user)
-- Port (`6543` veya dashboard'un verdiği port)
-- `sslmode=require`
+Migration durumu:
 
-Bu doğru pooler DSN geldikten sonra:
-1. Hermes local `.env` içinde `SUPABASE_DATABASE_URL` güncellenir.
-2. Railway `u2algo-site` service variable `DATABASE_URL` güncellenir.
-3. `hermes mcp test supabase_postgres` + `health` çalıştırılır.
-4. `/api/waitlist/health` backend `postgres`, database `ready` olmalı.
-5. `POST /api/waitlist` backend `postgres` dönmeli.
+- Applied:
+  - `001_init`
+  - `002_trace_id`
+  - `003_bar_ts`
+  - `004_enable_rls`
+  - `005_trade_audits`
+  - `006_enable_trade_audits_rls`
+  - `007_smc_v2_telemetry`
+  - `008_tp2_nullable`
+  - `009_trade_warehouse_extension`
+- Pending: yok
 
-## Güvenlik Notları
+Public tablolar:
 
-- Secret değerleri repo'ya yazılmadı.
-- Connection string bu belgeye eklenmedi.
-- MCP server sadece Hermes local config altında kuruldu.
-- Public u2algo-site formu DB kesintisinde 500 döndürmeyecek şekilde fallback korumalı.
-- Trading/Binance/Hetzner canlı execution secret'larına dokunulmadı.
+- `audit_log`
+- `equity_history`
+- `schema_migrations`
+- `trade_audits`
+- `trades`
+- `waitlist_leads`
+
+Row count son durum:
+
+| Table | Rows |
+|---|---:|
+| `audit_log` | 0 |
+| `equity_history` | 0 |
+| `schema_migrations` | 9 |
+| `trade_audits` | 0 |
+| `trades` | 0 |
+| `waitlist_leads` | 1 |
+
+RLS durumu:
+
+- `audit_log`: enabled
+- `equity_history`: enabled
+- `schema_migrations`: enabled
+- `trade_audits`: enabled
+- `trades`: enabled
+- `waitlist_leads`: enabled
+
+## Beklenen boş tablolar
+
+`trades`, `trade_audits`, `equity_history`, `audit_log` şu an boş. Bu normal olabilir:
+
+- Bot production DB olarak bu Supabase projesine bağlandıktan sonra canlı trade/equity/audit kayıtları bu tablolara yazılır.
+- Şu an sadece şema ve migration kayıtları doldurulmuş durumda.
+- Dummy trade/audit seed'i uygulanmadı; production analytics'i kirletmemek için gerçek trading tablolarına test verisi yazılmadı.
+
+## Güvenlik notları
+
+- Paylaşılan Supabase personal access token repo'ya yazılmadı.
+- `.env.supabase` `.gitignore` içinde.
+- Secret değerleri terminal çıktısında ve dokümanda gösterilmedi.
+- İş bitince Supabase Access Token rotate edilmesi önerilir.
+
+## Operasyon notları
+
+- Management API token ops/admin credential'dır; runtime app secret olarak kullanılmamalı.
+- Runtime için ayrı `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` veya anon key/service role ayrımı yapılmalı.
+- Compose/env değişimi production'da `docker compose up -d` ile recreate gerektirir; `docker restart` yeterli değildir.
+- Canlı deploy/config/mainnet işleri Utku operatör alanıdır.
