@@ -129,7 +129,9 @@
 - **Ders (kendi işime çapraz-kontrol):** Phase 3'te docs/results tarihsel rakamını sertçe genelledim;
   re-backtest mevcut engine'de farklı magnitude gösterdi. Mission gereği dürüstçe düzeltildi —
   "sahte rakam üretme" kendi bulgularıma da uygulanır. Yön doğru, magnitude nuance'landı.
-- step=8 ince koşu arka planda (bfunhszs2) — bitince 03 magnitude güncellenecek.
+- **step=8 ince koşu (faithful) TAMAMLANDI:** conf=50 → +81.35%/DD8.29/PF1.35/WR44.5/1473trade;
+  conf=80 → +110.48%/DD5.35/PF2.34/WR53.7/863trade. İnce step'te yön DAHA güçlü (+29pp getiri,
+  conf=50 DD'si kötüleşti). S1 kesin doğrulandı. 03 güncellendi.
 
 ### AUDIT TAMAMLANDI — 7 doküman, PR #118 (draft, base master)
 - Tüm fazlar lokal üretildi + branch'e push edildi. Subagent overload'da Phase 3-6 kendim yapıldı.

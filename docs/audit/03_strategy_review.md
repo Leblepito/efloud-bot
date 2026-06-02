@@ -32,15 +32,15 @@
 ### ✅ S1 DOĞRULANDI — re-backtest (2026-06-02, MEVCUT engine)
 `c:\tmp\verify_s1.py` ile **mevcut engine** (smc_version=v1 = prod execution yolu) üzerinde aynı 10 prod sembolü, aynı period/step, sadece confluence değişerek (gross — commission/funding YOK, bkz S2):
 
-| Koşu | conf=50 | conf=80 |
-|---|---|---|
-| Return % (gross) | +82.45 | **+90.05** |
-| Max DD % | 6.71 | **4.34** |
-| Profit Factor | **1.25** ⚠️ | **2.51** |
-| Win Rate % | 45.9 | **58.8** |
-| Trades | 1190 | 617 (½, daha kaliteli) |
+| Metrik (gross) | conf=50 (step24) | conf=80 (step24) | **conf=50 (step8)** | **conf=80 (step8)** |
+|---|---|---|---|---|
+| Return % | +82.45 | +90.05 | **+81.35** | **+110.48** |
+| Max DD % | 6.71 | 4.34 | **8.29** | **5.35** |
+| Profit Factor | 1.25 ⚠️ | 2.51 | **1.35** ⚠️ | **2.34** |
+| Win Rate % | 45.9 | 58.8 | **44.5** | **53.7** |
+| Trades | 1190 | 617 | **1473** | **863** |
 
-**(Probe: 365g, step=24 — kaba; step=8 ince koşu pending.)**
+**step=8 (faithful, 365g) = otorite sonuç.** İnce step'te yön DAHA DA güçlü: conf=80 getiri +110.48% vs conf=50 +81.35% (**+29pp**), DD 5.35 vs 8.29 (conf=50 DD'si step inceldikçe KÖTÜLEŞTİ), PF 2.34 vs 1.35.
 
 **DÜRÜST DÜZELTME (integrity):** Tarihsel **−43.75%/%44DD ESKİ engine'di (2026-05-05)**; o tarihten beri engine ciddi değişti (SMC fix'leri, PR'lar). **Mevcut engine'de conf=50 felaket DEĞİL** (+82% gross). Önceki başlık çok sertti — düzeltildi.
 
