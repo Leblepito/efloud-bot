@@ -107,7 +107,22 @@
 - OOS split / Monte Carlo YOK. Funding/OI dashboard-only (stratejiye girmiyor).
 - LuxAlgo envanteri: SFP/OTE/HTF-liquidity VAR; Volumetric OB / Inducement / Session / gerçek displacement YOK — ama hepsi "önce backtest'i fee+funding+OOS ile güvenilir yap, sonra ablate; kanıtsız ekleme".
 
-### Sıradaki: Phase 4 (cleanup) + 5 (roadmap) + 6 (agent team) — Phase 1 envanterinden kendim.
+### Phase 4-6 SONUÇ (kendim, Phase 1 envanteri + Phase 2/3 sentezi)
+- **04_cleanup.md** — SİL(superagentv3) / ARŞİVLE(*.original.md, PR_BODY, MAINNET rehberi) /
+  TAŞI(root test_*.py → scripts/diag) / BANNER(aggressive_v1 DO-NOT-DEPLOY) / KORU(docs/results, configs/archive).
+  Risk-sıralı; landmine: preflight/bot_runner default arşiv-config (F3.6).
+- **05_roadmap.md** — 26 maddelik önceliklendirilmiş backlog (P0-P3), her madde
+  Phase·Sev·Effort·Bağımlılık·TDD·Kim·flat-book. İlk 5 detaylı spec (S1, A1, C2, C4, C1).
+  Batch planı: Batch-1 S1 config-only (en acil), Batch-2 kod fix'leri, Batch-3 flat-book.
+- **06_agent_team.md** — dev-time roster (9+4) + runtime advisory contract + 2 karar ağacı
+  + gating ön-koşulları (A1→A2→C8→A5→50-trade shadow). Duplicate YOK; efloud-risk-ops vs
+  risk-safety-auditor rol netliği önerisi.
+
+### AUDIT TAMAMLANDI — 7 doküman, PR #118 (draft, base master)
+- Tüm fazlar lokal üretildi + branch'e push edildi. Subagent overload'da Phase 3-6 kendim yapıldı.
+- **Operatöre en kritik mesaj:** S1 (conf 50→80) — config-only, flat-book gerekmez, ölçülmüş
+  −43.75%→+11.29% bandı; canlı bleed'i durdurur. Roadmap #1.
+- GitHub: lokal gh + GH_TOKEN bypass ile çalıştı. ⚠️ PAT rotate edilmeli (sohbet geçmişinde).
 
 ---
 
