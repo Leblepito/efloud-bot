@@ -10,7 +10,7 @@ from typing import Any, Literal
 import pandas as pd
 
 from backtest.intrabar import resolve_fill, Bar
-from backtest.metrics import aggregate_metrics, serialize_trade
+from backtest.metrics import aggregate_metrics, apply_commission_costs, serialize_trade
 from backtest.slippage import adverse_fill, SlippageConfig
 from engine import SafeOrchestrator
 from engine.notifications import NullNotificationManager
@@ -61,6 +61,7 @@ def run_backtest(
     step_every_n_bars: int = 1,
     smc_window_bars: int = _DEFAULT_SMC_WINDOW,
     smc_version: Literal["v1", "v2"] = "v1",
+    commission_pct: float | None = None,
 ) -> dict[str, Any]:
     """Run a walk-forward backtest. No I/O.
 
@@ -215,6 +216,16 @@ def run_backtest(
             log.warning("Backtest had %d skipped cycles (see DEBUG log for details)", skipped_cycles)
         closed_positions = [p for p in orch.lifecycle.positions if not p.is_open and p.exits]
         trade_dicts = [serialize_trade(p) for p in closed_positions]
+        # S2: net out round-trip taker commission. Resolution order: explicit
+        # param → config["backtest"]["commission_pct"] → 0.0 (off, backward-compat
+        # — existing tests/baselines unchanged unless commission is enabled).
+        # Set backtest.commission_pct: 0.04 (Binance USD-M taker) for realistic
+        # net returns / profit factor (e.g. the S1 conf-50-vs-80 net-PF check).
+        cp = (
+            commission_pct if commission_pct is not None
+            else float(config.get("backtest", {}).get("commission_pct", 0.0))
+        )
+        trade_dicts, balance, total_commission = apply_commission_costs(trade_dicts, balance, cp)
         agg = aggregate_metrics(trade_dicts, initial_balance, peak_balance, balance)
 
         return {
@@ -227,6 +238,8 @@ def run_backtest(
             "skipped_cycles": skipped_cycles,
             "max_drawdown_pct": round(max_drawdown_pct, 2),
             "smc_version": smc_version,
+            "commission_pct": cp,
+            "total_commission": round(total_commission, 4),
             **agg,
         }
 
