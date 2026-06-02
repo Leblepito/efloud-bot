@@ -798,9 +798,22 @@ class SafeOrchestrator:
             warnings.extend(hold_check.warnings)
 
         # ═══ STEP 6: Yeni Trade Decision ═══
+        # C4: a failed balance fetch on a LIVE cycle must NOT fabricate a $10k
+        # balance and size new entries against it (see actual_balance fallback
+        # below). Treat unavailable balance like stale data → existing positions
+        # were already managed in STEP 5, but open NO new entries this cycle.
+        # Dry-run/backtest pass an explicit balance, so None there is exempt.
+        balance_unavailable = (
+            balance is None and not self.config["operation"].get("dry_run", False)
+        )
+        if balance_unavailable:
+            warnings.append(
+                "Balance unavailable (fetch failed) — skipping new entries this cycle"
+            )
         can_trade = (
             breaker_status.can_trade
             and not stale
+            and not balance_unavailable
             and regime_analysis.can_open_new_position
             and not self.config["operation"].get("watch_only", False)
         )
