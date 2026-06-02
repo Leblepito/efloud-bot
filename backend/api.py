@@ -578,10 +578,11 @@ async def ai_agents_recent() -> dict:
     team = _get_agent_team()
     if team is None:
         return {"enabled": False, "reviews": [], "message": "agent team not initialised"}
+    from engine.agents.gemini_client import DEFAULT_MODEL
     return {
         "enabled": bool(team.cfg.get("enabled", False)),
         "gating": bool(team.cfg.get("gating", False)),
-        "model": team.cfg.get("model", "gemini-3.5-flash"),
+        "model": team.cfg.get("model", DEFAULT_MODEL),
         "reviews": team.recent_reviews(limit=20),
     }
 

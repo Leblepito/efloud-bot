@@ -53,7 +53,8 @@ async def fetch_and_save_sentiment(api_key: str, db_url: str = None) -> dict:
                 # Imported lazily so ``engine.ai.sentiment`` still imports in
                 # environments where ``engine.agents`` is unavailable.
                 from engine.agents.gemini_client import GeminiClient
-                client = GeminiClient(api_key=api_key, model="gemini-3.5-flash")
+                # Use the canonical DEFAULT_MODEL (omit the kwarg) — never pin a literal.
+                client = GeminiClient(api_key=api_key)
                 # complete_json is sync; offload so the event loop stays alive.
                 sentiment_data = await asyncio.to_thread(
                     client.complete_json, prompt

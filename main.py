@@ -244,7 +244,8 @@ def validate_config(cfg: dict) -> bool:
                 raise ValueError(
                     f"agent_team.{bool_key} must be a bool, got {type(v).__name__}"
                 )
-        model = at.get("model", "gemini-3.5-flash")
+        from engine.agents.gemini_client import DEFAULT_MODEL
+        model = at.get("model", DEFAULT_MODEL)
         if not isinstance(model, str) or not model.strip():
             raise ValueError("agent_team.model must be a non-empty string")
         # gating=True with shadow-mode observation is the recommended

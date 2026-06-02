@@ -369,3 +369,48 @@ class TestAgentTeamRecentReviewsAPI:
             team_b.review_trade(_make_ctx(symbol="ETH/USDT"))
             assert team_a.recent_reviews()[0]["symbol"] == "BTC/USDT"
             assert team_b.recent_reviews()[0]["symbol"] == "ETH/USDT"
+
+
+class TestGeminiModelValidity:
+    """A1 regression guard: the pinned Gemini model must be a REAL, callable
+    model. ``gemini-3.5-flash`` does not exist in Google's public API → every
+    call 404s → the entire advisory + sentiment + signal-validation layer is
+    silently NEUTRAL (inert). Guard against any invalid pin anywhere in the
+    LLM call path.
+    """
+
+    # Valid Google Gemini aliases on the v1beta generateContent endpoint.
+    VALID_MODELS = {
+        "gemini-1.5-flash", "gemini-1.5-pro",
+        "gemini-2.0-flash", "gemini-2.0-flash-lite",
+        "gemini-2.5-flash", "gemini-2.5-pro",
+    }
+    DEAD_MODEL = "gemini-3" "." "5-flash"  # split so this file is not self-flagged
+
+    def test_default_model_is_valid(self) -> None:
+        from engine.agents.gemini_client import DEFAULT_MODEL, GeminiClient
+        assert DEFAULT_MODEL in self.VALID_MODELS, (
+            f"DEFAULT_MODEL={DEFAULT_MODEL!r} is not a real Gemini model"
+        )
+        assert GeminiClient().model in self.VALID_MODELS
+
+    def test_no_dead_model_string_in_llm_call_sites(self) -> None:
+        import pathlib
+        root = pathlib.Path(__file__).resolve().parents[1]
+        call_sites = [
+            "engine/agents/gemini_client.py",
+            "engine/agents/team.py",
+            "engine/ai/sentiment.py",
+            "engine/signals.py",
+            "backend/api.py",
+            "ops/alerter/formatter.py",
+            "main.py",
+        ]
+        offenders = [
+            rel for rel in call_sites
+            if (root / rel).exists()
+            and self.DEAD_MODEL in (root / rel).read_text(encoding="utf-8")
+        ]
+        assert not offenders, (
+            f"dead model {self.DEAD_MODEL!r} still referenced in: {offenders}"
+        )
