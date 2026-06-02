@@ -35,6 +35,12 @@ GEMINI_URL = (
 # endpoint as of 2026-06; switch via config when ready.
 DEFAULT_MODEL = "gemini-3.5-flash"
 
+# A2: surface real call failures at WARNING (not silent DEBUG) so a broken
+# key/model is visible — but rate-limit so a persistent outage doesn't spam
+# every cycle. Module-level (clients are constructed per-call in some callers).
+_consecutive_failures = 0
+_WARN_EVERY = 25  # WARNING on the 1st failure and every 25th thereafter
+
 
 class GeminiClient:
     """Thin wrapper around Gemini's generateContent REST endpoint.
@@ -62,8 +68,9 @@ class GeminiClient:
         (missing key, HTTP error, JSON parse, unexpected schema). The
         caller is expected to treat ``{}`` as "no opinion".
         """
+        global _consecutive_failures
         if not self.api_key:
-            return {}
+            return {}  # expected fail-safe (no key) — silent, not an error
         url = GEMINI_URL.format(model=self.model) + f"?key={self.api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -76,7 +83,17 @@ class GeminiClient:
             r = httpx.post(url, json=payload, timeout=timeout or self.timeout)
             r.raise_for_status()
             text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(text)
+            result = json.loads(text)
+            _consecutive_failures = 0  # A2: recovered → reset the rate-limiter
+            return result
         except Exception as e:
-            log.debug(f"GeminiClient.complete_json failed (returning {{}}): {e!r}")
+            # A2: a genuine failure (HTTP/parse/timeout) — surface at WARNING so a
+            # broken key/model is visible, rate-limited to avoid per-cycle spam.
+            _consecutive_failures += 1
+            msg = (f"GeminiClient.complete_json failed "
+                   f"(#{_consecutive_failures}, returning {{}}): {e!r}")
+            if _consecutive_failures == 1 or _consecutive_failures % _WARN_EVERY == 0:
+                log.warning(msg)
+            else:
+                log.debug(msg)
             return {}
