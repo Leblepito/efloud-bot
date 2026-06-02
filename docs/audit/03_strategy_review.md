@@ -29,6 +29,24 @@
 >
 > **Aksiyon (roadmap #1, S/effort, flat-book gerektirmez — sadece config):** `min_confluence: 50 → 80` (veya aggressive_v1 sembol seti + conf 70/80'e geç). Config-only değişiklik; canlı margin/mode değişimi YOK. En yüksek beklenen-değerli tek hamle.
 
+### ✅ S1 DOĞRULANDI — re-backtest (2026-06-02, MEVCUT engine)
+`c:\tmp\verify_s1.py` ile **mevcut engine** (smc_version=v1 = prod execution yolu) üzerinde aynı 10 prod sembolü, aynı period/step, sadece confluence değişerek (gross — commission/funding YOK, bkz S2):
+
+| Koşu | conf=50 | conf=80 |
+|---|---|---|
+| Return % (gross) | +82.45 | **+90.05** |
+| Max DD % | 6.71 | **4.34** |
+| Profit Factor | **1.25** ⚠️ | **2.51** |
+| Win Rate % | 45.9 | **58.8** |
+| Trades | 1190 | 617 (½, daha kaliteli) |
+
+**(Probe: 365g, step=24 — kaba; step=8 ince koşu pending.)**
+
+**DÜRÜST DÜZELTME (integrity):** Tarihsel **−43.75%/%44DD ESKİ engine'di (2026-05-05)**; o tarihten beri engine ciddi değişti (SMC fix'leri, PR'lar). **Mevcut engine'de conf=50 felaket DEĞİL** (+82% gross). Önceki başlık çok sertti — düzeltildi.
+
+**AMA S1'in özü DOĞRULANDI:** conf=80 her risk-ayarlı metrikte conf=50'yi domine ediyor. Kritik: **conf=50 PF=1.25 = breakeven'e tehlikeli yakın**; backtest commission(~0.08% round-trip)+funding modellemiyor (S2) → 1190 trade'de net PF muhtemelen **<1.0 (zararda)**. conf=80 PF=2.51 bu maliyetleri massedecek tampona sahip. **Öneri DEĞİŞMEDİ (50→80) ama gerekçe yeniden çerçevelendi:** "−43% bleed'i durdur" değil → "conf=50 edge'i ustura-ince/net-zararlı muhtemel; conf=80 sağlam". Memory canlı breaker-OPEN durumu bu thin-edge + korelasyon (B1) + C1 repaint birleşimiyle tutarlı.
+> **NASIL FALSİFİYE EDERİZ? (güncellendi):** step=8/4 ince re-backtest + commission+funding (S2) wire edilmiş halde net PF hesapla. conf=50 net PF ≥ conf=80 ise S1 yanlış. Beklenti: conf=50 net PF <1.0, conf=80 >1.5.
+
 ---
 
 ## A. QUANT LENS — istatistiksel kesinlik

@@ -118,6 +118,19 @@
   + gating ön-koşulları (A1→A2→C8→A5→50-trade shadow). Duplicate YOK; efloud-risk-ops vs
   risk-safety-auditor rol netliği önerisi.
 
+### S1 DOĞRULAMA (2026-06-02 re-backtest) — INTEGRITY DÜZELTMESİ
+- `c:\tmp\verify_s1.py` ile mevcut engine (v1 path), 10 prod sembolü, probe step=24/365g (gross):
+  conf=50 → +82.45% / DD 6.71 / **PF 1.25** / WR 45.9 / 1190 trade
+  conf=80 → +90.05% / DD 4.34 / **PF 2.51** / WR 58.8 / 617 trade
+- **DÜRÜST DÜZELTME:** Tarihsel −43.75% ESKİ engine'di (2026-05-05); mevcut engine'de conf=50
+  felaket DEĞİL. Önceki sert başlık düzeltildi (03'te). **AMA S1 özü doğrulandı:** conf=80 her
+  metrikte domine; conf=50 PF=1.25 breakeven'e tehlikeli yakın → commission+funding (modellenmemiş, S2)
+  eklenince net PF muhtemelen <1.0. Öneri (50→80) korunuyor, gerekçe yeniden çerçevelendi.
+- **Ders (kendi işime çapraz-kontrol):** Phase 3'te docs/results tarihsel rakamını sertçe genelledim;
+  re-backtest mevcut engine'de farklı magnitude gösterdi. Mission gereği dürüstçe düzeltildi —
+  "sahte rakam üretme" kendi bulgularıma da uygulanır. Yön doğru, magnitude nuance'landı.
+- step=8 ince koşu arka planda (bfunhszs2) — bitince 03 magnitude güncellenecek.
+
 ### AUDIT TAMAMLANDI — 7 doküman, PR #118 (draft, base master)
 - Tüm fazlar lokal üretildi + branch'e push edildi. Subagent overload'da Phase 3-6 kendim yapıldı.
 - **Operatöre en kritik mesaj:** S1 (conf 50→80) — config-only, flat-book gerekmez, ölçülmüş
