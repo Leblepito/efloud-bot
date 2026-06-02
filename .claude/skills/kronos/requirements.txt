@@ -1,0 +1,7 @@
+torch>=2.0
+transformers>=4.40
+huggingface-hub>=0.20
+yfinance>=0.2.40
+pandas>=2.0
+numpy>=1.24
+einops>=0.7
