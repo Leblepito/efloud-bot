@@ -15,10 +15,30 @@ recency-tighter BOS handling, see signals.py:200-204).
 from dataclasses import dataclass
 from typing import List, Tuple
 
+import pandas as pd
+
 from engine.smc import StructBreak, Swing, FVG
 from engine.smc_v2.setup_state import SetupCandidate
 from engine.smc_v2.swing_anchor import select_htf_swing_anchor
 from engine.smc_v2.zones import build_pullback_zones
+
+
+def _bar_ts_to_ms(ts: str) -> int:
+    """Convert a StructBreak's bar timestamp string to ms-epoch.
+
+    C6: ``SetupCandidate.trigger_bar_ts`` feeds ``confirm_entry``'s ``since_ts``,
+    which is compared against ``df_15m`` bar timestamps in ms-epoch. The trigger
+    bar's ms must be captured at creation time (stable across later windowing) —
+    storing the bar ordinal made the "only AFTER the trigger" guard dead code
+    (ordinal << ms always → never skipped). ``brk.ts`` is the bar's index string
+    (real ISO in production); round-tripping it via ``pd.Timestamp`` yields the
+    same ms ``confirm_entry`` computes. Returns 0 on an unparseable/empty ts
+    (degenerate; confirm_entry then simply does not skip).
+    """
+    try:
+        return int(pd.Timestamp(ts).timestamp() * 1000)
+    except (ValueError, TypeError):
+        return 0
 
 
 @dataclass
@@ -114,7 +134,10 @@ def generate_setup_candidates(
         out.append(SetupCandidate(
             symbol=symbol,
             direction=direction,
-            trigger_bar_ts=brk.idx,  # ordinal axis (matches swing_anchor)
+            # C6: store the CHoCH bar's ms-epoch (confirm_entry.since_ts axis),
+            # NOT the ordinal. swing_anchor gets brk.idx directly above (line ~92),
+            # so it is unaffected by this.
+            trigger_bar_ts=_bar_ts_to_ms(brk.ts),
             trigger_price=brk.price,
             htf_bias=htf_bias,
             target_zone=zone,
