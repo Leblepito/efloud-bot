@@ -41,6 +41,13 @@ def _strip_contract_suffix(symbol: str) -> str:
 _TP_UNREACHABLE_SENTINEL = "UNREACHABLE"
 
 
+def _timeframe_ms(timeframe: str) -> int:
+    """Timeframe string → milliseconds. '1m'→60_000, '4h'→14_400_000, '1d'→…."""
+    tf = timeframe.lower().strip()
+    unit_ms = {"m": 60_000, "h": 3_600_000, "d": 86_400_000, "w": 604_800_000}
+    return int(tf[:-1]) * unit_ms[tf[-1]]
+
+
 class BinanceClient:
     """CCXT ile Binance Futures/Spot bağlantısı."""
 
@@ -73,8 +80,22 @@ class BinanceClient:
         log.info(f"Binance {'testnet' if testnet else 'MAINNET'} | {market_type}")
 
     def fetch_ohlcv(self, symbol: str, timeframe: str, limit: int = 500) -> pd.DataFrame:
-        """Kline data çek → DataFrame."""
+        """Kline data çek → DataFrame (yalnız KAPANMIŞ barlar)."""
         raw = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+        # C1: drop the still-forming (unclosed) last candle. CCXT returns the
+        # current in-progress bar as the final row; the SMC engine reads
+        # ``.iloc[-1]`` for CHoCH/BOS close crossings, entry price, SL local-low
+        # and ATR, so acting on it repaints intra-bar — and that is invisible in
+        # backtest, which feeds only closed bars. A bar is still forming when its
+        # close time (open + tf) is in the future. Operate on the raw ms
+        # timestamps to avoid naive-vs-tz epoch ambiguity. Single exchange choke
+        # point → live + CLI both inherit closed-bar-only analysis. Backtest does
+        # NOT use this path (it loads cached parquet of already-closed bars).
+        if raw and len(raw) >= 2:
+            tf_ms = _timeframe_ms(timeframe)
+            now_ms = int(_time.time() * 1000)
+            if raw[-1][0] + tf_ms > now_ms:
+                raw = raw[:-1]
         df = pd.DataFrame(raw, columns=["timestamp", "open", "high", "low", "close", "volume"])
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
         df.set_index("timestamp", inplace=True)
