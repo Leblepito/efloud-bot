@@ -207,6 +207,12 @@ class Position:
             "tp1_target_type": self.tp1_target_type,
             "tp2_target_type": self.tp2_target_type,
             "bars_to_pullback": self.bars_to_pullback,
+            # Breaker-dedup flag (C2): STEP 5 records a closed position's
+            # realized PnL to the CircuitBreaker once and sets this runtime
+            # attribute. It MUST persist — lifecycle never prunes closed
+            # positions, so without this a restart re-counts the PnL and
+            # corrupts daily_pnl / consecutive_losses / peak_balance.
+            "_reported_to_breaker": getattr(self, "_reported_to_breaker", False),
         }
 
     @classmethod
@@ -217,7 +223,7 @@ class Position:
         mfe_pct keys; default to 0.0 so a state-volume upgrade does not
         crash.
         """
-        return cls(
+        pos = cls(
             id=d["id"], symbol=d["symbol"], direction=d["direction"],
             entries=[Entry(**e) for e in d.get("entries", [])],
             exits=[Exit(**e) for e in d.get("exits", [])],
@@ -240,6 +246,11 @@ class Position:
             tp2_target_type=d.get("tp2_target_type"),
             bars_to_pullback=d.get("bars_to_pullback"),
         )
+        # Restore the breaker-dedup flag (C2). Pre-fix state files lack the
+        # key → default False. Without this, STEP 5 re-records an already
+        # counted closed position's PnL to the breaker after a restart.
+        pos._reported_to_breaker = bool(d.get("_reported_to_breaker", False))
+        return pos
 
 
 class PositionLifecycle:
