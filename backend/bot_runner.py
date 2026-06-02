@@ -30,7 +30,13 @@ from main import resolve_credentials, validate_config
 
 log = logging.getLogger("efloud.runner")
 
-CONFIG_PATH_DEFAULT = "configs/config.phase2_micro.yaml"
+# F3.6: must resolve to a real file. The previous default pointed at a micro
+# config under the configs/ root that does not exist there (the file lives under
+# configs/archive/), so an unset EFLOUD_CONFIG_PATH made start() silently refuse
+# with "config not found". Default to the documented production config that
+# deploy/.env.production actually sets. Prod always sets EFLOUD_CONFIG_PATH
+# explicitly + AUTOSTART=0, so this is a fallback, not an auto-trade trigger.
+CONFIG_PATH_DEFAULT = "configs/config.phase2_1k.yaml"
 
 
 def _enforce_margin_setup(client, tradeable, margin_mode, leverage, hedge_mode):
