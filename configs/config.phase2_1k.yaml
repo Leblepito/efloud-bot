@@ -152,6 +152,13 @@ safety:
   # TP Binance -2021 ile reddedilir). 0 = kapalı. Gevşetmek/sıkmak operatör kararı.
   max_entry_drift_pct: 1.0
 
+  # ── PnL reconcile audit (PR C, 2026-06-01) ──
+  # Periodic sweep that corrects locally-estimated closes to Binance net
+  # realizedPnl (realizedPnl - commission - funding). Runs once per N reconcile
+  # cycles. Fixes the local-vs-exchange PnL divergence (+87 local vs +32 real).
+  enable_pnl_audit: true
+  pnl_audit_every_cycles: 20
+
   # ── Safety Integration (2026-05-30 plan) ──
   reverse_min_profit_pct: 0.2          # kontra sinyal: karda + %0.2 buffer üstünde reverse
   pause_new_entries: false             # true = yeni giriş durdur (mevcut pozisyonlar yönetilir)

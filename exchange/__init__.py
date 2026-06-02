@@ -241,6 +241,46 @@ class BinanceClient:
         positions = self.exchange.fetch_positions([symbol] if symbol else None)
         return [p for p in positions if float(p.get("contracts", 0)) > 0]
 
+    def fetch_realized_pnl(self, symbol: str, since_ms: int,
+                           until_ms: Optional[int] = None) -> dict:
+        """Sum REALIZED_PNL / COMMISSION / FUNDING_FEE for a symbol+window.
+
+        Reads the USD-M income endpoint (fapiPrivateGetIncome). Soft-fails:
+        any transport/API error returns ok=False with zeroed sums so the
+        caller can fall back to its estimate — never raises into reconcile.
+        """
+        if self.market_type != "futures":
+            return {"realized_pnl": 0.0, "commission": 0.0, "funding": 0.0,
+                    "net": 0.0, "ok": False}
+        try:
+            bn_sym = self.exchange.market(self.to_ccxt_symbol(symbol))["id"]
+        except Exception:
+            bn_sym = symbol.replace("/", "")
+
+        totals = {"REALIZED_PNL": 0.0, "COMMISSION": 0.0, "FUNDING_FEE": 0.0}
+        for income_type in totals:
+            params = {"symbol": bn_sym, "incomeType": income_type,
+                      "startTime": int(since_ms), "limit": 1000}
+            if until_ms is not None:
+                params["endTime"] = int(until_ms)
+            try:
+                rows = self.exchange.fapiPrivateGetIncome(params)
+            except Exception as e:
+                log.warning(f"fetch_realized_pnl({symbol},{income_type}) failed: {e}")
+                return {"realized_pnl": 0.0, "commission": 0.0, "funding": 0.0,
+                        "net": 0.0, "ok": False}
+            for r in (rows or []):
+                try:
+                    totals[income_type] += float(r.get("income", 0) or 0)
+                except (TypeError, ValueError):
+                    continue
+
+        net = totals["REALIZED_PNL"] + totals["COMMISSION"] + totals["FUNDING_FEE"]
+        return {"realized_pnl": totals["REALIZED_PNL"],
+                "commission": totals["COMMISSION"],
+                "funding": totals["FUNDING_FEE"],
+                "net": net, "ok": True}
+
 
 @dataclass
 class Position:
@@ -264,6 +304,12 @@ class Position:
     exit_reason: str = ""   # "TP1" | "TP2" | "SL" | "MANUAL" | "RECONCILED"
     exit_price: float = 0.0
     pnl_usdt: float = 0.0
+    # PR C — exchange-truth PnL reconciliation. Defaults keep _restore() of
+    # pre-PR-C order_manager_positions.json backward-compatible.
+    realized_pnl_exchange: float = 0.0   # net realizedPnl pulled from Binance income endpoint
+    commission_paid: float = 0.0         # summed COMMISSION income for this position's fills
+    funding_paid: float = 0.0            # summed FUNDING_FEE income over the position lifetime
+    pnl_source: str = "estimated"        # "estimated" until reconciled, then "exchange"
     trace_id: Optional[str] = None       # log correlation across orchestrator → DB
     bar_ts_ms: Optional[int] = None      # bar-aligned timestamp (UTC ms epoch)
 
@@ -335,6 +381,10 @@ class OrderManager:
         # -2021 'would immediately trigger'. 0.0 = disabled (backward-compat).
         # See test_entry_drift_guard.py for the 2026-05-31 live incident.
         self.max_entry_drift_pct = max_entry_drift_pct
+        # PR C — periodic PnL audit sweep (overridden by bot_runner wiring).
+        self.enable_pnl_audit = True
+        self.pnl_audit_every_cycles = 20
+        self._pnl_audit_cycle = 0
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
@@ -1228,6 +1278,7 @@ class OrderManager:
 
         # Always persist after a reconcile pass so disk reflects latest exchange-derived
         # state (closes removed from list, tp1_hit flags flipped, sl_order_id updated).
+        self._maybe_run_pnl_audit()
         self._persist()
         return closed_now
 
@@ -1382,12 +1433,37 @@ class OrderManager:
             return pos.entry
 
     def _record_close(self, pos: Position, exit_price: float, reason: str) -> None:
-        """Pozisyon kapanış metadata'sını doldur ve event emit et."""
+        """Pozisyon kapanış metadata'sını doldur ve event emit et.
+
+        PR C: prefer Binance net realizedPnl (realizedPnl - commission - funding)
+        over the gross estimate. Falls back to the estimate (and tags
+        pnl_source="estimated") when the exchange read soft-fails.
+        """
         is_long = pos.direction == "LONG"
         pnl_pct = ((exit_price - pos.entry) / pos.entry * 100) if is_long else \
                   ((pos.entry - exit_price) / pos.entry * 100)
-        pnl_usdt = (exit_price - pos.entry) * pos.size if is_long else \
-                   (pos.entry - exit_price) * pos.size
+        est_pnl_usdt = (exit_price - pos.entry) * pos.size if is_long else \
+                       (pos.entry - exit_price) * pos.size
+
+        # Exchange-truth PnL (soft-fail → keep estimate).
+        pnl_usdt = est_pnl_usdt
+        pos.pnl_source = "estimated"
+        try:
+            since_ms = int(pd.Timestamp(pos.opened_at).value // 1_000_000) if pos.opened_at else 0
+        except Exception:
+            since_ms = 0
+        try:
+            res = self.client.fetch_realized_pnl(pos.symbol, since_ms=since_ms)
+        except Exception:
+            res = {"ok": False}
+        # isinstance guard: a real BinanceClient returns a dict; mock/absent
+        # clients (or anything non-dict) fall through to the estimate.
+        if isinstance(res, dict) and res.get("ok"):
+            pnl_usdt = res["net"]
+            pos.realized_pnl_exchange = res.get("realized_pnl", 0.0)
+            pos.commission_paid = res.get("commission", 0.0)
+            pos.funding_paid = res.get("funding", 0.0)
+            pos.pnl_source = "exchange"
 
         pos.closed_at = pd.Timestamp.now(tz="UTC").isoformat()
         pos.exit_reason = reason
@@ -1397,12 +1473,88 @@ class OrderManager:
         log.info(
             f"{reason}: {pos.symbol} {pos.direction} | "
             f"Entry={pos.entry:.4f} Exit={exit_price:.4f} | "
-            f"PnL={pnl_pct:+.2f}% (${pnl_usdt:+.2f})"
+            f"PnL={pnl_pct:+.2f}% (${pnl_usdt:+.2f}) [{pos.pnl_source}]"
         )
 
         self.closed_positions.append(pos)
         self._journal_record_close(pos, exit_price, reason)
         self._emit("position_closed", pos)
+
+    def _maybe_run_pnl_audit(self) -> None:
+        """Tick the cycle counter; run the audit sweep every N cycles."""
+        if not self.enable_pnl_audit:
+            return
+        self._pnl_audit_cycle += 1
+        if self._pnl_audit_cycle % max(1, self.pnl_audit_every_cycles) != 0:
+            return
+        try:
+            self.audit_realized_pnl(window_hours=24)
+        except Exception as e:
+            log.warning(f"pnl_audit sweep failed: {e}")
+
+    def audit_realized_pnl(self, window_hours: int = 24) -> int:
+        """Re-reconcile recently-closed positions still tagged 'estimated'.
+
+        Pulls exchange income for each estimated close within the window and
+        upgrades pnl_usdt to net exchange truth. Returns the number corrected.
+        Soft-fails per position so one bad read never aborts the sweep.
+
+        Limitation: closed_positions is in-memory (not persisted/restored), so
+        the sweep only reaches closes from the current process lifetime. A close
+        that soft-failed to 'estimated' just before a restart keeps its estimate
+        in the journal. Acceptable given the breaker is not back-corrected either
+        (reporting-only PR); a future journal-sourced audit could close this gap.
+        """
+        try:
+            cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=window_hours)
+        except Exception:
+            return 0
+        corrected = 0
+        for pos in self.closed_positions:
+            if pos.pnl_source == "exchange":
+                continue
+            if not pos.closed_at:
+                continue
+            try:
+                closed_ts = pd.Timestamp(pos.closed_at)
+                if closed_ts < cutoff:
+                    continue
+                since_ms = int(pd.Timestamp(pos.opened_at).value // 1_000_000)
+                # Bound the income window to THIS position's lifetime (+5s for
+                # fill-time posting lag) so a later trade on the same symbol
+                # cannot have its realizedPnl/commission misattributed here.
+                until_ms = int(closed_ts.value // 1_000_000) + 5_000
+            except Exception:
+                continue
+            try:
+                res = self.client.fetch_realized_pnl(
+                    pos.symbol, since_ms=since_ms, until_ms=until_ms)
+            except Exception:
+                res = {"ok": False}
+            if not (isinstance(res, dict) and res.get("ok")):
+                continue
+            old = pos.pnl_usdt
+            pos.pnl_usdt = res["net"]
+            pos.realized_pnl_exchange = res.get("realized_pnl", 0.0)
+            pos.commission_paid = res.get("commission", 0.0)
+            pos.funding_paid = res.get("funding", 0.0)
+            pos.pnl_source = "exchange"
+            corrected += 1
+            log.info(
+                "pnl_audit: corrected %s %s est=%.4f → exchange=%.4f",
+                pos.symbol, pos.direction, old, pos.pnl_usdt,
+            )
+            # Idempotent in-place journal update — NOT _journal_record_close,
+            # which would append a duplicate entry row (no dedup in record_entry).
+            if self.trade_journal is not None:
+                trade_id = pos.order_id or f"{pos.symbol}-{pos.opened_at}"
+                self.trade_journal.update_realized_pnl(
+                    trade_id, realized_pnl=pos.pnl_usdt, pnl_source="exchange",
+                    realized_pnl_exchange=pos.realized_pnl_exchange,
+                    commission_paid=pos.commission_paid,
+                    funding_paid=pos.funding_paid,
+                )
+        return corrected
 
     def _journal_record_close(self, pos: Position, exit_price: float, reason: str) -> None:
         """Write a full TradeSnapshot (entry+exit atomically) to TradeJournal.
@@ -1435,6 +1587,10 @@ class OrderManager:
                 intent_score_entry=0,
                 intent_label_entry="",
                 confluence_score=0,
+                pnl_source=pos.pnl_source,
+                realized_pnl_exchange=pos.realized_pnl_exchange,
+                commission_paid=pos.commission_paid,
+                funding_paid=pos.funding_paid,
             )
             self.trade_journal.record_entry(snap)
             self.trade_journal.record_exit(

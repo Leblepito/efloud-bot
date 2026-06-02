@@ -90,6 +90,13 @@ class TradeSnapshot:
     error_tags: List[str] = field(default_factory=list)
     lessons: List[str] = field(default_factory=list)
 
+    # PR C — PnL reconciliation provenance. "estimated" = gross price-diff;
+    # "exchange" = net realizedPnl - commission - funding from Binance income.
+    pnl_source: str = "estimated"
+    realized_pnl_exchange: float = 0.0
+    commission_paid: float = 0.0
+    funding_paid: float = 0.0
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -166,6 +173,34 @@ class TradeJournal:
         self._persist(snap)
         log.info(f"📝 Journal exit: {trade_id} {exit_reason} | "
                  f"PnL=${realized_pnl:+.2f} ({snap.realized_pnl_pct:+.2f}%)")
+
+    def update_realized_pnl(self, trade_id: str, realized_pnl: float,
+                            pnl_source: str = "exchange",
+                            realized_pnl_exchange: float = 0.0,
+                            commission_paid: float = 0.0,
+                            funding_paid: float = 0.0):
+        """Idempotently upgrade a closed trade's PnL to exchange truth.
+
+        Used by the PnL audit sweep (PR C). Mutates the EXISTING snapshot in
+        place and rewrites the journal — no duplicate entry row (the bug from
+        re-running record_entry+record_exit). No-op if trade_id is unknown.
+        """
+        snap = self.get(trade_id)
+        if not snap:
+            log.warning(f"update_realized_pnl: {trade_id} not in journal — skip")
+            return
+        snap.realized_pnl = realized_pnl
+        snap.realized_pnl_pct = (
+            (realized_pnl / (snap.entry_price * snap.position_size)) * 100
+            if snap.position_size * snap.entry_price > 0 else 0
+        )
+        snap.is_winner = realized_pnl > 0
+        snap.pnl_source = pnl_source
+        snap.realized_pnl_exchange = realized_pnl_exchange
+        snap.commission_paid = commission_paid
+        snap.funding_paid = funding_paid
+        self._persist(snap)
+        log.info(f"📝 Journal PnL reconciled: {trade_id} → ${realized_pnl:+.2f} [{pnl_source}]")
 
     def attach_lessons(self, trade_id: str, error_tags: List[str], lessons: List[str]):
         """Post-mortem analiz sonuçlarını ekle."""

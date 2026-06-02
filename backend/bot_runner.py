@@ -217,6 +217,11 @@ class BotRunner:
             max_entry_drift_pct=self.cfg.get("safety", {}).get("max_entry_drift_pct", 0.0),
         )
 
+        # PR C — periodic PnL audit sweep config.
+        _safety = self.cfg.get("safety", {})
+        self.order_mgr.enable_pnl_audit = bool(_safety.get("enable_pnl_audit", True))
+        self.order_mgr.pnl_audit_every_cycles = int(_safety.get("pnl_audit_every_cycles", 20))
+
         # PR #S6 wiring (hotfix): instantiate SetupStateStore when smc_version=v2.
         # Inert default (smc_version=v1 or engine block absent): setup_state_store=None
         # → all v2 hooks short-circuit per PR #67 contract.
