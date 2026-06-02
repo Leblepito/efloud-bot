@@ -72,7 +72,7 @@ class AgentTeam:
         if client is None:
             client = GeminiClient(
                 api_key=self.cfg.get("api_key"),
-                model=self.cfg.get("model", "gemini-3.1-flash"),
+                model=self.cfg.get("model", "gemini-3.5-flash"),
             )
         self.client = client
 
