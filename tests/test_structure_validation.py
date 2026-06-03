@@ -6,15 +6,11 @@ from engine.signals import validate_signal_with_gemini
 def test_validate_signal_high_confidence():
     mock_resp = MagicMock()
     mock_resp.status_code = 200
+    # Anthropic /v1/messages response shape (default provider is now Claude).
     mock_resp.json.return_value = {
-        "candidates": [
-            {
-                "content": {
-                    "parts": [
-                        {"text": '{"valid": true, "confidence": 0.85, "reasoning": "High volume institutional CHoCH"}'}
-                    ]
-                }
-            }
+        "content": [
+            {"type": "text",
+             "text": '{"valid": true, "confidence": 0.85, "reasoning": "High volume institutional CHoCH"}'}
         ]
     }
 
@@ -44,14 +40,9 @@ def test_validate_signal_low_confidence_filtered():
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
-        "candidates": [
-            {
-                "content": {
-                    "parts": [
-                        {"text": '{"valid": false, "confidence": 0.35, "reasoning": "Retail liquidity trap"}'}
-                    ]
-                }
-            }
+        "content": [
+            {"type": "text",
+             "text": '{"valid": false, "confidence": 0.35, "reasoning": "Retail liquidity trap"}'}
         ]
     }
 

@@ -32,11 +32,10 @@ import logging
 log = logging.getLogger("efloud.alerter.formatter")
 
 def format_alert_with_ai(raw_text: str, severity: str, alert_key: str) -> str:
-    """Uses Gemini API with response_schema to structure alerts. Fallback to raw_text on failure."""
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        return raw_text
-
+    """Structure alerts via the advisory LLM (default Claude, gemini fallback via
+    ``LLM_PROVIDER``). Falls back to ``raw_text`` on any failure (no key, HTTP,
+    parse) — the shared client returns ``{}`` and parsing/fence-stripping is
+    handled there, so a broken LLM never drops an operator alert."""
     # Determine event type from alert_key
     event_type = "overseer"
     for prefix in ["breaker", "health", "trade"]:
@@ -56,7 +55,7 @@ def format_alert_with_ai(raw_text: str, severity: str, alert_key: str) -> str:
     Raw Alert: "{raw_text}"
     Severity: "{severity}"
     Event Type: "{event_type}"
-    
+
     Output exactly a JSON object conforming to this schema:
     {{
       "emoji": "Single emoji describing the event",
@@ -70,31 +69,13 @@ def format_alert_with_ai(raw_text: str, severity: str, alert_key: str) -> str:
     Do not include any backticks or markdown, just raw JSON.
     """
 
-    # Real v1beta alias (A1 fix); keep in sync with engine DEFAULT_MODEL.
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-        }
-    }
-
     try:
-        resp = httpx.post(url, headers=headers, json=payload, timeout=8.0)
-        if resp.status_code == 200:
-            data = resp.json()
-            raw_json = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            
-            if raw_json.startswith("```"):
-                lines = raw_json.split("\n")
-                raw_json = "\n".join([line for line in lines if not line.startswith("```")])
-                
-            parsed = json.loads(raw_json)
+        # Lazy import: the alerter shares the bot image, so engine is importable.
+        from engine.agents.llm import make_llm_client
+        parsed = make_llm_client().complete_json(prompt, timeout=8.0)
+        if parsed:
             alert = StructuredAlert(**parsed)
             return render_alert_html(alert)
-        else:
-            log.warning(f"Gemini API formatting error {resp.status_code}: {resp.text}")
     except Exception as e:
         log.warning(f"Failed to format alert with AI, falling back to raw: {e}")
 
