@@ -1,0 +1,11 @@
+{
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "invalid_argument",
+      "message": "invalid connector IDs: [942ea72c-09f6-46f0-b4d3-f9890a6edbc5]"
+    },
+    "ok": false,
+    "request_id": "61d19bc18087c0181be11a3a4a113afd"
+  }
+}

@@ -73,6 +73,8 @@
 | ✅ 3.5 | Forex adapter | `ExchangeAdapter` protocol + MT5/OANDA concrete impl | TAMAMLANDI — ExchangeAdapter Protocol, MT5Client ve OandaClient concrete FX adapter'ları ve unit testleri yazıldı (2026-05-26) |
 | ✅ 3.6 | Hedge Mode & Cross Margin | Çift yönlü LONG/SHORT pozisyon açma (Hedge Mode) ve Cross Margin desteği | TAMAMLANDI — Çift yönlü paralel emirler ve marjin geçişi tamamlandı (2026-05-26) |
 | ✅ 3.7 | Trade-Horizon Profiles | scalp/mid/long profilleri ile fail-fast monotonic guard ve Pine Script v6 dropdown/uyarı entegrasyonu | TAMAMLANDI — scalp, mid ve long (1h/8h/1w) profilleri, 14 passed unit test ve Pine warnings eklendi (2026-05-31) |
+| ✅ 3.8 | SMC Chart Overlays & Controls | SMC yapılarını (BOS/ChoCh, OB, FVG, Premium/Discount, PDH/PDL) ve bot kontrol aksiyonlarını (START, STOP, RESTART, KILL SWITCH) içeren görsel console entegrasyonu | TAMAMLANDI — Client-side overlay primitive'leri eklendi, WS baglantı status ve Kill Switch indicator pulse entegre edildi (2026-06-03) |
+| 🔄 3.9 | SMC Backend Telemetry Sync | Frontend'deki client-side SMC hesaplamalarını backend'in (/api/signals/smc) gerçek SMC çıktıları ile senkronize etmek | PLANLANDI — Client-side çizimler hazır, sırada backend SMC verisiyle senkronizasyon var. |
 
 
 

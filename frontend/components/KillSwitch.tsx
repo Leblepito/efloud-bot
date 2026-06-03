@@ -148,14 +148,15 @@ export function KillSwitch() {
           bg-bg
           font-mono text-[11px] tracking-widest text-accent-red
           uppercase select-none
-          transition-colors
+          transition-all duration-150 ease-out active:scale-[0.97]
           hover:bg-accent-red/10
           disabled:opacity-50 disabled:cursor-wait
           group
         "
       >
         {/* corner cuts via clip-path */}
-        <span className="relative z-10">
+        <span className="relative z-10 flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent-red dot-breathe" />
           {busy
             ? "Halting…"
             : holding

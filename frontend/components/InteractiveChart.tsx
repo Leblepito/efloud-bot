@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createChart, ColorType, LineStyle, IChartApi, ISeriesApi, CandlestickSeries, HistogramSeries, createSeriesMarkers } from "lightweight-charts";
+import { SmcOverlayPrimitive, computeSMC } from "./smcOverlay";
 import { usePositions } from "@/hooks/usePositions";
 import { useOrders } from "@/hooks/useOrders";
 import { useConfig } from "@/hooks/useConfig";
 import { useHistory } from "@/hooks/useHistory";
+import { useSmcSignals } from "@/hooks/useSmcSignals";
 import { n } from "@/lib/format";
 
 // TradingView-style Long/Short Position Drawing Overlay Primitive
@@ -312,6 +314,10 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
   const predictedFundingSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const markersPluginRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const candlesRef = useRef<any[]>([]);
+  const smcPrimitiveRef = useRef<any>(null);
+  const [showSMC, setShowSMC] = useState(true);
+  const [wsConnected, setWsConnected] = useState(false);
 
   const { data: positions } = usePositions();
   const { data: orders } = useOrders();
@@ -323,6 +329,8 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showFundingRate, setShowFundingRate] = useState(true);
+
+  const { data: serverSmc } = useSmcSignals(activeSymbol, timeframe, showSMC);
 
   // HUD Legend / Floating Overlays States
   const [latestCandle, setLatestCandle] = useState<any | null>(null);
@@ -540,6 +548,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
         }));
 
         candleSeries.setData(cdata);
+        candlesRef.current = cdata;
 
         // Update latest candle HUD state
         if (cdata.length > 0) {
@@ -635,6 +644,10 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     const wsUrl = `wss://fstream.binance.com/ws/${activeSymbol.toLowerCase()}@kline_${timeframe}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
+    setWsConnected(false);
+    ws.onopen = () => setWsConnected(true);
+    ws.onclose = () => setWsConnected(false);
+    ws.onerror = () => setWsConnected(false);
 
     ws.onmessage = (event) => {
       try {
@@ -809,6 +822,31 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     };
   }, [positions, orders, activeSymbol, selectedTrade, isLoading]);
 
+  // 8b. Calculated SMC overlay (BOS/ChoCh · OB · FVG · premium/discount · PDH/PDL)
+  useEffect(() => {
+    const series = candleSeriesRef.current;
+    if (!series) return;
+    const detach = () => {
+      if (smcPrimitiveRef.current) {
+        try { (series as any).detachPrimitive(smcPrimitiveRef.current); } catch {}
+        smcPrimitiveRef.current = null;
+      }
+    };
+    detach();
+    if (showSMC) {
+      const hasServer = serverSmc && (serverSmc.structure?.length || serverSmc.obs?.length || serverSmc.fvgs?.length);
+      const smc = hasServer
+        ? serverSmc
+        : (candlesRef.current.length > 30 ? computeSMC(candlesRef.current, timeframe) : null);
+      if (smc) {
+        const prim = new SmcOverlayPrimitive(smc);
+        (series as any).attachPrimitive(prim);
+        smcPrimitiveRef.current = prim;
+      }
+    }
+    return detach;
+  }, [showSMC, isLoading, activeSymbol, timeframe, serverSmc]);
+
   // 9. Render historical trade markers (ENTRY/EXIT)
   useEffect(() => {
     const candleSeries = candleSeriesRef.current;
@@ -911,59 +949,86 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
             <span className="text-[10px] uppercase tracking-widest text-text-secondary block mb-1">
               Indicators
             </span>
-            <button
-              onClick={() => setShowFundingRate(!showFundingRate)}
-              className={`px-3 py-1.5 text-xs transition-colors border rounded-sm ${
-                showFundingRate
-                  ? "bg-accent-green/10 text-accent-green border-accent-green/50 font-bold"
-                  : "bg-bg-surface text-text-muted hover:bg-bg-elevated border-border"
-              }`}
-            >
-              📊 Funding Rate (Coinalyze)
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowFundingRate(!showFundingRate)}
+                className={`px-3 py-1.5 text-xs transition-colors border ${
+                  showFundingRate
+                    ? "bg-accent-green/10 text-accent-green border-accent-green/50 font-bold"
+                    : "bg-bg-surface text-text-muted hover:bg-bg-elevated border-border"
+                }`}
+              >
+                Funding Rate
+              </button>
+              <button
+                onClick={() => setShowSMC(!showSMC)}
+                className={`px-3 py-1.5 text-xs transition-colors border ${
+                  showSMC
+                    ? "bg-accent-green/10 text-accent-green border-accent-green/50 font-bold"
+                    : "bg-bg-surface text-text-muted hover:bg-bg-elevated border-border"
+                }`}
+              >
+                SMC Overlay
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="text-right flex items-center gap-3">
-          {isLoading && (
-            <div className="text-[11px] text-accent-green animate-pulse flex items-center gap-1.5">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-green"></span>
+          {isLoading ? (
+            <div className="text-[11px] text-accent-green flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-green dot-breathe" />
               loading binance klines…
             </div>
-          )}
-          {!isLoading && (
+          ) : wsConnected ? (
             <div className="text-[11px] text-text-muted flex items-center gap-1.5">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-green animate-ringExpand"></span>
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-green ws-beat" />
               Binance live feed connected
+            </div>
+          ) : (
+            <div className="text-[11px] text-accent-amber flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-amber dot-breathe" />
+              reconnecting to binance…
             </div>
           )}
         </div>
       </div>
 
       {/* Main Chart Relative Container */}
-      <div className="relative flex-1 min-h-0 w-full rounded-sm overflow-hidden border border-border bg-[#09090b]">
+      <div className="relative flex-1 min-h-0 w-full overflow-hidden border border-border bg-[#09090b]">
         
         {/* Floating Legend Overlays */}
         {/* 1. Candlestick HUD */}
         {displayCandle && (
-          <div className="absolute top-2 left-3 z-10 font-mono text-[9px] bg-zinc-950/80 backdrop-blur-md px-2 py-1 border border-zinc-800/50 rounded flex flex-wrap items-center gap-x-2 gap-y-0.5 text-zinc-400 select-none">
-            <span className="text-zinc-200 font-bold">{activeSymbol} · {timeframe} · Binance Futures</span>
-            <span className="w-[1px] h-3 bg-zinc-800 hidden sm:inline" />
-            <span>O:<span className={displayCandle.close >= displayCandle.open ? "text-emerald-400 font-bold ml-0.5" : "text-rose-400 font-bold ml-0.5"}>{displayCandle.open.toFixed(2)}</span></span>
-            <span>H:<span className={displayCandle.close >= displayCandle.open ? "text-emerald-400 font-bold ml-0.5" : "text-rose-400 font-bold ml-0.5"}>{displayCandle.high.toFixed(2)}</span></span>
-            <span>L:<span className={displayCandle.close >= displayCandle.open ? "text-emerald-400 font-bold ml-0.5" : "text-rose-400 font-bold ml-0.5"}>{displayCandle.low.toFixed(2)}</span></span>
-            <span>C:<span className={displayCandle.close >= displayCandle.open ? "text-emerald-400 font-bold ml-0.5" : "text-rose-400 font-bold ml-0.5"}>{displayCandle.close.toFixed(2)}</span></span>
-            <span className={displayCandle.change >= 0 ? "text-emerald-400 font-bold ml-1" : "text-rose-400 font-bold ml-1"}>
+          <div className="absolute top-2 left-3 z-10 font-mono text-[9px] bg-bg-elevated/90 px-2 py-1 border border-border flex flex-wrap items-center gap-x-2 gap-y-0.5 text-text-muted select-none">
+            <span className="text-text-primary font-bold">{activeSymbol} · {timeframe} · Binance Futures</span>
+            <span className="w-[1px] h-3 bg-border hidden sm:inline" />
+            <span>O:<span className={displayCandle.close >= displayCandle.open ? "text-accent-green font-bold ml-0.5" : "text-accent-red font-bold ml-0.5"}>{displayCandle.open.toFixed(2)}</span></span>
+            <span>H:<span className={displayCandle.close >= displayCandle.open ? "text-accent-green font-bold ml-0.5" : "text-accent-red font-bold ml-0.5"}>{displayCandle.high.toFixed(2)}</span></span>
+            <span>L:<span className={displayCandle.close >= displayCandle.open ? "text-accent-green font-bold ml-0.5" : "text-accent-red font-bold ml-0.5"}>{displayCandle.low.toFixed(2)}</span></span>
+            <span>C:<span className={displayCandle.close >= displayCandle.open ? "text-accent-green font-bold ml-0.5" : "text-accent-red font-bold ml-0.5"}>{displayCandle.close.toFixed(2)}</span></span>
+            <span className={displayCandle.change >= 0 ? "text-accent-green font-bold ml-1" : "text-accent-red font-bold ml-1"}>
               {displayCandle.change >= 0 ? "+" : ""}{displayCandle.change.toFixed(2)} ({displayCandle.changePercent >= 0 ? "+" : ""}{displayCandle.changePercent.toFixed(2)}%)
             </span>
+            {showSMC && (
+              <>
+                <span className="w-[1px] h-3 bg-border hidden sm:inline" />
+                <span>SMC:<span className={`font-bold ml-0.5 uppercase ${
+                  serverSmc?.source === "engine" ? "text-accent-green" :
+                  serverSmc?.source === "heuristic" ? "text-blue-400" : "text-text-muted"
+                }`}>
+                  {serverSmc?.source || (candlesRef.current.length > 30 ? "client" : "loading")}
+                </span></span>
+              </>
+            )}
           </div>
         )}
 
         {/* 2. Settled Funding Rate HUD */}
         {showFundingRate && displayFunding !== null && (
-          <div className="absolute top-[58%] left-3 z-10 font-mono text-[9px] bg-zinc-950/80 backdrop-blur-md px-2 py-1 border border-zinc-800/50 rounded flex items-center gap-1.5 text-zinc-400 select-none">
+          <div className="absolute top-[58%] left-3 z-10 font-mono text-[9px] bg-bg-elevated/90 px-2 py-1 border border-border flex items-center gap-1.5 text-text-muted select-none">
             <span>Aggregated Funding Rate (Settled):</span>
-            <span className={`font-bold ${displayFunding >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            <span className={`font-bold ${displayFunding >= 0 ? "text-accent-green" : "text-accent-red"}`}>
               {displayFunding >= 0 ? "+" : ""}{displayFunding.toFixed(5)}%
             </span>
           </div>
@@ -971,9 +1036,9 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
 
         {/* 3. Predicted Funding Rate HUD */}
         {showFundingRate && displayPredicted !== null && (
-          <div className="absolute top-[79%] left-3 z-10 font-mono text-[9px] bg-zinc-950/80 backdrop-blur-md px-2 py-1 border border-zinc-800/50 rounded flex items-center gap-1.5 text-zinc-400 select-none">
+          <div className="absolute top-[79%] left-3 z-10 font-mono text-[9px] bg-bg-elevated/90 px-2 py-1 border border-border flex items-center gap-1.5 text-text-muted select-none">
             <span>Predicted Funding Rate (Real-time):</span>
-            <span className={`font-bold ${displayPredicted >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            <span className={`font-bold ${displayPredicted >= 0 ? "text-accent-green" : "text-accent-red"}`}>
               {displayPredicted >= 0 ? "+" : ""}{displayPredicted.toFixed(5)}%
             </span>
           </div>
@@ -981,14 +1046,13 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
 
         {error && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-bg-elevated/90 p-6 text-center">
-            <span className="text-accent-red text-2xl mb-2">⚠️</span>
             <p className="text-text-primary text-sm font-mono max-w-md">{error}</p>
             <button
               onClick={() => {
                 setError(null);
                 setActiveSymbol((s) => s); // Force reload
               }}
-              className="mt-4 border border-border hover:border-text-secondary text-text-primary px-4 py-2 text-xs font-mono rounded-sm transition-colors"
+              className="mt-4 border border-border hover:border-text-secondary text-text-primary px-4 py-2 text-xs font-mono transition-colors"
             >
               Retry Connection
             </button>
