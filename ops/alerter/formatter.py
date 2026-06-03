@@ -70,7 +70,8 @@ def format_alert_with_ai(raw_text: str, severity: str, alert_key: str) -> str:
     Do not include any backticks or markdown, just raw JSON.
     """
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
+    # Real v1beta alias (A1 fix); keep in sync with engine DEFAULT_MODEL.
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],

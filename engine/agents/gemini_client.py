@@ -12,8 +12,10 @@ Behaviour contract (do not break without updating all callers):
     canonical fail-safe: the bot must NEVER crash because Gemini is down.
 
   * Model is pinned in config (``agent_team.model`` etc). The default
-    here is ``gemini-1.5-flash`` per the canonical plan; if you bump
-    the alias, also update the configs and re-test fail-safe.
+    here is ``gemini-2.0-flash`` (a real, callable v1beta alias). All
+    callers MUST reference ``DEFAULT_MODEL`` rather than hardcoding a
+    literal — a non-existent alias 404s on every call and silently
+    degrades the whole advisory layer to NEUTRAL (see A1 regression test).
 """
 
 from __future__ import annotations
@@ -31,9 +33,10 @@ GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
 
-# Canonical default. ``gemini-2.0-flash`` is also stable on the v1beta
-# endpoint as of 2026-06; switch via config when ready.
-DEFAULT_MODEL = "gemini-3.5-flash"
+# Canonical default — a REAL Gemini alias on the v1beta generateContent
+# endpoint. Do NOT pin a non-existent alias here (an earlier invalid alias
+# 404'd on every call). Override per deployment via ``agent_team.model``.
+DEFAULT_MODEL = "gemini-2.0-flash"
 
 
 class GeminiClient:
