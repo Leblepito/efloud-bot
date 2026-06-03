@@ -164,6 +164,12 @@ def _df_to_compact_csv(df: pd.DataFrame, limit: int = 20) -> str:
     return "\n".join(lines)
 
 
+# Hot-path budget for the synchronous, advisory structure-validation call.
+# Deliberately short so a slow/reasoning backend cannot stall the trading loop;
+# fast models answer within it, slow ones time out → pass-through.
+_STRUCTURE_VALIDATION_TIMEOUT_SEC = 5.0
+
+
 def validate_signal_with_gemini(
     symbol: str,
     direction: str,
@@ -233,11 +239,18 @@ Do not include any markdown backticks or extra text, just the raw JSON.
     # self-resolves its provider's key from env (never pass a Gemini key to
     # a Claude client — production leaves api_key unset here).
     client = make_llm_client({"api_key": api_key} if api_key else {})
-    result = client.complete_json(prompt, timeout=10.0)
+    # Fail-FAST on the hot signal path: structure validation is advisory and
+    # synchronous, so a slow backend would stall the trading loop. A fast model
+    # (claude-haiku / gemini-flash, ~2-4s) answers within budget; a reasoning
+    # model (e.g. MiniMax-M2, ~19s) intentionally times out → pass-through. This
+    # makes validation adaptive without ever blocking a signal.
+    result = client.complete_json(prompt, timeout=_STRUCTURE_VALIDATION_TIMEOUT_SEC)
 
     if not result:
-        # Fail-safe: no key, HTTP error, parse failure — all converge here.
-        log.warning("Gemini signal validation unavailable — falling back to pass-through.")
+        # Expected degradation (no key, slow/reasoning backend, HTTP/parse error).
+        # Advisory only → pass the signal through unchanged. INFO, not WARNING:
+        # this is a designed fallback, not an operational fault.
+        log.info("LLM structure validation unavailable — advisory pass-through.")
         return {"valid": True, "confidence": 1.0,
                 "reasoning": "Fallback due to API failure or timeout."}
 
@@ -245,7 +258,7 @@ Do not include any markdown backticks or extra text, just the raw JSON.
     # returned something missing the keys, the SignalValidatorAgent
     # contract is "we don't know" — same fallback.
     if not all(k in result for k in ("valid", "confidence", "reasoning")):
-        log.warning(f"Gemini validation returned unexpected schema: {result!r}")
+        log.warning(f"LLM structure validation returned unexpected schema: {result!r}")
         return {"valid": True, "confidence": 1.0,
                 "reasoning": "Fallback due to unexpected LLM schema."}
 
