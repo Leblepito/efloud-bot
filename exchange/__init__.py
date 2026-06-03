@@ -1119,15 +1119,20 @@ class OrderManager:
             confluence_details=confluence_details,
         )
         self.positions.append(pos)
-        self._persist()
         # PR B — confirm SL/TP actually landed on the exchange within seconds.
         # May market-close + remove pos from self.positions if SL can't be
         # confirmed (returns rolled_back); return None so callers treat the
         # entry as not-opened (same contract as the entry-drift reject).
+        # C3: persist AFTER verify, not before. Persisting before verify meant a
+        # crash in the verify window (~verify_delay×attempts) left the on-disk
+        # state claiming a possibly-bare position is open+protected. Now only a
+        # verified-protected position is written; the rollback path persists its
+        # own flattened state inside _verify_and_repair_protection's finally.
         verify_result = self._verify_and_repair_protection(pos)
         if verify_result.get("rolled_back"):
             self._emit("position_rolled_back", pos)
             return None
+        self._persist()
         self._emit("position_opened", pos)
         return pos
 
