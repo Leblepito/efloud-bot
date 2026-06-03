@@ -183,13 +183,9 @@ def validate_signal_with_gemini(
     ``{"valid": True, "confidence": 1.0, ...}`` so downstream signal
     generation is not blocked.
     """
-    if not api_key:
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-
-    if not api_key:
-        # Graceful degradation fallback if no API key is configured
-        log.warning("Gemini API key not found. Skipping structure validation (degrades gracefully).")
-        return {"valid": True, "confidence": 1.0, "reasoning": "Fallback due to missing API key."}
+    # Provider + key are resolved by the shared LLM factory (default Claude,
+    # gemini fallback via LLM_PROVIDER). A no-key / outage converges on the
+    # pass-through fallback below — the deterministic signal is never blocked.
 
     # Format timeframes
     htf_csv = _df_to_compact_csv(df_htf, limit=20)
@@ -228,13 +224,15 @@ Do not include any markdown backticks or extra text, just the raw JSON.
     if cached:
         return cached
 
-    # Canonical A0: delegate the HTTP call to the shared GeminiClient.
+    # Delegate the HTTP call to the shared provider factory (default Claude).
     # Imported lazily to keep engine.signals importable in environments
     # where engine.agents is not on the path (legacy unit tests).
-    from engine.agents.gemini_client import GeminiClient
+    from engine.agents.llm import make_llm_client
 
-    # Use the canonical DEFAULT_MODEL (omit the kwarg) — never pin a literal.
-    client = GeminiClient(api_key=api_key)
+    # An explicit api_key is threaded as an override; otherwise the client
+    # self-resolves its provider's key from env (never pass a Gemini key to
+    # a Claude client — production leaves api_key unset here).
+    client = make_llm_client({"api_key": api_key} if api_key else {})
     result = client.complete_json(prompt, timeout=10.0)
 
     if not result:

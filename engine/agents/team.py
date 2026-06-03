@@ -32,7 +32,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional
 
-from .gemini_client import DEFAULT_MODEL, GeminiClient
+from .gemini_client import DEFAULT_MODEL, GeminiClient  # noqa: F401 (back-compat type/import)
+from .llm import make_llm_client
 from .roles import (
     OverseerAgent,
     PostMortemAgent,
@@ -70,10 +71,10 @@ class AgentTeam:
         self.state_dir.mkdir(parents=True, exist_ok=True)
 
         if client is None:
-            client = GeminiClient(
-                api_key=self.cfg.get("api_key"),
-                model=self.cfg.get("model", DEFAULT_MODEL),
-            )
+            # Provider resolved from cfg["provider"] → LLM_PROVIDER env → claude.
+            # Tests still inject an explicit client; production builds the
+            # configured backend (default Claude Haiku).
+            client = make_llm_client(self.cfg)
         self.client = client
 
         # Sub-agents. ``self.overseer`` is intentionally public: the test

@@ -695,19 +695,22 @@ class BotRunner:
         await asyncio.sleep(5.0)
         
         while not self.stopped:
-            api_key = os.environ.get("GEMINI_API_KEY") or self.cfg.get("gemini", {}).get("api_key")
-            if not api_key:
-                log.warning("⚠️ GEMINI_API_KEY not configured. Skipping periodic sentiment analysis update.")
+            # Provider resolved by the LLM factory (default Claude). Skip only
+            # when no provider key is available at all.
+            llm_cfg = self.cfg.get("agent_team") or self.cfg.get("llm") or {}
+            has_key = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("GEMINI_API_KEY"))
+            if not has_key:
+                log.warning("⚠️ No LLM API key configured. Skipping periodic sentiment analysis update.")
             else:
                 try:
-                    log.info("♻️ Triggering Gemini AI macro sentiment analysis...")
-                    res = await fetch_and_save_sentiment(api_key=api_key)
+                    log.info("♻️ Triggering macro sentiment analysis (LLM)...")
+                    res = await fetch_and_save_sentiment(llm_config=llm_cfg)
                     log.info(f"✅ AI Sentiment updated: {res.get('macro_sentiment', 'NEUTRAL')} (FGI: {res.get('fear_and_greed', 50)})")
                     # reload orchestrator's sentiment state in real time!
                     if self.orch:
                         self.orch.load_ai_sentiment()
                 except Exception as e:
-                    log.error(f"❌ Error updating Gemini AI sentiment: {e}", exc_info=True)
+                    log.error(f"❌ Error updating AI sentiment: {e}", exc_info=True)
             
             # Wait 4 hours (14400 seconds), checking every 10 seconds for stopped flag
             for _ in range(1440):

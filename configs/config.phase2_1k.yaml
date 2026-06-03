@@ -123,6 +123,15 @@ operation:
   state_dir: ./state_1k
   reports_dir: ./reports_1k
 
+# ── Advisory LLM backend (sentiment + structure validation + agent team) ──
+# Provider: claude (default) | gemini. Key from the provider's env var
+# (ANTHROPIC_API_KEY / GEMINI_API_KEY) — never in config. Global revert lever:
+# set env LLM_PROVIDER=gemini to flip every call site at once.
+# Advisory only & fail-safe: any LLM outage → deterministic fallback, never blocks a trade.
+llm:
+  provider: claude
+  model: claude-haiku-4-5-20251001    # fast + cheap; advisory needs no heavy reasoning
+
 # ── Safety: agresif (bütün cüzdan kullanılabilir, %10 daily loss tolerans) ──
 safety:
   daily_loss_limit_pct: 10.0          # $200 günlük max kayıp ($2000 × 10%)
