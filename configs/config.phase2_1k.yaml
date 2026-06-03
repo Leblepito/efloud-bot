@@ -124,13 +124,14 @@ operation:
   reports_dir: ./reports_1k
 
 # ── Advisory LLM backend (sentiment + structure validation + agent team) ──
-# Provider: claude (default) | gemini. Key from the provider's env var
-# (ANTHROPIC_API_KEY / GEMINI_API_KEY) — never in config. Global revert lever:
-# set env LLM_PROVIDER=gemini to flip every call site at once.
+# Provider: minimax (active) | claude | gemini. Key from the provider's env var
+# (MINIMAX_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY) — never in config.
+# Global lever: env LLM_PROVIDER=<provider> flips every call site at once
+# (incl. the no-config ones: structure validation + alerter formatter).
 # Advisory only & fail-safe: any LLM outage → deterministic fallback, never blocks a trade.
 llm:
-  provider: claude
-  model: claude-haiku-4-5-20251001    # fast + cheap; advisory needs no heavy reasoning
+  provider: minimax
+  model: MiniMax-M2.7-highspeed       # fast low-latency variant; advisory needs no heavy reasoning
 
 # ── Safety: agresif (bütün cüzdan kullanılabilir, %10 daily loss tolerans) ──
 safety:
