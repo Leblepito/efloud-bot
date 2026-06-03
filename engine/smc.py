@@ -214,8 +214,11 @@ class SMCEngine:
                         cnt += 1
                     elif cnt > 0: break
                 if cnt >= 1 and ot > ob:
+                    # C9: only PAST swings (0 < i - s.idx < 30). Using abs()
+                    # also matched swings up to ~30 bars in the FUTURE of the
+                    # breakout, which don't exist live → backtest/live divergence.
                     ns = any(abs(ob - s.price) / s.price < 0.015
-                             for s in sl if abs(s.idx - i) < 30)
+                             for s in sl if 0 < i - s.idx < 30)
                     out.append(OrderBlock(
                         round(ot, 8), round(ob, 8), round((ot + ob) / 2, 8),
                         i - cnt, ts[i - cnt] if (i - cnt) < len(ts) else "",
@@ -235,8 +238,9 @@ class SMCEngine:
                         cnt += 1
                     elif cnt > 0: break
                 if cnt >= 1 and ot > ob:
+                    # C9: only PAST swings (0 < i - s.idx < 30) — see BULL note above.
                     ns = any(abs(ot - s.price) / s.price < 0.015
-                             for s in sh if abs(s.idx - i) < 30)
+                             for s in sh if 0 < i - s.idx < 30)
                     out.append(OrderBlock(
                         round(ot, 8), round(ob, 8), round((ot + ob) / 2, 8),
                         i - cnt, ts[i - cnt] if (i - cnt) < len(ts) else "",
