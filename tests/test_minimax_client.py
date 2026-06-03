@@ -74,3 +74,27 @@ def test_strips_markdown_fences(monkeypatch):
 
 def test_default_model_is_fast_variant():
     assert "M2.7" in MiniMaxClient(api_key="k").model
+
+
+def test_strips_reasoning_think_block(monkeypatch):
+    """MiniMax-M2 is a reasoning model: it emits <think>...</think> before the
+    answer. The client must drop the think block and parse the trailing JSON."""
+    raw = ('<think>\nThe user wants JSON. I should output the verdict.\n</think>\n\n'
+           '{"verdict": "ACCEPT", "confidence": 0.6}')
+    monkeypatch.setattr(mc.httpx, "post", lambda url, **kw: _fake_openai_response(raw))
+    assert MiniMaxClient(api_key="fake-key").complete_json("x") == {
+        "verdict": "ACCEPT", "confidence": 0.6}
+
+
+def test_extracts_json_amid_prose(monkeypatch):
+    """Even without a think block, tolerate stray prose around the JSON object."""
+    raw = 'Here is the result: {"valid": true, "confidence": 0.9} — done.'
+    monkeypatch.setattr(mc.httpx, "post", lambda url, **kw: _fake_openai_response(raw))
+    assert MiniMaxClient(api_key="fake-key").complete_json("x") == {
+        "valid": True, "confidence": 0.9}
+
+
+def test_default_max_tokens_has_reasoning_budget():
+    # Reasoning models burn tokens on the think block before the answer; the
+    # default must leave room for the JSON to actually appear.
+    assert MiniMaxClient(api_key="k").max_tokens >= 1500

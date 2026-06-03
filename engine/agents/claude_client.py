@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Any, Dict, Optional
 
 import httpx
@@ -41,15 +42,31 @@ _WARN_EVERY = 20
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
-    """Parse a JSON object out of Claude's text, tolerating ```json fences."""
+    """Parse a JSON object out of an LLM's text.
+
+    Tolerates, in order: reasoning models that prepend a ``<think>…</think>``
+    block (e.g. MiniMax-M2), ```json fences, and stray prose around the object
+    (fallback: parse the first ``{…}`` span). Raises if no JSON is present —
+    the caller's ``complete_json`` converts that to the canonical ``{}``.
+    """
     s = text.strip()
+    # Reasoning models emit a think block before the answer — drop it.
+    if "<think>" in s:
+        s = re.sub(r"<think>.*?</think>", "", s, flags=re.DOTALL).strip()
     if s.startswith("```"):
         # strip a leading ```json / ``` fence and the trailing ```
         s = s.split("```", 2)[1] if s.count("```") >= 2 else s.strip("`")
         if s.lstrip().lower().startswith("json"):
             s = s.lstrip()[4:]
         s = s.strip().rstrip("`").strip()
-    return json.loads(s)
+    try:
+        return json.loads(s)
+    except Exception:
+        # Fallback: pull the first balanced-looking {...} span out of prose.
+        m = re.search(r"\{.*\}", s, flags=re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        raise
 
 
 class ClaudeClient:

@@ -49,9 +49,13 @@ class MiniMaxClient:
         api_key: Optional[str] = None,
         model: str = DEFAULT_MODEL,
         *,
-        timeout: float = 20.0,
-        max_tokens: int = 1024,
+        timeout: float = 30.0,
+        max_tokens: int = 2048,
     ) -> None:
+        # max_tokens is generous on purpose: M2.x reasoning models spend tokens
+        # on a <think> block before the JSON answer; too small a budget truncates
+        # the answer (finish_reason=length → {}). timeout likewise allows for the
+        # reasoning latency. _extract_json strips the think block.
         self.api_key = api_key or os.getenv("MINIMAX_API_KEY")
         self.model = model
         self.timeout = float(timeout)
