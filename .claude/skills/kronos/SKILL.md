@@ -33,6 +33,20 @@ python3 .claude/skills/kronos/scripts/run_kronos.py <TICKER> [period] [interval]
 
 ---
 
+## efloud-bot: profile-aware multi-TF cascade
+
+When the user asks for a **cascade**, a **multi-timeframe** read, or to align Kronos with
+the bot's trade profile (e.g. "kronos cascade BTC", "run kronos across timeframes for ETH"),
+follow **`PLAYBOOK.md`** in this skill directory. It maps the bot's loaded profile
+(`scalp`/`mid`/`long`, read from `config.yaml` → `timeframes.profile`) to the correct
+per-layer Kronos commands, accounts for yfinance limits (no `4h`/`8h`/`12h`; intraday
+history caps), and prescribes the **3-run consensus** ritual (output is non-deterministic,
+`sample_count=1`) plus the HTF→MTF→LTF decision cascade. Symbols mirror
+`config.yaml` → `symbols.fixed_core` (`SYM/USDT` → `SYM-USD`). Kronos is a confirm/veto
+layer on top of the bot's own SMC signal — never a primary trigger, never wired to live orders.
+
+---
+
 ## First run
 
 First time the skill runs, it auto-installs everything. This takes 3-7 minutes and prints status to stderr. You will see:
