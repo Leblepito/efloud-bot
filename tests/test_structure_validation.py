@@ -3,6 +3,34 @@ from unittest.mock import patch, MagicMock
 import pandas as pd
 from engine.signals import validate_signal_with_gemini
 
+
+def _df():
+    idx = pd.date_range("2026-05-26", periods=20, freq="15min")
+    return pd.DataFrame(
+        {"open": [10.0]*20, "high": [11.0]*20, "low": [9.0]*20, "close": [10.5]*20, "volume": [1000]*20},
+        index=idx,
+    )
+
+
+def test_validation_uses_fail_fast_timeout():
+    """Hot-path validation must cap its timeout so a slow reasoning backend
+    cannot stall the trading loop. Capture the timeout handed to the client."""
+    captured = {}
+
+    class _FakeClient:
+        def complete_json(self, prompt, *, timeout=None):
+            captured["timeout"] = timeout
+            return {}  # force pass-through; we only care about the timeout
+
+    with patch("engine.agents.llm.make_llm_client", return_value=_FakeClient()), \
+         patch("engine.signals._struct_cache.get", return_value=None):
+        validate_signal_with_gemini(
+            symbol="BTC/USDT", direction="LONG", entry=10.5, sl=9.0, tp=12.0,
+            df_htf=_df(), df_mtf=_df(), df_entry=_df(),
+        )
+    assert captured["timeout"] is not None
+    assert captured["timeout"] <= 5.0, "validation must fail-fast so it can't block the loop"
+
 def test_validate_signal_high_confidence():
     mock_resp = MagicMock()
     mock_resp.status_code = 200
