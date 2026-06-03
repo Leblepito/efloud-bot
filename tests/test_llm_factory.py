@@ -8,11 +8,29 @@ duck-type the ``complete_json(prompt) -> dict`` contract.
 from engine.agents.llm import make_llm_client
 from engine.agents.claude_client import ClaudeClient
 from engine.agents.gemini_client import GeminiClient
+from engine.agents.minimax_client import MiniMaxClient
 
 
 def test_default_is_claude():
     client = make_llm_client({})
     assert isinstance(client, ClaudeClient)
+
+
+def test_explicit_minimax():
+    client = make_llm_client({"provider": "minimax"})
+    assert isinstance(client, MiniMaxClient)
+    assert "M2.7" in client.model
+
+
+def test_minimax_model_override():
+    client = make_llm_client({"provider": "minimax", "model": "MiniMax-M2.5"})
+    assert isinstance(client, MiniMaxClient)
+    assert client.model == "MiniMax-M2.5"
+
+
+def test_minimax_via_env_lever(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "minimax")
+    assert isinstance(make_llm_client(), MiniMaxClient)
 
 
 def test_explicit_claude():
