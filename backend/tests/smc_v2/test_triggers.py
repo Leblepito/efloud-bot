@@ -1,5 +1,6 @@
 """Tests for engine.smc_v2.triggers — pure CHoCH → SetupCandidate generator."""
 from dataclasses import dataclass
+import pandas as pd
 import pytest
 
 from engine.smc import Swing, StructBreak, FVG
@@ -18,9 +19,11 @@ class TestGenerateSetupCandidatesShort:
 
     def test_emits_candidate_for_aligned_choch(self):
         from engine.smc_v2.triggers import generate_setup_candidates
+        trigger_iso = "2026-01-01T06:15:00+00:00"
+        trigger_ms = int(pd.Timestamp(trigger_iso).timestamp() * 1000)
         ltf_brks = [
             StructBreak(kind="CHoCH", direction="BEAR", price=100.0,
-                        idx=25, ts="t25", broken_level=95.0),
+                        idx=25, ts=trigger_iso, broken_level=95.0),
         ]
         htf_swings = {
             "swing_highs": [
@@ -52,7 +55,12 @@ class TestGenerateSetupCandidatesShort:
         assert c.symbol == "BTC/USDT"
         assert c.direction == "SHORT"
         assert c.trigger_price == 100.0
-        assert c.trigger_bar_ts == 25
+        # C6: trigger_bar_ts must be the CHoCH bar's ms-epoch timestamp (the axis
+        # confirm_entry's since_ts compares against), NOT the bar ordinal. Storing
+        # the ordinal (25) made confirm_entry's "only AFTER the trigger" guard dead
+        # code (ordinal << ms always → never skipped pre-trigger engulfings).
+        assert c.trigger_bar_ts == trigger_ms
+        assert c.trigger_bar_ts != 25  # not the ordinal
         assert c.htf_bias == "BEAR"
         assert c.htf_swing_anchor == 120.0
         assert c.target_zone.low == 110.0
