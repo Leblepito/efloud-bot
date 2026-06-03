@@ -378,6 +378,26 @@ class SafeOrchestrator:
             "reasoning": "Fallback default due to load failure."
         }
 
+    def _estimate_size_notional_pct(self, balance, entry: float, sl: float) -> float:
+        """F1: estimate the position notional as % of balance using the SAME
+        sizer the open step uses, so the RiskReviewer agent sees a real notional
+        (not a hardcoded 0.0 → its notional-cap rule could never fire). Returns
+        0.0 when balance/entry are unavailable."""
+        if not balance or float(balance) <= 0 or entry <= 0:
+            return 0.0
+        try:
+            from risk import calc_position_size
+            risk_cfg = self.config.get("risk", {})
+            lev = self.config.get("exchange", {}).get("leverage", 1)
+            max_notional = self.config.get("safety", {}).get("max_position_notional_pct", 3.0)
+            size = calc_position_size(
+                float(balance), risk_cfg.get("risk_per_trade_pct", 1.0),
+                entry, sl, lev, max_notional_pct=max_notional,
+            )
+            return (size * entry) / float(balance) * 100.0
+        except Exception:
+            return 0.0
+
     def _persist_state(self):
         """State'i diske yaz."""
         if not self.persist:
@@ -825,6 +845,12 @@ class SafeOrchestrator:
             agent_team_review = None
             if self.agent_team is not None and self.agent_team.cfg.get("enabled", False):
                 try:
+                    # F1: estimate the notional % up-front (same sizer the open
+                    # step uses) so the RiskReviewer's "notional > 8% → REJECT"
+                    # rule can actually fire — previously hardcoded 0.0 (blind).
+                    notional_pct = self._estimate_size_notional_pct(
+                        balance, float(latest.entry), float(latest.sl)
+                    )
                     agent_team_review = self.agent_team.review_trade({
                         "symbol": symbol,
                         "direction": latest.direction,
@@ -835,19 +861,15 @@ class SafeOrchestrator:
                         "htf_bias": htf_bias,
                         "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
                         "rr": float(latest.rr1) if latest.rr1 else 0.0,
-                        "size_notional_pct": 0.0,  # sized later; refine in follow-up
+                        "size_notional_pct": notional_pct,
                     })
                     # Attach to signal so journal/DB can persist (canonical A7)
                     if isinstance(latest.meta, dict):
                         latest.meta["agent_review"] = agent_team_review
-                        # Mark the risk agent as notional-blind so downstream
-                        # consumers (post-mortem, dashboards) know the
-                        # "notional > 8% → REJECT" rule could not have fired
-                        # on this review. The fix is a 2-pass review
-                        # (post-sizing) — see engine.agents.agent-team-engineer
-                        # "Known limits". This flag is a shadow-data safety
-                        # net, not a runtime fix.
-                        latest.meta["risk_review_was_notional_blind"] = True
+                        # F1: notional-blind only when the estimate was
+                        # unavailable (no balance) — otherwise the risk agent saw
+                        # a real notional and its cap rule could fire.
+                        latest.meta["risk_review_was_notional_blind"] = (notional_pct <= 0.0)
                     log.info(
                         f"🤖 AgentTeam[{symbol}] verdict={agent_team_review.get('team_verdict')} "
                         f"score={agent_team_review.get('score', 0.0):.2f}"
