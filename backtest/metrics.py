@@ -15,6 +15,7 @@ def serialize_trade(p) -> dict:
     # on TP1 hit; initial_sl preserves the original zone for visualization.
     initial_sl = getattr(p, "initial_sl", None) or float(p.sl)
     return {
+        "id": p.id,  # S2b: stable key to map funding (sim-time holding) per trade
         "symbol": p.symbol,
         "direction": p.direction,
         "entry": float(p.avg_entry_price),
@@ -69,6 +70,38 @@ def apply_commission_costs(
         nt = dict(t)
         nt["pnl"] = float(t.get("pnl", 0.0) or 0.0) - commission
         nt["commission"] = round(commission, 6)
+        out.append(nt)
+    return out, balance - total, total
+
+
+def apply_funding_costs(
+    trades: list[dict], balance: float, funding_pct_per_8h: float,
+    holding_hours: dict, notional_by_id: dict,
+) -> tuple[list[dict], float, float]:
+    """S2b: subtract an average funding drag per trade from pnl + balance.
+
+    cost = rate% × notional × completed-8h-periods, where periods = floor(hours/8)
+    and hours comes from the engine's sim-time open/close tracking. Modelled as a
+    SYMMETRIC MAGNITUDE (always a cost) — a constant rate cannot represent real
+    funding sign flips (long pays / short receives, and the rate itself flips).
+    A per-symbol funding-rate series is a further follow-up (S2c). Default rate 0
+    → no change. Returns ``(net_trades, net_balance, total_funding)``.
+    """
+    if funding_pct_per_8h <= 0:
+        return trades, balance, 0.0
+    rate = funding_pct_per_8h / 100.0
+    total = 0.0
+    out: list[dict] = []
+    for t in trades:
+        tid = t.get("id")
+        hours = float(holding_hours.get(tid, 0.0) or 0.0)
+        periods = int(hours // 8)
+        notional = float(notional_by_id.get(tid, 0.0) or 0.0)
+        funding = rate * notional * periods
+        total += funding
+        nt = dict(t)
+        nt["pnl"] = float(t.get("pnl", 0.0) or 0.0) - funding
+        nt["funding"] = round(funding, 6)
         out.append(nt)
     return out, balance - total, total
 
