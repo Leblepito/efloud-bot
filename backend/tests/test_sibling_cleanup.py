@@ -106,6 +106,11 @@ class TestCancelPositionSiblings:
             ccxt.OrderNotFound("Order does not exist"),
             None,
         ]
+        # TP1 falls back to the algo-cancel endpoint, which also reports
+        # not-found (genuinely gone) → counted 'missing'.
+        mock_client.exchange.fapiPrivateDeleteAlgoOrder.side_effect = ccxt.OrderNotFound(
+            "algo order gone"
+        )
 
         result = mgr._cancel_position_siblings(
             position_with_all_orders, "BTC/USDT:USDT", reason="TEST"
@@ -394,4 +399,157 @@ class TestLeftoverOrderSweeper:
 
         # No orders cancelled (since it's an active tracked symbol)
         assert mock_client.exchange.cancel_order.call_count == 0
+
+
+class TestAlgoAwareCancel:
+    """The bot's SL/TP are server-side algo orders (algoId); cancel_order(algoId)
+    returns -2011 'Unknown order sent'. _cancel_order_any must fall back to the
+    algo-cancel endpoint so the orders actually get cancelled (orphan-SL fix)."""
+
+    def test_cancel_falls_back_to_algo_endpoint(
+        self, mgr, mock_client, position_with_all_orders
+    ):
+        # Regular cancel fails as it does for algo ids; algo-cancel succeeds.
+        mock_client.exchange.cancel_order.side_effect = ccxt.OrderNotFound(
+            'binance {"code":-2011,"msg":"Unknown order sent."}'
+        )
+        mock_client.exchange.fapiPrivateDeleteAlgoOrder.return_value = {"code": "200"}
+
+        result = mgr._cancel_position_siblings(
+            position_with_all_orders, "BTC/USDT:USDT", reason="TEST"
+        )
+
+        assert sorted(result["cancelled"]) == ["SL", "TP1", "TP2"]
+        assert result["missing"] == [] and result["failed"] == []
+        assert mock_client.exchange.fapiPrivateDeleteAlgoOrder.call_count == 3
+        sent = [
+            c.args[0]["algoId"]
+            for c in mock_client.exchange.fapiPrivateDeleteAlgoOrder.call_args_list
+        ]
+        assert sorted(sent) == ["SL-1", "TP1-1", "TP2-1"]
+
+    def test_breakeven_cancels_old_sl_via_algo(self, mgr, mock_client):
+        """BE move must cancel the old (algo) SL via the algo endpoint, else a
+        duplicate SL lingers (root of the DOGE 2-SL orphan)."""
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+            sl_order_id="SL-OLD", tp1_order_id="TP1-1", tp2_order_id="TP2-1",
+        )
+        mock_client.exchange.cancel_order.side_effect = ccxt.OrderNotFound(
+            'binance {"code":-2011}'
+        )
+        mock_client.exchange.fapiPrivateDeleteAlgoOrder.return_value = {"code": "200"}
+        mock_client.exchange.create_order.return_value = {"id": "SL-BE-NEW"}
+
+        mgr._move_sl_to_breakeven(pos)
+
+        # Old SL cancelled through the algo endpoint (not left resting)
+        assert mock_client.exchange.fapiPrivateDeleteAlgoOrder.call_count == 1
+        assert (
+            mock_client.exchange.fapiPrivateDeleteAlgoOrder.call_args.args[0]["algoId"]
+            == "SL-OLD"
+        )
+        # A new break-even SL was placed (STOP_MARKET)
+        stop_calls = [
+            c for c in mock_client.exchange.create_order.call_args_list
+            if c.args[1] == "STOP_MARKET"
+        ]
+        assert len(stop_calls) == 1
+
+
+class TestRepairSetButAbsentProtection:
+    """B2: reconcile's repair must re-place an SL whose tracked algoId has
+    vanished from the live order set (not just empty ids)."""
+
+    def test_repair_replaces_sl_when_tracked_but_absent(self, mgr, mock_client):
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+            sl_order_id="SL-OLD", tp1_order_id="TP1-1", tp2_order_id="TP2-1",
+        )
+        mgr.positions = [pos]
+        mock_client.exchange.create_order.return_value = {"id": "SL-NEW"}
+
+        # Live order set has TP1/TP2 but NOT SL-OLD → SL vanished.
+        mgr._repair_missing_protection_orders({"TP1-1", "TP2-1"})
+
+        assert pos.sl_order_id == "SL-NEW"
+        stop_calls = [
+            c for c in mock_client.exchange.create_order.call_args_list
+            if c.args[1] == "STOP_MARKET"
+        ]
+        assert len(stop_calls) == 1  # exactly one SL re-placement
+
+    def test_repair_skips_when_all_present(self, mgr, mock_client):
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+            sl_order_id="SL-1", tp1_order_id="TP1-1", tp2_order_id="TP2-1",
+        )
+        mgr.positions = [pos]
+
+        mgr._repair_missing_protection_orders({"SL-1", "TP1-1", "TP2-1"})
+
+        assert pos.sl_order_id == "SL-1"
+        assert mock_client.exchange.create_order.call_count == 0
+
+    def test_repair_does_not_churn_unreachable_sl(self, mgr, mock_client):
+        from exchange import _TP_UNREACHABLE_SENTINEL
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+            sl_order_id=_TP_UNREACHABLE_SENTINEL,
+            tp1_order_id="TP1-1", tp2_order_id="TP2-1",
+        )
+        mgr.positions = [pos]
+
+        # Sentinel id is "absent" from the live set, but must NOT be re-placed.
+        mgr._repair_missing_protection_orders({"TP1-1", "TP2-1"})
+
+        assert pos.sl_order_id == _TP_UNREACHABLE_SENTINEL
+        assert mock_client.exchange.create_order.call_count == 0
+
+
+class TestAlgoSweeper:
+    """The leftover sweeper must also cancel orphan ALGO orders (SL/TP) for
+    symbols with no active position — fetch_open_orders can't see them."""
+
+    def test_sweeps_orphan_algo_orders_on_closed_symbol(self, mgr, mock_client):
+        mgr.positions = []
+        mock_client.get_open_positions.return_value = []
+        mock_client.exchange.fetch_open_orders.return_value = []
+        mock_client.exchange.fapiPrivateGetOpenAlgoOrders.return_value = [
+            {"symbol": "DOGEUSDT", "algoId": "A1", "orderType": "STOP_MARKET"},
+            {"symbol": "DOGEUSDT", "algoId": "A2", "orderType": "STOP_MARKET"},
+        ]
+
+        mgr.reconcile()
+
+        assert mock_client.exchange.fapiPrivateDeleteAlgoOrder.call_count == 2
+        cancelled = [
+            c.args[0]["algoId"]
+            for c in mock_client.exchange.fapiPrivateDeleteAlgoOrder.call_args_list
+        ]
+        assert sorted(cancelled) == ["A1", "A2"]
+
+    def test_does_not_sweep_algo_orders_for_active_symbol(self, mgr, mock_client):
+        pos = Position(
+            symbol="DOGE/USDT", direction="SHORT", entry=0.09, sl=0.095,
+            tp1=0.085, tp2=0.08, size=1000.0,
+            sl_order_id="A1", tp1_order_id="A2", tp2_order_id="A3",
+        )
+        mgr.positions = [pos]
+        mock_client.get_open_positions.return_value = [
+            {"symbol": "DOGE/USDT:USDT", "contracts": 1000.0, "side": "SHORT"}
+        ]
+        mock_client.exchange.fetch_open_orders.return_value = []
+        mock_client.exchange.fapiPrivateGetOpenAlgoOrders.return_value = [
+            {"symbol": "DOGEUSDT", "algoId": "A1", "orderType": "STOP_MARKET"},
+        ]
+
+        mgr.reconcile()
+
+        # DOGE has an active position → its algo orders must NOT be swept.
+        assert mock_client.exchange.fapiPrivateDeleteAlgoOrder.call_count == 0
 

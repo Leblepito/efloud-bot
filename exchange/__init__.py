@@ -552,6 +552,49 @@ class OrderManager:
         """
         return bool(oid) and oid != _TP_UNREACHABLE_SENTINEL
 
+    def _cancel_algo_order(self, algo_id: str) -> str:
+        """Cancel a single server-side algo order (SL/TP) by its algoId.
+
+        The bot places SL/TP via create_order(STOP_MARKET/TAKE_PROFIT_MARKET),
+        which Binance routes to the conditional/algo system; create_order returns
+        the *algoId* as `id`, so `pos.sl_order_id`/`tp1_order_id`/`tp2_order_id`
+        ARE algoIds. The regular cancel_order(orderId) endpoint returns Binance
+        -2011 'Unknown order sent' for an algoId — so algo orders MUST be
+        cancelled via DELETE /fapi/v1/algo/futures/order (algoId). This is the
+        root-cause fix for orphan SL/TP that survived position closes and for
+        break-even moves that left a duplicate (un-cancelled) SL.
+
+        Returns 'cancelled' | 'missing' | 'failed'.
+        """
+        try:
+            self.client.exchange.fapiPrivateDeleteAlgoOrder({"algoId": algo_id})
+            return "cancelled"
+        except ccxt.OrderNotFound:
+            return "missing"
+        except Exception as e:  # noqa: BLE001 — best-effort cleanup, never propagate
+            log.warning(f"[cleanup] algo-cancel failed for algoId={algo_id}: {e}")
+            return "failed"
+
+    def _cancel_order_any(self, oid: str, ccxt_sym: str) -> str:
+        """Cancel an order by id, transparently handling BOTH regular orders
+        and server-side algo orders (the SL/TP legs the bot places).
+
+        Tries the regular cancel_order first; on OrderNotFound — which Binance
+        also returns as -2011 'Unknown order sent' when an algoId is sent to the
+        regular cancel endpoint — falls back to the algo-cancel endpoint.
+
+        Returns 'cancelled' | 'missing' | 'failed'.
+        """
+        try:
+            self.client.exchange.cancel_order(oid, ccxt_sym)
+            return "cancelled"
+        except ccxt.OrderNotFound:
+            # Either genuinely gone, OR an algo order that hit the wrong endpoint
+            # (-2011). Disambiguate by trying the algo-cancel endpoint.
+            return self._cancel_algo_order(oid)
+        except Exception:  # noqa: BLE001 — caller logs with label context
+            return "failed"
+
     def _retry_tp_order(
         self,
         *,
@@ -693,7 +736,23 @@ class OrderManager:
                     log.warning(f"Failed to format TP sizes using exchange precision for {pos.symbol}: {e}")
 
             # ── Repair SL if missing (highest priority — unprotected position) ──
-            if not pos.sl_order_id:
+            # "Missing" = never placed (empty id) OR placed-then-vanished: the
+            # tracked algoId is no longer in the live order set (bn_order_ids,
+            # which includes algoIds). The latter catches an SL that was
+            # cancelled/lost while the position stayed open (exchange-side
+            # cancel, failed BE-move, a stray cancel-all). Closes are processed
+            # BEFORE repair, so a still-open position whose SL is absent
+            # genuinely lost it (an SL fill would have closed the position).
+            # UNREACHABLE sentinel is excluded via _is_real_oid (do not churn).
+            sl_absent_on_exchange = (
+                self._is_real_oid(pos.sl_order_id)
+                and pos.sl_order_id not in bn_order_ids
+            )
+            if not pos.sl_order_id or sl_absent_on_exchange:
+                if sl_absent_on_exchange:
+                    # Stale id: clear it so _retry_tp_order treats this as a
+                    # fresh placement and overwrites with the new algoId below.
+                    pos.sl_order_id = ""
                 log.critical(
                     "order_manager.repair_missing_sl: %s %s "
                     "— re-sending protection order",
@@ -1307,6 +1366,11 @@ class OrderManager:
                     pos.tp1_hit = True
                     log.info(f"RECONCILE: TP1 hit {pos.symbol} → SL → break-even @ {pos.entry}")
                     self._move_sl_to_breakeven(pos)
+                    # The BE move placed a NEW SL this cycle; its algoId is not in
+                    # the cycle-start bn_order_ids snapshot. Register it so the
+                    # set-but-absent repair below does not double-place it.
+                    if self._is_real_oid(pos.sl_order_id):
+                        bn_order_ids.add(pos.sl_order_id)
                     self._emit("tp1_hit", pos)
 
         # 🔧 Repair missing protection orders:
@@ -1322,8 +1386,11 @@ class OrderManager:
         # 1. No active position tracked locally for this symbol.
         # 2. AND no active open position on the exchange for this symbol.
         # Then cancel all open orders for this symbol to prevent orphan leftovers!
-        if orders_fetch_ok and not self.dry_run and bn_orders_raw:
+        if orders_fetch_ok and not self.dry_run:
             active_symbols = {pos.symbol for pos in self.positions} | bn_open_symbols
+            # (1) Regular leftover orders. Algo-aware cancel: a leftover whose id
+            # is actually an algoId would fail cancel_order(-2011) → _cancel_order_any
+            # falls back to the algo endpoint.
             for order in bn_orders_raw:
                 ccxt_sym = order.get("symbol")
                 if not ccxt_sym:
@@ -1336,12 +1403,30 @@ class OrderManager:
                             f"🧹 [cleanup] Leftover orphan order detected on {order_sym} "
                             f"(no active position locally or on exchange). Cancelling order {oid}..."
                         )
-                        try:
-                            self.client.exchange.cancel_order(oid, ccxt_sym)
-                        except Exception as e:
+                        if self._cancel_order_any(oid, ccxt_sym) == "failed":
                             log.warning(
-                                f"⚠️ [cleanup] Failed to cancel leftover order {oid} on {order_sym}: {e}"
+                                f"⚠️ [cleanup] Failed to cancel leftover order {oid} on {order_sym}"
                             )
+            # (2) Leftover ALGO orders (server-side SL/TP). These are invisible to
+            # fetch_open_orders, so a closed position's SL/TP can linger forever
+            # as an orphan (the DOGE incident: TP filled, 2 STOP_MARKET SLs left).
+            # Cancel any algo order whose symbol has no active position via the
+            # algo-cancel endpoint. Algo symbols are bare ("DOGEUSDT") — compare
+            # against the bare form of the active set.
+            active_bn = {s.replace("/", "") for s in active_symbols}
+            algo_list = algo_orders if ("algo_orders" in locals() and isinstance(algo_orders, list)) else []
+            for a in algo_list:
+                if not isinstance(a, dict):
+                    continue
+                algo_sym = a.get("symbol")
+                algo_id = a.get("algoId")
+                if not algo_sym or not algo_id or algo_sym in active_bn:
+                    continue
+                log.warning(
+                    f"🧹 [cleanup] Leftover orphan ALGO order on {algo_sym} "
+                    f"(no active position). Cancelling algoId={algo_id}..."
+                )
+                self._cancel_algo_order(str(algo_id))
 
         # Always persist after a reconcile pass so disk reflects latest exchange-derived
         # state (closes removed from list, tp1_hit flags flipped, sl_order_id updated).
@@ -1379,16 +1464,15 @@ class OrderManager:
             if not self._is_real_oid(oid):
                 result["missing"].append(label)
                 continue
-            try:
-                self.client.exchange.cancel_order(oid, ccxt_sym)
-                result["cancelled"].append(label)
-            except ccxt.OrderNotFound:
-                result["missing"].append(label)
-            except Exception as e:
+            # Use the algo-aware cancel: the bot's SL/TP are algo orders, so a
+            # plain cancel_order(algoId) returns -2011 and leaves the order
+            # resting. _cancel_order_any falls back to the algo-cancel endpoint.
+            outcome = self._cancel_order_any(oid, ccxt_sym)
+            if outcome == "failed":
                 log.warning(
-                    f"[cleanup] {pos.symbol}: failed to cancel {label} ({oid}): {e}"
+                    f"[cleanup] {pos.symbol}: failed to cancel {label} ({oid})"
                 )
-                result["failed"].append(label)
+            result[outcome].append(label)
         cancelled_str = "+".join(result["cancelled"]) or "none"
         log.info(
             f"[cleanup] {pos.symbol}: cancelled {cancelled_str} (reason={reason})"
@@ -1422,11 +1506,12 @@ class OrderManager:
 
         # Step 1: Cancel old SL (best-effort — failure means it may already
         # be filled/cancelled server-side; new SL is a separate order).
-        if pos.sl_order_id:
-            try:
-                self.client.exchange.cancel_order(pos.sl_order_id, ccxt_sym)
-            except Exception as e:
-                log.warning(f"SL cancel failed for {pos.symbol}: {e} (continuing)")
+        # Algo-aware: the old SL is an algo order, so cancel_order(algoId) alone
+        # returns -2011 and leaves it resting → a duplicate SL after the BE move
+        # (the orphan-SL bug). _cancel_order_any falls back to the algo endpoint.
+        if self._is_real_oid(pos.sl_order_id):
+            if self._cancel_order_any(pos.sl_order_id, ccxt_sym) == "failed":
+                log.warning(f"SL cancel failed for {pos.symbol} (continuing)")
 
         # Step 2: Place new SL at breakeven with retry
         reverse_side = "sell" if pos.direction == "LONG" else "buy"
