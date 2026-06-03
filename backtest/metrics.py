@@ -19,6 +19,9 @@ def serialize_trade(p) -> dict:
         "direction": p.direction,
         "entry": float(p.avg_entry_price),
         "exit": float(p.exits[-1].price) if p.exits else None,
+        # Total entered size — used by the S2 commission model (round-trip taker
+        # fee on entry + exit notional). For a fully-closed trade, exit size == entry size.
+        "size": float(getattr(p, "total_size_entered", 0.0)),
         "pnl": float(p.realized_pnl),
         "exit_reason": p.exits[-1].reason if p.exits else None,
         "opened_at": str(p.opened_at),
@@ -34,6 +37,40 @@ def serialize_trade(p) -> dict:
         "mae_pct": float(getattr(p, "mae_pct", 0.0)),
         "mfe_pct": float(getattr(p, "mfe_pct", 0.0)),
     }
+
+
+def apply_commission_costs(
+    trades: list[dict], balance: float, commission_pct: float,
+) -> tuple[list[dict], float, float]:
+    """Deduct round-trip taker commission from each trade's pnl and the balance.
+
+    S2: the backtest modelled slippage but no commission. Per-leg fee =
+    ``commission_pct`` % of that leg's notional; a round trip charges the entry
+    leg + the exit leg: ``rate * size * (entry + exit)``. Making both the
+    per-trade pnl AND the final balance net keeps PF / win_rate / sharpe /
+    total_return_pct mutually consistent and realistic.
+
+    Comprehensive by construction: works off the closed-trade records, so it
+    captures every trade regardless of which path closed it. NOT pathwise, so
+    the engine's MTM ``max_drawdown_pct`` stays gross-of-commission (a small,
+    documented optimism). Returns ``(net_trades, net_balance, total_commission)``.
+    """
+    if commission_pct <= 0:
+        return trades, balance, 0.0
+    rate = commission_pct / 100.0
+    total = 0.0
+    out: list[dict] = []
+    for t in trades:
+        size = abs(float(t.get("size", 0.0) or 0.0))
+        entry = float(t.get("entry", 0.0) or 0.0)
+        exit_px = float(t.get("exit", 0.0) or 0.0)
+        commission = rate * size * (entry + exit_px)
+        total += commission
+        nt = dict(t)
+        nt["pnl"] = float(t.get("pnl", 0.0) or 0.0) - commission
+        nt["commission"] = round(commission, 6)
+        out.append(nt)
+    return out, balance - total, total
 
 
 def aggregate_metrics(
