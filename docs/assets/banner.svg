@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="Efloud Bot">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1120"/>
+      <stop offset="0.55" stop-color="#0f2744"/>
+      <stop offset="1" stop-color="#06251f"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="300" fill="url(#bg)"/>
+  <polyline points="0,235 90,210 170,225 250,160 340,185 430,120 520,150 610,95 700,130 790,70 880,105 970,55 1060,90 1150,40 1200,60"
+            fill="none" stroke="url(#accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+  <text x="70" y="140" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#f8fafc">EFLOUD<tspan fill="url(#accent)"> BOT</tspan></text>
+  <text x="74" y="185" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="26" fill="#94a3b8">Smart Money Concepts · Binance USDT-M Futures · Multi-Agent Risk Engine</text>
+  <text x="74" y="222" font-family="Consolas, monospace" font-size="16" fill="#5eead4">safety-first · fail-safe LLM advisory · CI-gated · exchange-truth PnL</text>
+</svg>
