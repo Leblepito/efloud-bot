@@ -1669,6 +1669,12 @@ class SafeOrchestrator:
                      f"size={size:.6f} SL={sl:.4f} TP1={tp1:.4f} TP2={tp2_log}")
             return pos
 
+        # C7: the live-price re-validation for the v2 CONFIRMED→order path is the
+        # OrderManager entry-drift guard inside open_position — it re-reads the
+        # live price and rejects if it has drifted past max_entry_drift_pct from
+        # this confirmed `entry` (or is already past TP1). Combined with C1
+        # (closed-bar confirmation), the v2 entry cannot repaint into a
+        # stale-price order. See test_entry_order_placement TestV2EntryDriftGuard.
         return self.order_manager.open_position(
             symbol=cand.symbol,
             direction=cand.direction,
