@@ -14,7 +14,8 @@
   },
   "skills": {
     "writing-plans": ".claude/skills/writing-plans/SKILL.md",
-    "claude-automation-recommender": ".claude/skills/claude-automation-recommender/SKILL.md"
+    "claude-automation-recommender": ".claude/skills/claude-automation-recommender/SKILL.md",
+    "kronos": ".claude/skills/kronos/SKILL.md"
   },
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
