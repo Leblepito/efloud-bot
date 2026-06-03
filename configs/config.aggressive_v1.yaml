@@ -1,3 +1,11 @@
+# ⚠️⚠️⚠️  DO-NOT-DEPLOY — ARCHIVED / REFERENCE ONLY  (audit F3.2)  ⚠️⚠️⚠️
+# This config uses margin_mode: CROSSED + hedge_mode: true, which CONTRADICTS the
+# live production posture (configs/config.phase2_1k.yaml = ISOLATED + one-way, PR A).
+# Pointing EFLOUD_CONFIG_PATH at this file would SILENTLY REVERT the PR A safety
+# posture — CROSSED + hedge is the FIL auto-flip incident class (see memory
+# binance_isolated_hedge_off_autoflip). Production reads ONLY config.phase2_1k.yaml.
+# Kept for its validated +49% reference (docs/results/2026-05-07-aggressive-v1-final.md).
+# Do NOT set this as EFLOUD_CONFIG_PATH without a deliberate flat-book margin/mode switch.
 # ══════════════════════════════════════════════════════════════════
 # AGGRESSIVE MODE v1 — daily-action focused, 9-coin curated universe
 # ══════════════════════════════════════════════════════════════════
