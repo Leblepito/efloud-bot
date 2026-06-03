@@ -81,9 +81,9 @@ export function BotControl() {
           bg-bg
           font-mono text-[11px] tracking-widest text-accent-green
           uppercase select-none
-          transition-colors
+          transition-all duration-150 ease-out active:scale-[0.97]
           hover:bg-accent-green/10
-          disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-bg
+          disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-bg disabled:scale-100
         "
         aria-label="Start bot"
       >
@@ -102,9 +102,9 @@ export function BotControl() {
           bg-bg
           font-mono text-[11px] tracking-widest text-text-muted
           uppercase select-none
-          transition-colors
+          transition-all duration-150 ease-out active:scale-[0.97]
           hover:bg-text-muted/10 hover:text-text-primary
-          disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-bg
+          disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-bg disabled:scale-100
         "
         aria-label="Stop bot"
       >
@@ -122,9 +122,9 @@ export function BotControl() {
           bg-bg
           font-mono text-[11px] tracking-widest text-accent-amber
           uppercase select-none
-          transition-colors
+          transition-all duration-150 ease-out active:scale-[0.97]
           hover:bg-accent-amber/10
-          disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-bg
+          disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-bg disabled:scale-100
         "
         aria-label="Restart bot"
       >

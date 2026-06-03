@@ -13,7 +13,14 @@ const reasonStyle: Record<string, string> = {
   RECONCILED: "text-text-secondary border-border-strong",
 };
 
-export function TradesTable({ onSelectTrade }: { onSelectTrade?: (trade: any) => void }) {
+export function TradesTable({
+  onSelectTrade,
+  selectedId,
+}: {
+  onSelectTrade?: (trade: any) => void;
+  /** Trade id currently open in the inspector — gets a green left-accent highlight. */
+  selectedId?: string;
+}) {
   const { data, isLoading } = useHistory(50);
   const rows = data ?? [];
   const total = rows.reduce((acc, t) => acc + (t.pnl_usdt ?? 0), 0);
@@ -63,11 +70,13 @@ export function TradesTable({ onSelectTrade }: { onSelectTrade?: (trade: any) =>
               const pnl = t.pnl_usdt ?? 0;
               const profit = pnl >= 0;
               const badgeCls = reasonStyle[t.reason ?? ""] ?? "text-text-muted border-border";
+              const isSel = selectedId != null && t.id === selectedId;
               return (
                 <tr
                   key={t.id}
                   onClick={() => onSelectTrade?.(t)}
-                  className="border-b border-border hover:bg-bg-surface transition-colors cursor-pointer"
+                  aria-selected={isSel}
+                  className={`border-b border-border hover:bg-bg-surface/80 active:bg-bg-surface/50 active:scale-[0.995] transition-all duration-150 ease-out cursor-pointer ${isSel ? "row-selected" : ""}`}
                 >
                   <td className="px-5 py-2 text-text-primary">{t.symbol}</td>
                   <td className="px-3 py-2">

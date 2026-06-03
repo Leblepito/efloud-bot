@@ -23,6 +23,9 @@ export default function Dashboard() {
   // Cookie tek domain'de (rewrites /api proxy üzerinden) — auth gate /api/status'un
   // 401 dönüşünden geliyor; jsonFetcher yönlendiriyor /login'e.
   useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("efloud_demo_mode") === "true") {
+      return;
+    }
     fetch("/api/status", { credentials: "include" }).then((r) => {
       if (r.status === 401) window.location.href = "/login";
     });
@@ -56,13 +59,13 @@ export default function Dashboard() {
           <EquityChart />
         </section>
         <section>
-          <PositionsTable onSelectSymbol={setSelectedSymbol} />
+          <PositionsTable onSelectSymbol={setSelectedSymbol} selectedSymbol={selectedSymbol} />
         </section>
         <section>
           <OpenOrdersTable onSelectSymbol={setSelectedSymbol} />
         </section>
         <section>
-          <TradesTable onSelectTrade={setSelectedTrade} />
+          <TradesTable onSelectTrade={setSelectedTrade} selectedId={selectedTrade?.id} />
         </section>
         <section>
           <ConfigPanel />

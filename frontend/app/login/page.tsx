@@ -60,12 +60,28 @@ export default function LoginPage() {
               bg-accent-green/5 hover:bg-accent-green/15
               disabled:opacity-40 disabled:cursor-not-allowed
               font-mono text-[11px] tracking-widest text-accent-green uppercase
-              transition-colors
+              transition-colors active:scale-[0.98] transition-transform duration-100
             "
           >
             {busy ? "Verifying…" : "Enter Console"}
           </button>
         </form>
+        
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => {
+              localStorage.setItem("efloud_demo_mode", "true");
+              window.location.href = "/";
+            }}
+            className="
+              text-[11px] font-mono tracking-widest text-text-secondary hover:text-accent-green 
+              transition-colors uppercase active:scale-[0.98] transition-transform duration-100
+            "
+          >
+            ▪ Enter Demo Console ▪
+          </button>
+        </div>
+
         <p className="mt-6 text-[10px] tracking-widest font-mono text-text-muted text-center uppercase">
           Authorised personnel only
         </p>

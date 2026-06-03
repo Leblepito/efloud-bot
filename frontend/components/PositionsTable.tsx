@@ -3,7 +3,14 @@
 import { usePositions } from "@/hooks/usePositions";
 import { fromNow, n, pct, priceDecimals } from "@/lib/format";
 
-export function PositionsTable({ onSelectSymbol }: { onSelectSymbol?: (symbol: string) => void }) {
+export function PositionsTable({
+  onSelectSymbol,
+  selectedSymbol,
+}: {
+  onSelectSymbol?: (symbol: string) => void;
+  /** When set, the matching row gets a green left-accent highlight. */
+  selectedSymbol?: string;
+}) {
   const { data, isLoading } = usePositions();
   const rows = data ?? [];
 
@@ -44,11 +51,13 @@ export function PositionsTable({ onSelectSymbol }: { onSelectSymbol?: (symbol: s
               const dec = priceDecimals(p.entry);
               const isLong = p.direction === "LONG";
               const profit = p.unrealized_pct >= 0;
+              const isSel = selectedSymbol === p.symbol;
               return (
                 <tr
                   key={p.symbol}
                   onClick={() => onSelectSymbol?.(p.symbol)}
-                  className="border-b border-border hover:bg-bg-surface transition-colors animate-slideIn cursor-pointer"
+                  aria-selected={isSel}
+                  className={`border-b border-border hover:bg-bg-surface/80 active:bg-bg-surface/50 active:scale-[0.995] transition-all duration-150 ease-out animate-slideIn cursor-pointer ${isSel ? "row-selected" : ""}`}
                 >
                   <td className="px-5 py-2.5 text-text-primary">
                     {p.symbol}

@@ -1,0 +1,72 @@
+{
+  "detail": {
+    "ok": true,
+    "request_id": "2114df92cc9ff8148fa18e7155ff1373",
+    "task": {
+      "agent_profile": "manus-1.6",
+      "created_at": "1780482117",
+      "created_by_api_key": {
+        "id": "VMpn98aizCuFBkQENcngHR",
+        "name": "hermes"
+      },
+      "credit_usage": 101,
+      "id": "Bnk8FCrVYgZ6Kavx3eA332",
+      "share_visibility": "private",
+      "status": "stopped",
+      "task_type": "standard",
+      "task_url": "https://manus.im/app/Bnk8FCrVYgZ6Kavx3eA332",
+      "title": "Dry-Run Connector Readiness Re-Check and Reporting",
+      "updated_at": "1780482700"
+    }
+  },
+  "messages": {
+    "has_more": false,
+    "messages": [
+      {
+        "id": "EhnSQizAfAADzSup4WIIx1",
+        "status_update": {
+          "agent_status": "stopped",
+          "brief": "Manus has stopped",
+          "description": "The user stopped Manus's work"
+        },
+        "timestamp": "1780482700527",
+        "type": "status_update"
+      },
+      {
+        "id": "piagmBPAmeweFeLSx2OxD3",
+        "timestamp": "1780482700295",
+        "type": "user_stop"
+      },
+      {
+        "assistant_message": {
+          "content": "Talebinizi aldım. Yalnızca okuma/inceleme amaçlı, dış aksiyon almadan connector readiness re-check işlemini başlatıyorum ve sonucu Türkçe Markdown rapor olarak sunacağım."
+        },
+        "id": "lvGnsu1ohO3M75b6BnqJ3u",
+        "timestamp": "1780482122110",
+        "type": "assistant_message"
+      },
+      {
+        "id": "aolwMiaR8hJanUgDMtDubQ-1",
+        "status_update": {
+          "agent_status": "running",
+          "brief": "Manus is running",
+          "description": "Manus is working on your request"
+        },
+        "timestamp": "1780482118340",
+        "type": "status_update"
+      },
+      {
+        "id": "1HiM9jt1dJwVN0iUD6Jm5S",
+        "timestamp": "1780482117311",
+        "type": "user_message",
+        "user_message": {
+          "content": "PRIVATE, DRY-RUN ONLY - u2algo / efloud-bot connector readiness re-check. NO publishing, NO post creation, NO message sending, NO external actions on any platform. Only inspect, read, and report.\n\nBu gorevin amaci: 31 Mayis 2026 readiness raporundan bu yana 2+ hafta gecti. Asagidaki kontrolleri yap, sonucu Turkce markdown rapor olarak dondur. Dis aksiyon ALMA.\n\nKontrol listesi:\n1) Instagram connector (UUID 4b899211-fd12-410e-a8d2-264a409cbc78) su anda hangi Instagram Business/Professional hesabina bagli? Gecen sefer @leblepito gorunmustu; hedefimiz @u2algo. get_account_info veya esdegeri read-only cagri ile bagli hesabin @handle'ini, hesap adini, hesap turunu (Business/Creator) ve bagli reklam hesabi varsa act_ ID'sini raporla.\n2) Google Drive connector (UUID f8900a57-4bd7-46cc-83a3-5ebd2420a817) icin Drive API'ye read-only bir cagri (orn. about.get veya files.list root, max 5) dene. Token not found / Please re-authorize mesaji geliyor mu? Gelmiyorsa hangi Google hesabina bagli, depolama kotasi bilgisi nedir?\n3) Make (UUID f8405590-5602-4fee-bfd6-f221623e6f72) ve Zapier (UUID 433d2fe0-e56d-42b2-8625-9996eab0bb1d) connector'larinda OAuth tamamlanmis mi? connector_scenario_list veya tool listesi cekilebiliyor mu? Cekilemiyorsa tam hata mesajini ver.\n4) n8n (UUID d6b4170a-4001-450d-823a-287dfd9716a7) connector durumu nedir? Config devre disi ise bunu acikca yaz.\n5) Meta Ads Manager (UUID c073ede4-35a7-4c89-8158-c9b40c489932) bagli reklam hesabi hala act_327551395 mi, yoksa yeni bir hesap mi? READ-ONLY cagri ile son 7 gunluk impression / spend / click ozetini de ekleyebilirsen cok yardimci olur.\n6) Diger connector'lar: OpenAI, Anthropic, Google Gemini, Canva, HeyGen, Kling, Flux, ElevenLabs, Playwright, My Browser, Apify, Firecrawl, PostHog, Sentry, Ahrefs, Similarweb, Mailchimp, HubSpot, Intercom, Supabase, Vercel, Cloudflare, Notion, Airtable, Linear, GitHub, Gmail, Google Calendar icin config durumunu ve authorize edilmis olup olmadiklarini tek tablo halinde ozetle.\n\nCikti formati:\n- Bolum 1: Instagram hesap eslesmesi (KRITIK - @u2algo onayi veya reddi)\n- Bolum 2: Google Drive token durumu\n- Bolum 3: Make / Zapier / n8n OAuth durumu\n- Bolum 4: Meta Ads Manager bagli hesap + son 7 gun ozet (read-only)\n- Bolum 5: Diger 25+ connector durum tablosu\n- Bolum 6: Karar - Yayin hatti icin blokaj durumu: ACIK / KISMI / KAPALI\n\nCompliance: Bu gorev yatirim tavsiyesi uretmez. Dis aksiyon YOK. Sadece read-only envanter.",
+          "message_type": "text"
+        }
+      }
+    ],
+    "ok": true,
+    "request_id": "14a516bc0bcdb91e0adce83de474d5ab",
+    "task_id": "Bnk8FCrVYgZ6Kavx3eA332"
+  }
+}

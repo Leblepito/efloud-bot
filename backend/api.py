@@ -621,3 +621,11 @@ async def ai_post_mortem(schedule: str = "daily") -> dict:
         )
     return {"report_path": out_path, "schedule": schedule}
 
+
+from backend.signals_smc import get_smc_signal
+
+@router.get("/signals/smc", dependencies=[Depends(require_auth)])
+async def signals_smc(symbol: str = "BTCUSDT", timeframe: str = "15m") -> dict:
+    """Calculated SMC structure (swings → BOS/ChoCh, OB, FVG, premium/discount, PDH/PDL)."""
+    return await get_smc_signal(symbol, timeframe, runner)
+

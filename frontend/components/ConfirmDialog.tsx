@@ -58,11 +58,11 @@ export function ConfirmDialog({
       aria-labelledby="confirm-dialog-title"
       aria-describedby={description ? "confirm-dialog-desc" : undefined}
       onClick={onCancel}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-modal-fade"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="border border-border-strong bg-bg-elevated p-6 max-w-md w-full font-mono"
+        className="border border-border-strong bg-bg-elevated p-6 max-w-md w-full font-mono animate-modal-scale"
       >
         <h2
           id="confirm-dialog-title"
@@ -91,7 +91,7 @@ export function ConfirmDialog({
               bg-bg
               font-mono text-[11px] tracking-widest text-text-secondary
               uppercase
-              transition-colors
+              transition-all duration-150 ease-out active:scale-[0.97]
               hover:bg-text-muted/10 hover:text-text-primary
             "
           >
@@ -102,8 +102,8 @@ export function ConfirmDialog({
             onClick={onConfirm}
             className={
               destructive
-                ? "h-10 px-4 border border-accent-red bg-bg font-mono text-[11px] tracking-widest text-accent-red uppercase transition-colors hover:bg-accent-red/10"
-                : "h-10 px-4 border border-accent-green bg-bg font-mono text-[11px] tracking-widest text-accent-green uppercase transition-colors hover:bg-accent-green/10"
+                ? "h-10 px-4 border border-accent-red bg-bg font-mono text-[11px] tracking-widest text-accent-red uppercase transition-all duration-150 ease-out active:scale-[0.97] hover:bg-accent-red/10"
+                : "h-10 px-4 border border-accent-green bg-bg font-mono text-[11px] tracking-widest text-accent-green uppercase transition-all duration-150 ease-out active:scale-[0.97] hover:bg-accent-green/10"
             }
           >
             {confirmLabel}

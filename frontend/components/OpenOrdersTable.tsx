@@ -75,7 +75,7 @@ export function OpenOrdersTable({ onSelectSymbol }: { onSelectSymbol?: (symbol: 
                 <tr
                   key={o.id}
                   onClick={() => onSelectSymbol?.(o.symbol)}
-                  className="border-b border-border hover:bg-bg-surface transition-colors animate-slideIn cursor-pointer"
+                  className="border-b border-border hover:bg-bg-surface/80 active:bg-bg-surface/50 active:scale-[0.995] transition-all duration-150 ease-out animate-slideIn cursor-pointer"
                 >
                   <td className="px-5 py-2.5 text-text-primary">{o.symbol}</td>
                   <td className="px-3 py-2.5">
