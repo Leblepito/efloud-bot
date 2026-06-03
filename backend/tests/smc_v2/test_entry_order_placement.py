@@ -235,6 +235,47 @@ class TestOrderPlacementOnConfirmed:
             assert result is None
 
 
+def _make_live_order_manager(max_drift_pct: float, live_price: float):
+    """A LIVE (non-dry-run) OrderManager with its entry-drift guard armed and a
+    client reporting ``live_price`` (so the drift guard can re-validate)."""
+    from exchange import BinanceClient, OrderManager
+    mock_client = MagicMock(spec=BinanceClient)
+    mock_client.exchange = MagicMock()
+    mock_client.market_type = "futures"
+    mock_client.testnet = True
+    mock_client.to_ccxt_symbol.side_effect = lambda s: f"{s}:USDT" if ":" not in s else s
+    mock_client.get_balance = MagicMock(return_value=10000.0)
+    mock_client.get_available_margin = MagicMock(return_value=10000.0)
+    mock_client.get_price = MagicMock(return_value=live_price)
+    return OrderManager(mock_client, dry_run=False, max_entry_drift_pct=max_drift_pct)
+
+
+class TestV2EntryDriftGuard:
+    """C7: the v2 CONFIRMED→order path re-validates the LIVE price via the
+    OrderManager entry-drift guard — no separate v2 re-check is needed, and a
+    drifted entry is rejected before any market order."""
+
+    def test_v2_entry_rejected_when_live_price_drifted_past_tp1(self, tmp_path):
+        # SHORT confirmed at 105 with tp1=95; live has run to 90 (past TP1) — a
+        # market short would open SL-only with a TP Binance rejects as -2021.
+        order_mgr = _make_live_order_manager(max_drift_pct=1.0, live_price=90.0)
+        store = SetupStateStore(tmp_path / "state.json")
+        cfg = _minimal_config()
+        cfg["exchange"] = {"leverage": 1}
+        orc = SafeOrchestrator(
+            cfg, state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, order_manager=order_mgr,
+        )
+        cand = _make_in_zone_candidate()  # SHORT, confirmed entry 105
+        with patch("engine.smc_v2.tp_calc.calc_tp_targets") as tp_spy:
+            tp_spy.return_value = (95.0, 90.0, {"tp1_source": "LIQUIDITY", "tp2_source": "FVG_FAR"})
+            result = orc._place_v2_entry_order(
+                cand, current_price=105.0, entry_price=105.0,
+            )
+        assert result is None, "C7: drifted live price must reject the v2 entry"
+        order_mgr.client.exchange.create_order.assert_not_called()
+
+
 class TestSafetyGates:
     """v2 path MUST go through the same safety gates as v1 (PR #S3c-2 fix
     after risk-ops review flagged bypass risk):

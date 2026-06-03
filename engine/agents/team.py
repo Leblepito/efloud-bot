@@ -9,7 +9,7 @@ gate (``engine/safe_orchestrator.py``); the team itself does not
 implement a "hard veto over Overseer" rule. The breaker/guard/orphan
 layers are still in charge of every other safety decision.
 
-Default model is ``gemini-1.5-flash`` per the canonical plan; override
+Default model is ``DEFAULT_MODEL`` (gemini-2.0-flash); override
 via ``config["agent_team"]["model"]``.
 
 NOTE — historical claims removed in the push-prep fixup:
@@ -32,7 +32,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional
 
-from .gemini_client import GeminiClient
+from .gemini_client import DEFAULT_MODEL, GeminiClient
 from .roles import (
     OverseerAgent,
     PostMortemAgent,
@@ -72,7 +72,7 @@ class AgentTeam:
         if client is None:
             client = GeminiClient(
                 api_key=self.cfg.get("api_key"),
-                model=self.cfg.get("model", "gemini-3.5-flash"),
+                model=self.cfg.get("model", DEFAULT_MODEL),
             )
         self.client = client
 

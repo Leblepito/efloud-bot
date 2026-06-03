@@ -12,8 +12,10 @@ Behaviour contract (do not break without updating all callers):
     canonical fail-safe: the bot must NEVER crash because Gemini is down.
 
   * Model is pinned in config (``agent_team.model`` etc). The default
-    here is ``gemini-1.5-flash`` per the canonical plan; if you bump
-    the alias, also update the configs and re-test fail-safe.
+    here is ``gemini-2.0-flash`` (a real, callable v1beta alias). All
+    callers MUST reference ``DEFAULT_MODEL`` rather than hardcoding a
+    literal — a non-existent alias 404s on every call and silently
+    degrades the whole advisory layer to NEUTRAL (see A1 regression test).
 """
 
 from __future__ import annotations
@@ -31,9 +33,16 @@ GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
 
-# Canonical default. ``gemini-2.0-flash`` is also stable on the v1beta
-# endpoint as of 2026-06; switch via config when ready.
-DEFAULT_MODEL = "gemini-3.5-flash"
+# Canonical default — a REAL Gemini alias on the v1beta generateContent
+# endpoint. Do NOT pin a non-existent alias here (an earlier invalid alias
+# 404'd on every call). Override per deployment via ``agent_team.model``.
+DEFAULT_MODEL = "gemini-2.0-flash"
+
+# A2: surface real call failures at WARNING (not silent DEBUG) so a broken
+# key/model is visible — but rate-limit so a persistent outage doesn't spam
+# every cycle. Module-level (clients are constructed per-call in some callers).
+_consecutive_failures = 0
+_WARN_EVERY = 25  # WARNING on the 1st failure and every 25th thereafter
 
 
 class GeminiClient:
@@ -62,8 +71,9 @@ class GeminiClient:
         (missing key, HTTP error, JSON parse, unexpected schema). The
         caller is expected to treat ``{}`` as "no opinion".
         """
+        global _consecutive_failures
         if not self.api_key:
-            return {}
+            return {}  # expected fail-safe (no key) — silent, not an error
         url = GEMINI_URL.format(model=self.model) + f"?key={self.api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -76,7 +86,17 @@ class GeminiClient:
             r = httpx.post(url, json=payload, timeout=timeout or self.timeout)
             r.raise_for_status()
             text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(text)
+            result = json.loads(text)
+            _consecutive_failures = 0  # A2: recovered → reset the rate-limiter
+            return result
         except Exception as e:
-            log.debug(f"GeminiClient.complete_json failed (returning {{}}): {e!r}")
+            # A2: a genuine failure (HTTP/parse/timeout) — surface at WARNING so a
+            # broken key/model is visible, rate-limited to avoid per-cycle spam.
+            _consecutive_failures += 1
+            msg = (f"GeminiClient.complete_json failed "
+                   f"(#{_consecutive_failures}, returning {{}}): {e!r}")
+            if _consecutive_failures == 1 or _consecutive_failures % _WARN_EVERY == 0:
+                log.warning(msg)
+            else:
+                log.debug(msg)
             return {}

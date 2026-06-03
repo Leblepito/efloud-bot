@@ -233,7 +233,8 @@ Do not include any markdown backticks or extra text, just the raw JSON.
     # where engine.agents is not on the path (legacy unit tests).
     from engine.agents.gemini_client import GeminiClient
 
-    client = GeminiClient(api_key=api_key, model="gemini-3.5-flash")
+    # Use the canonical DEFAULT_MODEL (omit the kwarg) — never pin a literal.
+    client = GeminiClient(api_key=api_key)
     result = client.complete_json(prompt, timeout=10.0)
 
     if not result:
@@ -679,10 +680,24 @@ def generate_signals(
             reasoning = val_res.get("reasoning", "")
             
             log.info(f"SMC Structure Validation [{symbol}]: valid={is_valid}, confidence={confidence:.2f}, reasoning='{reasoning}'")
-            
+
+            # C8: advisory ONLY — annotate the signal, NEVER drop it. An external
+            # LLM must not be a hard trade gate inside signal generation (the
+            # agents layer is advisory; any gating lives in safe_orchestrator
+            # behind agent_team.gating=false). A low-confidence/invalid verdict is
+            # recorded for journal/dashboard, not used to suppress the trade.
+            if isinstance(sig.meta, dict):
+                sig.meta["gemini_structure_validation"] = {
+                    "valid": bool(is_valid),
+                    "confidence": float(confidence),
+                    "reasoning": reasoning,
+                    "advisory_only": True,
+                }
             if not is_valid or confidence < 0.70:
-                log.info(f"❌ Signal {sig.direction} @ {sig.entry} rejected by Gemini Structure Validation Layer (confidence={confidence:.2f})")
-                continue
+                log.info(
+                    f"⚠️ Gemini structure validation flagged {sig.direction} @ {sig.entry} "
+                    f"(confidence={confidence:.2f}) — ADVISORY, signal NOT dropped"
+                )
 
         signals.append(sig)
         log.info(f"Signal: {sig.direction} @ {sig.entry} | Conf={sig.confluence} | R:R={sig.rr1}/{sig.rr2}")

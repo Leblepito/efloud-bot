@@ -102,7 +102,9 @@ def main():
         sys.exit(1)
 
     # Load active config if specified in environment
-    config_path = os.environ.get("EFLOUD_CONFIG_PATH", "configs/config.phase2_micro.yaml")
+    # F3.6: default to the real production config (the old micro path did not
+    # exist → except:pass below → bogus starting_balance=100 band).
+    config_path = os.environ.get("EFLOUD_CONFIG_PATH", "configs/config.phase2_1k.yaml")
     starting_balance = 100.0
     hedge_mode = False
     try:

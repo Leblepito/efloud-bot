@@ -10,7 +10,9 @@ from typing import Any, Literal
 import pandas as pd
 
 from backtest.intrabar import resolve_fill, Bar
-from backtest.metrics import aggregate_metrics, serialize_trade
+from backtest.metrics import (
+    aggregate_metrics, apply_commission_costs, apply_funding_costs, serialize_trade,
+)
 from backtest.slippage import adverse_fill, SlippageConfig
 from engine import SafeOrchestrator
 from engine.notifications import NullNotificationManager
@@ -61,6 +63,8 @@ def run_backtest(
     step_every_n_bars: int = 1,
     smc_window_bars: int = _DEFAULT_SMC_WINDOW,
     smc_version: Literal["v1", "v2"] = "v1",
+    commission_pct: float | None = None,
+    funding_pct_per_8h: float | None = None,
 ) -> dict[str, Any]:
     """Run a walk-forward backtest. No I/O.
 
@@ -111,6 +115,9 @@ def run_backtest(
         slippage_cfg = SlippageConfig()
         max_drawdown_pct = 0.0
         current_prices: dict[str, float] = {}
+        # S2b: sim-time open/close per position id → funding holding duration.
+        sim_open_ts: dict = {}
+        sim_close_ts: dict = {}
 
         # Use the first symbol's entry-TF index as the master clock
         entry_tf_name = config["timeframes"]["entry"]
@@ -211,10 +218,48 @@ def run_backtest(
             )
             max_drawdown_pct = max(max_drawdown_pct, dd)
 
+            # S2b: stamp sim-time open (first sighting) and close (first time the
+            # position is no longer open) so funding can use real holding hours.
+            for pos in orch.lifecycle.positions:
+                if pos.id not in sim_open_ts:
+                    sim_open_ts[pos.id] = current_ts
+                if not pos.is_open and pos.id not in sim_close_ts:
+                    sim_close_ts[pos.id] = current_ts
+
         if skipped_cycles > 0:
             log.warning("Backtest had %d skipped cycles (see DEBUG log for details)", skipped_cycles)
         closed_positions = [p for p in orch.lifecycle.positions if not p.is_open and p.exits]
         trade_dicts = [serialize_trade(p) for p in closed_positions]
+        # S2: net out round-trip taker commission. Resolution order: explicit
+        # param → config["backtest"]["commission_pct"] → 0.0 (off, backward-compat
+        # — existing tests/baselines unchanged unless commission is enabled).
+        # Set backtest.commission_pct: 0.04 (Binance USD-M taker) for realistic
+        # net returns / profit factor (e.g. the S1 conf-50-vs-80 net-PF check).
+        cp = (
+            commission_pct if commission_pct is not None
+            else float(config.get("backtest", {}).get("commission_pct", 0.0))
+        )
+        trade_dicts, balance, total_commission = apply_commission_costs(trade_dicts, balance, cp)
+        # S2b: apply funding from sim-time holding duration (after commission, on
+        # the already-netted balance/trades). Rate resolution: param →
+        # config["backtest"]["funding_pct_per_8h"] → 0.0 (off, backward-compat).
+        # Funding is an average symmetric drag (see apply_funding_costs); a
+        # per-symbol funding-rate series is a further follow-up (S2c).
+        holding_hours: dict = {}
+        notional_by_id: dict = {}
+        for p in closed_positions:
+            o, c = sim_open_ts.get(p.id), sim_close_ts.get(p.id)
+            holding_hours[p.id] = (
+                (c - o).total_seconds() / 3600.0 if (o is not None and c is not None) else 0.0
+            )
+            notional_by_id[p.id] = float(p.avg_entry_price) * float(p.total_size_entered)
+        fp = (
+            funding_pct_per_8h if funding_pct_per_8h is not None
+            else float(config.get("backtest", {}).get("funding_pct_per_8h", 0.0))
+        )
+        trade_dicts, balance, total_funding = apply_funding_costs(
+            trade_dicts, balance, fp, holding_hours, notional_by_id
+        )
         agg = aggregate_metrics(trade_dicts, initial_balance, peak_balance, balance)
 
         return {
@@ -227,6 +272,10 @@ def run_backtest(
             "skipped_cycles": skipped_cycles,
             "max_drawdown_pct": round(max_drawdown_pct, 2),
             "smc_version": smc_version,
+            "commission_pct": cp,
+            "total_commission": round(total_commission, 4),
+            "funding_pct_per_8h": fp,
+            "total_funding": round(total_funding, 4),
             **agg,
         }
 

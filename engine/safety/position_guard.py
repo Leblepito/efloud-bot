@@ -312,6 +312,22 @@ class PositionGuard:
                     f"Consider smaller size."
                 )
 
+        # 5b. SL must fire BEFORE isolated-margin liquidation (P3-4). For
+        # ISOLATED Nx the position liquidates at ~(1/leverage) adverse move
+        # (minus maintenance margin). An SL wider than that NEVER triggers — the
+        # exchange liquidates first at a worse price. Reject with a 0.9 safety
+        # factor covering maintenance margin + buffer (e.g. 5x → reject ≥ 18%).
+        if leverage > 1 and entry > 0:
+            sl_dist_pct = abs(entry - sl) / entry
+            liq_dist_pct = 1.0 / leverage
+            if sl_dist_pct >= liq_dist_pct * 0.90:
+                return PositionCheckResult(
+                    False,
+                    f"SL distance {sl_dist_pct*100:.1f}% >= liquidation distance "
+                    f"{liq_dist_pct*100:.1f}% (ISOLATED {leverage}x) — SL would never "
+                    f"fire (liquidation first). Reject."
+                )
+
         # 6. Risk per trade sanity
         risk_amount = abs(entry - sl) * size
         risk_pct = (risk_amount / balance) * 100 if balance > 0 else 0

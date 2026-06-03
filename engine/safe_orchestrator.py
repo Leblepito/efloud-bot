@@ -357,26 +357,87 @@ class SafeOrchestrator:
                 log.warning(f"Could not restore processed_signals: {e}")
                 self._processed_signals = {}
 
+    # A3: the sentiment loop refreshes every ~4h; treat a registry older than
+    # that (+15m grace) as stale and revert to NEUTRAL, so an old RISK_ON/OFF
+    # cannot keep injecting a ±5 confluence bias after a restart or a stalled loop.
+    _SENTIMENT_MAX_AGE_SEC = 4 * 3600 + 900
+
     def load_ai_sentiment(self):
         """Yapay zeka makro duygu durumunu local registry'den yukler."""
         try:
             registry_path = Path(self.store.dir) / "ai_sentiment_registry.json"
             if registry_path.exists():
                 with open(registry_path, encoding="utf-8") as f:
-                    self.sentiment_state = json.load(f)
-                    log.info(f"♻️  Loaded AI sentiment state: {self.sentiment_state.get('macro_sentiment', 'NEUTRAL')}")
+                    state = json.load(f)
+                if self._sentiment_is_stale(state):
+                    log.warning("AI sentiment registry stale — reverting to NEUTRAL")
+                else:
+                    self.sentiment_state = state
+                    log.info(f"♻️  Loaded AI sentiment state: {state.get('macro_sentiment', 'NEUTRAL')}")
                     return
         except Exception as e:
             log.warning(f"Could not load AI sentiment state: {e}")
-        
-        # Fallback default neutral
+
+        # Fallback default neutral (load failure OR stale registry)
         self.sentiment_state = {
             "macro_sentiment": "NEUTRAL",
             "confidence_score": 1.0,
             "fear_and_greed": 50.0,
             "bitcoin_trend": "NEUTRAL",
-            "reasoning": "Fallback default due to load failure."
+            "reasoning": "Fallback default (load failure or stale registry)."
         }
+
+    def _sentiment_is_stale(self, state: dict) -> bool:
+        """A3 freshness guard. True when ``last_updated`` is older than the
+        refresh window. Lenient on a missing/unparseable timestamp — legacy
+        registries load as-is (real ones always stamp ``last_updated``)."""
+        ts = state.get("last_updated")
+        if not ts:
+            return False
+        try:
+            dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return False
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - dt).total_seconds()
+        return age > self._SENTIMENT_MAX_AGE_SEC
+
+    @staticmethod
+    def _htf_slope_pct(df_htf, lookback: int = 20) -> float:
+        """A4: signed % change of HTF close over the last ``lookback`` bars — the
+        RegimeAgent's directional-strength input. The orchestrator previously
+        never supplied it, so the agent saw the field as absent (phantom)."""
+        try:
+            closes = df_htf["close"]
+            if len(closes) <= lookback:
+                return 0.0
+            prior = float(closes.iloc[-1 - lookback])
+            if prior == 0:
+                return 0.0
+            return (float(closes.iloc[-1]) - prior) / prior * 100.0
+        except Exception:
+            return 0.0
+
+    def _estimate_size_notional_pct(self, balance, entry: float, sl: float) -> float:
+        """F1: estimate the position notional as % of balance using the SAME
+        sizer the open step uses, so the RiskReviewer agent sees a real notional
+        (not a hardcoded 0.0 → its notional-cap rule could never fire). Returns
+        0.0 when balance/entry are unavailable."""
+        if not balance or float(balance) <= 0 or entry <= 0:
+            return 0.0
+        try:
+            from risk import calc_position_size
+            risk_cfg = self.config.get("risk", {})
+            lev = self.config.get("exchange", {}).get("leverage", 1)
+            max_notional = self.config.get("safety", {}).get("max_position_notional_pct", 3.0)
+            size = calc_position_size(
+                float(balance), risk_cfg.get("risk_per_trade_pct", 1.0),
+                entry, sl, lev, max_notional_pct=max_notional,
+            )
+            return (size * entry) / float(balance) * 100.0
+        except Exception:
+            return 0.0
 
     def _persist_state(self):
         """State'i diske yaz."""
@@ -798,9 +859,22 @@ class SafeOrchestrator:
             warnings.extend(hold_check.warnings)
 
         # ═══ STEP 6: Yeni Trade Decision ═══
+        # C4: a failed balance fetch on a LIVE cycle must NOT fabricate a $10k
+        # balance and size new entries against it (see actual_balance fallback
+        # below). Treat unavailable balance like stale data → existing positions
+        # were already managed in STEP 5, but open NO new entries this cycle.
+        # Dry-run/backtest pass an explicit balance, so None there is exempt.
+        balance_unavailable = (
+            balance is None and not self.config["operation"].get("dry_run", False)
+        )
+        if balance_unavailable:
+            warnings.append(
+                "Balance unavailable (fetch failed) — skipping new entries this cycle"
+            )
         can_trade = (
             breaker_status.can_trade
             and not stale
+            and not balance_unavailable
             and regime_analysis.can_open_new_position
             and not self.config["operation"].get("watch_only", False)
         )
@@ -825,6 +899,12 @@ class SafeOrchestrator:
             agent_team_review = None
             if self.agent_team is not None and self.agent_team.cfg.get("enabled", False):
                 try:
+                    # F1: estimate the notional % up-front (same sizer the open
+                    # step uses) so the RiskReviewer's "notional > 8% → REJECT"
+                    # rule can actually fire — previously hardcoded 0.0 (blind).
+                    notional_pct = self._estimate_size_notional_pct(
+                        balance, float(latest.entry), float(latest.sl)
+                    )
                     agent_team_review = self.agent_team.review_trade({
                         "symbol": symbol,
                         "direction": latest.direction,
@@ -833,21 +913,18 @@ class SafeOrchestrator:
                         "tp1": float(latest.tp1),
                         "confluence": int(latest.confluence),
                         "htf_bias": htf_bias,
+                        "htf_slope_pct": self._htf_slope_pct(df_htf),  # A4: was never supplied
                         "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
                         "rr": float(latest.rr1) if latest.rr1 else 0.0,
-                        "size_notional_pct": 0.0,  # sized later; refine in follow-up
+                        "size_notional_pct": notional_pct,
                     })
                     # Attach to signal so journal/DB can persist (canonical A7)
                     if isinstance(latest.meta, dict):
                         latest.meta["agent_review"] = agent_team_review
-                        # Mark the risk agent as notional-blind so downstream
-                        # consumers (post-mortem, dashboards) know the
-                        # "notional > 8% → REJECT" rule could not have fired
-                        # on this review. The fix is a 2-pass review
-                        # (post-sizing) — see engine.agents.agent-team-engineer
-                        # "Known limits". This flag is a shadow-data safety
-                        # net, not a runtime fix.
-                        latest.meta["risk_review_was_notional_blind"] = True
+                        # F1: notional-blind only when the estimate was
+                        # unavailable (no balance) — otherwise the risk agent saw
+                        # a real notional and its cap rule could fire.
+                        latest.meta["risk_review_was_notional_blind"] = (notional_pct <= 0.0)
                     log.info(
                         f"🤖 AgentTeam[{symbol}] verdict={agent_team_review.get('team_verdict')} "
                         f"score={agent_team_review.get('score', 0.0):.2f}"
@@ -1614,6 +1691,12 @@ class SafeOrchestrator:
                      f"size={size:.6f} SL={sl:.4f} TP1={tp1:.4f} TP2={tp2_log}")
             return pos
 
+        # C7: the live-price re-validation for the v2 CONFIRMED→order path is the
+        # OrderManager entry-drift guard inside open_position — it re-reads the
+        # live price and rejects if it has drifted past max_entry_drift_pct from
+        # this confirmed `entry` (or is already past TP1). Combined with C1
+        # (closed-bar confirmation), the v2 entry cannot repaint into a
+        # stale-price order. See test_entry_order_placement TestV2EntryDriftGuard.
         return self.order_manager.open_position(
             symbol=cand.symbol,
             direction=cand.direction,
