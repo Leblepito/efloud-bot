@@ -5,8 +5,10 @@
 // HTF bias gate + structural SL + hybrid liquidity/Fibonacci TP ladder.
 // Repaint-safe: HTF data uses lookahead_off on closed bars only.
 //
-// PUBLISH VARIANT (English user-facing strings). Behavior is identical to the
-// repo dev file pine/efloud_signals.pine — only display strings differ.
+// PUBLISH / PRODUCT VARIANT (English user-facing strings). Adds an "auto"
+// Trade-Horizon Profile that follows the chart timeframe (5m->scalp, 15m->mid,
+// 1h->long) so users only switch the chart TF — no manual profile/TF matching.
+// Core SMC signal logic is identical to the repo port pine/efloud_signals.pine.
 // =============================================================================
 indicator("EFloud Signals v2", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
 
@@ -15,12 +17,16 @@ indicator("EFloud Signals v2", overlay = true, max_lines_count = 500, max_labels
 // ─────────────────────────────────────────────────────────────────────────────
 grpTF   = "Timeframe Chain"
 // ── Trade-Horizon Profile (V2 = 2-TF: htf + entry; no mtf) ──
-//   scalp = 5m/.../12h · mid = 15m/.../4h · long = 1h/.../1w · custom = input below
-profileMode = input.string("mid", "Trade-Horizon Profile", options = ["scalp", "mid", "long", "custom"], group = grpTF)
+//   auto = follow chart TF · scalp = 5m/12h · mid = 15m/4h · long = 1h/1w · custom = input below
+profileMode = input.string("auto", "Trade-Horizon Profile", options = ["auto", "scalp", "mid", "long", "custom"], group = grpTF)
 customHtf   = input.timeframe("240", "Custom HTF (profile=custom)", group = grpTF)
-profEntry = profileMode == "scalp" ? "5"   : profileMode == "mid" ? "15"  : profileMode == "long" ? "60"  : ""
-htfTf     = profileMode == "scalp" ? "720" : profileMode == "mid" ? "240" : profileMode == "long" ? "W"   : customHtf
-// LTF = chart TF (must match the profile entry). Daily filter optional:
+// AUTO: map chart timeframe -> profile (5m->scalp, 15m->mid, 1h->long; else mid fallback).
+isSupportedTf = timeframe.period == "5" or timeframe.period == "15" or timeframe.period == "60"
+autoProfile   = timeframe.period == "5" ? "scalp" : timeframe.period == "15" ? "mid" : timeframe.period == "60" ? "long" : "mid"
+effProfile    = profileMode == "auto" ? autoProfile : profileMode
+profEntry = effProfile == "scalp" ? "5"   : effProfile == "mid" ? "15"  : effProfile == "long" ? "60"  : ""
+htfTf     = effProfile == "scalp" ? "720" : effProfile == "mid" ? "240" : effProfile == "long" ? "W"   : customHtf
+// LTF = chart TF. In auto mode the profile follows the chart, so there is no TF mismatch.
 useDaily   = input.bool(false, "Use daily macro filter", group = grpTF)
 dailyTf    = input.timeframe("1D", "Daily TF", group = grpTF)
 dailyStrict= input.bool(false, "Daily filter STRICT (reject opposite bias)", group = grpTF)
@@ -441,11 +447,14 @@ if showZones and barstate.islast and array.size(sDir) > 0
 // HTF bias background tint
 bgcolor(htfBias == 1 ? color.new(color.teal, 95) : htfBias == -1 ? color.new(color.red, 95) : na, title = "HTF bias")
 
-// ── Wrong chart-TF warning (chart TF must match the profile entry) ──
-//   profEntry == "" -> custom profile, no warning.
+// ── Timeframe note (soft, informational — not an error) ──
+//   AUTO: only when chart TF is unsupported (not 5m/15m/1h) -> mid fallback in use.
+//   MANUAL: when chart TF != selected profile entry -> hint to switch chart TF.
+showTfNote = (profileMode == "auto" and not isSupportedTf) or (profileMode != "auto" and profEntry != "" and timeframe.period != profEntry)
+tfNoteMsg  = profileMode == "auto" ? ("ℹ️ Auto: unsupported chart TF " + timeframe.period + "m → using mid (15m) defaults.\nUse 5m / 15m / 1h for scalp / mid / long.") : ("ℹ️ Chart TF=" + timeframe.period + "m · profile(" + effProfile + ") entry=" + profEntry + "m\nSet chart to " + profEntry + "m to match this profile.")
 var table warnTbl = table.new(position.top_right, 1, 1)
-if barstate.islast and profEntry != "" and timeframe.period != profEntry
-    table.cell(warnTbl, 0, 0, "⚠️ WRONG TIMEFRAME\nChart TF=" + timeframe.period + " · profile(" + profileMode + ") entry=" + profEntry, bgcolor = color.new(color.red, 10), text_color = color.white, text_size = size.normal)
+if barstate.islast and showTfNote
+    table.cell(warnTbl, 0, 0, tfNoteMsg, bgcolor = color.new(color.gray, 20), text_color = color.white, text_size = size.small)
 
 // ── Alerts ──
 alertcondition(firedLong,  title = "EFloud V2 LONG",  message = "EFloud V2 LONG entry confirmed")
