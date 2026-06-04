@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://u2algo.com/schemas/content_job-1.0.0.json",
+  "title": "ContentJob",
+  "description": "Lane A producer (efloud-bot) -> Lane B/C/D/E/F consumer contract. Schema version 1.0.0.",
+  "type": "object",
+  "required": ["event_id", "event_type", "schema_version", "occurred_at", "source", "signal", "compliance"],
+  "properties": {
+    "event_id":       { "type": "string", "format": "uuid" },
+    "event_type":     { "enum": ["content_job.created", "content_job.position_opened"] },
+    "schema_version": { "const": "1.0.0" },
+    "occurred_at":    { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "required": ["service", "env"],
+      "properties": {
+        "service": { "const": "efloud-bot" },
+        "env":     { "enum": ["dev", "testnet", "mainnet"] },
+        "commit":  { "type": ["string", "null"] },
+        "loop_id": { "type": "string", "format": "uuid" }
+      }
+    },
+    "signal": {
+      "type": "object",
+      "required": ["symbol", "direction", "entry", "sl", "tp1", "confluence", "timeframe"],
+      "properties": {
+        "symbol":         { "type": "string", "pattern": "^[A-Z0-9]+/[A-Z]+$" },
+        "direction":      { "enum": ["LONG", "SHORT"] },
+        "entry":          { "type": "number", "exclusiveMinimum": 0 },
+        "sl":             { "type": "number", "exclusiveMinimum": 0 },
+        "tp1":            { "type": "number" },
+        "tp2":            { "type": ["number", "null"] },
+        "confluence":     { "type": "integer", "minimum": 0, "maximum": 100 },
+        "timeframe":      { "type": "string" },
+        "horizon":        { "enum": ["scalp", "orta", "uzun", null] },
+        "regime":         { "enum": ["TRENDING", "RANGING", "VOLATILE", null] },
+        "reasons":        { "type": "array", "items": { "type": "string" } },
+        "reasons_detail": { "type": "object" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "filled":       { "type": "boolean" },
+        "fill_price":   { "type": "number" },
+        "quantity":     { "type": "number" },
+        "leverage":     { "type": "integer" },
+        "sl_order_id":  { "type": ["string", "null"] },
+        "tp1_order_id": { "type": ["string", "null"] },
+        "tp2_order_id": { "type": ["string", "null"] },
+        "trace_id":     { "type": ["string", "null"] }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "properties": {
+        "chart_url":   { "type": "string", "format": "uri-reference" },
+        "chart_local": { "type": "string" }
+      }
+    },
+    "compliance": {
+      "type": "object",
+      "required": ["disclaimer_tr", "disclaimer_en", "no_guarantee"],
+      "properties": {
+        "disclaimer_tr": { "const": "Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir." },
+        "disclaimer_en": { "const": "Not investment advice. Trade at your own risk." },
+        "no_guarantee":  { "const": true }
+      }
+    }
+  }
+}

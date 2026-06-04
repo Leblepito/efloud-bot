@@ -25,15 +25,19 @@ log = logging.getLogger("efloud.notifications")
 class NotificationManager:
     """Sinyal ve event bildirimi — kanal-agnostic."""
 
-    def __init__(self, channels: Optional[list] = None):
+    def __init__(self, channels: Optional[list] = None, content_emitter=None):
         """
         channels: ['terminal', 'log', 'telegram', ...] — şimdilik 'terminal' + 'log'
+        content_emitter: ContentJobEmitter instance (Lane A, default None = inert)
         """
         self.channels = channels or ['terminal', 'log']
+        self.content_emitter = content_emitter
 
     def signal_readonly(self, symbol: str, direction: str,
                           entry: float, sl: float, tp1: float, tp2: float,
-                          confluence: int, reasons: list = None):
+                          confluence: int, reasons: list = None,
+                          timeframe: str = None, regime: str = None,
+                          horizon: str = None, trace_id: str = None):
         """
         Read-only sembolde sinyal var — bot trade etmiyor ama kullanıcı bilsin.
         Manuel trader bu sinyali değerlendirip kendisi karar verir.
@@ -65,8 +69,21 @@ class NotificationManager:
             log.info(f"🔍 READONLY: {symbol} {direction} @ {entry:.4f} "
                      f"SL={sl:.4f} TP1={tp1:.4f} Conf={confluence}")
 
+        # Lane A: content_job event emit (inert if emitter None)
+        if self.content_emitter is not None:
+            self.content_emitter.emit(
+                "content_job.created",
+                signal={"symbol": symbol, "direction": direction, "entry": entry,
+                        "sl": sl, "tp1": tp1, "tp2": tp2, "confluence": confluence,
+                        "timeframe": timeframe, "horizon": horizon, "regime": regime,
+                        "reasons": reasons or [], "reasons_detail": {"trace_id": trace_id}},
+            )
+
     def position_opened(self, symbol: str, direction: str, entry: float,
-                          size: float, sl: float, tp1: float, confluence: int):
+                          size: float, sl: float, tp1: float, confluence: int,
+                          timeframe: str = None, regime: str = None,
+                          horizon: str = None, trace_id: str = None,
+                          leverage: int = None):
         """Pozisyon açıldı."""
         msg = (f"✅ [TRADE OPENED] {symbol} {direction} @ {entry:.4f} | "
                f"size={size:.6f} | SL={sl:.4f} TP1={tp1:.4f} | Conf={confluence}")
@@ -74,6 +91,17 @@ class NotificationManager:
             print(msg)
         if 'log' in self.channels:
             log.info(msg)
+
+        # Lane A: position_opened content_job event (inert if emitter None)
+        if self.content_emitter is not None:
+            self.content_emitter.emit(
+                "content_job.position_opened",
+                signal={"symbol": symbol, "direction": direction, "entry": entry,
+                        "sl": sl, "tp1": tp1, "confluence": confluence,
+                        "timeframe": timeframe, "horizon": horizon, "regime": regime},
+                execution={"filled": True, "fill_price": entry, "quantity": size,
+                           "leverage": leverage, "trace_id": trace_id},
+            )
 
     def position_closed(self, symbol: str, direction: str, exit_price: float,
                          pnl: float, reason: str):

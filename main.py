@@ -42,6 +42,7 @@ from engine.safety import (
 from engine.universe import SymbolUniverse
 from engine.permissions import PermissionManager
 from engine.notifications import NotificationManager
+from engine.content_jobs import ContentJobEmitter
 from exchange import BinanceClient, OrderManager
 
 from typing import Optional
@@ -590,7 +591,10 @@ def main():
 
     # ── Permission detection (Binance API yetki kontrolü) ──
     permission_mgr = None
-    notif_mgr = NotificationManager(channels=['terminal', 'log'])
+    notif_mgr = NotificationManager(
+        channels=['terminal', 'log'],
+        content_emitter=ContentJobEmitter(env="mainnet" if not cfg["operation"].get("dry_run", True) else "testnet"),
+    )
     if api_key and not cfg["operation"].get("dry_run", True):
         # Sadece live trading'de detect et — dry_run'da gerek yok
         try:
