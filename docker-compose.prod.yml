@@ -18,6 +18,7 @@ services:
       - efloud_state_aggressive:/app/state_aggressive
       - efloud_logs:/app/logs
       - efloud_reports:/app/reports
+      - efloud_content_jobs:/app/data/content_jobs
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz', timeout=5).getcode()==200 else 1)"]
       interval: 30s
@@ -196,5 +197,6 @@ volumes:
   efloud_state_aggressive:
   efloud_logs:
   efloud_reports:
+  efloud_content_jobs:    # Lane A — content_job JSONL producer (efloud-bot PR #155)
   caddy_data:
   caddy_config:
