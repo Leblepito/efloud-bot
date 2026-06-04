@@ -247,7 +247,9 @@ class TestRepairMissingProtectionOrders:
         )
         mgr.positions.append(pos)
 
-        mgr._repair_missing_protection_orders(bn_order_ids=set())
+        # SL + TP1 are both live on the exchange (present in the order set), so
+        # neither is "missing" — single-target TP2 is the only skip under test.
+        mgr._repair_missing_protection_orders(bn_order_ids={"SL-1", "TP1-1"})
 
         # No create_order calls since TP1 is already present and TP2 is single-target
         mock_client.exchange.create_order.assert_not_called()
@@ -264,7 +266,9 @@ class TestRepairMissingProtectionOrders:
         )
         mgr.positions.append(pos)
 
-        mgr._repair_missing_protection_orders(bn_order_ids=set())
+        # SL (break-even) + TP2 are live on the exchange; TP1 is empty but
+        # tp1_hit suppresses its repair. Nothing should be re-placed.
+        mgr._repair_missing_protection_orders(bn_order_ids={"SL-BE", "TP2-1"})
 
         # No repair attempted — TP1 already hit
         mock_client.exchange.create_order.assert_not_called()
@@ -283,6 +287,7 @@ class TestRepairMissingProtectionOrders:
         # All repair attempts fail
         mock_client.exchange.create_order.side_effect = ValueError("bad params")
 
-        mgr._repair_missing_protection_orders(bn_order_ids=set())
+        # SL + TP2 are live; only the empty TP1 is repaired (and fails).
+        mgr._repair_missing_protection_orders(bn_order_ids={"SL-1", "TP2-1"})
 
         assert pos.tp1_order_id == ""  # Still empty, but no crash
