@@ -700,8 +700,16 @@ class OrderManager:
                 _time.sleep(delay)
         return ""  # unreachable but defensive
 
-    def _repair_missing_protection_orders(self, bn_order_ids: set) -> None:
+    def _repair_missing_protection_orders(
+        self, bn_order_ids: set, algo_fetch_ok: bool = True
+    ) -> None:
         """Re-send TP1/TP2 orders for positions that have empty order IDs.
+
+        ``algo_fetch_ok`` reports whether this cycle's algo-order fetch
+        succeeded. When it failed, ``bn_order_ids`` holds NO algoIds, so every
+        live SL/TP (which ARE algoIds) would falsely look 'absent' — the
+        set-but-absent SL repair is suppressed to avoid re-placing a still-live
+        SL (duplicate-SL churn on a transient API hiccup).
 
         Called from reconcile() after the TP1-hit detection pass. This is the
         safety net that catches:
@@ -744,8 +752,11 @@ class OrderManager:
             # BEFORE repair, so a still-open position whose SL is absent
             # genuinely lost it (an SL fill would have closed the position).
             # UNREACHABLE sentinel is excluded via _is_real_oid (do not churn).
+            # Gated on algo_fetch_ok: if the algo fetch failed this cycle,
+            # bn_order_ids has no algoIds and every live SL would look absent.
             sl_absent_on_exchange = (
-                self._is_real_oid(pos.sl_order_id)
+                algo_fetch_ok
+                and self._is_real_oid(pos.sl_order_id)
                 and pos.sl_order_id not in bn_order_ids
             )
             if not pos.sl_order_id or sl_absent_on_exchange:
@@ -1242,6 +1253,7 @@ class OrderManager:
         bn_orders_raw: list = []
         bn_order_ids: set = set()
         orders_fetch_ok = True
+        algo_fetch_ok = True
         try:
             bn_orders_raw = self.client.exchange.fetch_open_orders()
             bn_order_ids = {str(o.get("id", "")) for o in bn_orders_raw}
@@ -1254,6 +1266,7 @@ class OrderManager:
                 algo_orders = self.client.exchange.fapiPrivateGetOpenAlgoOrders({})
                 bn_order_ids.update(str(a.get("algoId", "")) for a in algo_orders)
             except Exception as e:
+                algo_fetch_ok = False
                 log.warning(f"Reconcile: algo orders fetch failed: {e} — TP1-hit detection may misfire")
         except Exception as e:
             log.warning(f"Reconcile: open orders fetch failed: {e}")
@@ -1379,7 +1392,7 @@ class OrderManager:
         # re-send the missing orders now. This is the safety net that ensures
         # every open position eventually gets full SL+TP protection.
         if orders_fetch_ok and not self.dry_run:
-            self._repair_missing_protection_orders(bn_order_ids)
+            self._repair_missing_protection_orders(bn_order_ids, algo_fetch_ok=algo_fetch_ok)
 
         # 🧹 Fail-safe leftover order sweeper:
         # If there are open orders on Binance for a symbol, but we have:

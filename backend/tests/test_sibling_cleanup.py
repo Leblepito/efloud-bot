@@ -510,6 +510,25 @@ class TestRepairSetButAbsentProtection:
         assert pos.sl_order_id == _TP_UNREACHABLE_SENTINEL
         assert mock_client.exchange.create_order.call_count == 0
 
+    def test_repair_does_not_churn_when_algo_fetch_failed(self, mgr, mock_client):
+        """If the algo-order fetch failed this cycle, bn_order_ids lacks ALL
+        algoIds, so every live SL/TP (which ARE algoIds) would look 'absent'.
+        The set-but-absent branch must be suppressed (algo_fetch_ok=False) to
+        avoid re-placing a still-live SL → duplicate-SL churn on a transient
+        API hiccup. Falls back to empty-id-only repair (pre-fix behavior)."""
+        pos = Position(
+            symbol="BTC/USDT", direction="LONG", entry=95000, sl=94000,
+            tp1=96000, tp2=97000, size=1.0,
+            sl_order_id="SL-LIVE", tp1_order_id="TP1-1", tp2_order_id="TP2-1",
+        )
+        mgr.positions = [pos]
+
+        # bn_order_ids has nothing (algo fetch failed → no algoIds harvested).
+        mgr._repair_missing_protection_orders(set(), algo_fetch_ok=False)
+
+        assert pos.sl_order_id == "SL-LIVE"  # untouched — not re-placed
+        assert mock_client.exchange.create_order.call_count == 0
+
 
 class TestAlgoSweeper:
     """The leftover sweeper must also cancel orphan ALGO orders (SL/TP) for
