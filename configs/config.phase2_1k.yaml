@@ -98,7 +98,7 @@ risk:
   risk_per_trade_pct: 1.0             # $20 risk budget per trade ($2000 × 1%)
   max_open_positions: 10              # Eşzamanlı max 10 (her sembol için 1)
   min_rr: 1.8                         # Min R:R 1:1.8
-  min_confluence: 80                  # S1: 50 → 80. 365g backtest (10 prod sym):
+  min_confluence: 50                  # Adjusted from 80 to 50 per operator request to increase trade frequency
                                       # conf=50 +81%/DD8.3/PF1.35/WR44.5 vs conf=80
                                       # +110%/DD5.4/PF2.34/WR53.7 (step=8). conf=50 PF
                                       # ustura-ince (fee'siz); conf=80 her metrikte domine.
