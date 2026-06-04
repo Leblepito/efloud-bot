@@ -22,6 +22,7 @@ from backend.notifications import TelegramNotifier
 from engine import SafeOrchestrator
 from engine.journal import TradeJournal
 from engine.notifications import NotificationManager
+from engine.content_jobs import ContentJobEmitter
 from engine.permissions import PermissionManager
 from engine.safety import MainnetGuard, OrphanProtector, load_orphan_protection_config
 from engine.universe import SymbolUniverse
@@ -218,7 +219,12 @@ class BotRunner:
                 self.last_error = err
                 return
 
-        notif_mgr = NotificationManager(channels=["log"])  # WS push üzerinden ayrıca yapılır
+        notif_mgr = NotificationManager(
+            channels=["log"],  # WS push üzerinden ayrıca yapılır
+            content_emitter=ContentJobEmitter(
+                env="mainnet" if not self.cfg["operation"].get("dry_run", True) else "testnet"
+            ),
+        )
         state_dir = self.cfg["operation"].get("state_dir", "./state")
 
         orphan_cfg = load_orphan_protection_config(self.cfg.get("safety", {}))
