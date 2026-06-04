@@ -126,10 +126,11 @@ if __name__ == "__main__":
 
     cmd = sys.argv[1]
     if cmd == "run":
-        if len(sys.argv) < 3:
-            print("Usage: python -m scripts.routines.runner run <name>")
+        import os
+        name = sys.argv[2] if len(sys.argv) >= 3 else os.environ.get("ROUTINE")
+        if not name:
+            print("Usage: python -m scripts.routines.runner run <name> (or set ROUTINE environment variable)")
             sys.exit(2)
-        name = sys.argv[2]
         rc = run_one(name)
         sys.exit(rc)
     elif cmd == "watch":

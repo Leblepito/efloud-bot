@@ -191,6 +191,40 @@ services:
         max-size: "2m"
         max-file: "3"
 
+  routines-watcher:
+    image: efloud-bot:latest
+    container_name: efloud-routines
+    command: python -m scripts.routines.runner watch
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    volumes:
+      - efloud_state:/app/state
+      - efloud_reports:/app/reports
+      - efloud_data:/app/data            # new volume for data/market/*
+      - efloud_logs:/app/logs:ro
+    depends_on:
+      efloud-bot:
+        condition: service_started   # watch even if bot idle
+
+  routines-scheduled:
+    image: efloud-bot:latest
+    container_name: efloud-routines-scheduled
+    profiles: [routines-scheduled]
+    command: python -m scripts.routines.runner run
+    env_file:
+      - .env.production
+    volumes:
+      - efloud_state:/app/state
+      - efloud_reports:/app/reports
+      - efloud_data:/app/data
+      - efloud_logs:/app/logs:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "3"
+
 volumes:
   efloud_state:
   efloud_state_1k:
@@ -198,5 +232,6 @@ volumes:
   efloud_logs:
   efloud_reports:
   efloud_content_jobs:    # Lane A — content_job JSONL producer (efloud-bot PR #155)
+  efloud_data:            # new volume for data/market/*
   caddy_data:
   caddy_config:
