@@ -95,6 +95,10 @@ class GeminiClient:
             _consecutive_failures += 1
             msg = (f"GeminiClient.complete_json failed "
                    f"(#{_consecutive_failures}, returning {{}}): {e!r}")
+            # The key travels in the URL (?key=...) and httpx error strings embed
+            # the request URL — redact it so a 429/HTTP error never leaks the key.
+            if self.api_key:
+                msg = msg.replace(self.api_key, "***REDACTED***")
             if _consecutive_failures == 1 or _consecutive_failures % _WARN_EVERY == 0:
                 log.warning(msg)
             else:

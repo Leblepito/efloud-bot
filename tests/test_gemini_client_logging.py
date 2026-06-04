@@ -39,6 +39,32 @@ def test_missing_key_stays_silent(caplog):
     assert not caplog.records, "missing key is an expected fail-safe, not an error"
 
 
+def test_api_key_not_leaked_in_logs(monkeypatch, caplog):
+    """Gemini sends the key in the URL (?key=...). httpx errors embed the
+    request URL in their string, so an HTTP error (e.g. 429) would otherwise
+    leak the key into the WARNING log. It must be redacted."""
+    secret = "AIzaSECRET_KEY_should_never_appear_in_logs"
+
+    def _raise_http_error(url, **k):
+        request = httpx.Request("POST", url)
+        response = httpx.Response(429, request=request)
+        # Mirrors httpx's own message format: it embeds the full request URL.
+        raise httpx.HTTPStatusError(
+            f"Client error '429 Too Many Requests' for url '{url}'",
+            request=request,
+            response=response,
+        )
+
+    monkeypatch.setattr(gc.httpx, "post", _raise_http_error)
+    monkeypatch.setattr(gc, "_consecutive_failures", 0, raising=False)
+    client = GeminiClient(api_key=secret)
+    with caplog.at_level(logging.WARNING, logger=_LOGGER):
+        assert client.complete_json("x") == {}
+    assert caplog.records, "an HTTP 429 must still surface at WARNING"
+    for r in caplog.records:
+        assert secret not in r.getMessage(), "API key leaked into logs"
+
+
 def test_repeated_failures_are_rate_limited(monkeypatch, caplog):
     monkeypatch.setattr(gc.httpx, "post", _raise_conn)
     monkeypatch.setattr(gc, "_consecutive_failures", 0, raising=False)
