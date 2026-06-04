@@ -1,0 +1,461 @@
+//@version=6
+// =============================================================================
+// EFloud Signals v2 — Multi-Timeframe Smart Money Concepts
+// Wait-for-confirmation state machine: CHoCH -> pullback zone -> engulfing confirm.
+// HTF bias gate + structural SL + hybrid liquidity/Fibonacci TP ladder.
+// Repaint-safe: HTF data uses lookahead_off on closed bars only.
+//
+// PUBLISH / PRODUCT VARIANT (English user-facing strings). Adds an "auto"
+// Trade-Horizon Profile that follows the chart timeframe (5m->scalp, 15m->mid,
+// 1h->long) so users only switch the chart TF — no manual profile/TF matching.
+// Core SMC signal logic is identical to the repo port pine/efloud_signals.pine.
+// =============================================================================
+indicator("EFloud Signals v2", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INPUTS  (identifier names kept in sync with the strategy file)
+// ─────────────────────────────────────────────────────────────────────────────
+grpTF   = "Timeframe Chain"
+// ── Trade-Horizon Profile (V2 = 2-TF: htf + entry; no mtf) ──
+//   auto = follow chart TF · scalp = 5m/12h · mid = 15m/4h · long = 1h/1w · custom = input below
+profileMode = input.string("auto", "Trade-Horizon Profile", options = ["auto", "scalp", "mid", "long", "custom"], group = grpTF)
+customHtf   = input.timeframe("240", "Custom HTF (profile=custom)", group = grpTF)
+// AUTO: map chart timeframe -> profile (5m->scalp, 15m->mid, 1h->long; else mid fallback).
+isSupportedTf = timeframe.period == "5" or timeframe.period == "15" or timeframe.period == "60"
+autoProfile   = timeframe.period == "5" ? "scalp" : timeframe.period == "15" ? "mid" : timeframe.period == "60" ? "long" : "mid"
+effProfile    = profileMode == "auto" ? autoProfile : profileMode
+profEntry = effProfile == "scalp" ? "5"   : effProfile == "mid" ? "15"  : effProfile == "long" ? "60"  : ""
+htfTf     = effProfile == "scalp" ? "720" : effProfile == "mid" ? "240" : effProfile == "long" ? "W"   : customHtf
+// LTF = chart TF. In auto mode the profile follows the chart, so there is no TF mismatch.
+useDaily   = input.bool(false, "Use daily macro filter", group = grpTF)
+dailyTf    = input.timeframe("1D", "Daily TF", group = grpTF)
+dailyStrict= input.bool(false, "Daily filter STRICT (reject opposite bias)", group = grpTF)
+
+grpSwing = "SMC Primitives"
+swingLb  = input.int(5, "Swing lookback (pivot L/R)", minval = 1, group = grpSwing)
+oteLo    = input.float(0.618, "OTE retrace lo", group = grpSwing)
+oteHi    = input.float(0.786, "OTE retrace hi", group = grpSwing)
+htfSlope = input.float(2.0, "HTF bias slope fallback %", group = grpSwing)
+eqThrPct = input.float(0.1, "Equal-level threshold %", minval = 0.0, group = grpSwing)   // EQH/EQL clustering
+eqThr    = eqThrPct / 100.0
+
+grpV2 = "V2 Setup Machine"
+pullbackTimeoutBars = input.int(8, "Pullback timeout (bars)", minval = 1, group = grpV2)
+maxPending          = input.int(3, "Max pending candidates", minval = 1, group = grpV2)
+recencyBars         = input.int(20, "CHoCH recency (bars)", minval = 1, group = grpV2)
+requireConfirm      = input.bool(true, "Require engulfing confirmation", group = grpV2)
+
+grpRisk = "Risk (SL / TP)"
+atrLen      = input.int(14, "ATR length", minval = 1, group = grpRisk)
+slAtrBuffer = input.float(0.5, "SL ATR buffer", group = grpRisk)
+minSlAtr    = input.float(0.5, "Min SL (ATR)", group = grpRisk)
+maxSlAtr    = input.float(5.0, "Max SL (ATR) — reject setup if exceeded", group = grpRisk)
+minRr       = input.float(1.8, "Min R:R (TP1)", group = grpRisk)
+fibExt      = input.float(1.618, "TP2 fib extension", group = grpRisk)
+fibTp1      = input.float(1.272, "TP1 Fibo (price discovery)", group = grpRisk)   // TP1 when no structure
+fibDiscTp2  = input.float(2.618, "TP2 Fibo (discovery ext)", group = grpRisk)     // TP2 in discovery
+
+grpViz = "Visuals"
+showZones  = input.bool(true, "Zone boxes", group = grpViz)
+showLevels = input.bool(true, "Entry/SL/TP lines", group = grpViz)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTF BUNDLE — runs in 4h context, returns scalar bundle (repaint-safe)
+//   trend(int 1/-1/0), last swing high/low, nearest EQH/EQL, OTE band, nearest unmitigated FVG bot/top
+//   NOTE (simplification): TP liquidity = one nearest swing per side + one nearest
+//   EQH/EQL + FVG_NEAR (3 scalar candidates); no full cluster arrays (spec §12 #6).
+// ─────────────────────────────────────────────────────────────────────────────
+htfBundle() =>
+    ph = ta.pivothigh(swingLb, swingLb)
+    pl = ta.pivotlow(swingLb, swingLb)
+
+    var float lastSH = na
+    var float lastSL = na
+    var int   trend  = 0          // 1 BULL, -1 BEAR, 0 UNDEF
+    var float refSH  = na         // active swing high for structure break
+    var float refSL  = na
+
+    if not na(ph)
+        lastSH := ph
+        refSH  := ph
+    if not na(pl)
+        lastSL := pl
+        refSL  := pl
+
+    // Equal-high/low liquidity pool (smc.py:308-353 liquidity_pools equivalent):
+    // new pivot within eqThr (0.1%) of ANY of the last eqWindow pivots -> EQH/EQL.
+    // (also catches non-consecutive equals; returns one scalar = most recent EQ level)
+    var float[] recentPH = array.new_float()
+    var float[] recentPL = array.new_float()
+    var float lastEqh = na
+    var float lastEql = na
+    eqWindow = 5
+    if not na(ph)
+        if array.size(recentPH) > 0
+            for k = 0 to array.size(recentPH) - 1
+                p = array.get(recentPH, k)
+                if math.abs(ph - p) <= p * eqThr
+                    lastEqh := math.max(ph, p)
+        array.push(recentPH, ph)
+        if array.size(recentPH) > eqWindow
+            array.shift(recentPH)
+    if not na(pl)
+        if array.size(recentPL) > 0
+            for k = 0 to array.size(recentPL) - 1
+                p = array.get(recentPL, k)
+                if math.abs(pl - p) <= p * eqThr
+                    lastEql := math.min(pl, p)
+        array.push(recentPL, pl)
+        if array.size(recentPL) > eqWindow
+            array.shift(recentPL)
+
+    // Structure trend (CHoCH/BOS same trend update)
+    if not na(refSH) and close > refSH
+        trend := 1
+        refSH := na
+    if not na(refSL) and close < refSL
+        trend := -1
+        refSL := na
+
+    // Slope fallback (while trend UNDEF)
+    bias = trend
+    if bias == 0 and bar_index > 40
+        chg = (close - close[40]) / close[40] * 100.0
+        bias := chg > htfSlope ? 1 : chg < -htfSlope ? -1 : 0
+
+    // OTE band (from last swing high/low)
+    float oteTop = na
+    float oteBot = na
+    if not na(lastSH) and not na(lastSL) and lastSH > lastSL
+        d = lastSH - lastSL
+        if bias >= 0
+            oteTop := lastSH - d * oteLo
+            oteBot := lastSH - d * oteHi
+        else
+            oteTop := lastSL + d * oteHi
+            oteBot := lastSL + d * oteLo
+
+    // Nearest unmitigated FVG (3-bar imbalance), per direction
+    // BULL FVG: low > high[2] ; BEAR FVG: high < low[2]
+    var float bullFvgBot = na
+    var float bullFvgTop = na
+    var float bearFvgBot = na
+    var float bearFvgTop = na
+    if low > high[2]
+        bullFvgBot := high[2]
+        bullFvgTop := low
+    if high < low[2]
+        bearFvgBot := high
+        bearFvgTop := low[2]
+    // Mitigation: cancel BULL FVG if bot is touched; cancel BEAR FVG if top is touched
+    if not na(bullFvgBot) and low <= bullFvgBot
+        bullFvgBot := na
+        bullFvgTop := na
+    if not na(bearFvgTop) and high >= bearFvgTop
+        bearFvgBot := na
+        bearFvgTop := na
+
+    [bias, lastSH, lastSL, lastEqh, lastEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
+
+[htfBias, htfSwingHigh, htfSwingLow, htfEqh, htfEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+
+// Daily bias (optional)
+dailyBias = 0
+if useDaily
+    db = request.security(syminfo.tickerid, dailyTf, (close - close[30]) / close[30] * 100.0, lookahead = barmerge.lookahead_off)
+    dailyBias := db > 5.0 ? 1 : db < -5.0 ? -1 : 0
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LTF (chart TF) — swing + structure + CHoCH trigger
+// ─────────────────────────────────────────────────────────────────────────────
+phL = ta.pivothigh(swingLb, swingLb)
+plL = ta.pivotlow(swingLb, swingLb)
+
+var float lRefSH = na
+var float lRefSL = na
+var int   lTrend = 0
+if not na(phL)
+    lRefSH := phL
+if not na(plL)
+    lRefSL := plL
+
+// CHoCH = break while trend opposite/UNDEF (reversal). BOS = same direction (V2 skips BOS).
+bool chochBull = false
+bool chochBear = false
+float chochPx  = na
+if not na(lRefSH) and close > lRefSH
+    chochBull := lTrend <= 0          // previous trend BEAR/UNDEF -> CHoCH
+    chochPx   := close
+    lTrend    := 1
+    lRefSH    := na
+if not na(lRefSL) and close < lRefSL
+    chochBear := lTrend >= 0
+    chochPx   := close
+    lTrend    := -1
+    lRefSL    := na
+
+atr15 = ta.atr(atrLen)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETUP STATE MACHINE — parallel var arrays
+//   state: 0 AWAITING_PULLBACK, 1 IN_ZONE  (CONFIRMED/EXPIRED removed from array)
+// ─────────────────────────────────────────────────────────────────────────────
+var int[]   sDir       = array.new_int()      // 1 LONG, -1 SHORT
+var int[]   sState     = array.new_int()
+var float[] sZoneLow   = array.new_float()
+var float[] sZoneHigh  = array.new_float()
+var float[] sAnchor    = array.new_float()
+var float[] sTrigPx    = array.new_float()
+var int[]   sBarsWait  = array.new_int()
+
+// Active candidate count on the symbol (cap check)
+pendingCount() => array.size(sDir)
+
+// Build zone: FVG priority, OTE fallback. Degenerate (zero width) -> returns na.
+buildZone(int dir, float trigPx) =>
+    float zl = na
+    float zh = na
+    if dir == 1            // LONG -> BEAR FVG BELOW trigger
+        if not na(bearFvgTop) and bearFvgTop < trigPx
+            zl := bearFvgBot
+            zh := bearFvgTop
+    else                   // SHORT -> BULL FVG ABOVE trigger
+        if not na(bullFvgBot) and bullFvgBot > trigPx
+            zl := bullFvgBot
+            zh := bullFvgTop
+    if na(zl) and not na(oteTop) and not na(oteBot) and oteTop != oteBot
+        zl := math.min(oteBot, oteTop)
+        zh := math.max(oteBot, oteTop)
+    [zl, zh]
+
+// SL anchor: last HTF swing on the opposite side (simplification: last swing vs last-unbroken)
+slAnchor(int dir) => dir == 1 ? htfSwingLow : htfSwingHigh
+
+// Add new CHoCH candidate (all trigger filters)
+addCandidate(int dir, float trigPx) =>
+    if pendingCount() < maxPending and htfBias != 0 and (dir == 1 ? htfBias == 1 : htfBias == -1)
+        // Daily strict filter
+        bool dailyOk = not (useDaily and dailyStrict and dailyBias != 0 and dailyBias != (dir == 1 ? 1 : -1))
+        if dailyOk
+            anchor = slAnchor(dir)
+            [zl, zh] = buildZone(dir, trigPx)
+            if not na(anchor) and not na(zl) and not na(zh)
+                array.push(sDir, dir)
+                array.push(sState, 0)
+                array.push(sZoneLow, zl)
+                array.push(sZoneHigh, zh)
+                array.push(sAnchor, anchor)
+                array.push(sTrigPx, trigPx)
+                array.push(sBarsWait, 0)
+
+// Compute SL (sl_calc.py). NA = setup REJECTED (SLTooFar or anchor issue)
+calcSl(int dir, float entry, float zl, float zh, float anchor) =>
+    buf = slAtrBuffer * atr15
+    float structuralSl = dir == 1 ? math.min(zl, anchor) - buf : math.max(zh, anchor) + buf
+    stopDist = math.abs(entry - structuralSl)
+    minDist  = minSlAtr * atr15
+    maxDist  = maxSlAtr * atr15
+    float sl = na
+    if stopDist > maxDist
+        sl := na                                   // reject
+    else if stopDist < minDist
+        sl := dir == 1 ? entry - minDist : entry + minDist
+    else
+        sl := structuralSl
+    sl
+
+// Compute TP — hybrid: v2 candidate chain (EQH/EQL + swing + FVG_NEAR) + Fibonacci ladder.
+// returns: [tp1, tp2]  (tp1 na -> setup REJECTED / InsufficientTPDistance; tp2 na -> single target)
+//   TP1 candidate priority: LIQUIDITY (swing + EQH/EQL) > FVG_NEAR; on tie, LIQUIDITY.
+//   No structure -> Fibonacci price discovery: tp1 = entry +/- max(minRr, fibTp1)*risk.
+calcTp(int dir, float entry, float sl) =>
+    risk    = math.abs(entry - sl)
+    minDist = minRr * risk
+
+    // Structural candidates: nearest qualifying LIQUIDITY and FVG_NEAR tracked separately.
+    bool  anyCand = false        // is there at least one structural candidate on the correct side
+    float bestLiq = na
+    float bestFvg = na
+    if dir == 1
+        // LIQUIDITY (ABOVE entry): HTF swing high + EQH
+        if not na(htfSwingHigh) and htfSwingHigh > entry
+            anyCand := true
+            if (htfSwingHigh - entry) >= minDist and (na(bestLiq) or htfSwingHigh < bestLiq)
+                bestLiq := htfSwingHigh
+        if not na(htfEqh) and htfEqh > entry
+            anyCand := true
+            if (htfEqh - entry) >= minDist and (na(bestLiq) or htfEqh < bestLiq)
+                bestLiq := htfEqh
+        // FVG_NEAR: BEAR FVG near edge (bot)
+        if not na(bearFvgBot) and bearFvgBot > entry
+            anyCand := true
+            if (bearFvgBot - entry) >= minDist and (na(bestFvg) or bearFvgBot < bestFvg)
+                bestFvg := bearFvgBot
+    else
+        // LIQUIDITY (BELOW entry): HTF swing low + EQL — mirror
+        if not na(htfSwingLow) and htfSwingLow < entry
+            anyCand := true
+            if (entry - htfSwingLow) >= minDist and (na(bestLiq) or htfSwingLow > bestLiq)
+                bestLiq := htfSwingLow
+        if not na(htfEql) and htfEql < entry
+            anyCand := true
+            if (entry - htfEql) >= minDist and (na(bestLiq) or htfEql > bestLiq)
+                bestLiq := htfEql
+        // FVG_NEAR: BULL FVG near edge (top)
+        if not na(bullFvgTop) and bullFvgTop < entry
+            anyCand := true
+            if (entry - bullFvgTop) >= minDist and (na(bestFvg) or bullFvgTop > bestFvg)
+                bestFvg := bullFvgTop
+
+    // TP1 selection: LIQUIDITY > FVG_NEAR (FVG wins only if STRICTLY closer).
+    float tp1 = na
+    bool  isDiscovery = false
+    if not na(bestLiq) and not na(bestFvg)
+        bool fvgCloser = dir == 1 ? bestFvg < bestLiq : bestFvg > bestLiq
+        tp1 := fvgCloser ? bestFvg : bestLiq
+    else if not na(bestLiq)
+        tp1 := bestLiq
+    else if not na(bestFvg)
+        tp1 := bestFvg
+    else if anyCand
+        tp1 := na                                   // candidates exist but none >= min_dist -> REJECT
+    else
+        f = math.max(minRr, fibTp1)                 // no structure -> Fibonacci discovery (R:R clamp)
+        tp1 := dir == 1 ? entry + f * risk : entry - f * risk
+        isDiscovery := true
+
+    // TP2: discovery -> fibDiscTp2; else FVG far edge, else fibExt (beyond tp1).
+    float tp2 = na
+    if not na(tp1)
+        if isDiscovery
+            fd = dir == 1 ? entry + fibDiscTp2 * risk : entry - fibDiscTp2 * risk
+            tp2 := (dir == 1 ? fd > tp1 : fd < tp1) ? fd : na   // keep TP2 > TP1 invariant (minRr>fibDiscTp2 clamp edge)
+        else if dir == 1
+            float far = not na(bearFvgTop) and bearFvgTop > tp1 ? bearFvgTop : na
+            if not na(far)
+                tp2 := far
+            else
+                f = entry + fibExt * risk
+                tp2 := f > tp1 ? f : na
+        else
+            float far = not na(bullFvgBot) and bullFvgBot < tp1 ? bullFvgBot : na
+            if not na(far)
+                tp2 := far
+            else
+                f = entry - fibExt * risk
+                tp2 := f < tp1 ? f : na
+    [tp1, tp2]
+
+// ── Confirmed-bar logic ──
+var float lastEntry = na
+var float lastSl    = na
+var float lastTp1   = na
+var float lastTp2   = na
+var int   lastDir   = 0
+bool firedLong  = false
+bool firedShort = false
+
+if barstate.isconfirmed
+    // 1) New CHoCH candidates (recency: bar is already current)
+    if chochBull
+        addCandidate(1, chochPx)
+    if chochBear
+        addCandidate(-1, chochPx)
+
+    // 2) Advance existing candidates (back to front — safe removal)
+    if array.size(sDir) > 0
+        for i = array.size(sDir) - 1 to 0
+            dir   = array.get(sDir, i)
+            st    = array.get(sState, i)
+            zl    = array.get(sZoneLow, i)
+            zh    = array.get(sZoneHigh, i)
+            wait  = array.get(sBarsWait, i) + 1
+            array.set(sBarsWait, i, wait)
+
+            bool inZone = close >= zl and close <= zh
+            if st == 0 and inZone
+                array.set(sState, i, 1)            // IN_ZONE (sticky)
+                st := 1
+
+            bool expired = wait > pullbackTimeoutBars
+            bool confirmed = false
+
+            if st == 1 and not expired
+                // Engulfing confirmation (close inside zone)
+                bool priorBull = close[1] > open[1]
+                bool priorBear = close[1] < open[1]
+                bool curBull   = close > open
+                bool curBear   = close < open
+                bool bullEng = priorBear and curBull and open <= close[1] and close >= open[1]
+                bool bearEng = priorBull and curBear and open >= close[1] and close <= open[1]
+                bool eng = dir == 1 ? bullEng : bearEng
+                bool zoneClose = close >= zl and close <= zh
+                if (not requireConfirm and inZone) or (eng and zoneClose)
+                    // CONFIRMED -> entry
+                    entry  = close
+                    anchor = array.get(sAnchor, i)
+                    sl     = calcSl(dir, entry, zl, zh, anchor)
+                    if not na(sl)
+                        [tp1, tp2] = calcTp(dir, entry, sl)
+                        bool tpOk = not na(tp1) and (dir == 1 ? tp1 > entry : tp1 < entry)
+                        if tpOk
+                            confirmed := true
+                            lastEntry := entry
+                            lastSl    := sl
+                            lastTp1   := tp1
+                            lastTp2   := tp2
+                            lastDir   := dir
+                            firedLong  := dir == 1
+                            firedShort := dir == -1
+
+            // 3) Remove terminal states from arrays
+            if expired or confirmed
+                array.remove(sDir, i)
+                array.remove(sState, i)
+                array.remove(sZoneLow, i)
+                array.remove(sZoneHigh, i)
+                array.remove(sAnchor, i)
+                array.remove(sTrigPx, i)
+                array.remove(sBarsWait, i)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VISUALS
+// ─────────────────────────────────────────────────────────────────────────────
+plotshape(firedLong,  title = "LONG entry",  style = shape.triangleup,   location = location.belowbar, color = color.new(color.teal, 0),  size = size.small)
+plotshape(firedShort, title = "SHORT entry", style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0),   size = size.small)
+
+if showLevels and (firedLong or firedShort)
+    col = lastDir == 1 ? color.teal : color.red
+    line.new(bar_index, lastEntry, bar_index + 6, lastEntry, color = color.new(color.gray, 0), width = 1)
+    line.new(bar_index, lastSl,    bar_index + 6, lastSl,    color = color.new(color.red, 0),  width = 1, style = line.style_dashed)
+    line.new(bar_index, lastTp1,   bar_index + 6, lastTp1,   color = color.new(color.green, 0), width = 1)
+    label.new(bar_index + 6, lastEntry, "Entry", style = label.style_label_left, color = color.new(col, 80), textcolor = color.white, size = size.tiny)
+    label.new(bar_index + 6, lastSl,    "SL",    style = label.style_label_left, color = color.new(color.red, 80), textcolor = color.white, size = size.tiny)
+    label.new(bar_index + 6, lastTp1,   "TP1",   style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny)
+    if not na(lastTp2)
+        line.new(bar_index, lastTp2, bar_index + 6, lastTp2, color = color.new(color.green, 30), width = 1)
+        label.new(bar_index + 6, lastTp2, "TP2", style = label.style_label_left, color = color.new(color.green, 80), textcolor = color.white, size = size.tiny)
+
+// Zone box (active IN_ZONE candidates)
+if showZones and barstate.islast and array.size(sDir) > 0
+    for i = 0 to array.size(sDir) - 1
+        zl = array.get(sZoneLow, i)
+        zh = array.get(sZoneHigh, i)
+        c  = array.get(sState, i) == 1 ? color.new(color.orange, 80) : color.new(color.blue, 88)
+        box.new(bar_index - 5, zh, bar_index + 2, zl, border_color = color.new(color.gray, 50), bgcolor = c)
+
+// HTF bias background tint
+bgcolor(htfBias == 1 ? color.new(color.teal, 95) : htfBias == -1 ? color.new(color.red, 95) : na, title = "HTF bias")
+
+// ── Timeframe note (soft, informational — not an error) ──
+//   AUTO: only when chart TF is unsupported (not 5m/15m/1h) -> mid fallback in use.
+//   MANUAL: when chart TF != selected profile entry -> hint to switch chart TF.
+showTfNote = (profileMode == "auto" and not isSupportedTf) or (profileMode != "auto" and profEntry != "" and timeframe.period != profEntry)
+tfNoteMsg  = profileMode == "auto" ? ("ℹ️ Auto: unsupported chart TF " + timeframe.period + "m → using mid (15m) defaults.\nUse 5m / 15m / 1h for scalp / mid / long.") : ("ℹ️ Chart TF=" + timeframe.period + "m · profile(" + effProfile + ") entry=" + profEntry + "m\nSet chart to " + profEntry + "m to match this profile.")
+var table warnTbl = table.new(position.top_right, 1, 1)
+if barstate.islast and showTfNote
+    table.cell(warnTbl, 0, 0, tfNoteMsg, bgcolor = color.new(color.gray, 20), text_color = color.white, text_size = size.small)
+
+// ── Alerts ──
+alertcondition(firedLong,  title = "EFloud V2 LONG",  message = "EFloud V2 LONG entry confirmed")
+alertcondition(firedShort, title = "EFloud V2 SHORT", message = "EFloud V2 SHORT entry confirmed")
