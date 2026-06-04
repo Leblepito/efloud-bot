@@ -11,7 +11,7 @@ Schema: docs/schemas/content_job-1.0.0.json
 import json
 import logging
 import os
-import tempfile
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -64,6 +64,10 @@ class ContentJobEmitter:
         self.env = env
         self.loop_id = loop_id or str(uuid.uuid4())
         self.commit = _git_commit()
+        # Single-process lock: efloud-bot tek container ama thread-safe yap.
+        # Dosya O_APPEND POSIX atomic ama Python write + flush + fsync 3 syscall,
+        # aralarinda race olabilir. Lock ile sequentialize.
+        self._lock = threading.Lock()
 
     def _schema(self) -> Optional[dict]:
         sp = Path(__file__).parent.parent / "docs" / "schemas" / f"content_job-{SCHEMA_VERSION}.json"
@@ -81,25 +85,23 @@ class ContentJobEmitter:
         return self.base_path / f"{datetime.now(timezone.utc).date().isoformat()}.jsonl"
 
     def _append(self, line: str) -> bool:
+        """O_APPEND + fsync + lock. Concurrent thread'ler sequentialize."""
         try:
             self.base_path.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             log.error("content_jobs_mkdir_failed path=%s err=%s", self.base_path, e)
             return False
         target = self._file()
-        fd, tmp = tempfile.mkstemp(prefix=".emit-", dir=str(self.base_path), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(line + "\n")
-            os.replace(tmp, target)
-            return True
-        except OSError as e:
-            log.error("content_jobs_write_failed err=%s", e)
+        with self._lock:
             try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-            return False
+                with open(target, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                return True
+            except OSError as e:
+                log.error("content_jobs_write_failed err=%s", e)
+                return False
 
     def emit(self, event_type: str, signal: dict, execution: Optional[dict] = None) -> bool:
         if not _enabled():

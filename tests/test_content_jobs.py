@@ -22,7 +22,6 @@ intact.
 
 import json
 import os
-import platform
 import shutil
 import tempfile
 import threading
@@ -31,15 +30,6 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-
-# Windows NTFS doesn't guarantee atomic os.replace across concurrent
-# processes (Linux ext4 does). The Hetzner production environment is Linux,
-# so concurrent emit only needs to be tested on POSIX. Mark these tests
-# as skip-on-Windows to keep CI fast and signal intent.
-_IS_WINDOWS = platform.system() == "Windows"
-skip_on_windows = pytest.mark.skipif(
-    _IS_WINDOWS, reason="Concurrent emit: Linux-only (NTFS rename not atomic)"
-)
 
 from engine.content_jobs import ContentJobEmitter, SCHEMA_VERSION, _enabled, _base_path
 from engine.notifications import NotificationManager
@@ -92,17 +82,17 @@ def test_emit_creates_file(emitter, tmp_jobs_path):
     assert event["compliance"]["no_guarantee"] is True
 
 
-def test_atomic_write_no_partial_files(emitter, tmp_jobs_path, monkeypatch):
-    """Crash mid-write: tmp kalmaz, dosya temiz veya hiç oluşmamış."""
-    # os.replace'i crash simüle et -> OSError
-    original_replace = os.replace
-    def crashing_replace(*a, **kw):
-        raise OSError("simulated crash during rename")
-    monkeypatch.setattr(os, "replace", crashing_replace)
+def test_disk_full_or_open_failure(emitter, tmp_jobs_path, monkeypatch):
+    """Crash mid-write: dosya temiz kalir (tmp yok, kismi satir yazilabilir ama test izole)."""
+    # open()'i crash simüle et -> OSError
+    original_open = open
+    def crashing_open(*a, **kw):
+        raise OSError("simulated crash during open")
+    monkeypatch.setattr("builtins.open", crashing_open)
     assert emitter.emit("content_job.created", signal=_signal()) is False
-    # Tmp dosya kalmamalı
-    tmps = list(tmp_jobs_path.glob(".emit-*.tmp"))
-    assert tmps == [], f"tmp leftover: {tmps}"
+    # Klasör boş (dosya oluşmadi)
+    files = list(tmp_jobs_path.glob("*.jsonl"))
+    assert files == [], f"unexpected files: {files}"
 
 
 def test_daily_rotation_creates_new_file(emitter, tmp_jobs_path, monkeypatch):
@@ -126,7 +116,6 @@ def test_daily_rotation_creates_new_file(emitter, tmp_jobs_path, monkeypatch):
     assert len(list(tmp_jobs_path.glob("*.jsonl"))) == 2
 
 
-@skip_on_windows
 def test_concurrent_emit_no_corruption(emitter, tmp_jobs_path):
     """100 paralel emit, hepsi valid JSON parse edilir."""
     results = []
@@ -145,7 +134,6 @@ def test_concurrent_emit_no_corruption(emitter, tmp_jobs_path):
     assert len({e["event_id"] for e in parsed}) == 100  # unique IDs
 
 
-@skip_on_windows
 def test_event_id_unique(emitter, tmp_jobs_path):
     """UUID v4, 1000 emit'te collision yok."""
     ids = set()
