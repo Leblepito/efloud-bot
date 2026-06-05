@@ -552,6 +552,32 @@ class SafeOrchestrator:
         except Exception as e:
             log.warning(f"trade_journal.record_exit failed for {pos.id}: {e}")
 
+    def _live_opposite_position_exists(self, symbol: str, direction: str) -> bool:
+        """True if a position for (symbol, direction) is live on the exchange NOW.
+
+        Guards the reverse path against a lifecycle-vs-order_manager desync — a
+        position the order_manager no longer tracks but is still open on Binance.
+        Fails SAFE: on any fetch error, assume it MAY be live (return True) so the
+        caller aborts the reverse rather than risk an uncontrolled auto-flip.
+        """
+        client = getattr(self.order_manager, "client", None)
+        if client is None:
+            return False  # dry-run / no exchange client → original behavior
+        try:
+            from exchange import _strip_contract_suffix
+            for p in (client.get_open_positions() or []):
+                if (_strip_contract_suffix(p.get("symbol", "")) == symbol
+                        and str(p.get("side", "")).upper() == direction
+                        and float(p.get("contracts", 0) or 0) > 0):
+                    return True
+            return False
+        except Exception as e:
+            log.warning(
+                f"[{symbol}] reverse desync check failed: {e} — assuming position "
+                f"may be live (aborting reverse to be safe)"
+            )
+            return True
+
     def _handle_reverse(self, opposite_pos, symbol: str, current_price: float) -> bool:
         """Close the opposite-direction position so a reverse-direction signal
         can open cleanly afterwards.
@@ -592,12 +618,37 @@ class SafeOrchestrator:
                     if self.notification_mgr is not None:
                         try:
                             self.notification_mgr.alert(
+                                "CRITICAL",
                                 f"REVERSE close failed for {symbol}: {e}. "
-                                f"Manual intervention required."
+                                f"Manual intervention required.",
                             )
                         except Exception:
                             pass
                     return False
+            elif self._live_opposite_position_exists(symbol, opposite_pos.direction):
+                # order_manager does not track this position, but it IS still live
+                # on the exchange (lifecycle-vs-order_manager desync: restart with
+                # empty order_manager state, manual injection, partial reconcile).
+                # Proceeding would open the reverse side and — under hedge-off /
+                # ISOLATED — trigger an uncontrolled Binance auto-flip of the live
+                # position with no bot SL/TP, leaving orphan algo orders. Abort the
+                # reverse instead of dropping logical state on a live position.
+                log.error(
+                    f"⛔ [{symbol}] REVERSE aborted: {opposite_pos.direction} position "
+                    f"is live on the exchange but untracked by order_manager (desync) "
+                    f"— refusing to auto-flip."
+                )
+                if self.notification_mgr is not None:
+                    try:
+                        self.notification_mgr.alert(
+                            "CRITICAL",
+                            f"REVERSE aborted for {symbol}: live {opposite_pos.direction} "
+                            f"position untracked by order_manager (desync). Manual "
+                            f"intervention required.",
+                        )
+                    except Exception:
+                        pass
+                return False
 
         self.lifecycle.close_position(opposite_pos, current_price, "REVERSE")
         # Journal-write avoidance: when exchange_close_ran is True, the
@@ -1225,7 +1276,7 @@ class SafeOrchestrator:
                                             warnings.append(flat_msg)
                                             if self.notification_mgr is not None:
                                                 try:
-                                                    self.notification_mgr.alert(flat_msg)
+                                                    self.notification_mgr.alert("WARNING", flat_msg)
                                                 except Exception:
                                                     pass
                                         else:
