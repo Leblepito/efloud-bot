@@ -80,12 +80,20 @@ The other three TP branches already clamp to `min_tp` (= `min_rr·risk`):
 Only the discovery branch is defective. TP2 discovery logic (2.618·risk,
 signals.py:642) is unaffected and stays.
 
-## Config change
+## Config change — DEFERRED (split out 2026-06-05 per review)
 
-`configs/config.phase2_1k.yaml:100` — `min_rr: 1.8 → 1.5` (repo-optimized value;
-"Optimized from 1.8" per root config.yaml). Rebuild-safe (committed). Affects all
-signals, not just discovery: slightly more frequent fills, higher turnover.
-This is `risk:` block → triggers risk-ops review.
+`configs/config.phase2_1k.yaml:100` `min_rr: 1.8 → 1.5` was **split out of this PR**
+after review. The clamp (code) is risk-neutral and unblocks discovery at the
+*current* floor (min_rr=1.8 → discovery emits at 1.8R), fully resolving the "bot
+won't trade" symptom on its own.
+
+The R:R-floor change is a separate tuning decision: quant-strategy-analyst flagged
+that conf=50 is already thin-edge (`docs/audit/03_strategy_review.md` — net PF likely
+<1.0 once fees/funding modeled) and lowering min_rr admits more marginal ~1.5R trades,
+so it needs a backtest (min_rr 1.8 vs 1.5, 365d/10-sym, fee-haircut) before shipping.
+Risk-ops confirmed min_rr does NOT feed position sizing (sizing is SL-distance ×
+risk_per_trade_pct driven), so the floor change affects turnover/expectancy, not
+per-trade dollar risk. → follow-up PR, backtest-gated.
 
 ## Testing (TDD)
 
@@ -102,16 +110,27 @@ Run full suite (`pytest`) — must stay green (1139+ tests).
 ## Deploy
 
 - Feature branch + PR (live mainnet rule).
-- `engine/signals.py` = trade logic + `configs/config.phase2_1k.yaml` `risk:` block
-  → `efloud-risk-ops-reviewer` gate before merge.
-- Cautious deploy on a quiet window; rebuild keeps conf=50 + min_rr=1.5 (committed).
+- `engine/signals.py` = trade logic → risk-ops + quant review done (APPROVE-WITH-NOTES
+  / SOUND-WITH-FOLLOWUPS). Config `risk:` block change split out (deferred), so this
+  PR is code + tests only.
+- Cautious deploy on a quiet window; rebuild keeps conf=50 + min_rr=1.8 (unchanged).
 - Post-deploy watch: discovery symbols (ADA/ETH/XRP/DOGE/SOL/BNB/LINK) should now
-  emit at rr1 = 1.5 instead of `max seen: 1.27` rejects.
+  emit at `rr1 = 1.8` (= current min_rr) instead of `max seen: 1.27` rejects.
 
-## Out of scope (follow-up)
+## Out of scope (follow-up) — logged from review
 
-- **Structural target detection:** `max seen` never exceeds 1.27 on flat symbols →
-  worth checking whether HTF swing/EQ/FVG target detection ever surfaces a
-  qualifying ≥min_rr target on ranging symbols. Separate investigation after this
-  clamp lands.
-- Broader signal/risk-path logical-error audit → separate atomic PRs.
+1. **min_rr 1.8→1.5 floor change** — backtest-gated (see Config section above).
+2. **Proper "1.272 Fibo" = leg extension.** The original intent was likely a 1.272
+   Fibonacci EXTENSION of the impulse/displacement leg (structurally meaningful,
+   usually >1.5R), not `1.272 × risk` (which has no SMC meaning). The clamp is an
+   acceptable interim; a dedicated PR could compute the leg from `e_brks`/swings and
+   project 1.272×/1.618× of its range.
+3. **v1 vs v2 skip semantics.** smc_v2 raises `InsufficientTPDistanceError` (skips)
+   when a structural candidate EXISTS but is closer than min_rr; v1 conflates "no
+   candidate" with "candidate too close" and now projects past near structure to the
+   floor. Aligning v1 to the v2 skip semantics is the more correct long-run behavior.
+4. **Candidate-count diagnostic.** Correction: `max seen = 1.27` is partly a
+   MEASUREMENT ARTIFACT — `max_seen_rr` is read from the discovery branch's hard-coded
+   1.27, so it does NOT prove targets were unfindable. A diagnostic-only PR should log
+   raw candidate count + nearest-candidate distance *before* the `min_tp` filter to
+   actually test the detection hypothesis.
