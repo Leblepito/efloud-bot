@@ -1329,7 +1329,8 @@ class OrderManager:
                 else:
                     log.warning(f"⚠️  ORPHAN POSITION DETECTED: {orphan} — details unavailable")
 
-        if self.orphan_protector is not None and detected_orphans:
+        if (self.orphan_protector is not None and detected_orphans
+                and orders_fetch_ok and algo_fetch_ok):
             try:
                 actions = self.orphan_protector.protect_cycle(detected_orphans, algo_orders if 'algo_orders' in locals() else [])
                 for act in actions:
@@ -1340,6 +1341,19 @@ class OrderManager:
                     )
             except Exception as e:
                 log.warning(f"orphan_protector failed during reconcile: {e}", exc_info=True)
+        elif self.orphan_protector is not None and detected_orphans:
+            # The regular or algo open-orders fetch failed this cycle, so the live
+            # id set is incomplete and SL coverage is UNKNOWABLE. Skip orphan
+            # protection rather than infer 'missing SL' from an empty set — that
+            # would place a DUPLICATE close-position SL on a position that may
+            # already have an algo-SL which merely failed to fetch. Mirrors the
+            # _repair_missing_protection_orders algo_fetch_ok guard. The orphan is
+            # still warned above for the operator.
+            log.warning(
+                f"orphan_protect skipped for {len(detected_orphans)} orphan(s): "
+                f"order/algo fetch failed (orders_ok={orders_fetch_ok}, "
+                f"algo_ok={algo_fetch_ok}) — cannot assess SL coverage this cycle"
+            )
 
         closed_now: List[Position] = []
 
