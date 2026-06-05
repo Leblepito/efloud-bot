@@ -572,7 +572,10 @@ def generate_signals(
                 else:
                     # ── Fibonacci price discovery targets (empty structures) ──
                     # "fiyat oluşmamış bir alanda hedef belirlemek için kullanılabilir. 1.272"
-                    tp1 = price + risk_tmp * 1.272
+                    # Clamp to min_rr: a bare 1.272 projection (rr1=1.27) would be
+                    # rejected 100% of the time by the min_rr gate below. Mirrors
+                    # smc_v2 RR_PROJECTION (engine/smc_v2/tp_calc.py:76).
+                    tp1 = price + risk_tmp * max(1.272, min_rr)
         else:
             htf_below_targets = []
             sl_c = [s for s in e_sh if s.idx < brk.idx]
@@ -614,7 +617,8 @@ def generate_signals(
                 else:
                     # ── Fibonacci price discovery targets (empty structures) ──
                     # "fiyat oluşmamış bir alanda hedef belirlemek için kullanılabilir. 1.272"
-                    tp1 = price - risk_tmp * 1.272
+                    # Clamp to min_rr: see LONG branch — mirrors smc_v2 RR_PROJECTION.
+                    tp1 = price - risk_tmp * max(1.272, min_rr)
 
         risk = abs(price - sl)
         if risk == 0:
