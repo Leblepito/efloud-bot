@@ -1058,9 +1058,10 @@ class SafeOrchestrator:
                                 leverage=self.config["exchange"].get("leverage", 1),
                                 target_stop_pct=risk_cfg["target_stop_distance_pct"] / 100.0,
                             )
-                            notional = calc.calculate_position_size(actual_balance)
-                            # Convert notional (USDT) → contract size (asset units)
-                            size = notional / latest.entry if latest.entry > 0 else 0.0
+                            # calculate_position_size returns MARGIN; convert to
+                            # notional (× leverage) before /entry, else the position
+                            # is leverage-x too small (5x under-risked at lev=5).
+                            size = calc.calculate_contract_size(actual_balance, latest.entry)
                         else:
                             from risk import calc_position_size
                             max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
