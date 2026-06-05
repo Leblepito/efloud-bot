@@ -33,6 +33,7 @@ async def test_kill_switch_persists_breaker_halt(monkeypatch):
 
     assert res["ok"] is True
     assert res["closed"] == ["BTC/USDT", "ETH/USDT"]
+    assert res["persisted"] is True  # operator-facing confirmation
     # The HALT was tripped...
     orch.breaker._halt.assert_called_once()
     # ...AND persisted to disk (authoritative on restart restore — the fix)...
@@ -58,4 +59,7 @@ async def test_kill_switch_returns_ok_even_if_persist_fails(monkeypatch):
 
     res = await api.kill_switch()
     assert res["ok"] is True
+    # Emergency stop still succeeds, but the operator is told persistence failed
+    # (in-memory HALT only — do not restart before investigating disk).
+    assert res["persisted"] is False
     orch.breaker._halt.assert_called_once()
