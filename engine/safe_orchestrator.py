@@ -615,6 +615,56 @@ class SafeOrchestrator:
             )
         return True
 
+    def _force_close_max_hold(self, pos, current_price: float) -> bool:
+        """Force-close a position past max holding time, EXCHANGE leg first.
+
+        A logical-only close (the old STEP-5 behavior) left the real Binance
+        position open and invisible to the duplicate-direction guard → same-symbol
+        same-direction STACKING, plus phantom breaker PnL recorded at a price the
+        position never exited at. Mirrors _handle_reverse: market-close + cancel
+        siblings on the exchange first; on exchange-close failure KEEP the logical
+        position (return False) so we never drop tracking while it is still live.
+
+        Returns True if the logical close ran, False if the exchange close failed
+        and the logical close was skipped.
+        """
+        exchange_close_ran = False
+        if self.order_manager is not None:
+            exchange_pos = next(
+                (p for p in self.order_manager.positions
+                 if p.symbol == pos.symbol and p.direction == pos.direction),
+                None,
+            )
+            if exchange_pos is not None:
+                try:
+                    self.order_manager._fallback_close(
+                        exchange_pos, current_price, "MAX_HOLD"
+                    )
+                    exchange_close_ran = True
+                except Exception as e:
+                    log.error(
+                        f"⛔ [{pos.symbol}] MAX_HOLD exchange close failed: {e} — "
+                        f"keeping logical position (still live on exchange)",
+                        exc_info=True,
+                    )
+                    if self.notification_mgr is not None:
+                        try:
+                            self.notification_mgr.alert(
+                                f"MAX_HOLD close failed for {pos.symbol}: {e}. "
+                                f"Manual intervention required."
+                            )
+                        except Exception:
+                            pass
+                    return False
+
+        self.lifecycle.close_position(pos, current_price, "MANUAL")
+        # When the exchange path ran, OrderManager._fallback_close already wrote a
+        # close TradeSnapshot; avoid a duplicate orchestrator-side row (mirror
+        # _handle_reverse).
+        if not exchange_close_ran:
+            self._journal_record_exit(pos, exit_price=current_price, reason="MANUAL")
+        return True
+
     def check_and_train_regime_model(self, symbol: str, df: pd.DataFrame):
         """Her 24 saatte bir, BTC/USDT veya ETH/USDT üzerinden ML modelini otomatik eğitir."""
         import datetime
@@ -853,9 +903,16 @@ class SafeOrchestrator:
             hold_check = self.pos_guard.check_holding_time(pos)
             if not hold_check.allowed:
                 log.warning(f"⏰ Force-closing {pos.id}: {hold_check.reason}")
-                self.lifecycle.close_position(pos, current_price, "MANUAL")
-                self._journal_record_exit(pos, exit_price=current_price, reason="MANUAL")
-                actions.append(f"Force-closed {pos.id} (max holding time)")
+                # Close the EXCHANGE leg before the logical one — a logical-only
+                # close leaves the live Binance position untracked → stacking +
+                # phantom PnL. Keep logical state if the exchange close fails.
+                if self._force_close_max_hold(pos, current_price):
+                    actions.append(f"Force-closed {pos.id} (max holding time)")
+                else:
+                    warnings.append(
+                        f"⚠️ MAX_HOLD exchange close failed for {pos.symbol} — "
+                        f"position still live, manual intervention required"
+                    )
             warnings.extend(hold_check.warnings)
 
         # ═══ STEP 6: Yeni Trade Decision ═══
