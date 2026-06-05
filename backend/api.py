@@ -300,13 +300,30 @@ async def kill_switch() -> dict:
         raise HTTPException(status_code=503, detail="Bot not running")
     closed = runner.order_mgr.kill_switch()
     # Trip the breaker so bot doesn't open new positions
+    halt_persisted = False
     if runner.orch:
         try:
             runner.orch.breaker._halt("Manual kill switch (frontend)")
-        except Exception:
-            pass
-    await db.log_audit("kill_switch_activated", {"closed_positions": closed})
-    return {"ok": True, "closed": closed}
+            # Persist the HALT immediately. _halt() only mutates in-memory status;
+            # without this a restart inside the ~30s cycle window (autoheal /
+            # redeploy / crash) reloads the stale pre-kill-switch breaker from disk
+            # (typically OPEN) and the bot resumes trading, defeating the emergency
+            # stop. Mirror the /breaker/reset hardening: disk is authoritative on
+            # restore (and survives DB-less prod); the DB mirror is best-effort.
+            runner.orch._persist_state()
+            await db.upsert_breaker_state(runner.orch.breaker.to_dict())
+            halt_persisted = True
+        except Exception as e:
+            # Positions are already closed; a persist failure must not 500 the
+            # emergency stop. Surface it loudly for ops AND in the response so the
+            # operator knows the HALT is in-memory only (must not restart before
+            # investigating disk).
+            log.error(f"kill-switch: breaker HALT persist failed: {e}", exc_info=True)
+    await db.log_audit(
+        "kill_switch_activated",
+        {"closed_positions": closed, "halt_persisted": halt_persisted},
+    )
+    return {"ok": True, "closed": closed, "persisted": halt_persisted}
 
 
 @router.post("/breaker/reset", dependencies=[Depends(require_auth)])
