@@ -25,13 +25,15 @@ log = logging.getLogger("efloud.notifications")
 class NotificationManager:
     """Sinyal ve event bildirimi — kanal-agnostic."""
 
-    def __init__(self, channels: Optional[list] = None, content_emitter=None):
+    def __init__(self, channels: Optional[list] = None, content_emitter=None, on_signal_readonly=None):
         """
         channels: ['terminal', 'log', 'telegram', ...] — şimdilik 'terminal' + 'log'
         content_emitter: ContentJobEmitter instance (Lane A, default None = inert)
+        on_signal_readonly: Optional callback triggered when a read-only signal is detected
         """
         self.channels = channels or ['terminal', 'log']
         self.content_emitter = content_emitter
+        self.on_signal_readonly = on_signal_readonly
 
     def signal_readonly(self, symbol: str, direction: str,
                           entry: float, sl: float, tp1: float, tp2: float,
@@ -78,6 +80,15 @@ class NotificationManager:
                         "timeframe": timeframe, "horizon": horizon, "regime": regime,
                         "reasons": reasons or [], "reasons_detail": {"trace_id": trace_id}},
             )
+
+        if self.on_signal_readonly is not None:
+            try:
+                self.on_signal_readonly(
+                    symbol=symbol, direction=direction, entry=entry, sl=sl,
+                    tp1=tp1, tp2=tp2, confluence=confluence, reasons=reasons
+                )
+            except Exception as callback_err:
+                log.warning(f"on_signal_readonly callback failed: {callback_err}")
 
     def position_opened(self, symbol: str, direction: str, entry: float,
                           size: float, sl: float, tp1: float, confluence: int,
