@@ -278,10 +278,16 @@ class SMCEngine:
 
     def range_info(self, df: pd.DataFrame) -> RangeInfo:
         lb = min(self.range_lb, len(df))
-        r = df.iloc[-lb:]
+        lc, ll, lh = float(df["close"].iloc[-1]), float(df["low"].iloc[-1]), float(df["high"].iloc[-1])
+        # Range extremes from the PRIOR bars only — exclude the current bar. If the
+        # current bar were in the window, lo<=ll and hi>=lh by construction, so
+        # dev_bull (ll<lo) and dev_bear (lh>hi) could NEVER be True (the whole
+        # range-deviation play was dead). Excluding it lets a recent bar be detected
+        # piercing-and-reverting the range. Single-bar frames keep the bar itself
+        # (nothing prior to compare → no deviation, as expected).
+        r = df.iloc[-(lb + 1):-1] if len(df) >= 2 else df.iloc[-lb:]
         hi, lo = float(r["high"].max()), float(r["low"].min())
         eq = (hi + lo) / 2
-        lc, ll, lh = float(df["close"].iloc[-1]), float(df["low"].iloc[-1]), float(df["high"].iloc[-1])
         return RangeInfo(hi, lo, eq, lc > eq, lc < eq,
                          ll < lo and lc > lo, lh > hi and lc < hi)
 
