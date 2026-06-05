@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from engine.notifications import NotificationManager
 from engine.safe_orchestrator import SafeOrchestrator
 
 
@@ -54,7 +55,9 @@ class TestForceCloseMaxHold:
         om = MagicMock()
         om.positions = [ex_pos]
         om._fallback_close.side_effect = RuntimeError("network")
-        notif = MagicMock()
+        # spec=NotificationManager so a wrong-arity alert() call raises (catches
+        # the (level, message) signature, not a silently-swallowed TypeError).
+        notif = MagicMock(spec=NotificationManager)
         orch = _orch(order_manager=om, notification_mgr=notif)
         pos = _pos()
 
@@ -63,7 +66,9 @@ class TestForceCloseMaxHold:
         assert ok is False
         # CRITICAL: logical close must NOT run while the position is still live.
         orch.lifecycle.close_position.assert_not_called()
+        # Operator alert fires with the correct (level, message) signature.
         notif.alert.assert_called_once()
+        assert notif.alert.call_args.args[0] == "CRITICAL"
 
     def test_no_order_manager_falls_back_to_logical_close(self):
         # dry-run / no exchange manager → logical close + journal, returns True.

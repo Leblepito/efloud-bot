@@ -650,8 +650,9 @@ class SafeOrchestrator:
                     if self.notification_mgr is not None:
                         try:
                             self.notification_mgr.alert(
+                                "CRITICAL",
                                 f"MAX_HOLD close failed for {pos.symbol}: {e}. "
-                                f"Manual intervention required."
+                                f"Manual intervention required.",
                             )
                         except Exception:
                             pass
