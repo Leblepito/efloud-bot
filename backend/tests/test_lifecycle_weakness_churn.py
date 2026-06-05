@@ -92,23 +92,26 @@ def test_weakness_after_cooldown_elapsed_fires_next_exit():
 
 
 def test_weakness_skips_dust_sized_remainder():
-    """If remaining_size < MIN_REMAINING_SIZE (0.01), no exit even when weak."""
+    """If the remaining NOTIONAL is below the dust floor ($5), no exit even when weak.
+
+    Dust is measured in NOTIONAL (remaining_size × price), not asset units
+    (bug-hunt #12): 0.001 ETH @ ~$2030 ≈ $2 < $5 floor → skipped.
+    """
     lc = PositionLifecycle()
-    # Open with already-dust size; do NOT call partial_close (which would
+    # Open with a sub-$5-notional remainder; do NOT call partial_close (which would
     # shrink it further and confuse the assertion).
     pos = lc.open_position(
         "ETH/USDT", "LONG",
-        entry_price=2000.0, size=0.005,
+        entry_price=2000.0, size=0.001,
         sl=1980.0, tp1=2040.0, tp2=2080.0,
     )
     pos.tp1_hit = True
-    assert pos.remaining_size < 0.01
     pre_count = pos.weakness_exit_count
     pre_size = pos.remaining_size
 
     lc.on_tick({pos.symbol: 2030.0}, intent_checker=lambda _p: True)
 
-    assert pos.weakness_exit_count == pre_count
+    assert pos.weakness_exit_count == pre_count   # $2 notional < $5 floor → dust → skipped
     assert pos.remaining_size == pre_size
 
 
