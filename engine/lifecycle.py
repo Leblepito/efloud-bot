@@ -503,7 +503,7 @@ class PositionLifecycle:
             # Min remaining size 0.01 to avoid dust exits.
             MAX_WEAKNESS_EXITS = 3
             WEAKNESS_COOLDOWN_BARS = 4   # minutes between weakness exits
-            MIN_REMAINING_SIZE = 0.01    # USDT-notional threshold
+            MIN_REMAINING_NOTIONAL_USDT = 5.0   # dust floor (notional, not asset units)
 
             if intent_checker and pos.tp1_hit and pos.weakness_exit_count < MAX_WEAKNESS_EXITS:
                 # Cooldown check
@@ -516,8 +516,11 @@ class PositionLifecycle:
                     except (ValueError, TypeError):
                         pass  # bad timestamp — allow the check
 
-                # Size check — don't exit dust
-                if pos.remaining_size < MIN_REMAINING_SIZE:
+                # Dust check — compare NOTIONAL (remaining_size × price), not asset
+                # units. Comparing the contract count to a USDT constant suppressed
+                # weakness exits on high-priced assets (0.005 BTC ≈ $500 < 0.01) and
+                # never fired for sub-$1 coins (bug-hunt #12).
+                if pos.remaining_size * price < MIN_REMAINING_NOTIONAL_USDT:
                     continue
 
                 if intent_checker(pos):
