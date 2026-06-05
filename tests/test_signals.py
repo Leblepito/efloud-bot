@@ -346,3 +346,72 @@ class TestDiscoveryRRClamp:
         )
         assert len(sigs) == 1
         assert sigs[0].rr1 == 1.27       # 1.272 preserved (max(1.272, 1.2))
+
+
+class TestStructuralSLBuffer:
+    """Structural SL must subtract the ATR buffer from the chosen swing, not sit
+    exactly on it (bug-hunt #4).
+
+    Pre-fix: sl = sl_c[-1].price (raw swing, no buffer) whenever a prior swing
+    exists, because the buffer was only applied to the local_lo/local_hi fallback
+    and the clamp direction discarded it → stop sits exactly on structure (stop-hunt
+    target). Fix: subtract the buffer from the swing too.
+
+    Deterministic buffer: with high=100.5/low=99.0/close=100.0 constant, ATR(14)=1.5
+    and buffer = 0.5*ATR = 0.75.
+    """
+
+    def _make_engine(self, break_obj, swing_lows=None, swing_highs=None, trend="BULL"):
+        e_range = SimpleNamespace(
+            discount=False, premium=False, dev_bull=False, dev_bear=False,
+            lo=99.0, hi=101.0,
+        )
+        engine = MagicMock()
+        engine.analyze.return_value = {
+            "trend": trend, "active_fvgs": [], "active_obs": [],
+            "swing_highs": [], "swing_lows": [], "range": e_range,
+        }
+        engine.swings.return_value = (swing_highs or [], swing_lows or [])
+        engine.structure.side_effect = [[], [break_obj]]
+        engine.order_blocks.return_value = []
+        engine.sfps.return_value = []
+        engine.range_info.return_value = e_range
+        engine.ote.return_value = None
+        return engine
+
+    def _df(self) -> pd.DataFrame:
+        return pd.DataFrame({
+            "high": [100.5] * 50, "low": [99.0] * 50, "close": [100.0] * 50,
+        })
+
+    def test_long_sl_subtracts_buffer_from_swing(self) -> None:
+        choch = SimpleNamespace(
+            direction="BULL", kind="CHoCH", idx=45, ts="2026-06-05T00:00", price=100.0,
+        )
+        swing = SimpleNamespace(idx=40, price=99.5)  # recent swing low in the 20-bar window
+        engine = self._make_engine(choch, swing_lows=[swing], trend="BULL")
+        sigs = generate_signals(
+            engine, self._df(), self._df(), self._df(),
+            min_confluence=20, min_rr=1.5, fib_ext=1.618, recency_bars=40, symbol=None,
+        )
+        assert len(sigs) == 1
+        sig = sigs[0]
+        assert sig.direction == "LONG"
+        assert sig.sl < swing.price                  # buffer applied BELOW structure
+        assert sig.sl == pytest.approx(98.75, abs=1e-6)  # 99.5 - 0.75
+
+    def test_short_sl_adds_buffer_to_swing(self) -> None:
+        choch = SimpleNamespace(
+            direction="BEAR", kind="CHoCH", idx=45, ts="2026-06-05T00:00", price=100.0,
+        )
+        swing = SimpleNamespace(idx=40, price=100.3)  # recent swing high in the window
+        engine = self._make_engine(choch, swing_highs=[swing], trend="BEAR")
+        sigs = generate_signals(
+            engine, self._df(), self._df(), self._df(),
+            min_confluence=20, min_rr=1.5, fib_ext=1.618, recency_bars=40, symbol=None,
+        )
+        assert len(sigs) == 1
+        sig = sigs[0]
+        assert sig.direction == "SHORT"
+        assert sig.sl > swing.price                  # buffer applied ABOVE structure
+        assert sig.sl == pytest.approx(101.05, abs=1e-6)  # 100.3 + 0.75

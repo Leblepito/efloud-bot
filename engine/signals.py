@@ -535,7 +535,12 @@ def generate_signals(
             htf_above_targets = []
             sl_c = [s for s in e_sl if s.idx < brk.idx]
             local_lo = float(df_entry["low"].iloc[max(0, brk.idx - 20):brk.idx].min()) - buffer
-            sl = sl_c[-1].price if sl_c else local_lo
+            # Spec/comment: SL = structure − 0.5·ATR buffer. Subtract the buffer
+            # from the chosen swing too (not just the local_lo fallback) so the stop
+            # sits BELOW structure, not exactly on it (a stop-hunt target). The clamp
+            # keeps it tight — an old swing far below the buffered 20-bar low is
+            # discarded in favour of local_lo.
+            sl = (sl_c[-1].price - buffer) if sl_c else local_lo
             if sl < local_lo:
                 sl = local_lo
             
@@ -580,7 +585,9 @@ def generate_signals(
             htf_below_targets = []
             sl_c = [s for s in e_sh if s.idx < brk.idx]
             local_hi = float(df_entry["high"].iloc[max(0, brk.idx - 20):brk.idx].max()) + buffer
-            sl = sl_c[-1].price if sl_c else local_hi
+            # Mirror of LONG: SL = structure + 0.5·ATR buffer; add the buffer to the
+            # chosen swing too so the stop sits ABOVE structure, not on it.
+            sl = (sl_c[-1].price + buffer) if sl_c else local_hi
             if sl > local_hi:
                 sl = local_hi
             
