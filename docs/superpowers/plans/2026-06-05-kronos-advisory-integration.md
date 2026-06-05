@@ -126,11 +126,28 @@ Categorical band by default, explicit `ADVISORY — did not affect this trade`, 
 
 ## 5. Rollout & verification
 
-- **Branch:** `feat/kronos-advisory` off `master` (the working-tree changes currently sit on
-  `fix/orphan-protect-algo-fetch-guard`, which carries an unrelated `reverse_from_risk` commit —
-  move Kronos to its own branch before PR). Merge only on a **flat book** (live-bot workflow).
-- **Gate:** Phases 0–5 green + hermetic (`pytest backend/tests/test_kronos_integration.py` < ~8s,
-  no subprocess) before merge. Flag is `false` in committed config → merge is behaviorally inert.
+- **Branch:** `feat/kronos-advisory` off `master` → **PR #166** (commits `a69aa3e` Phases 0–5,
+  `ee78046` Phases 6–7 + review fixes, plus the skill-vendoring commit). Merge only on a **flat
+  book** (live-bot workflow) — **positions are currently OPEN, so PR stays open until flat.**
+- **Gate:** backend hermetic (`pytest backend/tests/test_kronos_integration.py`, 17 green, no
+  subprocess) + frontend (`cd frontend && npm run test`, 3 green). Flag `false` in committed config
+  → merge is behaviorally inert.
+- **Skill provisioning (B2 — resolved):** the patched runner (`scripts/*.py` + `requirements.txt`
+  incl. `pyarrow`) is now **vendored** into the repo (its embedded `.git` removed; upstream
+  `coopersimson96/kronos-claude-skill`). `.venv` + `_kronos` stay gitignored and are rebuilt by
+  `ensure_venv()` from `requirements.txt` on first run/pre-warm.
+- **⚠️ VPS deploy method (the box is HYBRID — base `66c767c` + surgical fixes; bot RUNNING):**
+  - **NEVER** `git pull` / `git reset --hard` on the VPS — would clobber the live surgical fixes
+    or pull un-vetted gap commits (e.g. `5cc4318` Phase-5 docker-compose). All vetted fixes are on
+    `origin/master` (`461f94b`: #156–#161, #164, #165); **#162/#163 are backtest-gated — must NOT
+    reach the VPS.**
+  - Deploy Kronos via **surgical checkout only** (after PR #166 merges to master):
+    `git checkout origin/master -- <kronos files>` (kronos.py, bot_runner.py, db.py,
+    notifications, configs, migration, frontend, and the vendored
+    `external_repos/kronos-claude-skill/scripts/*.py` + `requirements.txt`).
+  - Do **not** clobber the live working-copy config (conf=50 + min_rr=1.8, uncommitted on VPS).
+  - If a stale `.venv` exists on the VPS, `rm -rf external_repos/kronos-claude-skill/.venv` before
+    pre-warm so the new `requirements.txt` (pyarrow) is picked up — only needed if enabling `binance`.
 - **Operator pre-warm (VPS, before first enable):**
   `python external_repos/kronos-claude-skill/scripts/run_kronos.py BTC-USD 1mo 1h 12`
   → confirm `external_repos/kronos-claude-skill/.venv` + `_kronos/` exist.
