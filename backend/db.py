@@ -133,6 +133,23 @@ class Database:
         except Exception as e:
             log.warning(f"record_trade_close failed: {e}")
 
+    async def update_trade_kronos_data(self, trade_id: str, comment: str, confidence: int) -> None:
+        """Update a trade row with Kronos AI forecast commentary and confidence."""
+        if not self.pool:
+            return
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE trades
+                    SET kronos_comment = $2, kronos_confidence = $3
+                    WHERE id = $1::uuid
+                    """,
+                    trade_id, comment, confidence
+                )
+        except Exception as e:
+            log.warning(f"update_trade_kronos_data failed: {e}")
+
     async def fetch_recent_trades(self, limit: int = 50) -> list[dict[str, Any]]:
         if not self.pool:
             return []
@@ -146,7 +163,8 @@ class Database:
                            entry_setup_source, tp1_target_type,
                            tp2_target_type, bars_to_pullback,
                            mae_pct, mfe_pct, initial_sl, adx_value, atr_value,
-                           funding_rate, confluence_details
+                           funding_rate, confluence_details,
+                           kronos_comment, kronos_confidence
                     FROM trades
                     ORDER BY opened_at DESC LIMIT $1
                     """,
@@ -177,7 +195,8 @@ class Database:
                            entry_setup_source, tp1_target_type,
                            tp2_target_type, bars_to_pullback,
                            mae_pct, mfe_pct, initial_sl, adx_value, atr_value,
-                           funding_rate, confluence_details
+                           funding_rate, confluence_details,
+                           kronos_comment, kronos_confidence
                     FROM trades
                     WHERE closed_at IS NOT NULL AND closed_at >= $1
                     ORDER BY closed_at DESC

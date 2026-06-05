@@ -8,8 +8,10 @@ Loop: every check_interval_sec, run reconcile() + run_cycle() in a thread execut
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +30,8 @@ from engine.safety import MainnetGuard, OrphanProtector, load_orphan_protection_
 from engine.universe import SymbolUniverse
 from exchange import BinanceClient, OrderManager, Position
 from main import resolve_credentials, validate_config
+from engine.ai.kronos import run_kronos_prediction, synthesize_signal_with_kronos
+from engine.agents.llm import make_llm_client
 
 log = logging.getLogger("efloud.runner")
 
@@ -103,6 +107,21 @@ class BotRunner:
         self.last_error: Optional[str] = None
         self.pubsub_task: Optional[asyncio.Task] = None  # Phase 3.1 Pub/Sub consumer
 
+        # ── Kronos advisory layer (default-OFF, additive, advisory-only) ──────
+        # All state initialised inert so the bot behaves EXACTLY as if the
+        # feature were absent until an operator sets `kronos.enabled: true`.
+        # The confidence/commentary produced here NEVER feeds trade, sizing,
+        # SL/TP or the confluence gate — it is render/Telegram only.
+        self._kronos_cfg: dict = {}
+        self._kronos_enabled: bool = False
+        self._kronos_run_on: set = set()          # subset of {"trade_open","readonly"}
+        self._kronos_available: bool = True        # flipped False by the prewarm gate on failure
+        self._kronos_executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
+        self._kronos_sem: Optional[asyncio.Semaphore] = None
+        self._kronos_last_run: dict = {}           # (symbol,direction,bar_bucket) -> ts
+        self._kronos_inflight: set = set()         # (symbol,direction,bar_bucket) in-flight
+        self._kronos_cache = None                  # SentimentCache, lazily built when enabled
+
         # Healthz / crash-loop runtime state (Aşama 2 Step 2)
         from engine.safety.runtime_state import RuntimeState
         state_dir = (
@@ -166,6 +185,12 @@ class BotRunner:
             self.last_error = f"Config validation failed: {e}"
             return
 
+        # ── Kronos advisory layer init (default-OFF) ─────────────────────────
+        # Read the `kronos:` block and build the bounded concurrency primitives.
+        # Absent block OR enabled:false → fully inert (no executor, no wiring,
+        # no subprocess, no LLM call, no Telegram). This is the master kill switch.
+        self._init_kronos()
+
         # Mainnet Guard (non-interactive in worker mode)
         if not MainnetGuard.check(
             testnet=self.cfg["exchange"]["testnet"],
@@ -219,11 +244,21 @@ class BotRunner:
                 self.last_error = err
                 return
 
+        # Read-only signals fan out across the WHOLE universe every tick — only
+        # wire the Kronos callback when the operator has explicitly opted that
+        # path in (kronos.enabled AND "readonly" in kronos.run_on). Default keeps
+        # it None so the heavy fan-out vector stays disabled.
+        readonly_cb = (
+            self._on_signal_readonly
+            if (self._kronos_enabled and "readonly" in self._kronos_run_on)
+            else None
+        )
         notif_mgr = NotificationManager(
             channels=["log"],  # WS push üzerinden ayrıca yapılır
             content_emitter=ContentJobEmitter(
                 env="mainnet" if not self.cfg["operation"].get("dry_run", True) else "testnet"
             ),
+            on_signal_readonly=readonly_cb,
         )
         state_dir = self.cfg["operation"].get("state_dir", "./state")
 
@@ -316,6 +351,12 @@ class BotRunner:
         bus.publish("bot_started", config_path=cfg_path)
         await db.log_audit("bot_started", {"config_path": cfg_path})
 
+        # Kronos prewarm — build/warm the sub-venv + model OFF the trade path so
+        # the first live signal never pays the 3-7 min first-run install. Runs as
+        # a detached background task; self-disables the feature on any failure.
+        if self._kronos_enabled and bool(self._kronos_cfg.get("prewarm_on_start", True)):
+            asyncio.create_task(self._kronos_prewarm(), name="kronos_prewarm")
+
         # Phase 3.1: Start Pub/Sub consumer task (graceful no-op if not configured)
         try:
             from backend.pubsub_consumer import PubSubConsumer
@@ -354,6 +395,13 @@ class BotRunner:
                 await self.task
             except asyncio.CancelledError:
                 pass
+        # Tear down the dedicated Kronos executor (no-op when feature inert).
+        if self._kronos_executor is not None:
+            try:
+                self._kronos_executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+            self._kronos_executor = None
         self.running = False
         log.info("🛑 Bot runner stopped")
         bus.publish("bot_stopped")
@@ -548,7 +596,7 @@ class BotRunner:
             return  # Test env or pre-startup — skip persistence
         try:
             if event_type == "position_opened":
-                asyncio.run_coroutine_threadsafe(
+                future = asyncio.run_coroutine_threadsafe(
                     db.record_trade_open(
                         symbol=pos.symbol, direction=pos.direction,
                         entry=pos.entry, sl=pos.sl, tp1=pos.tp1, tp2=pos.tp2,
@@ -571,6 +619,38 @@ class BotRunner:
                     ),
                     self.loop,
                 )
+                
+                # Kronos advisory on a real trade open — only when enabled AND
+                # "trade_open" is an opted-in trigger. The analysis still records
+                # against the trade_id (inert in prod's DB-less mode) and/or
+                # broadcasts to Telegram, entirely off the trade-decision path.
+                if self._kronos_enabled and "trade_open" in self._kronos_run_on:
+                    conf_details = getattr(pos, "confluence_details", None) or {}
+                    confluence = conf_details.get("score") or 0
+                    reasons = conf_details.get("reasons") or []
+
+                    def on_open_persisted(fut):
+                        try:
+                            trade_id = fut.result()
+                            if trade_id and self.loop:
+                                asyncio.run_coroutine_threadsafe(
+                                    self._run_kronos_analysis(
+                                        trade_id=trade_id,
+                                        symbol=pos.symbol,
+                                        direction=pos.direction,
+                                        entry=pos.entry,
+                                        sl=pos.sl,
+                                        tp1=pos.tp1,
+                                        tp2=pos.tp2,
+                                        confluence=confluence,
+                                        reasons=reasons,
+                                    ),
+                                    self.loop
+                                )
+                        except Exception as persist_err:
+                            log.warning(f"Failed to trigger Kronos after trade open: {persist_err}")
+
+                    future.add_done_callback(on_open_persisted)
             elif event_type == "position_closed":
                 pnl_pct = ((pos.exit_price - pos.entry) / pos.entry * 100) if pos.direction == "LONG" else \
                           ((pos.entry - pos.exit_price) / pos.entry * 100)
@@ -723,6 +803,286 @@ class BotRunner:
                 if self.stopped:
                     break
                 await asyncio.sleep(10)
+
+    # ─────────────────────────────────────────────────────────────
+    # Kronos advisory layer (default-OFF, additive, advisory-only)
+    # ─────────────────────────────────────────────────────────────
+
+    _BAR_SECONDS = {
+        "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800,
+        "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "12h": 43200, "1d": 86400,
+    }
+
+    def _init_kronos(self) -> None:
+        """Read the ``kronos:`` config block and build bounded concurrency primitives.
+
+        Default-OFF: an absent block or ``enabled: false`` leaves the feature fully
+        inert (no executor, no Semaphore, no cache, no wiring). Called once from
+        ``start()`` inside the running loop, so ``asyncio.Semaphore()`` binds cleanly.
+        """
+        cfg = self.cfg.get("kronos", {}) or {}
+        self._kronos_cfg = cfg
+        self._kronos_enabled = bool(cfg.get("enabled", False))
+        run_on = cfg.get("run_on", ["trade_open"]) or []
+        self._kronos_run_on = {str(x).strip().lower() for x in run_on}
+        self._kronos_available = True
+        self._kronos_last_run = {}
+        self._kronos_inflight = set()
+
+        if not self._kronos_enabled:
+            log.info("Kronos advisory layer INERT (kronos.enabled=false or block absent)")
+            self._kronos_executor = None
+            self._kronos_sem = None
+            self._kronos_cache = None
+            return
+
+        max_conc = max(1, int(cfg.get("max_concurrency", 1)))
+        # DEDICATED bounded executor: Kronos torch subprocesses can NEVER starve
+        # the shared default pool that reconcile()/_scan_universe()/DB writes/
+        # notifier.send() depend on. This is the core OOM/starvation guard.
+        self._kronos_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=max_conc, thread_name_prefix="kronos"
+        )
+        self._kronos_sem = asyncio.Semaphore(max_conc)
+        try:
+            from utils.cache import SentimentCache
+            self._kronos_cache = SentimentCache(cache_dir="state/cache/kronos")
+        except Exception:
+            self._kronos_cache = None
+        log.info(
+            "🔮 Kronos advisory layer ENABLED (run_on=%s, data_source=%s, "
+            "max_concurrency=%d, cooldown=%ss, provider via make_llm_client)",
+            sorted(self._kronos_run_on),
+            cfg.get("data_source", "yfinance"),
+            max_conc,
+            int(cfg.get("cooldown_sec", 3600)),
+        )
+
+    def _kronos_bar_bucket(self) -> int:
+        """Coarse time bucket (by forecast interval) for per-symbol dedup/cache."""
+        interval = str(self._kronos_cfg.get("interval", "1h"))
+        secs = self._BAR_SECONDS.get(interval, 3600)
+        return int(time.time() // secs)
+
+    def _kronos_should_run(self, key: tuple) -> bool:
+        """Dedup + cooldown gate: skip if in-flight or within cooldown_sec of last run."""
+        if key in self._kronos_inflight:
+            return False
+        cooldown = float(self._kronos_cfg.get("cooldown_sec", 3600))
+        last = self._kronos_last_run.get(key)
+        if last is not None and (time.time() - last) < cooldown:
+            return False
+        return True
+
+    async def _kronos_prewarm(self) -> None:
+        """Build/warm the Kronos sub-venv + model OFF the trade path, once at startup.
+
+        The 3-7 min first-run install (git clone + torch) can ONLY happen here,
+        never on the first live signal. On any failure the feature self-disables
+        (``_kronos_available = False``) so no live signal triggers a heavy bootstrap.
+        """
+        if not (self._kronos_enabled and self._kronos_executor):
+            return
+        cfg = self._kronos_cfg
+        try:
+            log.info("🔮 Kronos prewarm: building/warming sub-venv + model (off trade path)…")
+            loop = asyncio.get_running_loop()
+            res = await loop.run_in_executor(
+                self._kronos_executor,
+                run_kronos_prediction,
+                "BTCUSDT",
+                str(cfg.get("period", "1mo")),
+                str(cfg.get("interval", "1h")),
+                int(cfg.get("pred_len", 12)),
+            )
+            if res:
+                self._kronos_available = True
+                log.info("🔮 Kronos prewarm OK — advisory model ready.")
+            else:
+                self._kronos_available = False
+                log.warning(
+                    "🔮 Kronos prewarm returned no data — advisory layer DISABLED for this run."
+                )
+        except Exception as e:
+            self._kronos_available = False
+            log.warning(f"🔮 Kronos prewarm failed — advisory layer DISABLED for this run: {e}")
+
+    def _on_signal_readonly(
+        self,
+        symbol: str,
+        direction: str,
+        entry: float,
+        sl: float,
+        tp1: float,
+        tp2: Optional[float],
+        confluence: int,
+        reasons: list[str],
+    ) -> None:
+        """Triggered from NotificationManager on a read-only signal.
+
+        Only wired when kronos.enabled AND "readonly" in run_on (see start()).
+        The defensive guard here is belt-and-braces against a stale callback.
+        """
+        if not (self._kronos_enabled and self._kronos_available and self.loop):
+            return
+        asyncio.run_coroutine_threadsafe(
+            self._run_kronos_analysis(
+                trade_id=None,
+                symbol=symbol,
+                direction=direction,
+                entry=entry,
+                sl=sl,
+                tp1=tp1,
+                tp2=tp2,
+                confluence=confluence,
+                reasons=reasons,
+            ),
+            self.loop,
+        )
+
+    async def _run_kronos_analysis(
+        self,
+        trade_id: Optional[str],
+        symbol: str,
+        direction: str,
+        entry: float,
+        sl: float,
+        tp1: float,
+        tp2: Optional[float],
+        confluence: int,
+        reasons: list[str],
+    ) -> None:
+        """Run Kronos forecast + LLM synthesis, then persist (DB) / broadcast (Telegram).
+
+        ADVISORY ONLY — the result NEVER feeds trade/sizing/SL-TP/confluence logic.
+        Bounded by: enabled+available gate, per-(symbol,direction,bar) dedup+cooldown,
+        a Semaphore (drop-if-busy, never queue), a DEDICATED executor (never the
+        shared default pool), a synthesis timeout, and a result cache.
+        """
+        if not (self._kronos_enabled and self._kronos_available):
+            return
+        if self._kronos_executor is None or self._kronos_sem is None:
+            return
+
+        key = (symbol, direction, self._kronos_bar_bucket())
+        if not self._kronos_should_run(key):
+            log.debug(f"🔮 Kronos skip (dedup/cooldown): {key}")
+            return
+        # Drop, do NOT queue, when the single slot is busy — universe-wide signal
+        # bursts must never pile up megabytes of pending torch loads.
+        if self._kronos_sem.locked():
+            log.debug(f"🔮 Kronos skip (busy): {symbol} {direction}")
+            return
+
+        try:
+            async with self._kronos_sem:
+                self._kronos_inflight.add(key)
+                cfg = self._kronos_cfg
+                loop = asyncio.get_running_loop()
+
+                # 0) Cache — same symbol/direction within the same bar = no new info.
+                cache_key = f"kronos:{symbol}:{direction}:{key[2]}"
+                synthesis = None
+                if self._kronos_cache is not None:
+                    cached = self._kronos_cache.get(cache_key)
+                    if cached:
+                        synthesis = cached
+                        log.debug(f"🔮 Kronos cache hit: {cache_key}")
+
+                if synthesis is None:
+                    log.info(f"🔮 [Kronos] Forecasting {symbol} {direction}…")
+                    # data_source: binance → feed the bot's own closed-bar perp klines (no basis
+                    # distortion, 100% symbol coverage); yfinance remains the fallback.
+                    df = None
+                    if str(cfg.get("data_source", "yfinance")).lower() == "binance" and self.client is not None:
+                        try:
+                            df = await loop.run_in_executor(
+                                self._kronos_executor,
+                                self.client.fetch_ohlcv,
+                                symbol, str(cfg.get("interval", "1h")), 500,
+                            )
+                        except Exception as e:
+                            log.warning(f"🔮 Kronos Binance fetch failed for {symbol}, falling back to yfinance: {e}")
+                            df = None
+                    kronos_data = await loop.run_in_executor(
+                        self._kronos_executor, run_kronos_prediction,
+                        symbol, str(cfg.get("period", "1mo")), str(cfg.get("interval", "1h")),
+                        int(cfg.get("pred_len", 12)), df,
+                    )
+
+                    # 2) LLM synthesis via the provider factory (MiniMax in prod),
+                    #    bounded by a hard timeout so a hung HTTP call can't pin a
+                    #    worker for minutes. llm_cfg honours the global LLM_PROVIDER
+                    #    lever even when no per-feature block is present.
+                    llm_cfg = (
+                        cfg.get("llm")
+                        or self.cfg.get("llm")
+                        or self.cfg.get("agent_team")
+                        or {}
+                    )
+                    client = make_llm_client(llm_cfg)
+                    synth_timeout = float(cfg.get("synth_timeout_sec", 30))
+                    synthesis = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            self._kronos_executor,
+                            synthesize_signal_with_kronos,
+                            symbol, direction, entry, sl, tp1, tp2,
+                            confluence, reasons, kronos_data, client,
+                        ),
+                        timeout=synth_timeout,
+                    )
+                    # Carry the categorical band into the cached object so cache
+                    # hits can render it without re-running the model.
+                    synthesis["band"] = (kronos_data or {}).get("confidence_band", "WIDE")
+                    if self._kronos_cache is not None and synthesis:
+                        try:
+                            self._kronos_cache.set(cache_key, synthesis)
+                        except Exception:
+                            pass
+
+                comment = synthesis.get("comment", "")
+                confidence = synthesis.get("confidence", confluence)
+                source = synthesis.get("source", "llm")
+                band = synthesis.get("band", "WIDE")
+                log.info(
+                    f"🔮 [Kronos] {symbol} synthesis done (band={band}, source={source})"
+                )
+
+                # 3) Telegram broadcast — the ONLY live surface in prod's DB-less
+                #    mode. Categorical band by default (no fake 0-100 axis next to
+                #    confluence); explicit ADVISORY label; [fallback] tag when the
+                #    provider failed so a dead LLM is VISIBLE, not dressed up.
+                if self.notifier and self.notifier.enabled:
+                    show_num = bool(cfg.get("show_numeric_confidence", False))
+                    fb_tag = " ⚠️[fallback]" if source == "fallback" else ""
+                    if show_num:
+                        head = f"SMC Confluence: `{confluence}/100` | Kronos Güven: *`{confidence}%`*{fb_tag}"
+                    else:
+                        head = f"SMC Confluence: `{confluence}/100` | Kronos Bandı: *`{band}`*{fb_tag}"
+                    tg_text = (
+                        f"🔮 *Sentez Analizi (ADVISORY): {symbol} {direction}*\n"
+                        f"{head}\n"
+                        f"_Bu analiz danışmanlıktır — işlem kararını ETKİLEMEDİ._\n\n"
+                        f"{comment}"
+                    )
+                    await loop.run_in_executor(self._kronos_executor, self.notifier.send, tg_text)
+
+                # 4) DB persist — inert in prod's DB-less mode (pool is None →
+                #    early return); advisory telemetry only.
+                if trade_id:
+                    try:
+                        await db.update_trade_kronos_data(trade_id, comment, int(confidence))
+                    except Exception as db_err:
+                        log.warning(f"🔮 Kronos DB update failed for {trade_id}: {db_err}")
+        except asyncio.TimeoutError:
+            log.warning(f"🔮 Kronos synthesis timed out for {symbol} — skipped.")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error(f"🔮 Kronos background analysis error for {symbol}: {e}", exc_info=True)
+        finally:
+            self._kronos_last_run[key] = time.time()
+            self._kronos_inflight.discard(key)
 
 
 # Module singleton

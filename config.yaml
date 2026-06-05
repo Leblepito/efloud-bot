@@ -225,3 +225,24 @@ agent_team:
     # schedule: API-tetiklemeli (POST /api/ai/post-mortem). Bot içinde
     # cron/scheduler YOK. 'daily' | 'weekly' yalnızca prompt framing'i
     # için kullanılır.
+
+# ── Kronos advisory layer (time-series forecast + LLM synthesis) ──────────────
+# ADDITIVE & ADVISORY-ONLY: commentary + categorical band for Telegram/DB.
+# NEVER feeds trade/sizing/SL-TP/confluence logic. DEFAULT-OFF kill switch.
+# Provider resolved via make_llm_client (falls back to agent_team / LLM_PROVIDER).
+# Pre-warm before first enable:
+#   python external_repos/kronos-claude-skill/scripts/run_kronos.py BTC-USD 1mo 1h 12
+kronos:
+  enabled: false              # MASTER kill switch. false → fully inert.
+  run_on: [trade_open]        # subset of [trade_open, readonly]; readonly = whole-universe fan-out (opt-in).
+  data_source: yfinance       # yfinance (spot, default/works today) | binance (perp klines — code-ready,
+                              #   but requires the PATCHED skill deployed (external_repos is gitignored) +
+                              #   a parquet engine in the sub-venv. Keep yfinance until that's provisioned.)
+  interval: "1h"
+  period: "1mo"
+  pred_len: 12
+  max_concurrency: 1          # dedicated bounded executor + Semaphore
+  cooldown_sec: 3600          # per (symbol,direction,bar) dedup window
+  synth_timeout_sec: 30
+  prewarm_on_start: true
+  show_numeric_confidence: false  # false → categorical band (no fake 0-100 next to confluence)

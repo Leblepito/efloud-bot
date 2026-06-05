@@ -49,8 +49,17 @@ tmp/
 .worktrees/
 worktrees/
 
-# Cloned external reference repositories
-external_repos/
+# Cloned external reference repositories — ignored EXCEPT the Kronos skill's
+# runner scripts + requirements, which the bot's Binance-native Kronos feed
+# depends on (the --df-path patch). Heavy/generated parts (.venv, _kronos clone,
+# __pycache__) stay ignored and are rebuilt by the runner's ensure_venv() on the VPS.
+external_repos/*
+!external_repos/kronos-claude-skill/
+external_repos/kronos-claude-skill/*
+!external_repos/kronos-claude-skill/scripts/
+!external_repos/kronos-claude-skill/requirements.txt
+external_repos/kronos-claude-skill/scripts/*
+!external_repos/kronos-claude-skill/scripts/*.py
 
 # Local candidate configs
 configs/candidate_*.yaml

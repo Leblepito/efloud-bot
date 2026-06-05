@@ -59,6 +59,8 @@ export type Trade = {
   opened_at: string;
   closed_at: string | null;
   confluence: number | null;
+  kronos_comment?: string;
+  kronos_confidence?: number;
 };
 
 export type EquityPoint = {

@@ -133,6 +133,28 @@ llm:
   provider: minimax
   model: MiniMax-M2.7-highspeed       # fast low-latency variant; advisory needs no heavy reasoning
 
+# ── Kronos advisory layer (time-series forecast + LLM synthesis) ──────────────
+# ADDITIVE & ADVISORY-ONLY: produces commentary + a categorical band for Telegram
+# (and the DB when present). It NEVER feeds trade/sizing/SL-TP/confluence logic.
+# DEFAULT-OFF master kill switch. Operator pre-warm step before first enable:
+#   python external_repos/kronos-claude-skill/scripts/run_kronos.py BTC-USD 1mo 1h 12
+kronos:
+  enabled: false              # MASTER kill switch. false → fully inert (no subprocess/LLM/Telegram).
+  run_on: [trade_open]        # subset of [trade_open, readonly]. readonly = whole-universe fan-out
+                              #   (OOM/spam vector) → opt-in only, enable AFTER trade_open is proven clean.
+  data_source: yfinance       # yfinance (spot, default/works today) | binance (perp klines — code-ready,
+                              #   but requires the PATCHED skill deployed (external_repos gitignored) + a
+                              #   parquet engine in the sub-venv. Keep yfinance until that's provisioned.)
+  interval: "1h"             # forecast bar interval
+  period: "1mo"              # history window
+  pred_len: 12                # forecast horizon in bars (aligned to intraday, NOT a 24h point bet)
+  max_concurrency: 1          # dedicated bounded executor + Semaphore — caps concurrent torch loads
+  cooldown_sec: 3600          # per (symbol,direction,bar) dedup window
+  synth_timeout_sec: 30       # hard timeout around the LLM synthesis call
+  prewarm_on_start: true      # build/warm the sub-venv + model at startup, off the trade path
+  show_numeric_confidence: false  # false → Telegram shows categorical band (no fake 0-100 vs confluence)
+  # provider/model resolved via make_llm_client → reuses the `llm:` block above + LLM_PROVIDER env.
+
 # ── Safety: agresif (bütün cüzdan kullanılabilir, %10 daily loss tolerans) ──
 safety:
   daily_loss_limit_pct: 10.0          # $200 günlük max kayıp ($2000 × 10%)
