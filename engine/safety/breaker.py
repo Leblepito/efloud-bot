@@ -164,8 +164,14 @@ class CircuitBreaker:
                         f"threshold ${self.emergency_threshold:.2f}")
             return self.status
 
-        # 1. Daily loss
-        daily_pnl = sum(t["pnl"] for t in self.trades_today)
+        # 1. Daily loss — sum only trades since calendar midnight so the window
+        # matches the calendar-midnight resume below. Summing the rolling-24h
+        # trades_today instead left a late-day loss counted past midnight, so the
+        # breaker immediately re-tripped at resume and the halt stretched ~1 extra
+        # day (bug-hunt #11).
+        _midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_trades = [t for t in self.trades_today if t["ts"] >= _midnight]
+        daily_pnl = sum(t["pnl"] for t in today_trades)
         daily_pct = (daily_pnl / self.starting_balance) * 100
         if daily_pct <= -self.daily_limit:
             tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0)
@@ -195,7 +201,7 @@ class CircuitBreaker:
                 "daily_pnl": round(daily_pnl, 2),
                 "daily_pct": round(daily_pct, 2),
                 "drawdown_pct": round(dd_pct, 2),
-                "trades_today": len(self.trades_today),
+                "trades_today": len(today_trades),
             }
         )
         return self.status
