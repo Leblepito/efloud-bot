@@ -76,6 +76,24 @@ class CustomRiskCalculator:
         """
         return position_size * self.leverage
 
+    def calculate_contract_size(self, available_balance: float, entry_price: float) -> float:
+        """Contract size (asset units) for the risk-budgeted position.
+
+        ``calculate_position_size`` returns MARGIN (max_loss / (stop_pct·leverage)).
+        The exchange order size is in asset units = notional / entry. Convert margin
+        → notional (× leverage) BEFORE dividing by entry — otherwise the position is
+        leverage-x too SMALL (e.g. 5x under-risked at leverage=5) and the realized
+        loss at the configured stop is only max_loss / leverage. With the conversion,
+        loss at the target stop ≈ max_loss_usdt.
+
+        Returns 0.0 for a non-positive entry price (no position).
+        """
+        if entry_price <= 0:
+            return 0.0
+        margin = self.calculate_position_size(available_balance)
+        notional = self.calculate_notional_exposure(margin)
+        return notional / entry_price
+
     def validate_risk_parameters(self, position_size: float, current_price: float, stop_price: float) -> Dict:
         """
         Validate that trade parameters meet risk requirements.
