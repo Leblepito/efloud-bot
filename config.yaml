@@ -235,7 +235,9 @@ agent_team:
 kronos:
   enabled: false              # MASTER kill switch. false → fully inert.
   run_on: [trade_open]        # subset of [trade_open, readonly]; readonly = whole-universe fan-out (opt-in).
-  data_source: yfinance       # yfinance (spot) | binance (native perp klines — needs Gemini Phase 6)
+  data_source: yfinance       # yfinance (spot, default/works today) | binance (perp klines — code-ready,
+                              #   but requires the PATCHED skill deployed (external_repos is gitignored) +
+                              #   a parquet engine in the sub-venv. Keep yfinance until that's provisioned.)
   interval: "1h"
   period: "1mo"
   pred_len: 12

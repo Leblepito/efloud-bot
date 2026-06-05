@@ -277,3 +277,100 @@ def test_make_llm_client_routes_to_minimax():
     from engine.agents.llm import make_llm_client
     client = make_llm_client({"provider": "minimax"})
     assert type(client).__name__ == "MiniMaxClient"
+
+
+def test_predict_script_df_path_loading(tmp_path, monkeypatch):
+    """Verify that _predict.load_history loads parquet, normalizes columns and index name, and skips yfinance."""
+    import sys
+    from pathlib import Path
+    from unittest.mock import MagicMock
+    
+    # Mock yfinance so it does not fail when importing _predict.py in parent venv
+    sys.modules['yfinance'] = MagicMock()
+    sys.modules['model'] = MagicMock()
+    
+    import pandas as pd
+    
+    # Inject _predict.py's directory to sys.path
+    project_root = Path(__file__).resolve().parents[2]
+    predict_dir = project_root / "external_repos" / "kronos-claude-skill" / "scripts"
+    sys.path.insert(0, str(predict_dir))
+    
+    import _predict
+    
+    # Create a dummy dataframe with extra columns and index name "timestamp"
+    df = pd.DataFrame(
+        {
+            "open": [10.0, 11.0],
+            "high": [12.0, 13.0],
+            "low": [9.0, 9.5],
+            "close": [11.0, 12.0],
+            "volume": [100.0, 150.0],
+            "extra_col": [1.0, 2.0]
+        },
+        index=pd.to_datetime(["2026-06-01 00:00:00", "2026-06-01 01:00:00"])
+    )
+    df.index.name = "timestamp"
+    
+    pq_path = tmp_path / "df_injected.parquet"
+    df.to_parquet(pq_path)
+    
+    # Mock fetch_ohlcv to fail if called
+    mock_fetch = MagicMock(side_effect=Exception("Should not fetch from yfinance"))
+    monkeypatch.setattr(_predict, "fetch_ohlcv", mock_fetch)
+    
+    # Call load_history
+    loaded_df = _predict.load_history("BTC-USD", "1mo", "1h", str(pq_path))
+    
+    # Assertions
+    mock_fetch.assert_not_called()
+    assert list(loaded_df.columns) == ["open", "high", "low", "close", "volume"]
+    assert loaded_df.index.name == "timestamps"
+    assert len(loaded_df) == 2
+
+
+def test_run_kronos_prediction_binance_df_injection(monkeypatch):
+    """Verify run_kronos_prediction converts DataFrame to temp parquet, passes --df-path, and cleans it up."""
+    import pandas as pd
+    import os
+    
+    # Create dummy dataframe
+    df = pd.DataFrame(
+        {
+            "open": [10.0],
+            "high": [12.0],
+            "low": [9.0],
+            "close": [11.0],
+            "volume": [100.0]
+        },
+        index=pd.to_datetime(["2026-06-01 00:00:00"])
+    )
+    df.index.name = "timestamp"
+    
+    temp_path_captured = []
+    
+    def mock_run(cmd, *args, **kwargs):
+        # Locate --df-path in cmd
+        assert "--df-path" in cmd
+        idx = cmd.index("--df-path")
+        df_path = cmd[idx + 1]
+        temp_path_captured.append(df_path)
+        
+        # Read the parquet file to assert
+        assert os.path.exists(df_path)
+        injected = pd.read_parquet(df_path)
+        assert list(injected.columns) == ["open", "high", "low", "close", "volume"]
+        assert injected.index.name == "timestamps"
+        
+        return _fake_completed(_KRONOS_STDOUT)
+        
+    monkeypatch.setattr("engine.ai.kronos.subprocess.run", mock_run)
+    
+    res = run_kronos_prediction("BTCUSDT", df=df)
+    
+    assert res["predicted_direction"] == "UP"
+    assert res["change_pct"] == pytest.approx(10.14)
+    
+    # Ensure temp file is cleaned up after run
+    assert len(temp_path_captured) == 1
+    assert not os.path.exists(temp_path_captured[0])

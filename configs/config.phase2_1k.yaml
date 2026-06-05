@@ -142,7 +142,9 @@ kronos:
   enabled: false              # MASTER kill switch. false → fully inert (no subprocess/LLM/Telegram).
   run_on: [trade_open]        # subset of [trade_open, readonly]. readonly = whole-universe fan-out
                               #   (OOM/spam vector) → opt-in only, enable AFTER trade_open is proven clean.
-  data_source: yfinance       # yfinance (spot, today) | binance (native perp klines — needs Gemini Phase 6)
+  data_source: yfinance       # yfinance (spot, default/works today) | binance (perp klines — code-ready,
+                              #   but requires the PATCHED skill deployed (external_repos gitignored) + a
+                              #   parquet engine in the sub-venv. Keep yfinance until that's provisioned.)
   interval: "1h"             # forecast bar interval
   period: "1mo"              # history window
   pred_len: 12                # forecast horizon in bars (aligned to intraday, NOT a 24h point bet)

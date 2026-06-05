@@ -991,14 +991,23 @@ class BotRunner:
 
                 if synthesis is None:
                     log.info(f"🔮 [Kronos] Forecasting {symbol} {direction}…")
-                    # 1) Prediction (torch subprocess) on the DEDICATED executor.
+                    # data_source: binance → feed the bot's own closed-bar perp klines (no basis
+                    # distortion, 100% symbol coverage); yfinance remains the fallback.
+                    df = None
+                    if str(cfg.get("data_source", "yfinance")).lower() == "binance" and self.client is not None:
+                        try:
+                            df = await loop.run_in_executor(
+                                self._kronos_executor,
+                                self.client.fetch_ohlcv,
+                                symbol, str(cfg.get("interval", "1h")), 500,
+                            )
+                        except Exception as e:
+                            log.warning(f"🔮 Kronos Binance fetch failed for {symbol}, falling back to yfinance: {e}")
+                            df = None
                     kronos_data = await loop.run_in_executor(
-                        self._kronos_executor,
-                        run_kronos_prediction,
-                        symbol,
-                        str(cfg.get("period", "1mo")),
-                        str(cfg.get("interval", "1h")),
-                        int(cfg.get("pred_len", 12)),
+                        self._kronos_executor, run_kronos_prediction,
+                        symbol, str(cfg.get("period", "1mo")), str(cfg.get("interval", "1h")),
+                        int(cfg.get("pred_len", 12)), df,
                     )
 
                     # 2) LLM synthesis via the provider factory (MiniMax in prod),

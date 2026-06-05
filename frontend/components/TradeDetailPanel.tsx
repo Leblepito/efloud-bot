@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fromNow, n, pct, usd } from "@/lib/format";
+import { KronosCard } from "./KronosCard";
 
 interface TradeDetailPanelProps {
   trade: any;
@@ -189,45 +190,7 @@ export function TradeDetailPanel({ trade, onClose }: TradeDetailPanelProps) {
         )}
 
         {/* Kronos AI Commentary (AI accent → core blue) */}
-        <div className="border border-blue-500/20 bg-blue-500/[0.03] p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-blue-500/20 pb-2">
-            <h3 className="text-[10px] tracking-widest text-blue-400 uppercase font-bold flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 dot-breathe" />
-              Kronos AI Forecast &amp; Commentary
-            </h3>
-            <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold text-[9px]">
-              Active Skill: V2.1
-            </span>
-          </div>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 text-[10px]">
-              <div>
-                <span className="text-[9px] uppercase text-text-muted block">Forecast Direction</span>
-                <span className={`font-bold uppercase ${isLong ? "text-accent-green" : "text-accent-red"}`}>{isLong ? "▲ BULLISH" : "▼ BEARISH"}</span>
-              </div>
-              <div>
-                <span className="text-[9px] uppercase text-text-muted block">Model Confidence</span>
-                <span className="text-text-primary font-bold tabular-nums">
-                  {trade.kronos_confidence ? `${trade.kronos_confidence}%` : `${Math.floor(72 + (trade.confluence || 10) * 0.15 + Math.abs(trade.pnl_pct || 0) * 0.4)}%`}
-                </span>
-              </div>
-              <div>
-                <span className="text-[9px] uppercase text-text-muted block">Target Horizon</span>
-                <span className="text-text-secondary">24h - 48h</span>
-              </div>
-              <div>
-                <span className="text-[9px] uppercase text-text-muted block">Forecast Action</span>
-                <span className="text-blue-400 font-bold">HOLD / ACCUMULATE</span>
-              </div>
-            </div>
-            <div className="pt-2 border-t border-blue-500/15">
-              <span className="text-[9px] uppercase tracking-wider text-text-muted block mb-1">AI Analyst Commentary</span>
-              <p className="text-xs text-text-secondary leading-relaxed">
-                {trade.kronos_comment || `${trade.symbol} üzerinde son 30 günlük zaman serisi verileri Kronos-small modeli ile analiz edildi. ${isLong ? 'Yükselen trend yapısında (BOS)' : 'Alçalan trend yapısında'} güçlü bir momentum displacement tespit edildi. Model, fiyatın $${n(trade.entry, 2)} giriş seviyesindeki FVG destek alanını korumasını ve $${n(trade.tp1, 2)} TP1 hedefine doğru hareketini sürdürmesini yüksek olasılıkla öngörüyor.`}
-              </p>
-            </div>
-          </div>
-        </div>
+        <KronosCard trade={trade} />
 
         {/* Trace Info */}
         <div className="text-[9px] text-text-muted flex justify-between items-center pt-2">

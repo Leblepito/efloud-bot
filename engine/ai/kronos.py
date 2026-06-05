@@ -49,6 +49,7 @@ def run_kronos_prediction(
     period: str = "1mo",
     interval: str = "1h",
     pred_len: int = 24,
+    df: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Run the Kronos prediction script as a subprocess and parse its output.
     
@@ -63,7 +64,33 @@ def run_kronos_prediction(
         log.warning(f"Kronos skill runner not found at: {script_path}")
         return {}
 
+    temp_file = None
+    if df is not None:
+        try:
+            import tempfile
+            df_cleaned = df.copy()
+            df_cleaned.columns = [c.lower() for c in df_cleaned.columns]
+            
+            # Normalize index name: DatetimeIndex named "timestamp" -> "timestamps"
+            if df_cleaned.index.name == "timestamp":
+                df_cleaned.index.name = "timestamps"
+            elif df_cleaned.index.name is None or df_cleaned.index.name != "timestamps":
+                df_cleaned.index.name = "timestamps"
+                
+            df_cleaned = df_cleaned[["open", "high", "low", "close", "volume"]]
+            
+            fd, temp_path = tempfile.mkstemp(suffix=".parquet")
+            os.close(fd)
+            temp_file = temp_path
+            df_cleaned.to_parquet(temp_file)
+        except Exception as write_err:
+            log.warning(f"Failed to write temp parquet for Kronos: {write_err}")
+            temp_file = None
+
     cmd = [sys.executable, str(script_path), ticker, period, interval, str(pred_len)]
+    if temp_file:
+        cmd.extend(["--df-path", temp_file])
+
     log.info(f"Running Kronos: {' '.join(cmd)}")
     
     try:
@@ -128,6 +155,12 @@ def run_kronos_prediction(
     except Exception as e:
         log.warning(f"Error executing Kronos prediction: {e}")
         return {}
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except Exception as rm_err:
+                log.warning(f"Failed to remove temp parquet file {temp_file}: {rm_err}")
 
 
 def synthesize_signal_with_kronos(
