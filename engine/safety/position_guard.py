@@ -230,9 +230,10 @@ class PositionGuard:
             return PositionCheckResult(False, "Size is zero or negative")
 
         # 2. Size cap
-        notional = entry * size
+        full_notional = entry * size       # exposure check unit (full notional)
+        notional = full_notional
         if leverage > 1:
-            notional = notional / leverage  # Margin değeri
+            notional = notional / leverage  # Margin değeri (size-cap/reserve unit)
 
         # 2.5 Reserve balance check — bakiye - margin - reserve > 0 olmalı
         if self.reserve_balance > 0:
@@ -259,12 +260,16 @@ class PositionGuard:
             )
 
         # 3. Total exposure (tüm pozisyonların notional/balance oranı)
+        # Existing positions are summed as FULL notional (avg_entry × remaining_size),
+        # so the new position must also use FULL notional — not the margin-reassigned
+        # `notional` above, which undercounted it by the leverage factor and made the
+        # exposure cap too permissive (bug-hunt #10).
         total_notional = sum(
             p.avg_entry_price * p.remaining_size
             for p in existing_positions
             if p.is_open
         )
-        new_total = total_notional + notional
+        new_total = total_notional + full_notional
         exposure_multiple = new_total / balance if balance > 0 else 0
         if exposure_multiple > self.max_exposure:
             return PositionCheckResult(
