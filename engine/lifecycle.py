@@ -124,12 +124,39 @@ class Position:
 
     @property
     def avg_entry_price(self) -> float:
-        """Ağırlıklı ortalama giriş fiyatı."""
+        """Ağırlıklı ortalama giriş fiyatı — KALAN envanterin maliyet temeli.
+
+        Average-cost: entries/exits zaman sırasıyla işlenir, her exit running
+        ortalamadan düşülür. Böylece kısmi bir çıkıştan (TP1) SONRA yapılan piramit
+        ekleme ortalamayı doğru günceller (çıkmış miktarın maliyet temeli geride
+        kalmaz). Çıkıştan sonra ekleme yapılmayan yaygın durumda bu, basit
+        tüm-girişler ortalamasıyla AYNIdır → davranış değişmez.
+        """
         if not self.entries:
             return 0
-        total_cost = sum(e.price * e.size for e in self.entries)
+        # Merge entries(+) / exits(−) chronologically; tie-break entries before
+        # exits so inventory always exists before it is reduced.
+        events = sorted(
+            [(e.timestamp, 0, e.size, e.price) for e in self.entries]
+            + [(x.timestamp, 1, x.size, 0.0) for x in self.exits],
+            key=lambda ev: (ev[0], ev[1]),
+        )
+        cost = 0.0
+        size = 0.0
+        for _ts, kind, sz, price in events:
+            if kind == 0:  # entry
+                cost += price * sz
+                size += sz
+            elif size > 1e-12:  # exit: remove at the running average
+                cost -= sz * (cost / size)
+                size -= sz
+        if size > 1e-9:
+            return cost / size
+        # Fully exited (or float underflow) → fall back to the simple all-entries
+        # average so post-close reporting still gets a sane number.
         total_size = self.total_size_entered
-        return total_cost / total_size if total_size > 0 else 0
+        return (sum(e.price * e.size for e in self.entries) / total_size
+                if total_size > 0 else 0)
 
     @property
     def realized_pnl(self) -> float:
