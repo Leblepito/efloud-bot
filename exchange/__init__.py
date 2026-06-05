@@ -1354,13 +1354,19 @@ class OrderManager:
                 # Pozisyon Binance'de kapanmış — TP2 / SL / manual close
                 # Ordering note: _estimate_exit_price runs before
                 # _cancel_position_siblings as defense-in-depth. Currently safe
-                # either way because _estimate_exit_price reads `bn_orders_raw`
-                # captured once at the top of reconcile(), so cancellations
-                # don't mutate that local list. But if _estimate_exit_price is
-                # ever changed to live-fetch open orders, cancelling first would
-                # invalidate trigger attribution (TP1/TP2/SL is inferred from
-                # which order ID is missing). Keep this order.
-                exit_price = self._estimate_exit_price(pos, bn_orders_raw)
+                # either way because it reads `bn_order_ids` captured once at the
+                # top of reconcile(), so cancellations don't mutate that local
+                # set. But if _estimate_exit_price is ever changed to live-fetch
+                # open orders, cancelling first would invalidate trigger
+                # attribution (TP1/TP2/SL is inferred from which id is missing).
+                # Keep this order.
+                # Pass the ALGO-INCLUSIVE id set (bn_order_ids), not the
+                # regular-only bn_orders_raw: SL/TP are algo orders, so a
+                # regular-only set makes every leg look 'missing' → phantom TP2.
+                # fetch_ok gates attribution off when either fetch failed.
+                exit_price = self._estimate_exit_price(
+                    pos, bn_order_ids, fetch_ok=(orders_fetch_ok and algo_fetch_ok)
+                )
                 # Cancel orphan sibling reduceOnly orders before dropping local state
                 if not self.dry_run:
                     ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
@@ -1577,21 +1583,33 @@ class OrderManager:
                 },
             )
 
-    def _estimate_exit_price(self, pos: Position, bn_orders: list) -> float:
+    def _estimate_exit_price(
+        self, pos: Position, bn_order_ids: set, fetch_ok: bool = True
+    ) -> float:
         """Reconcile sırasında exit price tahmin et.
 
-        Hangi order tetiklendi? — bn_orders listesinde olmayan TP/SL order'ı = filled.
-        """
-        # TP2 / TP1 / SL'den hangisi yoksa o tetiklenmiş demektir
-        order_ids = {str(o.get("id", "")) for o in bn_orders}
+        Hangi order tetiklendi? — canlı id set'inde olmayan TP/SL order'ı = filled.
 
-        if self._is_real_oid(pos.tp2_order_id) and pos.tp2_order_id not in order_ids:
-            return pos.tp2  # TP2 hit
-        if self._is_real_oid(pos.sl_order_id) and pos.sl_order_id not in order_ids:
-            return pos.sl   # SL hit
-        if self._is_real_oid(pos.tp1_order_id) and pos.tp1_order_id not in order_ids and not pos.tp1_hit:
-            return pos.tp1
-        # Fallback: current market price
+        bn_order_ids MUST be the algo-inclusive id set (regular fetch_open_orders
+        ids + fapiPrivateGetOpenAlgoOrders algoIds), because pos.sl/tp1/tp2_order_id
+        are server-side ALGO ids. Passing a regular-orders-only set makes every algo
+        leg look 'missing' and mis-attributes every close to TP2/SL — an SL-hit loss
+        gets logged as a TP2 profit, feeding phantom PnL to the drawdown breaker.
+
+        fetch_ok must be False when EITHER the regular or algo open-orders fetch
+        failed this cycle: the set is then incomplete (a live leg can look missing),
+        so we fall through to the current market price instead of a phantom TP2/SL
+        attribution.
+        """
+        # Only attribute a triggered leg when the live id set is trustworthy.
+        if fetch_ok:
+            if self._is_real_oid(pos.tp2_order_id) and pos.tp2_order_id not in bn_order_ids:
+                return pos.tp2  # TP2 hit
+            if self._is_real_oid(pos.sl_order_id) and pos.sl_order_id not in bn_order_ids:
+                return pos.sl   # SL hit
+            if self._is_real_oid(pos.tp1_order_id) and pos.tp1_order_id not in bn_order_ids and not pos.tp1_hit:
+                return pos.tp1
+        # Fetch failed, or no leg identifiably missing → current market price.
         try:
             return self.client.get_price(pos.symbol)
         except Exception:

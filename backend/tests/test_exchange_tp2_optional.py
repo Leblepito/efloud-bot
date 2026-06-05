@@ -118,9 +118,9 @@ def test_estimate_exit_price_returns_none_for_single_target_when_tp2_id_missing(
         tp2_order_id="",  # tp2 placement skipped, so no order id
         opened_at="2025-01-01T00:00:00",
     )
-    # bn_orders contains SL but not TP1 → TP1 hit
-    bn_orders = [{"id": "sl_x"}]
-    exit_price = om._estimate_exit_price(single_target_pos, bn_orders)
+    # bn_order_ids contains SL but not TP1 → TP1 hit (algo-inclusive set)
+    bn_order_ids = {"sl_x"}
+    exit_price = om._estimate_exit_price(single_target_pos, bn_order_ids)
     assert exit_price == 110.0  # TP1
 
 

@@ -112,15 +112,11 @@ class TestSentinelGuardEstimateExit:
             tp1_order_id="TP1-1",
             tp2_order_id="UNREACHABLE",  # sentinel
         )
-        # All real (non-sentinel) orders still present on Binance.
-        bn_orders = [
-            {"id": "SL-1"},
-            {"id": "TP1-1"},
-            # TP2 never existed — "UNREACHABLE" was never real
-        ]
+        # All real (non-sentinel) orders still present on Binance (algo-inclusive set).
+        bn_order_ids = {"SL-1", "TP1-1"}  # TP2 never existed — "UNREACHABLE" was never real
         mock_client.get_price.return_value = 22.75  # current market
 
-        exit_price = mgr._estimate_exit_price(pos, bn_orders)
+        exit_price = mgr._estimate_exit_price(pos, bn_order_ids)
 
         # Must fall through to current market price (fallback), NOT pos.tp2
         assert exit_price == 22.75
@@ -136,13 +132,54 @@ class TestSentinelGuardEstimateExit:
             tp1_order_id="UNREACHABLE",
             tp2_order_id="UNREACHABLE",
         )
-        bn_orders = [{"id": "SL-1"}]
+        bn_order_ids = {"SL-1"}
         mock_client.get_price.return_value = 22.80
 
-        exit_price = mgr._estimate_exit_price(pos, bn_orders)
+        exit_price = mgr._estimate_exit_price(pos, bn_order_ids)
 
         # Must fall through to market price, not pos.tp1 or pos.tp2
         assert exit_price == 22.80
+
+
+class TestEstimateExitPriceAlgoInclusive:
+    """_estimate_exit_price must use the algo-inclusive id SET and gate on fetch_ok.
+
+    CRITICAL regression: pos.sl/tp1/tp2_order_id are server-side ALGO ids. Reconcile
+    used to pass the regular-orders-only list (bn_orders_raw), so every algo leg
+    looked 'missing' → every close mis-attributed to TP2 (an SL-hit loss logged as a
+    TP2 profit), feeding phantom PnL to the drawdown breaker.
+    """
+
+    def _pos(self):
+        return Position(
+            symbol="BTC/USDT", direction="SHORT",
+            entry=100.0, sl=110.0, tp1=95.0, tp2=80.0, size=1.0,
+            order_id="ENTRY-1", sl_order_id="SL-algo",
+            tp1_order_id="TP1-algo", tp2_order_id="TP2-algo",
+        )
+
+    def test_sl_hit_returns_sl_not_tp2_when_tp2_still_live(self, mgr, mock_client):
+        # SL fired (its algoId gone); TP1/TP2 algoIds still on the book.
+        pos = self._pos()
+        bn_order_ids = {"TP1-algo", "TP2-algo"}
+        mock_client.get_price.return_value = 109.5
+        exit_price = mgr._estimate_exit_price(pos, bn_order_ids)
+        assert exit_price == pos.sl     # 110.0 — correct attribution
+        assert exit_price != pos.tp2    # NOT 80.0 (the pre-fix phantom profit)
+
+    def test_tp2_hit_returns_tp2(self, mgr, mock_client):
+        pos = self._pos()
+        bn_order_ids = {"SL-algo", "TP1-algo"}  # TP2 algoId gone → TP2 hit
+        exit_price = mgr._estimate_exit_price(pos, bn_order_ids)
+        assert exit_price == pos.tp2    # 80.0
+
+    def test_failed_fetch_falls_through_to_market_not_phantom_tp2(self, mgr, mock_client):
+        # A failed regular/algo fetch → set unreliable → must NOT attribute a leg.
+        pos = self._pos()
+        mock_client.get_price.return_value = 101.0
+        exit_price = mgr._estimate_exit_price(pos, set(), fetch_ok=False)
+        assert exit_price == 101.0      # current market price
+        assert exit_price != pos.tp2    # NOT 80.0 phantom TP2
 
 
 # ─────────────────────────────────────────────────────────────
