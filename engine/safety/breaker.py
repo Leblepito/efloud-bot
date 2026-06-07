@@ -171,7 +171,10 @@ class CircuitBreaker:
         # day (bug-hunt #11).
         _midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_trades = [t for t in self.trades_today if t["ts"] >= _midnight]
-        daily_pnl = sum(t["pnl"] for t in today_trades)
+        # Skip trades with missing/None pnl (open positions, journal entry without
+        # realized PnL). Bug-hunt #13: previously sum() raised TypeError when a
+        # trade's pnl field was None, causing run_cycle to fail every tick.
+        daily_pnl = sum(t["pnl"] for t in today_trades if t.get("pnl") is not None)
         daily_pct = (daily_pnl / self.starting_balance) * 100
         if daily_pct <= -self.daily_limit:
             tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0)
