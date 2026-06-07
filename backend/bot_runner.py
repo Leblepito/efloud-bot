@@ -508,7 +508,7 @@ class BotRunner:
                     )
 
             except Exception as e:
-                log.error(f"[{sym}] cycle failed: {e}")
+                log.error(f"[{sym}] cycle failed: {e}", exc_info=True)
 
     # ─────────────────────────────────────────────────────────────
     # Event handlers
