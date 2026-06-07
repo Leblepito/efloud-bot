@@ -160,7 +160,13 @@ class Position:
 
     @property
     def realized_pnl(self) -> float:
-        return sum(e.pnl for e in self.exits)
+        # Skip exits with None pnl (open in-flight exits, journal entries without
+        # realized PnL). Bug-hunt #14 (PR #168 follow-up): previously sum() raised
+        # TypeError on int + None when an exit was recorded with pnl=None (edge
+        # case from remaining-inventory cost-basis math in PR #164 / #167 LOW
+        # batch). Without this guard, run_cycle crashed every tick via
+        # SafeOrchestrator.run_cycle:944 -> breaker.record_trade.
+        return sum(e.pnl for e in self.exits if e.pnl is not None)
 
     def unrealized_pnl(self, current_price: float) -> float:
         if not self.is_open:
