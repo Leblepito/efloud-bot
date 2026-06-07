@@ -112,11 +112,15 @@ class Position:
 
     @property
     def total_size_entered(self) -> float:
-        return sum(e.size for e in self.entries)
+        # Skip entries with None size (in-flight entries, journal rows). Bug-hunt
+        # #15 (PR #170 follow-up): same None-arithmetic pattern as realized_pnl.
+        return sum(e.size for e in self.entries if e.size is not None)
 
     @property
     def total_size_exited(self) -> float:
-        return sum(e.size for e in self.exits)
+        # Skip exits with None size (in-flight exits, journal rows). Bug-hunt
+        # #15 (PR #170 follow-up): same None-arithmetic pattern as realized_pnl.
+        return sum(e.size for e in self.exits if e.size is not None)
 
     @property
     def remaining_size(self) -> float:
@@ -141,13 +145,22 @@ class Position:
             + [(x.timestamp, 1, x.size, 0.0) for x in self.exits],
             key=lambda ev: (ev[0], ev[1]),
         )
+        # Bug-hunt #15 (PR #170 follow-up): skip events whose entry size or price
+        # is None — they can't contribute to the running weighted average, and
+        # including them would raise TypeError on price * sz. The fallback at the
+        # bottom of the method still uses the simple-all-entries average which
+        # also has its own None-skip guard, so partial-None data is handled.
         cost = 0.0
         size = 0.0
         for _ts, kind, sz, price in events:
             if kind == 0:  # entry
+                if sz is None or price is None:
+                    continue
                 cost += price * sz
                 size += sz
             elif size > 1e-12:  # exit: remove at the running average
+                if sz is None:
+                    continue
                 cost -= sz * (cost / size)
                 size -= sz
         if size > 1e-9:
@@ -155,8 +168,12 @@ class Position:
         # Fully exited (or float underflow) → fall back to the simple all-entries
         # average so post-close reporting still gets a sane number.
         total_size = self.total_size_entered
-        return (sum(e.price * e.size for e in self.entries) / total_size
-                if total_size > 0 else 0)
+        # Skip entries with None price or size. Bug-hunt #15 (PR #170 follow-up):
+        # e.price * e.size raised TypeError if either was None. Reuses the
+        # total_size_entered None-filter, so we only need to guard e.price here.
+        weighted = sum(e.price * e.size for e in self.entries
+                      if e.price is not None and e.size is not None)
+        return (weighted / total_size if total_size > 0 else 0)
 
     @property
     def realized_pnl(self) -> float:
@@ -170,6 +187,12 @@ class Position:
 
     def unrealized_pnl(self, current_price: float) -> float:
         if not self.is_open:
+            return 0
+        if current_price is None:
+            # Bug-hunt #15 (PR #170 follow-up): price_map can carry None for
+            # symbols whose WS snapshot is stale or never landed. Returning 0
+            # keeps lifecycle math intact; the next tick with a real price
+            # resumes the calculation.
             return 0
         avg = self.avg_entry_price
         diff = (current_price - avg) if self.direction == "LONG" else (avg - current_price)
