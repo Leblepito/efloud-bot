@@ -70,6 +70,40 @@
 
 ---
 
+## Amendment 2026-06-08b — service architecture + Phase 3 re-scope
+
+Operator clarification (recorded so it is not lost; detailed design when each phase starts):
+
+**Railway service map (Hermes owns repo + local + both Railway services):**
+- **`efloud-bot` service** = the trade bot **+ operator Dashboard UI**. The dashboard is a
+  Next.js **static export** (`frontend/next.config.ts: output:'export'`) built inside the bot's
+  `Dockerfile` (stage 1) and served by FastAPI `StaticFiles(html=True)` at `/`
+  (`backend/main.py:146`) — a **single Railway service**, NOT a separate Vercel/Railway app.
+  `frontend/vercel.json` was legacy → archived to `.legacy` (PR #0). This supersedes the
+  reconstructed plan's Vercel assumption.
+- **`u2algo-site` service** = the **commercial platform where the bot's indicators and
+  algorithms are sold** (storefront), not merely a marketing landing + waitlist.
+
+**Phase 3 re-scope — u2algo-site = FULL sales platform (operator decision):**
+The reconstructed Phase 3 (PR #6–#10: landing + waitlist + SEO) is the *front door* but no longer
+the whole scope. u2algo-site must become a storefront with:
+- **Product catalog** — the indicators/strategies (tied to the repo's `pine/` TradingView Pine
+  indicator + strategy outputs) and/or bot access tiers.
+- **Payments/checkout** (e.g. Stripe).
+- **Licensing / entitlement** — most importantly **TradingView invite-only indicator access**
+  granting (see `docs/superpowers/specs/2026-06-03-tradingview-publish-efloud-signals-design.md`),
+  plus bot-subscription entitlement.
+- **Accounts / auth** — buyer accounts, purchase history, license management.
+- All under the same growth-OS compliance guardrails (no performance promises; the real TR
+  banned-list + numeric-% gate from C1 applies to storefront copy too).
+
+This expands Phase 3 into its own epic (catalog → checkout → entitlement → accounts), to be
+architected in detail when Phase 3 begins. PRs #6–#10 (App Router scaffold, i18n, compliance-strip
+landing, waitlist bridge, SEO) remain the first slice of it. Deploy/payment/TradingView-grant
+wiring that needs Railway/Stripe/TradingView access is delegated to Hermes with briefs.
+
+---
+
 ## Context
 
 Efloud has a live SMC trading bot, a **private operator dashboard** (`frontend/`, Next.js 15,
