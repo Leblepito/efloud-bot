@@ -1611,6 +1611,10 @@ class SafeOrchestrator:
         if self.setup_state_store is None:
             return
 
+        smc_v2_cfg = self.config.get("smc_v2", {})
+        require_confirmation = smc_v2_cfg.get("require_confirmation", True)
+        effective_pullback_timeout_bars = smc_v2_cfg.get("pullback_timeout_bars", pullback_timeout_bars)
+
         # Local import to avoid module-level circular dependency on smc_v2
         from engine.smc_v2.zones import is_price_in_zone
         from engine.smc_v2.setup_state import PERSISTED_STATES
@@ -1624,16 +1628,39 @@ class SafeOrchestrator:
 
             cand.bars_waited += 1
 
-            if cand.bars_waited > pullback_timeout_bars:
+            if cand.bars_waited > effective_pullback_timeout_bars:
                 cand.state = "EXPIRED"
                 continue
 
             if cand.state == "AWAITING_PULLBACK" and is_price_in_zone(
                 current_price, cand.target_zone
             ):
-                cand.state = "IN_ZONE"
+                if not require_confirmation:
+                    cand.state = "CONFIRMED"
+                    clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
+                    self._place_v2_entry_order(
+                        cand,
+                        current_price=current_price,
+                        entry_price=clamped_entry_price,
+                    )
+                    continue
+                else:
+                    cand.state = "IN_ZONE"
 
             if cand.state == "IN_ZONE":
+                if not require_confirmation:
+                    if is_price_in_zone(current_price, cand.target_zone):
+                        cand.state = "CONFIRMED"
+                        clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
+                        self._place_v2_entry_order(
+                            cand,
+                            current_price=current_price,
+                            entry_price=clamped_entry_price,
+                        )
+                        continue
+                    else:
+                        # Price has left the zone, do NOT confirm/enter, let it expire on timeout
+                        continue
                 # Skip confirmation when df_15m not provided (state-machine-
                 # only test paths). Real run_cycle always passes df_entry.
                 if df_15m is None:
