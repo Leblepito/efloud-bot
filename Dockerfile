@@ -1,16 +1,20 @@
 # ─────────────────────────────────────────────────────────────────
 # Stage 1 — Build Next.js frontend (static export → frontend/out)
+# Monorepo-aware (PR #0): the dashboard is an npm workspace depending on the
+# shared @efloud/tokens package, so install + build from the repo root.
 # ─────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS frontend-builder
-WORKDIR /app/frontend
+WORKDIR /app
 
-# Cache deps (package-lock.json first for layer cache hit)
-COPY frontend/package.json frontend/package-lock.json ./
+# Cache deps: root workspace manifests + lockfile + shared packages first.
+COPY package.json package-lock.json ./
+COPY packages ./packages
+COPY frontend/package.json ./frontend/package.json
 RUN npm ci --legacy-peer-deps
 
-# Copy source + build (Next.js outputs to ./out due to next.config.ts: output: 'export')
-COPY frontend/ ./
-RUN npm run build
+# Copy frontend source + build the workspace (next.config.ts output: 'export' → frontend/out).
+COPY frontend/ ./frontend/
+RUN npm run build --workspace efloud-frontend
 
 # Verify build output exists
 RUN test -f /app/frontend/out/index.html || (echo "BUILD FAILED: out/index.html missing" && exit 1)

@@ -1,6 +1,10 @@
 import type { Config } from "tailwindcss";
+import efloudTokens from "@efloud/tokens/tailwind";
 
 const config: Config = {
+  // Shared design-token preset (@efloud/tokens, PR #1). Additive/namespaced only —
+  // this file's own `theme.extend` below takes precedence on any shared key.
+  presets: [efloudTokens as Partial<Config>],
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
