@@ -149,6 +149,35 @@ export const effects = {
 } as const;
 
 /* ═══════════════════════════════════════════════════════
+   Terminal palette — the operator dashboard (frontend/)
+   "brutalist trader" identity. Distinct from the u2algo
+   marketing brand above. Single source for the dashboard's
+   Tailwind config AND its chart JS-land colors (recharts /
+   lightweight-charts take hex strings, not classes).
+   Values are byte-identical to the pre-PR-#2 inline literals,
+   so adopting these is a no-visual-change refactor.
+   ═══════════════════════════════════════════════════════ */
+export const terminal = {
+  bg: { base: "#000000", elevated: "#0A0A0A", surface: "#141414" },
+  border: { base: "#1F1F1F", strong: "#2A2A2A", accent: "#00FF88" },
+  text: { primary: "#FAFAFA", secondary: "#888888", muted: "#444444", dim: "#2A2A2A" },
+  accent: { green: "#00FF88", amber: "#FFA500", red: "#FF3030" },
+  /* Chart JS-land (recharts / lightweight-charts) */
+  chart: {
+    bull: "#00FF88",
+    bear: "#FF4D4D", // note: candle/marker red — distinct from accent.red (#FF3030)
+    neutral: "#FFA500",
+    grid: "#1F1F1F",
+    axis: "#444444",
+    axisText: "#666666",
+    cursor: "#2A2A2A",
+    tooltipBg: "#0A0A0A",
+    tagText: "#04040c",
+    oi: "#60a5fa", // open-interest / heuristic accent (blue-400)
+  },
+} as const;
+
+/* ═══════════════════════════════════════════════════════
    Tailwind class helpers (common patterns)
    ═══════════════════════════════════════════════════════ */
 export const tw = {
