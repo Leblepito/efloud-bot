@@ -557,6 +557,10 @@ class SafeOrchestrator:
             except Exception:
                 pass
             if t_sig and t_fil:
+                if t_sig.tzinfo is not None and t_fil.tzinfo is None:
+                    t_sig = t_sig.replace(tzinfo=None)
+                elif t_fil.tzinfo is not None and t_sig.tzinfo is None:
+                    t_fil = t_fil.replace(tzinfo=None)
                 latency_val = (t_fil - t_sig).total_seconds() * 1000.0
 
         trade_id = getattr(pos, "id", None) or getattr(pos, "order_id", "unknown_id")
