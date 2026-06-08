@@ -41,9 +41,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-dvh">
       <TopBar />
+      <TabNav active={activeTab} onChange={setActiveTab} />
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <TabNav active={activeTab} onChange={setActiveTab} />
-
         {/* Panels are kept mounted (CSS-hidden when inactive) so the live chart's
             WebSocket and the selectedSymbol/selectedTrade cross-links survive tab switches. */}
         <div className={activeTab === "overview" ? "space-y-6" : "hidden"}>
