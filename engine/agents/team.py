@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import threading
 from collections import deque
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional
@@ -86,6 +87,7 @@ class AgentTeam:
         self.overseer = OverseerAgent(client)
         self.post_mortem = PostMortemAgent(client)
 
+        self._lock = threading.RLock()
         # Rolling in-memory history for the /api/ai/agents endpoint.
         self._history: Deque[Dict[str, Any]] = deque(maxlen=_INMEM_HISTORY_LIMIT)
 
@@ -136,18 +138,20 @@ class AgentTeam:
             }
 
         # Persist to disagreement log + push to in-memory history.
-        self._log_disagreement(ctx, review)
-        self._history.append({
-            "timestamp": time.time(),
-            "symbol": (ctx or {}).get("symbol"),
-            "team_verdict": review.get("team_verdict"),
-            "score": review.get("score"),
-        })
+        with self._lock:
+            self._log_disagreement(ctx, review)
+            self._history.append({
+                "timestamp": time.time(),
+                "symbol": (ctx or {}).get("symbol"),
+                "team_verdict": review.get("team_verdict"),
+                "score": review.get("score"),
+            })
         return review
 
     def recent_reviews(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Return the most recent verdicts (newest first) for the API."""
-        return list(reversed(list(self._history)))[:limit]
+        with self._lock:
+            return list(reversed(list(self._history)))[:limit]
 
     def run_post_mortem(self, journal_path: str, reports_dir: str = "./reports",
                         *, schedule: str = "daily") -> str:
@@ -171,22 +175,23 @@ class AgentTeam:
 
     def _log_disagreement(self, ctx: Dict[str, Any], review: Dict[str, Any]) -> None:
         """Append one row per cycle to ``agent_disagreements.jsonl``."""
-        try:
-            row = {
-                "schema_version": 1,
-                "timestamp": time.time(),
-                "symbol": (ctx or {}).get("symbol"),
-                "direction": (ctx or {}).get("direction"),
-                "verdicts": {
-                    a.get("name"): a.get("verdict")
-                    for a in review.get("agents", []) if isinstance(a, dict) and "name" in a
-                },
-                "team_verdict": review.get("team_verdict"),
-                "team_confidence": review.get("team_confidence"),
-                "score": review.get("score"),
-            }
-            path = self.state_dir / "agent_disagreements.jsonl"
-            with path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        except Exception as e:
-            log.warning(f"AgentTeam: disagreement log failed (ignored): {e!r}")
+        with self._lock:
+            try:
+                row = {
+                    "schema_version": 1,
+                    "timestamp": time.time(),
+                    "symbol": (ctx or {}).get("symbol"),
+                    "direction": (ctx or {}).get("direction"),
+                    "verdicts": {
+                        a.get("name"): a.get("verdict")
+                        for a in review.get("agents", []) if isinstance(a, dict) and "name" in a
+                    },
+                    "team_verdict": review.get("team_verdict"),
+                    "team_confidence": review.get("team_confidence"),
+                    "score": review.get("score"),
+                }
+                path = self.state_dir / "agent_disagreements.jsonl"
+                with path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            except Exception as e:
+                log.warning(f"AgentTeam: disagreement log failed (ignored): {e!r}")

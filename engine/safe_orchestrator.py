@@ -260,11 +260,28 @@ class SafeOrchestrator:
             state_dir=state_dir,
         )
 
+        # Bounded executor for async review tasks
+        import concurrent.futures
+        import threading
+        self._review_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+        self._in_flight_reviews = set()
+        self._in_flight_lock = threading.Lock()
+
     def _get_planner(self, symbol: str) -> ScenarioPlanner:
         """Sembol başına ScenarioPlanner — senaryolar karışmasın."""
         if symbol not in self._planners:
             self._planners[symbol] = ScenarioPlanner()
         return self._planners[symbol]
+
+    def shutdown(self):
+        """Shutdown the executor for background reviews."""
+        try:
+            self._review_executor.shutdown(wait=False)
+        except Exception:
+            pass
+
+    def __del__(self):
+        self.shutdown()
 
     def _restore_state(self):
         """Startup'ta önceki state'i yükle."""
@@ -578,6 +595,75 @@ class SafeOrchestrator:
             self.trade_journal.record_entry(snap)
         except Exception as e:
             log.warning(f"trade_journal.record_entry failed for {trade_id}: {e}")
+
+    def _run_agent_review_async(
+        self,
+        pos: Position,
+        confluence: int,
+        htf_bias: str,
+        df_htf: Optional[pd.DataFrame],
+        adx: float,
+        rr: float,
+        size_notional_pct: float,
+    ) -> None:
+        """Run the AgentTeam review in a background thread and update the journal."""
+        if self.agent_team is None or not self.agent_team.cfg.get("enabled", False):
+            return
+
+        # V2 async review: df_htf=None, adx=0.0 -> degraded RegimeAgent context.
+        # Note: V2 async reviews use partial context as they are advisory-only.
+
+        try:
+            # Defensive attribute access: V1/v2-paper use lifecycle Position, live-v2 uses exchange Position.
+            entry_price = getattr(pos, "avg_entry_price", None)
+            if entry_price is None:
+                entry_price = getattr(pos, "entry", 0.0)
+
+            trade_id = getattr(pos, "id", None) or getattr(pos, "order_id", "unknown_id")
+
+            # Thread-safe in-flight review deduplication
+            with self._in_flight_lock:
+                if trade_id in self._in_flight_reviews:
+                    log.info(f"🤖 [AgentTeam] Review for {pos.symbol} (trade_id={trade_id}) already in flight — skip submit.")
+                    return
+                self._in_flight_reviews.add(trade_id)
+
+            htf_slope = self._htf_slope_pct(df_htf) if df_htf is not None else 0.0
+
+            ctx = {
+                "symbol": pos.symbol,
+                "direction": pos.direction,
+                "entry": float(entry_price),
+                "sl": float(pos.sl),
+                "tp1": float(pos.tp1),
+                "confluence": int(confluence),
+                "htf_bias": htf_bias,
+                "htf_slope_pct": htf_slope,
+                "adx": float(adx),
+                "rr": float(rr),
+                "size_notional_pct": size_notional_pct,
+            }
+
+            def task():
+                try:
+                    log.info(f"🤖 [AgentTeam] Starting async review for {pos.symbol} {pos.direction} (trade_id={trade_id})...")
+                    verdict = self.agent_team.review_trade(ctx)
+                    log.info(
+                        f"🤖 [AgentTeam] Async review finished for {pos.symbol}: "
+                        f"team_verdict={verdict.get('team_verdict')} score={verdict.get('score', 0.0):.2f}"
+                    )
+                    if self.trade_journal:
+                        self.trade_journal.update_agent_review(trade_id, verdict)
+                except Exception as e:
+                    log.warning(f"Error in async AgentTeam review execution: {e!r}")
+                finally:
+                    with self._in_flight_lock:
+                        self._in_flight_reviews.discard(trade_id)
+
+            self._review_executor.submit(task)
+        except Exception as e:
+            log.warning(f"Error submitting async AgentTeam review: {e!r}")
+
 
     def _journal_record_exit(self, pos: Position, exit_price: float,
                               reason: str) -> None:
@@ -1054,62 +1140,38 @@ class SafeOrchestrator:
         elif signals:
             latest = signals[-1]
             # === Runtime Agent Team pre-review (canonical A4) ===
-            # Advisory layer; never touches the deterministic guard pipeline.
-            # ``enabled`` controls whether the team runs at all; ``gating``
-            # controls whether a hard REJECT actually blocks the trade
-            # (default off — shadow mode only).
-            agent_team_review = None
-            if self.agent_team is not None and self.agent_team.cfg.get("enabled", False):
+            _agent_veto = False
+            if self.agent_team and self.agent_team.cfg.get("gating", False):
+                # Run review trade SYNCHRONOUSLY pre-trade and veto on "REJECT"
+                rr = float(latest.rr1) if latest.rr1 else 0.0
+                actual_balance = balance if balance is not None else 10000.0
+                size_notional_pct = self._estimate_size_notional_pct(actual_balance, latest.entry, latest.sl)
+                htf_slope = self._htf_slope_pct(df_htf) if df_htf is not None else 0.0
+                ctx = {
+                    "symbol": symbol,
+                    "direction": latest.direction,
+                    "entry": float(latest.entry),
+                    "sl": float(latest.sl),
+                    "tp1": float(latest.tp1),
+                    "confluence": int(latest.confluence),
+                    "htf_bias": htf_bias,
+                    "htf_slope_pct": htf_slope,
+                    "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
+                    "rr": float(rr),
+                    "size_notional_pct": size_notional_pct,
+                }
                 try:
-                    # F1: estimate the notional % up-front (same sizer the open
-                    # step uses) so the RiskReviewer's "notional > 8% → REJECT"
-                    # rule can actually fire — previously hardcoded 0.0 (blind).
-                    notional_pct = self._estimate_size_notional_pct(
-                        balance, float(latest.entry), float(latest.sl)
-                    )
-                    agent_team_review = self.agent_team.review_trade({
-                        "symbol": symbol,
-                        "direction": latest.direction,
-                        "entry": float(latest.entry),
-                        "sl": float(latest.sl),
-                        "tp1": float(latest.tp1),
-                        "confluence": int(latest.confluence),
-                        "htf_bias": htf_bias,
-                        "htf_slope_pct": self._htf_slope_pct(df_htf),  # A4: was never supplied
-                        "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
-                        "rr": float(latest.rr1) if latest.rr1 else 0.0,
-                        "size_notional_pct": notional_pct,
-                    })
-                    # Attach to signal so journal/DB can persist (canonical A7)
-                    if isinstance(latest.meta, dict):
-                        latest.meta["agent_review"] = agent_team_review
-                        # F1: notional-blind only when the estimate was
-                        # unavailable (no balance) — otherwise the risk agent saw
-                        # a real notional and its cap rule could fire.
-                        latest.meta["risk_review_was_notional_blind"] = (notional_pct <= 0.0)
-                    log.info(
-                        f"🤖 AgentTeam[{symbol}] verdict={agent_team_review.get('team_verdict')} "
-                        f"score={agent_team_review.get('score', 0.0):.2f}"
-                    )
+                    review = self.agent_team.review_trade(ctx)
+                    latest.meta["agent_review"] = review
+                    latest.meta["risk_review_was_notional_blind"] = review.get("risk_review_was_notional_blind", False)
+                    if review.get("team_verdict") == "REJECT":
+                        _agent_veto = True
+                        log.warning(f"🚫 [AgentTeam] Signal vetoed by agent team verdict REJECT")
                 except Exception as e:
-                    log.warning(f"AgentTeam review failed (ignored): {e!r}")
-                    agent_team_review = None
+                    log.warning(f"Error in synchronous AgentTeam gating review: {e!r}")
 
-            # === Hard-veto gating (default off) ===
-            _agent_veto = (
-                self.agent_team is not None
-                and self.agent_team.cfg.get("gating", False)
-                and (agent_team_review or {}).get("team_verdict") == "REJECT"
-            )
             if _agent_veto:
-                log.info(
-                    f"🛑 [{symbol}] AgentTeam REJECT veto — signal blocked, "
-                    f"score={(agent_team_review or {}).get('score', 0.0):.2f}"
-                )
-                actions.append(
-                    f"[{symbol}] AgentTeam veto "
-                    f"(score={(agent_team_review or {}).get('score', 0.0):.2f})"
-                )
+                actions.append(f"[{symbol}] Vetoed by agent team")
             else:
 
                 # Time-windowed dedup: aynı signal 1 saat içinde iki kez açılmasın
@@ -1357,6 +1419,15 @@ class SafeOrchestrator:
                                         zone_mid=latest.entry,
                                         ts_signal=getattr(latest, "timestamp", None) or getattr(latest, "ts", None),
                                         ts_fill=getattr(exchange_pos, "opened_at", None) or pos.opened_at,
+                                    )
+                                    self._run_agent_review_async(
+                                        pos=pos,
+                                        confluence=latest.confluence,
+                                        htf_bias=htf_bias,
+                                        df_htf=df_htf,
+                                        adx=float(regime_analysis.adx) if regime_analysis else 0.0,
+                                        rr=float(latest.rr1) if latest.rr1 else 0.0,
+                                        size_notional_pct=self._estimate_size_notional_pct(actual_balance, latest.entry, latest.sl),
                                     )
                                     log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
                                              f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
@@ -1902,6 +1973,18 @@ class SafeOrchestrator:
                 zone_mid=z_mid,
                 ts_signal=ts_sig,
                 ts_fill=pos.opened_at,
+            )
+
+            rr = abs(tp1 - entry_price) / abs(entry_price - sl) if entry_price != sl else 0.0
+            size_notional_pct = (size * entry_price) / balance * 100.0 if balance > 0 else 0.0
+            self._run_agent_review_async(
+                pos=pos,
+                confluence=cand.confluence_score,
+                htf_bias=cand.htf_bias,
+                df_htf=None,
+                adx=0.0,
+                rr=rr,
+                size_notional_pct=size_notional_pct,
             )
 
         return pos
