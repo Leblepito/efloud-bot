@@ -537,7 +537,7 @@ class SafeOrchestrator:
             else:
                 slippage_val = ((signal_entry_price - actual_fill_price) / signal_entry_price) * 100.0
 
-        # Calculate latency_ms
+        # Calculate latency_ms (measures bar-open to order-fill latency, including the candle period)
         latency_val = 0.0
         if ts_signal and ts_fill:
             t_sig = None
