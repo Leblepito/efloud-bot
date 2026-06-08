@@ -175,6 +175,15 @@ export const terminal = {
     tagText: "#04040c",
     oi: "#60a5fa", // open-interest / heuristic accent (blue-400)
   },
+  /* lightweight-charts canvas chrome (InteractiveChart) — zinc neutrals */
+  chrome: {
+    bg: "#09090b",        // canvas background (zinc-950)
+    text: "#a1a1aa",      // axis text (zinc-400)
+    grid: "#111113",      // grid lines
+    crosshair: "#3f3f46", // crosshair (zinc-700)
+    label: "#18181b",     // crosshair label bg + price/time scale borders (zinc-900)
+    orderLine: "#6366f1", // pending order price line (indigo-500; case-equivalent to #6366F1)
+  },
 } as const;
 
 /* ═══════════════════════════════════════════════════════

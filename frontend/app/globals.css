@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Base theme hex below mirror @efloud/tokens.terminal (CSS layer — TS tokens can't be
+   imported into CSS; a tokens→:root CSS-var codegen is a future enhancement, see PR #4). */
 :root {
   color-scheme: dark;
 }

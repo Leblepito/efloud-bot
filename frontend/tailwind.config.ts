@@ -33,6 +33,11 @@ const config: Config = {
           amber: terminal.accent.amber, // warning, TRIPPED
           red: terminal.accent.red,     // critical, SHORT, loss, HALTED
         },
+        // lightweight-charts canvas chrome — backs InteractiveChart's bg-chrome-bg (PR #4).
+        // Only `bg` is used as a class; the other chrome tones are consumed via terminal.chrome.* in TS.
+        chrome: {
+          bg: terminal.chrome.bg,
+        },
       },
       fontFamily: {
         sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],

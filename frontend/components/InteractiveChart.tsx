@@ -9,6 +9,7 @@ import { useConfig } from "@/hooks/useConfig";
 import { useHistory } from "@/hooks/useHistory";
 import { useSmcSignals } from "@/hooks/useSmcSignals";
 import { n } from "@/lib/format";
+import { terminal } from "@efloud/tokens";
 
 // TradingView-style Long/Short Position Drawing Overlay Primitive
 class PositionOverlayPrimitive {
@@ -95,6 +96,9 @@ class PositionOverlayPrimitive {
 
             context.save();
 
+            // Position-overlay washes below use derived alpha variants (rgba) of the
+            // emerald/red/amber tailwind palette; left inline per PR #4 (consistent with
+            // smcOverlay/PR #2 — only solid hex are sourced from @efloud/tokens).
             // 1. Draw Shaded Regions
             // Loss Zone (Red Shading)
             if (lossHeight > 0) {
@@ -399,32 +403,32 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     // 1. Initialize Lightweight Chart
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#09090b" },
-        textColor: "#a1a1aa", // zinc-400
+        background: { type: ColorType.Solid, color: terminal.chrome.bg },
+        textColor: terminal.chrome.text, // zinc-400
         fontSize: 10,
         fontFamily: "var(--font-geist-mono), monospace",
       },
       grid: {
-        vertLines: { color: "#111113" },
-        horzLines: { color: "#111113" },
+        vertLines: { color: terminal.chrome.grid },
+        horzLines: { color: terminal.chrome.grid },
       },
       crosshair: {
         mode: 1,
         vertLine: {
-          color: "#3f3f46", // zinc-700
-          labelBackgroundColor: "#18181b",
+          color: terminal.chrome.crosshair, // zinc-700
+          labelBackgroundColor: terminal.chrome.label,
         },
         horzLine: {
-          color: "#3f3f46",
-          labelBackgroundColor: "#18181b",
+          color: terminal.chrome.crosshair,
+          labelBackgroundColor: terminal.chrome.label,
         },
       },
       rightPriceScale: {
-        borderColor: "#18181b",
+        borderColor: terminal.chrome.label,
         autoScale: true,
       },
       timeScale: {
-        borderColor: "#18181b",
+        borderColor: terminal.chrome.label,
         timeVisible: true,
         secondsVisible: false,
       },
@@ -434,12 +438,12 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
 
     // 2. Add Candlestick Series
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#00FF88",
-      downColor: "#FF4D4D",
-      borderUpColor: "#00FF88",
-      borderDownColor: "#FF4D4D",
-      wickUpColor: "#00FF88",
-      wickDownColor: "#FF4D4D",
+      upColor: terminal.chart.bull,
+      downColor: terminal.chart.bear,
+      borderUpColor: terminal.chart.bull,
+      borderDownColor: terminal.chart.bear,
+      wickUpColor: terminal.chart.bull,
+      wickDownColor: terminal.chart.bear,
     });
     candleSeriesRef.current = candleSeries;
     markersPluginRef.current = createSeriesMarkers(candleSeries);
@@ -798,7 +802,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
       if (order.price) {
         const orderLine = candleSeries.createPriceLine({
           price: order.price,
-          color: "#6366F1",
+          color: terminal.chrome.orderLine,
           lineWidth: 2,
           lineStyle: LineStyle.Dotted,
           axisLabelVisible: true,
@@ -865,7 +869,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
         time: entryTime as any,
         position: isLong ? "belowBar" : "aboveBar",
         shape: isLong ? "arrowUp" : "arrowDown",
-        color: isLong ? "#00FF88" : "#FF4D4D",
+        color: isLong ? terminal.chart.bull : terminal.chart.bear,
         text: `${isLong ? "L" : "S"} Entry: ${t.entry}`,
       });
 
@@ -878,7 +882,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
           time: exitTime as any,
           position: isLong ? "aboveBar" : "belowBar",
           shape: "circle",
-          color: profit ? "#00FF88" : "#FF4D4D",
+          color: profit ? terminal.chart.bull : terminal.chart.bear,
           text: `Exit: ${t.reason ?? "RECONCILED"} (${t.pnl_pct != null ? (Number(t.pnl_pct) >= 0 ? "+" : "") + Number(t.pnl_pct).toFixed(2) : "—"}%)`,
         });
       }
@@ -995,7 +999,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
       </div>
 
       {/* Main Chart Relative Container */}
-      <div className="relative flex-1 min-h-0 w-full overflow-hidden border border-border bg-[#09090b]">
+      <div className="relative flex-1 min-h-0 w-full overflow-hidden border border-border bg-chrome-bg">
         
         {/* Floating Legend Overlays */}
         {/* 1. Candlestick HUD */}
