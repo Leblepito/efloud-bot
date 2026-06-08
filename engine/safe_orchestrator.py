@@ -478,53 +478,106 @@ class SafeOrchestrator:
 
     # ── Trade journal hooks ───────────────────────────────────────────────
 
-    def _journal_record_entry(self, pos: Position,
-                               agent_review: Optional[dict] = None) -> None:
-        """Record a freshly-opened position to the trade journal.
+    def _journal_record_entry(
+        self,
+        pos: Position,
+        agent_review: Optional[dict] = None,
+        signal_entry_price: float = 0.0,
+        actual_fill_price: float = 0.0,
+        zone_mid: float = 0.0,
+        ts_signal: Optional[str] = None,
+        ts_fill: Optional[str] = None,
+    ) -> None:
+        """Record a freshly-opened position to the trade journal with telemetry.
 
         No-op when self.trade_journal is None (backwards-compat for backtest
-        and unit-test paths that don't wire a journal). Snapshot enrichment
-        (htf_bias, intent_score, confluence) is intentionally minimal here;
-        a follow-up PR will feed those from the signal context. The
-        minimum-viable snapshot is enough to make Phase 0 evidence
-        extraction return journal_rows > 0.
-
-        ``agent_review`` (canonical A7) is the AgentTeam verdict produced
-        before this position opened, so post-mortem analysis can
-        correlate team verdicts with realised PnL. ``None`` when the
-        team was disabled or didn't run for this symbol.
+        and unit-test paths that don't wire a journal).
         """
         if self.trade_journal is None:
             return
-        if not pos.entries:
-            return
-        entry = pos.entries[0]
+
+        entries = getattr(pos, "entries", None)
+        if entries:
+            entry = entries[0]
+            entry_timestamp = entry.timestamp
+            entry_price = entry.price
+            position_size = entry.size
+        else:
+            entry_timestamp = getattr(pos, "opened_at", None) or datetime.utcnow().isoformat()
+            entry_price = getattr(pos, "entry", 0.0)
+            position_size = getattr(pos, "size", 0.0)
+
+        if actual_fill_price == 0.0:
+            actual_fill_price = entry_price
+        if signal_entry_price == 0.0:
+            signal_entry_price = entry_price
+
+        # Calculate signed slippage_pct (LONG: (fill-signal)/signal*100, SHORT: (signal-fill)/signal*100; +=adverse)
+        slippage_val = 0.0
+        if signal_entry_price > 0.0:
+            if pos.direction == "LONG":
+                slippage_val = ((actual_fill_price - signal_entry_price) / signal_entry_price) * 100.0
+            else:
+                slippage_val = ((signal_entry_price - actual_fill_price) / signal_entry_price) * 100.0
+
+        # Calculate latency_ms
+        latency_val = 0.0
+        if ts_signal and ts_fill:
+            t_sig = None
+            t_fil = None
+            try:
+                sig_str = ts_signal
+                if sig_str.endswith('Z'):
+                    sig_str = sig_str[:-1] + '+00:00'
+                t_sig = datetime.fromisoformat(sig_str)
+            except Exception:
+                pass
+            try:
+                fil_str = ts_fill
+                if fil_str.endswith('Z'):
+                    fil_str = fil_str[:-1] + '+00:00'
+                t_fil = datetime.fromisoformat(fil_str)
+            except Exception:
+                pass
+            if t_sig and t_fil:
+                latency_val = (t_fil - t_sig).total_seconds() * 1000.0
+
+        trade_id = getattr(pos, "id", None) or getattr(pos, "order_id", "unknown_id")
+        initial_sl = getattr(pos, "initial_sl", None)
+        if initial_sl is None:
+            initial_sl = getattr(pos, "sl", 0.0)
+        scenario_id = getattr(pos, "scenario_id", None)
+
         snap = TradeSnapshot(
-            trade_id=pos.id,
+            trade_id=trade_id,
             symbol=pos.symbol,
             direction=pos.direction,
             timeframe="",
-            entry_timestamp=entry.timestamp,
-            entry_price=entry.price,
-            sl_initial=pos.initial_sl,
+            entry_timestamp=entry_timestamp,
+            entry_price=entry_price,
+            sl_initial=initial_sl,
             tp1_initial=pos.tp1,
             tp2_initial=pos.tp2,
-            position_size=entry.size,
+            position_size=position_size,
             htf_bias="",
             intent_score_entry=0,
             intent_label_entry="",
             confluence_score=0,
-            scenario_name=pos.scenario_id,
-            # Canonical A7: persist the AgentTeam verdict alongside the
-            # trade so post-mortem analysis can correlate team verdicts
-            # with realised PnL. The caller (``_journal_record_entry``
-            # below) passes the dict; the snapshot just stores it.
+            scenario_name=scenario_id,
             agent_review=agent_review,
+            # Telemetry fields
+            signal_entry_price=signal_entry_price,
+            actual_fill_price=actual_fill_price,
+            slippage_pct=slippage_val,
+            zone_mid=zone_mid,
+            ts_signal=ts_signal,
+            ts_fill=ts_fill,
+            latency_ms=latency_val,
         )
         try:
             self.trade_journal.record_entry(snap)
         except Exception as e:
-            log.warning(f"trade_journal.record_entry failed for {pos.id}: {e}")
+            log.warning(f"trade_journal.record_entry failed for {trade_id}: {e}")
 
     def _journal_record_exit(self, pos: Position, exit_price: float,
                               reason: str) -> None:
@@ -1299,6 +1352,11 @@ class SafeOrchestrator:
                                         agent_review=(latest.meta.get("agent_review")
                                                       if isinstance(latest.meta, dict)
                                                       else None),
+                                        signal_entry_price=latest.entry,
+                                        actual_fill_price=getattr(exchange_pos, "entry", latest.entry) if exchange_pos else latest.entry,
+                                        zone_mid=latest.entry,
+                                        ts_signal=getattr(latest, "timestamp", None) or getattr(latest, "ts", None),
+                                        ts_fill=getattr(exchange_pos, "opened_at", None) or pos.opened_at,
                                     )
                                     log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
                                              f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
@@ -1795,32 +1853,58 @@ class SafeOrchestrator:
                 tp1=tp1,
                 tp2=tp2,
             )
-            # Record it in trade journal
-            self._journal_record_entry(pos)
             log.info(f"✅ [v2 paper] [{cand.symbol}] Opened {cand.direction} @ {entry_price:.4f} "
                      f"size={size:.6f} SL={sl:.4f} TP1={tp1:.4f} TP2={tp2_log}")
-            return pos
+        else:
+            # C7: the live-price re-validation for the v2 CONFIRMED→order path is the
+            # OrderManager entry-drift guard inside open_position — it re-reads the
+            # live price and rejects if it has drifted past max_entry_drift_pct from
+            # this confirmed `entry` (or is already past TP1). Combined with C1
+            # (closed-bar confirmation), the v2 entry cannot repaint into a
+            # stale-price order. See test_entry_order_placement TestV2EntryDriftGuard.
+            pos = self.order_manager.open_position(
+                symbol=cand.symbol,
+                direction=cand.direction,
+                size=size,
+                entry=entry_price,
+                sl=sl,
+                tp1=tp1,
+                tp2=tp2,
+                entry_setup_source=entry_setup_source,
+                tp1_target_type=tp_tags.get("tp1_source"),
+                tp2_target_type=tp_tags.get("tp2_source"),
+                bars_to_pullback=cand.bars_waited,
+                atr_value=float(atr_15m),
+            )
 
-        # C7: the live-price re-validation for the v2 CONFIRMED→order path is the
-        # OrderManager entry-drift guard inside open_position — it re-reads the
-        # live price and rejects if it has drifted past max_entry_drift_pct from
-        # this confirmed `entry` (or is already past TP1). Combined with C1
-        # (closed-bar confirmation), the v2 entry cannot repaint into a
-        # stale-price order. See test_entry_order_placement TestV2EntryDriftGuard.
-        return self.order_manager.open_position(
-            symbol=cand.symbol,
-            direction=cand.direction,
-            size=size,
-            entry=entry_price,
-            sl=sl,
-            tp1=tp1,
-            tp2=tp2,
-            entry_setup_source=entry_setup_source,
-            tp1_target_type=tp_tags.get("tp1_source"),
-            tp2_target_type=tp_tags.get("tp2_source"),
-            bars_to_pullback=cand.bars_waited,
-            atr_value=float(atr_15m),
-        )
+        if pos is not None:
+            # Plumb telemetry for V2 entry
+            z_mid = 0.0
+            if getattr(cand, "target_zone", None):
+                z_mid = (cand.target_zone.low + cand.target_zone.high) / 2.0
+
+            ts_sig = None
+            if getattr(cand, "trigger_bar_ts", None):
+                try:
+                    ts_sig = datetime.fromtimestamp(cand.trigger_bar_ts / 1000, tz=timezone.utc).isoformat()
+                except Exception:
+                    pass
+
+            act_fill = getattr(pos, "avg_entry_price", None)
+            if act_fill is None:
+                act_fill = getattr(pos, "entry", entry_price)
+
+            self._journal_record_entry(
+                pos,
+                agent_review=None,
+                signal_entry_price=entry_price,
+                actual_fill_price=act_fill,
+                zone_mid=z_mid,
+                ts_signal=ts_sig,
+                ts_fill=pos.opened_at,
+            )
+
+        return pos
 
     def _log_shadow_signal(self, *, cand, entry_price, sl, tp1, tp2, size,
                             tp_tags, entry_setup_source, reason: str) -> None:
