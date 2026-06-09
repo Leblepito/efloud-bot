@@ -146,9 +146,9 @@ export function TradeDetailPanel({ trade, onClose }: TradeDetailPanelProps) {
             <div><span className="text-[9px] uppercase text-text-muted block">Bars to Pullback</span><span className="text-text-primary tabular-nums">{trade.bars_to_pullback != null ? `${trade.bars_to_pullback} bars` : "—"}</span></div>
             <div><span className="text-[9px] uppercase text-text-muted block">TP1 Target Type</span><span className="text-text-secondary">{trade.tp1_target_type || "—"}</span></div>
             <div><span className="text-[9px] uppercase text-text-muted block">TP2 Target Type</span><span className="text-text-secondary">{trade.tp2_target_type || "—"}</span></div>
-            <div><span className="text-[9px] uppercase text-text-muted block">ADX (Trend Strength)</span><span className="text-text-primary tabular-nums">{trade.adx_value != null ? `${trade.adx_value.toFixed(1)}` : "—"}</span></div>
-            <div><span className="text-[9px] uppercase text-text-muted block">ATR (Volatility)</span><span className="text-text-primary tabular-nums">{trade.atr_value != null ? `${trade.atr_value.toFixed(4)}` : "—"}</span></div>
-            <div><span className="text-[9px] uppercase text-text-muted block">Funding Rate</span><span className="text-text-secondary tabular-nums">{trade.funding_rate != null ? `${(trade.funding_rate * 100).toFixed(4)}%` : "—"}</span></div>
+            <div><span className="text-[9px] uppercase text-text-muted block">ADX (Trend Strength)</span><span className="text-text-primary tabular-nums">{trade.adx_value != null ? `${Number(trade.adx_value).toFixed(1)}` : "—"}</span></div>
+            <div><span className="text-[9px] uppercase text-text-muted block">ATR (Volatility)</span><span className="text-text-primary tabular-nums">{trade.atr_value != null ? `${Number(trade.atr_value).toFixed(4)}` : "—"}</span></div>
+            <div><span className="text-[9px] uppercase text-text-muted block">Funding Rate</span><span className="text-text-secondary tabular-nums">{trade.funding_rate != null ? `${(Number(trade.funding_rate) * 100).toFixed(4)}%` : "—"}</span></div>
             <div><span className="text-[9px] uppercase text-text-muted block">Original SL</span><span className="text-text-secondary tabular-nums">{trade.initial_sl != null ? n(trade.initial_sl, 4) : "—"}</span></div>
           </div>
         </div>

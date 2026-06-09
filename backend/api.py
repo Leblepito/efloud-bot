@@ -211,7 +211,26 @@ def read_journal_history(journal_path: str, limit: int = 100) -> list[dict]:
                 except _json.JSONDecodeError:
                     continue
                 if obj.get("exit_timestamp"):
-                    rows.append(obj)
+                    mapped = dict(obj)
+                    mapped.update({
+                        "id": obj.get("trade_id"),
+                        "entry": obj.get("entry_price"),
+                        "exit": obj.get("exit_price"),
+                        "sl": obj.get("sl_initial"),
+                        "tp1": obj.get("tp1_initial"),
+                        "tp2": obj.get("tp2_initial"),
+                        "size": obj.get("position_size"),
+                        "pnl_usdt": obj.get("realized_pnl"),
+                        "pnl_pct": obj.get("realized_pnl_pct"),
+                        "reason": obj.get("exit_reason"),
+                        "opened_at": obj.get("entry_timestamp"),
+                        "closed_at": obj.get("exit_timestamp"),
+                        "confluence": obj.get("confluence_score"),
+                        "mae_pct": obj.get("max_adverse_excursion_pct"),
+                        "mfe_pct": obj.get("max_favorable_excursion_pct"),
+                        "initial_sl": obj.get("sl_initial"),
+                    })
+                    rows.append(mapped)
     except OSError:
         return []
     rows.sort(key=lambda r: r.get("exit_timestamp", ""), reverse=True)
