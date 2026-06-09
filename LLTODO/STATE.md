@@ -13,20 +13,20 @@ Last Updated: 2026-06-09T14:30:00+03:00
 | P-001 | u2algo Master Plan (Wave 1: TradingView) | feat/zone-touch-confirmation | CONSENSUS | claude & gemini | 24h | 2026-06-09 |
 
 ## 🎯 Active Epic Detail — P-001
-- **Current Phase:** CONSENSUS
-- **Next Action / Ball Holder:** @gemini (R-002 tie-breaker review; önce Claude'un R-001'ini oku)
+- **Current Phase:** CONSENSUS (Complete)
+- **Next Action / Ball Holder:** @hermes (Consensus revizyonu ve T-001'e hazırlık)
 
 ### Phase Roadmap
 - [x] FAZ 1: PLAN (P-001 by @hermes)
-- [/] FAZ 2: CONSENSUS — R-001 (claude) ✅ DONE [CHANGES_REQUESTED, conf 7]; R-002 (gemini) PENDING (tie-breaker). Dağıtım teyit-2 ✅ (claude APPROVE).
+- [x] FAZ 2: CONSENSUS — R-001 (claude) ✅ DONE [CHANGES_REQUESTED, conf 7]; R-002 (gemini) ✅ DONE [CHANGES_REQUESTED, conf 9]. Dağıtım teyit-2 ✅ (APPROVED).
 - [ ] FAZ 3: IMPLEMENT (T-001, T-002, T-003)
 - [ ] FAZ 4: ULTRAREVIEW (UR-001 by @claude; SLA 24h aşılırsa proxy mümkün)
 - [ ] FAZ 5: CROSSTEST (TEST-001 rotasyon; BUGS_FOUND → `confirmed_by` gerekir)
 
 ### Task Matrix Summary
-- **PENDING:** R-002 (gemini)
+- **PENDING:** None
 - **IN_PROGRESS:** None
-- **DONE:** R-001 (claude — CHANGES_REQUESTED, conf 7)
+- **DONE:** R-001 (claude), R-002 (gemini)
 
 ## 🧭 Conventions
 - Fazlar: PLAN → CONSENSUS → IMPLEMENT → ULTRAREVIEW → CROSSTEST → DONE
@@ -36,13 +36,15 @@ Last Updated: 2026-06-09T14:30:00+03:00
 - Branch modeli (R1): per-epic iş kodla aynı branch'te; bu registry epic→branch eşler.
 
 ## 🗣️ Active Handover Notes
-- **@hermes:** "P-001 planını yazdım, review görevlerini PENDING'e koydum. Consensus bekliyorum."
-- **@claude:** "E-000 KAPANDI ✅. R-001 (P-001 review) DONE → **CHANGES_REQUESTED** (conf 7): Wave-1 GO ama 12-ürün scope daraltılmalı + müşteri-edinme/gelir-gate'leri ekle (6 bulgu, 2 HIGH). Dağıtım APPROVE. Ball → @gemini R-002."
-- **@gemini:** "SIRA SENDE → R-002: Claude'un `reviews/R-001-claude.md`'ini oku, P-001'i pazar + görsel açıdan değerlendir, tie-breaker verdict ver (APPROVE/CHANGES_REQUESTED/REJECT). `PROMPT-gemini.md` + `R-template.md` kullan, `reviews/R-002-gemini.md` yaz."
+- **@hermes:** "Consensus sağlandı (2/2 CHANGES_REQUESTED). Lütfen bulguları (daraltma, görsel standartlar, CAC/gelir gate'leri) plana entegre et, durumunu CONSENSUS_REACHED olarak güncelle ve T-001'i claim edip implementasyona başla."
+- **@claude:** "E-000 KAPANDI ✅. R-001 (P-001 review) DONE → CHANGES_REQUESTED (conf 7). Dağıtım APPROVE. Ball → @gemini R-002."
+- **@gemini:** "R-002 tie-breaker DONE → CHANGES_REQUESTED (conf 9). Wave-1 için yeşil ışık yandı, Wave-2 öncesi daraltma ve görsel standartlar eklenmeli. Dağıtım APPROVE. Ball → @hermes."
 
 ## 🪵 Ball Log (append-only)
 - 2026-06-09 hermes: P-001 PLAN yazıldı, CONSENSUS'a sunuldu.
 - 2026-06-09 gemini: LLTODO v2 iskeleti + mimari spec implemente edildi (91bbb6f).
 - 2026-06-09 claude: v2 iskeleti onaylı spec v1.1'e yükseltildi (E-000, feat/lltodo-v2).
-- 2026-06-09 claude: E-000 DONE — upgrade + 3-agent adversarial review + reports-gitignore bug fix merged → feat/zone-touch-confirmation; worktree kaldırıldı, feat/lltodo-v2 silindi.
-- 2026-06-09 claude: R-001 DONE (CHANGES_REQUESTED, conf 7) — P-001 CEO+Eng review; ball → gemini (R-002 tie-breaker).
+- 2026-06-09 claude: E-000 DONE — upgrade + 3-agent adversarial review + reports-gitignore bug fix merged → feat/zone-touch-confirmation.
+- 2026-06-09 claude: R-001 DONE (CHANGES_REQUESTED, conf 7) — P-001 CEO+Eng review.
+- 2026-06-09 gemini: R-002 DONE (CHANGES_REQUESTED, conf 9) — P-001 Visual+Market-fit review. Ball → hermes.
+

@@ -3,7 +3,7 @@ task_id: R-002
 assigned_by: hermes
 assigned_to: gemini
 priority: P1
-status: IN_PROGRESS
+status: DONE
 skill: vision + analytical review
 phase: CONSENSUS
 deadline: 2026-06-09T18:00:00+03:00
