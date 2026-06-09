@@ -1,26 +1,52 @@
-# LLTODO — Multi-Agent Consensus Pipeline
+# LLTODO — Multi-Agent Consensus Pipeline (v2)
 
-> **Kural:** Bu projeye giren HER AI agent (Claude, Hermes, Gemini, Codex, Manus)
-> önce bu dosyayı okur, sonra kendine atanmış görevleri `tasks/PENDING/`'de arar.
+> **Kural:** Bu projeye giren HER AI agent (Claude, Hermes, Gemini, Manus, Codex)
+> önce bu dosyayı okur, ardından **Giriş Kontratı**'nı deterministik olarak çalıştırır.
 
 ---
 
-## Dizin Yapısı
+## 🚪 Giriş Kontratı (Entry Contract)
+
+Her agent repoya girdiğinde sırasıyla şu adımları işletmek zorundadır:
+
+1. **Beyin Eşitleme (Sync):** `git pull --rebase` komutuyla whiteboard'un son halini çek.
+2. **Durum Kontrolü (State Scan):** [STATE.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/STATE.md) ve [SCOREBOARD.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/SCOREBOARD.md) dosyalarını okuyarak hangi epic'te olunduğunu ve genel rolleri anla.
+3. **Görev Arama (Task Scan):** `LLTODO/tasks/PENDING/` dizininde `assigned_to` değeri kendi rolü olan (veya proxy-uygun) görevleri tara.
+4. **Görevi Üstlenme (Claim):** İlgili görev dosyasını `IN_PROGRESS/` altına taşı ve içindeki `status` değerini `IN_PROGRESS` olarak güncelle. Bu adımı anında commit'le ve push'la.
+5. **Uygulama (Execution):** Görevin talimatlarını birebir uygula. Sadece size atanan işleri yapın, kapsam dışına çıkmayın.
+6. **Rapor Yazımı (Reporting):** `LLTODO/reports/<agent>/YYYY-MM-DD-<özet>.md` formatında bir oturum raporu oluştur.
+7. **Görevi Kapatma (Complete):** Görev dosyasını `DONE/` altına taşı ve `status: DONE` yap.
+8. **Durum Güncelleme (State Update):** [STATE.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/STATE.md)'yi yeni aşamaya göre güncelle (örn. ball holder değiştir).
+9. **Cerrahi Commit & Push:** Sadece kod değişikliklerini ve güncellenen LLTODO dosyalarını içeren temiz bir commit yapıp push'la.
+10. **Timer/Relay:** Yapabiliyorsan self-schedule timer kur, yapamıyorsan bir sonraki agent için handover notu/prompt'u bırak.
+
+---
+
+## 📂 Dizin Yapısı
 
 ```
 LLTODO/
-├── README.md              ← BU DOSYA (tüm agent'lar önce bunu okur)
-├── plans/                 ← Plan dokümanları (P-XXX.md)
-├── reviews/               ← Review dokümanları (R-XXX-{agent}.md)
-├── tasks/
-│   ├── PENDING/           ← Henüz başlanmamış görevler
-│   ├── IN_PROGRESS/       ← Şu an çalışılan görevler
-│   └── DONE/              ← Tamamlanmış görevler
-├── tests/                 ← Cross-test raporları
-└── reports/
-    ├── hermes/            ← Hermes'in oturum raporları
-    ├── claude/            ← Claude'un oturum raporları
-    └── gemini/            ← Gemini'nin oturum raporları
+├── README.md               ← BU DOSYA (Giriş kontratı ve genel kurallar)
+├── STATE.md                ← Aktif Epic, Faz bilgisi ve sonraki adımlar (Turn/Ball)
+├── SCOREBOARD.md           ← Agent başarı istatistikleri ve uzmanlık alanları
+├── plans/                  ← Plan dosyaları (P-XXX-<slug>.md)
+├── reviews/                ← Consensus review'ları (R-XXX-{agent}.md)
+├── tests/                  ← Cross-test raporları (TEST-XXX.md)
+├── reports/                ← Agent'ların oturum raporları
+│   ├── hermes/
+│   ├── claude/
+│   └── gemini/
+├── tasks/                  ← Görev havuzu
+│   ├── PENDING/            ← Henüz başlanmamış görevler
+│   ├── IN_PROGRESS/        ← Aktif olarak çalışılan görevler
+│   └── DONE/               ← Tamamlanmış görevler
+└── templates/              ← Standart şablonlar
+    ├── P-template.md
+    ├── R-template.md
+    ├── T-template.md
+    ├── UR-template.md
+    ├── TEST-template.md
+    └── REPORT-template.md
 ```
 
 ---
@@ -37,268 +63,55 @@ PLAN ──→ CONSENSUS ──→ IMPLEMENT ──→ ULTRAREVIEW ──→ CRO
   │                                     + fix          test eder
 ```
 
----
+### FAZ 1: PLAN (Tek Agent Başlatır)
+1. `LLTODO/plans/P-XXX-<slug>.md` dosyasını `templates/P-template.md` şablonuna göre oluştur.
+2. Diğer 2 reviewer için review görevlerini `tasks/PENDING/R-XXX-{agent}.md` altına oluştur.
+3. [STATE.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/STATE.md)'yi güncelle.
 
-## FAZ 1: PLAN (Tek Agent Başlatır)
+### FAZ 2: CONSENSUS (3 Agent Teyitleşir)
+1. Reviewer agent'lar planı okur.
+2. `LLTODO/reviews/R-XXX-{agent}.md` dosyasını `templates/R-template.md` şablonuna göre oluşturup kararını yazar (`APPROVE`, `CHANGES_REQUESTED`, `REJECT`).
+3. Consensus kuralları:
+   - **3/3 APPROVE:** Strong Consensus → Direkt implementasyon (Faz 3).
+   - **2/3 APPROVE:** Consensus Reached → Uygulamaya geçilebilir (Faz 3).
+   - **CHANGES_REQUESTED:** Plan yazarı düzeltme yapar, tekrar review'a sunulur.
+   - **REJECT:** Major revizyon gerekir, sıfırdan başlanır.
 
-Plan yazacak agent (genelde Hermes veya Claude):
+### FAZ 3: IMPLEMENT (Görevler Dağıtılır)
+1. Plan yazarı her task için `LLTODO/tasks/PENDING/T-XXX-{agent}-{slug}.md` oluşturur.
+2. Her agent sadece kendine atanan işleri yapar, başka agent'ın görevine müdahale etmez.
 
-1. `LLTODO/plans/P-XXX-<slug>.md` dosyasını oluştur
-2. Plan içeriği: ne yapılacak, neden, nasıl, hangi skill'ler, kaç task
-3. Diğer 2 agent için review görevi oluştur (`tasks/PENDING/R-XXX-{agent}.md`)
+### FAZ 4: ULTRAREVIEW (Claude Code Final Check)
+1. Claude Code tüm tamamlanan görevleri ve raporları inceler.
+2. Eksik veya hatalı iş varsa `tasks/PENDING/FIX-XXX-{agent}.md` görevleri oluşturur.
+3. Her şey eksiksiz ise `UR-XXX.md` raporunu `PASS` olarak yazar.
 
-**Plan formatı:**
-
-```markdown
----
-plan_id: P-XXX
-author: <hangi agent yazdı>
-status: AWAITING_REVIEW
-created: 2026-06-09T12:00:00+03:00
-reviewers: [claude, gemini]
-approvals_needed: 2
-approvals_received: 0
----
-
-# Plan: <başlık>
-
-## Amaç
-<1-2 cümle>
-
-## Kapsam
-<ne yapılacak, ne yapılmayacak>
-
-## Task'lar
-| ID | Görev | Agent | Tahmini Süre |
-|----|-------|-------|-------------|
-| T-XXX | ... | hermes | 30dk |
-| T-YYY | ... | claude | 15dk |
-
-## Skill Pipeline
-1. `skill_view(name='...')` → ...
-2. ...
-
-## Riskler
-- ...
-```
+### FAZ 5: CROSSTEST (Karşılıklı Test)
+1. Her agent, rotasyona göre başka bir agent'ın işini test eder.
+2. Rotasyon:
+   - `hermes` → `claude`'un işini test eder.
+   - `claude` → `gemini`'nin işini test eder.
+   - `gemini` → `hermes`'in işini test eder.
+3. Test raporu `LLTODO/tests/TEST-XXX-{tester}-tests-{testee}.md` altına yazılır.
 
 ---
 
-## FAZ 2: CONSENSUS (3 Agent Teyitleşir)
+## 🏆 Altın Kurallar
 
-Her reviewer agent:
-
-1. Plan dosyasını oku (`LLTODO/plans/P-XXX.md`)
-2. Varsa diğer reviewer'ın review'unu da oku
-3. `LLTODO/reviews/R-XXX-{agent}.md` yaz
-4. Karar: `APPROVE` | `CHANGES_REQUESTED` | `REJECT`
-
-**Review formatı:**
-
-```markdown
----
-review_id: R-XXX-claude
-plan_id: P-XXX
-reviewer: claude
-verdict: APPROVE | CHANGES_REQUESTED | REJECT
-confidence: 0-10
-created: 2026-06-09T13:00:00+03:00
----
-
-# Review: <plan başlığı>
-
-## Genel Değerlendirme
-<2-3 cümle>
-
-## Bulgular
-| # | Konu | Severity | Açıklama | Öneri |
-|---|------|---------|---------|-------|
-| 1 | Scope | HIGH | ... | ... |
-
-## Karar
-APPROVE — <neden>
-CHANGES_REQUESTED — <ne değişmeli>
-REJECT — <neden, alternatif öneri>
-```
-
-**Consensus kuralları:**
-- 2/3 `APPROVE` → **CONSENSUS_REACHED** → Faz 3'e geç
-- 1/3 `APPROVE` + 2 `CHANGES_REQUESTED` → Plan yazarı düzeltme yapar, tekrar review
-- Herhangi biri `REJECT` → Plan yazarı major revizyon yapar, sıfırdan review
-- 3/3 `APPROVE` → **STRONG_CONSENSUS** → direkt implementasyon
-
----
-
-## FAZ 3: IMPLEMENT (Görevler Dağıtılır)
-
-Consensus sağlandıktan sonra plan yazarı:
-
-1. Plandaki her task için `LLTODO/tasks/PENDING/T-XXX-{agent}-{iş}.md` oluştur
-2. Her agent SADECE kendine atanan görevi yapar
-3. Görev bittiğinde `DONE/` altına taşır, rapor yazar
-4. Başka agent'ın görevine KARIŞMAZ
-
----
-
-## FAZ 4: ULTRAREVIEW (Claude Code Final Check)
-
-Tüm implementasyon görevleri DONE olduğunda:
-
-1. Claude Code TÜM DONE görevlerini ve raporlarını okur
-2. Kapsamlı final review yapar:
-   - Eksik kalan iş var mı?
-   - Yanlış yapılan bir şey var mı?
-   - Task'lar arası tutarsızlık var mı?
-   - Plan'dan sapan bir implementasyon var mı?
-3. Varsa fix görevleri oluşturur (`tasks/PENDING/FIX-XXX-{agent}.md`)
-4. Fix'ler de aynı implementasyon kurallarıyla yapılır
-
-**UltraReview formatı:**
-
-```markdown
----
-ultrareview_id: UR-XXX
-reviewer: claude
-plan_id: P-XXX
-status: PASS | FIXES_NEEDED
-created: 2026-06-09T15:00:00+03:00
----
-
-# UltraReview: <plan başlığı>
-
-## Tamamlanan İşler (DONE)
-| Task | Agent | Doğru mu? | Not |
-|------|-------|----------|-----|
-| T-001 | hermes | ✅ | ... |
-
-## Eksik / Yanlış İşler (FIX)
-| # | Task | Agent | Sorun | Fix Görevi |
-|---|------|-------|-------|-----------|
-| 1 | T-003 | gemini | ... | FIX-001 |
-
-## Genel Değerlendirme
-PASS — tüm işler doğru ve eksiksiz
-FIXES_NEEDED — yukarıdaki fix'ler yapılmalı
-```
-
----
-
-## FAZ 5: CROSSTEST (Agent'lar Birbirini Test Eder)
-
-UltraReview PASS olduktan sonra:
-
-1. Her agent BAŞKA BİR agent'ın yaptığı işi test eder
-2. Test planı: `LLTODO/tests/TEST-XXX-{tester}-tests-{testee}.md`
-3. Test eden agent karar verir: `PASS` | `BUGS_FOUND`
-4. BUGS_FOUND varsa → fix görevi → tekrar test → tekrar consensus
-
-**Cross-test eşleşmesi (3 agent için rotasyon):**
-```
-hermes → claude'un işini test eder
-claude → gemini'nin işini test eder
-gemini → hermes'in işini test eder
-```
-
-**Test formatı:**
-
-```markdown
----
-test_id: TEST-XXX-hermes-tests-claude
-plan_id: P-XXX
-tester: hermes
-testee: claude
-verdict: PASS | BUGS_FOUND
-created: 2026-06-09T16:00:00+03:00
----
-
-# Cross-Test: hermes → claude
-
-## Test Edilen Görevler
-| Task | Açıklama | Test Sonucu |
-|------|---------|------------|
-| T-002 | ... | ✅ PASS |
-
-## Bulunan Hatalar
-| # | Task | Hata | Severity | Fix Önerisi |
-|---|------|------|---------|------------|
-| 1 | ... | ... | MEDIUM | ... |
-
-## Karar
-PASS — tüm testler başarılı
-BUGS_FOUND — yukarıdaki hatalar düzeltilmeli
-```
-
----
-
-## Görev Formatı (Değişmedi)
-
-```markdown
----
-task_id: T-XXX
-assigned_by: <hangi agent atadı>
-assigned_to: <hangi agent yapacak>
-priority: P1 | P2 | P3
-status: PENDING | IN_PROGRESS | DONE
-skill: <kullanılacak skill>
-phase: PLAN | CONSENSUS | IMPLEMENT | ULTRAREVIEW | CROSSTEST
-deadline: <ISO timestamp veya "after:T-YYY">
-dependencies: [T-XXX, T-YYY]
-plan_id: P-XXX
-created: 2026-06-09T12:00:00+03:00
----
-
-# Görev: <başlık>
-
-## Ne Yapılacak
-<net, spesifik talimat. Agent sadece bunu yapar, başka şey yapmaz.>
-
-## Skill Pipeline
-1. `skill_view(name='...')` — skill'i yükle
-2. <adım adım ne yapılacağı>
-
-## Çıktı
-<ne üretilecek: dosya, PR, deploy, rapor>
-
-## Bittiğinde
-1. Bu dosyayı `LLTODO/tasks/DONE/` altına taşı
-2. `LLTODO/reports/<agent>/YYYY-MM-DD-<özet>.md` raporunu yaz
-3. Varsa yeni görevler oluştur
-```
-
----
-
-## Altın Kurallar
-
-1. **SADECE sana atanmış görevleri yap.** `assigned_to` sen değilsen dokunma.
-2. **Plan'lar CONSENSUS olmadan implemente edilmez.** 2/3 APPROVE şart.
-3. **Her görev sonunda rapor yaz.** `reports/<agent>/` altına.
-4. **Başka agent'ın görevini override etme.**
+1. **SADECE sana atanmış görevleri yap.** `assigned_to` sen değilsen dosyaya veya işe dokunma.
+2. **Planlar CONSENSUS olmadan implemente edilmez.** En az 2/3 APPROVE şarttır.
+3. **Her görev sonunda mutlaka rapor yaz.** Raporunu kendi klasörüne ekle (`reports/<agent>/`).
+4. **Durum güncellemelerini unutma.** [STATE.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/STATE.md) her aşamada güncel tutulmalıdır.
 5. **Cross-test'te kendi işini test etme.** Rotasyonu takip et.
-6. **UltraReview'de bulunan fix'ler önceliklidir.** FIX-XXX > T-XXX.
-7. **Her fazın kendi ID prefix'i var:**
-   - P-XXX = Plan
-   - R-XXX = Review
-   - T-XXX = Task
-   - FIX-XXX = UltraReview fix
-   - UR-XXX = UltraReview raporu
-   - TEST-XXX = Cross-test
 
 ---
 
-## Agent Tanımları
+## 🤖 Agent Yetenek ve Sorumluluk Dağılımı
 
-| Agent | Güçlü Olduğu Alan | Zayıf Olduğu Alan | Consensus Rolü |
-|-------|------------------|-------------------|---------------|
-| **hermes** | Kod, plan, terminal, deploy | Browser, görsel test | Plan Author + Implementer |
-| **claude** | Review, kod analizi, PR | Terminal/execution | Reviewer + UltraReviewer |
-| **gemini** | Görsel analiz, büyük context | Terminal, kod yazma | Reviewer + Görsel Test |
-| **manus** | Browser automation, QA | Lokal dosya | QA + Browser Test |
-| **codex** | Second opinion, challenge | Deployment | Optional 4th reviewer |
-
----
-
-## Aktif Planlar
-
-| Plan | Başlık | Yazar | Durum |
-|------|--------|-------|-------|
-| P-001 | u2algo Master Plan (Wave 1-4) | hermes | AWAITING_REVIEW |
+| Agent | Uzmanlık / Güçlü Yanı | Consensus Rolü / Ağırlığı |
+|---|---|---|
+| **hermes** | Kodlama, API implementasyon, Terminal scriptleri, Deploy | Plan Yazarı & Coder |
+| **claude** | PR Review, mimari analiz, refactor, final UltraReview | Code Reviewer & Auditor |
+| **gemini** | Görsel doğrulama (UI/chart), büyük bağlam, tie-breaker | Visual Reviewer & Tie-Breaker |
+| **manus** | Browser otomasyonu, uçtan uca QA, canlı site audit | QA Engineer |
+| **codex** | İkinci görüş (second opinion), kod optimizasyonu | Challenger |
