@@ -99,7 +99,7 @@ def test_daily_rotation_creates_new_file(emitter, tmp_jobs_path, monkeypatch):
     """Günlük rotation: emit anındaki date'e göre dosya adı."""
     # İlk emit bugün
     assert emitter.emit("content_job.created", signal=_signal()) is True
-    today_file = tmp_jobs_path / f"{__import__('datetime').date.today().isoformat()}.jsonl"
+    today_file = tmp_jobs_path / f"{__import__('datetime').datetime.now(__import__('datetime').timezone.utc).date().isoformat()}.jsonl"
     assert today_file.exists()
     # Monkeypatch the date to tomorrow -> yeni dosya
     from datetime import datetime, timezone
@@ -126,7 +126,7 @@ def test_concurrent_emit_no_corruption(emitter, tmp_jobs_path):
     for t in threads: t.start()
     for t in threads: t.join()
     assert all(results), f"some emits failed: {results.count(False)}/100"
-    target_file = tmp_jobs_path / f"{__import__('datetime').date.today().isoformat()}.jsonl"
+    target_file = tmp_jobs_path / f"{__import__('datetime').datetime.now(__import__('datetime').timezone.utc).date().isoformat()}.jsonl"
     lines = [ln for ln in target_file.read_text().splitlines() if ln.strip()]
     assert len(lines) == 100
     # Her satır parse edilebilir
@@ -139,7 +139,7 @@ def test_event_id_unique(emitter, tmp_jobs_path):
     ids = set()
     for i in range(1000):
         assert emitter.emit("content_job.created", signal=_signal(symbol=f"S{i}/USDT")) is True
-    target_file = tmp_jobs_path / f"{__import__('datetime').date.today().isoformat()}.jsonl"
+    target_file = tmp_jobs_path / f"{__import__('datetime').datetime.now(__import__('datetime').timezone.utc).date().isoformat()}.jsonl"
     for ln in target_file.read_text().splitlines():
         if ln.strip():
             ids.add(json.loads(ln)["event_id"])
@@ -185,7 +185,7 @@ def test_notification_manager_emits_via_content_emitter(tmp_jobs_path, monkeypat
     nm = NotificationManager(channels=["log"], content_emitter=emitter)
     nm.signal_readonly("BTC/USDT", "LONG", 50000, 49000, 52000, 53000, 85, ["FVG"],
                        timeframe="15m", regime="TRENDING")
-    target_file = tmp_jobs_path / f"{__import__('datetime').date.today().isoformat()}.jsonl"
+    target_file = tmp_jobs_path / f"{__import__('datetime').datetime.now(__import__('datetime').timezone.utc).date().isoformat()}.jsonl"
     assert target_file.exists()
     event = json.loads(target_file.read_text().strip().splitlines()[-1])
     assert event["event_type"] == "content_job.created"

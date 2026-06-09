@@ -76,7 +76,12 @@ class ContentJobEmitter:
         if not sp.exists():
             return None
         try:
-            return json.loads(sp.read_text())
+            # JSON is always UTF-8 (RFC 8259). Without an explicit encoding,
+            # read_text() uses the platform locale (cp1252 on Windows, C/ASCII on
+            # minimal containers) and mangles the Turkish compliance `const`
+            # strings -> every emit fails schema validation and Lane A silently
+            # drops the event. Pin UTF-8.
+            return json.loads(sp.read_text(encoding="utf-8"))
         except Exception as e:
             log.warning("content_jobs_schema_load_failed err=%s", e)
             return None
