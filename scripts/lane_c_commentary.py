@@ -15,8 +15,15 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Optional
+
+# Allow `python scripts/lane_c_commentary.py ...` (repo root not otherwise on
+# sys.path when invoked as a file rather than `-m`).
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 from engine.content_jobs import COMPLIANCE_TR
 from scripts.content_compliance import find_violations
