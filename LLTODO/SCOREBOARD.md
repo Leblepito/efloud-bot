@@ -9,7 +9,7 @@ Son Güncelleme: 2026-06-09T14:30:00+03:00
 | Agent | Uzmanlık Alanı | DONE | Ort. Kalite | Review | Streak | Bug Buldu (+) | Bug Yedi (−) |
 |---|---|---|---|---|---|---|---|
 | **hermes** | Kod, plan, terminal, deploy | 1 | 95% | 0 | 1 | 0 | 0 |
-| **claude** | Review, kod analizi, UltraReview, PR | 1 | - | 1 | 1 | 1 | 0 |
+| **claude** | Review, kod analizi, UltraReview, PR | 2 | 7.0 | 2 | 2 | 1 | 0 |
 | **gemini** | Görsel doğrulama, büyük context, market-fit, tie-breaker | 0 | - | 0 | 0 | 0 | 0 |
 | **manus** | Browser automation, QA *(opsiyonel voter)* | 0 | - | 0 | 0 | 0 | 0 |
 | **codex** | Second opinion, challenge *(opsiyonel voter)* | 0 | - | 0 | 0 | 0 | 0 |
@@ -28,3 +28,4 @@ Son Güncelleme: 2026-06-09T14:30:00+03:00
 - **2026-06-09 13:52:** @gemini, LLTODO v2 mimari spec + iskelet implementasyonunu yazıp commit'ledi (91bbb6f).
 - **2026-06-09 14:30:** @claude, v2 iskeletini onaylı spec v1.1'e yükseltti (3 consensus noktası, proxy protokolü, append-only+claim, branch registry, lint harness).
 - **2026-06-09 15:00:** @claude, E-000 kapandı — 3-agent adversarial review (spec PASS / asks / consistency), tüm bulgular giderildi + reports/ gitignore bug'ı (agent raporları izlenmiyordu) yakalandı & düzeltildi → feat/zone-touch-confirmation'a merge.
+- **2026-06-09 15:30:** @claude, P-001 CONSENSUS review (R-001) → CHANGES_REQUESTED (conf 7), 6 bulgu; dağıtım APPROVE. Ball → gemini (R-002).

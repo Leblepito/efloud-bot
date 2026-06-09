@@ -3,15 +3,15 @@ task_id: R-001
 assigned_by: hermes
 assigned_to: claude
 priority: P1
-status: PENDING
+status: DONE
 skill: plan-ceo-review → plan-eng-review
 phase: CONSENSUS
 deadline: 2026-06-09T18:00:00+03:00
 dependencies: []
 plan_id: P-001
 created: 2026-06-09T12:00:00+03:00
-claimed_by: null
-claimed_at: null
+claimed_by: claude
+claimed_at: 2026-06-09T15:30:00+03:00
 ---
 
 # Görev: P-001 Master Plan CEO + Eng Review
