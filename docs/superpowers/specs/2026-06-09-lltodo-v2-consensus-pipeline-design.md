@@ -1,7 +1,7 @@
 # LLTODO v2 — Multi-Agent Consensus Pipeline (Design Spec)
 
 - **Date:** 2026-06-09
-- **Status:** APPROVED (brainstorm) → ready for writing-plans
+- **Status:** APPROVED — v1.1 incorporates Gemini's 9.5/10 review (R1: branch co-location; R2: UltraReview proxy). → ready for writing-plans
 - **Authors:** claude (synthesis) + gemini (independent implementation plan, merged)
 - **Supersedes:** LLTODO v1 (`LLTODO/README.md` @ commit `0ba4780`)
 - **Topic:** A git-backed blackboard + consensus state machine that lets Hermes, Claude,
@@ -69,7 +69,7 @@ which is treated as a strong validation signal.
 | D2 | Absent-agent handling | **Proxy vote + explicit label** — provisional, overridable, never impersonating; earns no specialization credit. |
 | D3 | Conflict-safety | **Append-only + claim** — per-agent namespaces, claim-to-lock, surgical `git add`, no destructive ops. |
 | D4 | Distribution & specialization | **Scoreboard-driven** — distribution proposed with scoreboard-referenced rationale, ratified by plan consensus. |
-| D5 | Branch | **`master`** — LLTODO is docs-only/additive and never deployed; one shared branch eliminates repo-global-branch fragmentation. Code work still uses feature-branch + PR. |
+| D5 | Branch (revised, Gemini R1) | **Co-located per-epic + master registry.** An epic's LLTODO *working* files live on that epic's branch, beside the code, so the working agent never switches branches mid-task. Durable global files (`README`, `STATE` registry, `SCOREBOARD`, `templates`, `PROMPT-*`) live on `master`. Epic completion = one PR merging code + LLTODO to master. |
 | D6 | Phase model | **5 phases, 3 consensus points** — keep v1/Gemini phase names; embed distribution-ratification inside CONSENSUS and verdict-confirmation inside CROSSTEST. |
 
 ## 4. Architecture
@@ -82,6 +82,15 @@ files. Two small files give every agent O(1) orientation:
 - **`STATE.md`** — the heartbeat: active epic, current phase, branch, who holds the ball,
   consensus tallies, what is blocking.
 - **`SCOREBOARD.md`** — the specialization ledger: per-agent, per-domain track record.
+
+**State lives in two tiers (revised per Gemini R1, to remove branch-switching overhead):**
+- **Durable / global — on `master`:** `README.md`, `STATE.md` (the *epic registry*),
+  `SCOREBOARD.md`, `templates/`, `PROMPT-*.md`. Agents read these on entry without switching
+  branches (e.g. `git show origin/master:LLTODO/STATE.md`).
+- **Volatile / per-epic — on the epic's working branch, beside the code:** `plans/`,
+  `reviews/`, `tasks/`, `tests/`, `reports/` for that epic. The working agent claims, codes,
+  tests, and reports all on one branch — **zero per-task branch-switching**. The epic's PR
+  merges this coordination record to master on completion.
 
 ## 5. The Pipeline — 5 phases, 3 consensus points
 
@@ -116,11 +125,15 @@ per row of the (now-ratified) distribution. Each agent executes **only** tasks w
 `assigned_to == self`, following the claim protocol (§6). On completion: move task to
 `DONE/`, write a report under `reports/<agent>/`, and create any follow-on tasks.
 
-**Phase 4 — ULTRAREVIEW (single driver = Claude Code).** When all implementation tasks are
-DONE, Claude Code reads every DONE task + report and writes `UR-XXX.md`: what's correct,
-what's missing/wrong, plan-drift, cross-task inconsistency. Issues become
-`tasks/PENDING/FIX-XXX-<agent>.md` (FIX > T in priority). Claude Code also updates
-`SCOREBOARD.md` for the epic (append-only, signed).
+**Phase 4 — ULTRAREVIEW (driver = Claude Code; proxy-escalable, Gemini R2).** When all
+implementation tasks are DONE, Claude Code reads every DONE task + report and writes
+`UR-XXX.md`: what's correct, what's missing/wrong, plan-drift, cross-task inconsistency.
+Issues become `tasks/PENDING/FIX-XXX-<agent>.md` (FIX > T in priority). Claude Code also
+updates `SCOREBOARD.md` for the epic (append-only, signed). **SPOF guard:** if Claude holds
+the Phase-4 ball past the SLA recorded in `STATE.md` (default 24h, user-tunable), another
+core agent MAY file a provisional **proxy UltraReview** (`UR-XXX-PROXY`) to unblock the
+pipeline; Claude's genuine report supersedes it on return. Proxy UltraReview obeys the §7
+integrity guards (no reviewing one's own implementation; earns no specialization credit).
 
 **Phase 5 — CROSSTEST (verdict confirmation = third consensus point).** Rotation: each
 agent tests **another** agent's work (`hermes→claude`, `claude→gemini`, `gemini→hermes`).
@@ -149,7 +162,11 @@ racing agent sees the claim and backs off.
 3. Commit with a scoped message (`lltodo: <agent> <action> <id>`), then `git push`.
 4. **Forbidden:** `git reset --hard`, force-push, `git checkout --` on files you don't own,
    editing another agent's namespace.
-5. All LLTODO commits target **`master`** (D5). Code changes remain on feature branches + PRs.
+5. **Durable global files** (`README`, `STATE` registry, `SCOREBOARD`, `templates`,
+   `PROMPT-*`) are committed to **`master`** (rare — at epic start/transition/end).
+   **Per-epic working files** are committed to the **epic's branch** alongside the code and
+   reach master via the epic's merge PR (D5, Gemini R1). The working agent thus stays on one
+   branch per task — no mid-task switching.
 
 ## 7. Absent-Agent Proxy-Vote Protocol (D2)
 
@@ -174,6 +191,9 @@ Rules:
 - **Integrity guards:** an agent may not proxy a vote on its **own** authored artifact;
   and proxy votes alone can never satisfy a consensus gate — at least one genuine,
   non-author vote is always required (mirrors §5 Phase 2).
+- **Phase-4 coverage (Gemini R2):** the same proxy mechanism covers the UltraReview SPOF.
+  A `UR-XXX-PROXY` is provisional and superseded by Claude's genuine report on return; it
+  unblocks the pipeline only after the `STATE.md` SLA on Claude's Phase-4 ball has elapsed.
 
 ## 8. Scoreboard & Transparent Distribution (D4)
 
@@ -201,27 +221,31 @@ distribution. This is the concrete fix for "hangi mantıkla dağıttın bilmiyor
 
 ## 10. Directory Structure & ID Scheme
 
+**Placement legend (Gemini R1):** `[M]` = lives on `master` (durable/global, read on entry);
+`[E]` = lives on the epic's working branch (volatile, beside the code) until the epic PR
+merges it to master.
+
 ```
 LLTODO/
-├── README.md            # v2 protocol; entry contract at the very top
-├── STATE.md             # heartbeat (active epic, phase, branch, ball-holder, tallies)
-├── SCOREBOARD.md        # specialization ledger
-├── templates/
+├── README.md       [M]  # v2 protocol; entry contract at the very top
+├── STATE.md        [M]  # epic registry: active epics → branch, phase, ball-holder, SLA
+├── SCOREBOARD.md   [M]  # specialization ledger (cumulative across epics)
+├── templates/      [M]
 │   ├── P-template.md          # Plan (incl. mandatory Distribution+rationale section)
 │   ├── R-template.md          # Review (verdict, findings, distribution-fairness line,
 │   │                          #          proxy fields)
 │   ├── T-template.md          # Task (instructions, deps, deliverables, claim fields)
-│   ├── UR-template.md         # UltraReview report
+│   ├── UR-template.md         # UltraReview report (+ PROXY variant)
 │   ├── TEST-template.md       # Cross-test (verdict, confirmed_by)
 │   └── REPORT-template.md     # Agent run log / handover note
-├── PROMPT-claude.md     # generalized onboarding (NOT epic-specific)
-├── PROMPT-gemini.md
-├── PROMPT-hermes.md
-├── plans/               # P-XXX
-├── reviews/             # R-XXX-<agent>  (incl. -PROXY)
-├── tasks/{PENDING,IN_PROGRESS,DONE}/   # T-XXX / FIX-XXX / R-XXX review-tasks
-├── tests/               # TEST-XXX-<tester>-tests-<testee>
-└── reports/{hermes,claude,gemini}/
+├── PROMPT-claude.md  [M]  # generalized onboarding (NOT epic-specific)
+├── PROMPT-gemini.md  [M]
+├── PROMPT-hermes.md  [M]
+├── plans/          [E]  # P-XXX
+├── reviews/        [E]  # R-XXX-<agent>  (incl. -PROXY)
+├── tasks/{PENDING,IN_PROGRESS,DONE}/  [E]  # T-XXX / FIX-XXX / R-XXX review-tasks
+├── tests/          [E]  # TEST-XXX-<tester>-tests-<testee>
+└── reports/{hermes,claude,gemini}/  [E]
 ```
 
 **ID prefixes:** `P-` plan · `R-` review · `T-` task · `FIX-` ultrareview fix ·
@@ -237,8 +261,10 @@ Every agent, on entering the repo:
 5. **Claim** the task (move to `IN_PROGRESS/`, stamp, commit+push).
 6. Do **only** the claimed task. Do not touch unassigned work.
 7. Write output in your namespace; create any follow-on tasks.
-8. Update `STATE.md` (your section only) and, if you are the UltraReview driver,
-   `SCOREBOARD.md`.
+8. On a **phase transition**, update the `master:STATE.md` registry entry for your epic
+   (phase, ball-holder, SLA); per-task progress is reflected by moving task files on the
+   epic branch (no master touch per task). If you are the UltraReview driver, also update
+   `master:SCOREBOARD.md` (append-only, signed).
 9. Surgical `git add LLTODO/...` → commit → push.
 10. Self-schedule a recheck (Claude/Hermes) or leave a ready prompt for relay (Gemini).
 
