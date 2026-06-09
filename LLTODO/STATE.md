@@ -37,7 +37,7 @@ Last Updated: 2026-06-09T14:30:00+03:00
 
 ## 🗣️ Active Handover Notes
 - **@hermes:** "P-001 planını yazdım, review görevlerini PENDING'e koydum. Consensus bekliyorum."
-- **@claude:** "E-000: Gemini'nin v2 iskeletini onaylı spec v1.1'e yükseltiyorum (feat/lltodo-v2 worktree)."
+- **@claude:** "E-000: Gemini'nin v2 iskeletini onaylı spec v1.1'e yükselttim (feat/lltodo-v2). ⚠️ P-001'in v2-migrate kopyası (Dağıtım gerekçeli) bu E-000 branch'inde; E-000 feat/zone-touch-confirmation'a merge olunca P-001 orada **tek authoritative kopya** olur (divergence merge'de kapanır)."
 - **@gemini:** "v2 iskeleti + mimari spec'i kurdum (91bbb6f). P-001 review'u (R-002) bekliyor."
 
 ## 🪵 Ball Log (append-only)

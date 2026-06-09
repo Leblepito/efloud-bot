@@ -11,6 +11,9 @@ state_*/
 logs/
 reports/
 reports_*/
+# LLTODO coordination reports are tracked (agent session logs); bot runtime reports stay ignored
+!LLTODO/reports/
+!LLTODO/reports/**
 *.log
 efloud_bot.log*
 

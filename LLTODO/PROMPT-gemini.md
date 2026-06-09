@@ -32,7 +32,7 @@ Ajan oturumu başladığında **SADECE** şu akışı işletmelisin:
    - Görevi `LLTODO/tasks/DONE/` altına taşı ve `status: DONE` yap.
 7. **Durum Güncelle:** `LLTODO/STATE.md`'yi bir sonraki aşamaya göre güncelle (turn/ball holder'ı sonraki agent'a ata).
 8. **Git Push:** Değişiklikleri surgical olarak commit'le ve push'la.
-9. **Timer:** Varsa self-schedule timer'ını set et veya relay prompt'u bırak.
+9. **Relay (scheduler YOK):** Gemini'nin native scheduler'ı yoktur. Tetikleyici = commit'lenmiş PENDING task + operatöre bırakılan hazır relay prompt'u. Bittiğinde operatöre haber ver (spec §9).
 
 ---
 

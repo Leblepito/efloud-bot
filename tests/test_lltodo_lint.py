@@ -19,6 +19,7 @@ def test_detect_type_from_path():
     assert L.detect_type(Path("LLTODO/reviews/R-001-claude.md")) == "review"
     assert L.detect_type(Path("LLTODO/tasks/PENDING/R-001-x.md")) == "task"
     assert L.detect_type(Path("LLTODO/tests/TEST-1-a-tests-b.md")) == "test"
+    assert L.detect_type(Path("LLTODO/ultrareviews/UR-001.md")) == "ultrareview"
     assert L.detect_type(Path("LLTODO/README.md")) is None
 
 

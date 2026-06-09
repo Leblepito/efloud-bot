@@ -10,15 +10,18 @@
 Her agent repoya girdiğinde sırasıyla şu adımları işletmek zorundadır:
 
 1. **Beyin Eşitleme (Sync):** `git pull --rebase` komutuyla whiteboard'un son halini çek.
-2. **Durum Kontrolü (State Scan):** [STATE.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/STATE.md) ve [SCOREBOARD.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/SCOREBOARD.md) dosyalarını okuyarak hangi epic'te olunduğunu ve genel rolleri anla.
+2. **Durum Kontrolü (State Scan):** [STATE.md](STATE.md) ve [SCOREBOARD.md](SCOREBOARD.md) dosyalarını okuyarak hangi epic'te olunduğunu ve genel rolleri anla.
 3. **Görev Arama (Task Scan):** `LLTODO/tasks/PENDING/` dizininde `assigned_to` değeri kendi rolü olan (veya proxy-uygun) görevleri tara.
 4. **Görevi Üstlenme (Claim):** İlgili görev dosyasını `IN_PROGRESS/` altına taşı ve içindeki `status` değerini `IN_PROGRESS` olarak güncelle. Bu adımı anında commit'le ve push'la.
 5. **Uygulama (Execution):** Görevin talimatlarını birebir uygula. Sadece size atanan işleri yapın, kapsam dışına çıkmayın.
 6. **Rapor Yazımı (Reporting):** `LLTODO/reports/<agent>/YYYY-MM-DD-<özet>.md` formatında bir oturum raporu oluştur.
 7. **Görevi Kapatma (Complete):** Görev dosyasını `DONE/` altına taşı ve `status: DONE` yap.
-8. **Durum Güncelleme (State Update):** [STATE.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/STATE.md)'yi yeni aşamaya göre güncelle (örn. ball holder değiştir).
+8. **Durum Güncelleme (State Update):** [STATE.md](STATE.md)'yi yeni aşamaya göre güncelle (örn. ball holder değiştir).
 9. **Cerrahi Commit & Push:** Sadece kod değişikliklerini ve güncellenen LLTODO dosyalarını içeren temiz bir commit yapıp push'la.
-10. **Timer/Relay:** Yapabiliyorsan self-schedule timer kur, yapamıyorsan bir sonraki agent için handover notu/prompt'u bırak.
+10. **Self-schedule / Relay (agent'a göre — bkz. spec §9):**
+    - **Claude** → işi ilerlettikten sonra LLTODO recheck'ini **OTOMATİK** planla (native `ScheduleWakeup`/cron/`/schedule`). Opsiyonel değil.
+    - **Hermes** → kendi scheduler'ı veya operatör relay'i ile geri döner.
+    - **Gemini** → scheduler YOK; tetikleyici = commit'lenmiş PENDING task + operatöre bırakılan hazır relay prompt'u.
 
 ---
 
@@ -44,13 +47,20 @@ LLTODO/
 ├── PROMPT-hermes.md   [M]
 ├── plans/             [E]  ← Plan dosyaları (P-XXX-<slug>.md)
 ├── reviews/           [E]  ← Consensus review'ları (R-XXX-{agent}.md, incl. -PROXY)
+├── ultrareviews/      [E]  ← UltraReview raporları (UR-XXX.md, incl. -PROXY)
 ├── tests/             [E]  ← Cross-test raporları (TEST-XXX-{tester}-tests-{testee}.md)
-├── reports/           [E]  ← Agent oturum raporları (hermes/ claude/ gemini/)
+├── reports/           [E]  ← Agent oturum raporları
+│   ├── hermes/
+│   ├── claude/
+│   └── gemini/
 └── tasks/             [E]  ← Görev havuzu
     ├── PENDING/             (Henüz başlanmamış: T-XXX / R-XXX / FIX-XXX)
     ├── IN_PROGRESS/         (Claim edilmiş, aktif çalışılan)
     └── DONE/                (Tamamlanmış)
 ```
+
+> `[E]` boş dizinler `.gitkeep` ile tutulur (git boş dizin izlemez); claim/rapor adımları
+> dizini hazır bulur. UltraReview raporları `ultrareviews/` altında (`UR-XXX.md`).
 
 ---
 
@@ -71,7 +81,7 @@ PLAN ──→ CONSENSUS ──→ IMPLEMENT ──→ ULTRAREVIEW ──→ CRO
 ### FAZ 1: PLAN (Tek Agent Başlatır)
 1. `LLTODO/plans/P-XXX-<slug>.md` dosyasını `templates/P-template.md` şablonuna göre oluştur. **ZORUNLU:** plan, her task→agent satırı için SCOREBOARD'a atıfla **gerekçeli bir Dağıtım** bölümü içerir ("neden bu agent bu işi alıyor?" şeffaflığı — opak/tek-taraflı dağıtım yasak).
 2. Diğer 2 reviewer için review görevlerini `tasks/PENDING/R-XXX-{agent}.md` altına oluştur.
-3. [STATE.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/STATE.md)'yi güncelle.
+3. [STATE.md](STATE.md)'yi güncelle.
 
 ### FAZ 2: CONSENSUS (3 Agent Teyitleşir — 2 teyit noktası)
 1. Reviewer agent'lar planı okur (oy kümesi = yazar + 2 reviewer; yazar kendi planını örtük APPROVE eder).
@@ -144,7 +154,7 @@ eklenir, frontmatter: `proxy: true, proxy_by: <agent>, proxy_engine: <...>, prov
 1. **SADECE sana atanmış görevleri yap.** `assigned_to` sen değilsen dosyaya veya işe dokunma.
 2. **Planlar CONSENSUS olmadan implemente edilmez.** En az 2/3 APPROVE **+ ≥1 gerçek non-author onay** şarttır.
 3. **Her görev sonunda mutlaka rapor yaz.** Raporunu kendi klasörüne ekle (`reports/<agent>/`).
-4. **Durum güncellemelerini unutma.** [STATE.md](file:///c:/Users/utkuc/Downloads/efloud-bot/LLTODO/STATE.md) faz geçişlerinde güncel tutulmalıdır.
+4. **Durum güncellemelerini unutma.** [STATE.md](STATE.md) faz geçişlerinde güncel tutulmalıdır.
 5. **Cross-test'te kendi işini test etme.** Rotasyonu takip et; `BUGS_FOUND` `confirmed_by` ister.
 6. **`git add -A` YASAK** — yalnızca `LLTODO/<spesifik>` (append-only + claim güvenliği).
 7. **Proxy oy şeffaf + geçici.** Kendi artifact'ını proxy'leme; proxy puan kazandırmaz.

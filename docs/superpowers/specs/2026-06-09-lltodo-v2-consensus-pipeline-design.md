@@ -275,12 +275,14 @@ Carried over from v1 where unchanged; additions noted. Templates encode these.
 - **Plan `P-XXX`:** `plan_id, author, status, created, reviewers[], approvals_needed,
   approvals_received` + body sections incl. **Distribution (with rationale)**.
 - **Review `R-XXX-<agent>`:** `review_id, plan_id, reviewer, verdict, confidence, created`
-  + optional proxy fields (§7) + a **distribution-fairness** verdict line.
+  (+ optional `prior_reviews_read[]` for tie-breaker reviewers) + optional proxy fields (§7)
+  + a **distribution-fairness** verdict line. `verdict ∈ {APPROVE, CHANGES_REQUESTED, REJECT}`.
 - **Task `T-XXX`:** `task_id, assigned_by, assigned_to, priority, status, skill, phase,
   deadline, dependencies[], plan_id, created` + `claimed_by, claimed_at` on claim.
 - **Cross-test `TEST-XXX`:** `test_id, plan_id, tester, testee, verdict, created` +
   `confirmed_by` before a BUGS_FOUND becomes a FIX.
-- **UltraReview `UR-XXX`:** `ultrareview_id, reviewer, plan_id, status, created`.
+- **UltraReview `UR-XXX`:** `ultrareview_id, reviewer, plan_id, status, created`
+  (+ optional proxy fields for the §7 Phase-4 SPOF escalation). `status ∈ {PASS, FIXES_NEEDED}`.
 
 ## 13. Migration & Cleanup (first live epic = the system testing itself)
 

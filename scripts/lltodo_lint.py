@@ -75,6 +75,8 @@ def detect_type(path: Path) -> str | None:
         return "test"
     if "/plans/" in posix:
         return "plan"
+    if "/ultrareviews/" in posix:
+        return "ultrareview"
     name = path.name
     for prefix, atype in PREFIX_TYPE:
         if name.startswith(prefix):
