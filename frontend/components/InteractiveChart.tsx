@@ -879,7 +879,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
           position: isLong ? "aboveBar" : "belowBar",
           shape: "circle",
           color: profit ? "#00FF88" : "#FF4D4D",
-          text: `Exit: ${t.reason ?? "RECONCILED"} (${t.pnl_pct != null ? (t.pnl_pct >= 0 ? "+" : "") + t.pnl_pct.toFixed(2) : "—"}%)`,
+          text: `Exit: ${t.reason ?? "RECONCILED"} (${t.pnl_pct != null ? (Number(t.pnl_pct) >= 0 ? "+" : "") + Number(t.pnl_pct).toFixed(2) : "—"}%)`,
         });
       }
     });
