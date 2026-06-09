@@ -27,14 +27,16 @@ efloud-bot kod tabanından 12 satılabilir ürün çıkar, 3 ayda $14K MRR hedef
 - Mevcut production config'lerine dokunmak.
 - Mainnet bakiyesiyle risk almak.
 
-## Task'lar (Task Matrix)
+## Task'lar & Dağıtım (Task Matrix — SCOREBOARD gerekçeli, CONSENSUS'ta onaylanır)
 
-| ID | Görev | Agent | Faz | Süre | Dependencies |
-|----|-------|-------|-----|------|--------------|
-| T-001 | TradingView spec yaz + publish | hermes | IMPLEMENT | 2-3 saat | [] |
-| T-002 | Master plan CEO + Eng review | claude | CONSENSUS | 30dk | [] |
-| T-003 | Pine Script görsel doğrulama | gemini | CROSSTEST | 20dk | [T-001, T-002] |
-| UR-001 | UltraReview (tüm işler bitince) | claude | ULTRAREVIEW | 30dk | [T-001, T-002, T-003] |
+| ID | Görev | Agent | Faz | Süre | Dependencies | Gerekçe (SCOREBOARD'a atıf) |
+|----|-------|-------|-----|------|--------------|------------------------------|
+| T-001 | TradingView spec yaz + publish | hermes | IMPLEMENT | 2-3 saat | [] | hermes: implementation+deploy specialty (1 DONE, 95%) |
+| T-002 | Master plan CEO + Eng review | claude | CONSENSUS | 30dk | [] | claude: review/kod-analizi specialty |
+| T-003 | Pine Script görsel doğrulama | gemini | CROSSTEST | 20dk | [T-001, T-002] | gemini: görsel-doğrulama specialty |
+| UR-001 | UltraReview (tüm işler bitince) | claude | ULTRAREVIEW | 30dk | [T-001, T-002, T-003] | claude: UltraReview sürücüsü (spec §5 Faz 4) |
+
+> Not (ilk epic): SCOREBOARD herkes için ~0'dan başladığından bu ilk dağıtım statik uzmanlık tanımlarına dayanıyor; sonraki epic'ler birikmiş rakamlara atıf yapacak. Reviewer'lar R-template'teki "Dağıtım Adil mi?" satırında bu dağıtımı onaylar.
 
 ## Skill Pipeline
 1. **hermes:** `office-hours` → `spec` → `writing-plans` → `implement`

@@ -10,6 +10,9 @@ deadline: YYYY-MM-DDTHH:MM:SS+03:00
 dependencies: []
 plan_id: P-XXX
 created: YYYY-MM-DDTHH:MM:SS+03:00
+# --- claim alanları: görev IN_PROGRESS'e taşınınca damgalanır ---
+claimed_by: null
+claimed_at: null
 ---
 
 # Görev: [Slug / Görev Başlığı]

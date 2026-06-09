@@ -5,6 +5,7 @@ tester: hermes | claude | gemini
 testee: hermes | claude | gemini
 verdict: PASS | BUGS_FOUND
 created: YYYY-MM-DDTHH:MM:SS+03:00
+confirmed_by: null        # BUGS_FOUND, FIX'e dönüşmeden önce 2. bir agent onayı (3. consensus noktası)
 ---
 
 # Cross-Test: {tester} → {testee}
@@ -14,7 +15,7 @@ created: YYYY-MM-DDTHH:MM:SS+03:00
 |------|---------|------------|
 | T-XXX | ... | ✅ PASS |
 
-## Bulunan Hatalar
+## Bulunan Hatalar (yalnızca `confirmed_by` dolunca FIX'e dönüşür)
 | # | Task | Hata | Severity | Fix Önerisi |
 |---|------|------|---------|------------|
 | 1 | ... | ... | MEDIUM | ... |

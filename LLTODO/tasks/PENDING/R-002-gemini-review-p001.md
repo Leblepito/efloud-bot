@@ -10,6 +10,8 @@ deadline: 2026-06-09T18:00:00+03:00
 dependencies: [R-001]
 plan_id: P-001
 created: 2026-06-09T12:00:00+03:00
+claimed_by: null
+claimed_at: null
 ---
 
 # Görev: P-001 Master Plan Review (Gemini Perspective)

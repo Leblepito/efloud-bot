@@ -39,3 +39,11 @@ Ajan oturumu başladığında **SADECE** şu akışı işletmelisin:
 ## 🛠️ Kullanman Gereken Skill / Tool'lar
 - **Görsel Analiz:** `generate_image`, `browser_subagent` veya screenshot dosyalarını `view_file` ile inceleme.
 - **Rapor Şablonları:** `LLTODO/templates/` altındaki `R-template.md` (Review için) ve `TEST-template.md` (Cross-test için) şablonlarını kullan.
+
+---
+
+## 🆕 v2 Kuralları (özet — detay: `LLTODO/README.md`)
+- **Giriş:** `git pull --rebase` → STATE/SCOREBOARD oku → `assigned_to: gemini` tara → claim → yap → rapor → STATE → **surgical commit (`git add LLTODO/<spesifik>`, asla `-A`)** → push. (Scheduler yoksa: bittiğini operatöre bildir.)
+- **Review'da (tie-breaker rolün):** önce Claude'un `R-XXX-claude.md`'ini oku, sonra "Dağıtım Adil mi?" satırını doldur. Kendi yazdığın işi review/proxy etme.
+- **Consensus:** 2/3 APPROVE + **≥1 gerçek non-author onay**. Crosstest `BUGS_FOUND` → `confirmed_by` gerekir.
+- **Proxy:** eksik agent için izole-context proxy (`-PROXY`, `provisional:true`); proxy puan kazandırmaz.

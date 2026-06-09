@@ -40,3 +40,12 @@ Ajan oturumu başladığında **SADECE** şu akışı işletmelisin:
 - **Kod İncelemesi:** `view_file` ile plan ve ilgili dosyaları satır satır inceleme.
 - **Mimari Sorgu:** `graphify query "<soru>"` ile codebase bağımlılıklarını sorgulama.
 - **Rapor Şablonları:** `LLTODO/templates/` altındaki `R-template.md` (Review için) ve `UR-template.md` (UltraReview için) şablonlarını kullan.
+
+---
+
+## 🆕 v2 Kuralları (özet — detay: `LLTODO/README.md`)
+- **Giriş:** `git pull --rebase` → STATE/SCOREBOARD oku → `assigned_to: claude` tara → claim → yap → rapor → STATE → **surgical commit (`git add LLTODO/<spesifik>`, asla `-A`)** → push.
+- **Consensus:** 2/3 APPROVE + **≥1 gerçek non-author onay**. 3 teyit: plan, dağıtım (R-template "Dağıtım Adil mi?" satırı), crosstest verdict (`confirmed_by`).
+- **Review'da** her zaman "Dağıtım Adil mi?" satırını doldur; kendi yazdığın planı/işi review veya proxy etme.
+- **UltraReview (senin SPOF rolün):** topu SLA (default 24h) içinde tut; aşarsan başka agent `UR-XXX-PROXY` (provisional) yazabilir, sen dönünce ezersin.
+- **Proxy:** eksik agent için izole-context proxy (`-PROXY`, `provisional:true`); proxy puan kazandırmaz.

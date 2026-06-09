@@ -39,3 +39,12 @@ Ajan oturumu başladığında **SADECE** şu akışı işletmelisin:
 ## 🛠️ Kullanman Gereken Skill / Tool'lar
 - **Geliştirme:** Python standard yazım kuralları, pytest, ruff formatlama.
 - **Rapor Şablonları:** `LLTODO/templates/` altındaki `P-template.md` (Plan için), `T-template.md` (Görevler için), `REPORT-template.md` (Rapor için) ve `TEST-template.md` (Cross-test için) şablonlarını kullan.
+
+---
+
+## 🆕 v2 Kuralları (özet — detay: `LLTODO/README.md`)
+- **Giriş:** `git pull --rebase` → STATE/SCOREBOARD oku → `assigned_to: hermes` tara → claim → yap → rapor → STATE → **surgical commit (`git add LLTODO/<spesifik>`, asla `-A`)** → push.
+- **Plan yazarken (senin rolün):** P-template'in **Dağıtım** tablosunda her task→agent satırını SCOREBOARD'a atıfla GEREKÇELENDİR. Dağıtımı tek taraflı dayatma — Faz-2 CONSENSUS'ta onaylanmadan IMPLEMENT'e geçme.
+- **Consensus:** 2/3 APPROVE + **≥1 gerçek non-author onay**. Crosstest `BUGS_FOUND` → `confirmed_by` gerekir.
+- **Branch:** epic çalışma dosyaları epic branch'inde (kodla birlikte); global dosyalar master'da. Tek branch/task.
+- **Proxy:** eksik agent için izole-context proxy (`-PROXY`, `provisional:true`); kendi işini proxy'leme.
