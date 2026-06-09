@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://u2algo.com/schemas/lane_c_commentary-1.0.0.json",
+  "title": "LaneCCommentary",
+  "description": "Multi-timeframe SMC commentary (PR #13). Top-down narration over the doctrine chain; ratio/risk metrics only; mandated disclaimer.",
+  "type": "object",
+  "required": ["symbol", "direction", "sections", "risk", "invalidation", "disclaimer", "script"],
+  "properties": {
+    "symbol": { "type": "string" },
+    "direction": { "enum": ["LONG", "SHORT"] },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["timeframe", "label", "note"],
+        "properties": {
+          "timeframe": { "type": "string" },
+          "label": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "required": ["risk_pct", "rr_tp1"],
+      "properties": {
+        "risk_pct": { "type": ["number", "null"] },
+        "rr_tp1": { "type": ["number", "null"] },
+        "rr_tp2": { "type": ["number", "null"] }
+      }
+    },
+    "invalidation": { "type": "string" },
+    "disclaimer": { "type": "string" },
+    "script": { "type": "string" }
+  }
+}
