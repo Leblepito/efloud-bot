@@ -1,0 +1,96 @@
+"""Content-pipeline compliance checker — Phase 4a, shared by Lane C (#12) and the
+multi-TF commentary generator (#13).
+
+Growth-OS guardrails on generated copy (no live config / risk touched):
+- **Banned promise-phrases** — the REAL Turkish list from
+  ``docs/marketing/GO_TO_MARKET_2026-05-28.md:16-22`` (ultrareview C1).
+- **No absolute-$ amounts** — decision #5: result/PnL copy shows ratio/risk
+  metrics only (R:R, %, risk); absolute dollar profit/loss is never shown.
+- **No performance-% claims** — win-rate / return promises (e.g. "73.2% win
+  rate", "%80 kazanç") are banned; risk-% (e.g. "2% risk") and R:R are allowed.
+
+The mandated disclaimer reuses ``engine.content_jobs`` COMPLIANCE_TR/EN.
+"""
+from __future__ import annotations
+
+import re
+
+from engine.content_jobs import COMPLIANCE_EN, COMPLIANCE_TR
+
+# GO_TO_MARKET_2026-05-28.md:16-22 — verbatim (curly quotes stripped).
+BANNED_TR_PHRASES = [
+    "Kesin kazanç",
+    "Garantili getiri",
+    "Her gün kâr",
+    "Pasif gelir makinesi",
+    "Sinyal al, kazan",
+    "Fonumuza para yatır",
+]
+
+
+def _norm(s: str) -> str:
+    """Lowercase, drop commas, collapse whitespace — for tolerant matching.
+
+    Turkish ``İ`` (U+0130) lowercases to ``i`` + combining dot above; map it to a
+    plain ``i`` first (and strip any stray combining dot) so phrases match
+    regardless of the writer's casing.
+    """
+    s = (s or "").replace("İ", "i").replace(",", " ").lower().replace("̇", "")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+_BANNED_NORM = [(p, _norm(p)) for p in BANNED_TR_PHRASES]
+
+# Absolute money amount: $/₺ either side of a number, or a currency-tagged number.
+_MONEY = re.compile(
+    r"\$\s*\d[\d.,]*"                              # $250, $1,000
+    r"|\d[\d.,]*\s*\$"                             # 250$
+    r"|₺\s*\d[\d.,]*|\d[\d.,]*\s*₺"                # ₺ amounts
+    r"|\b\d[\d.,]*\s*(?:usd|usdt|dolar|tl)\b",     # 250 USD, 1000 TL
+    re.IGNORECASE,
+)
+
+# Any percentage token, and the performance words that make one a *promise*.
+_PCT = re.compile(r"%\s*\d[\d.,]*|\b\d[\d.,]*\s*%|yüzde\s+\d", re.IGNORECASE)
+_PERF_WORDS = re.compile(
+    r"kazanç|kazan\b|getiri|kâr\b|kar\b|win\s*rate|isabet|başarı|return|profit",
+    re.IGNORECASE,
+)
+
+
+def _has_performance_pct(text: str) -> bool:
+    """A percentage is a violation only when it sits next to a performance word."""
+    for m in _PCT.finditer(text):
+        lo, hi = max(0, m.start() - 30), min(len(text), m.end() + 30)
+        if _PERF_WORDS.search(text[lo:hi]):
+            return True
+    return False
+
+
+def find_violations(text: str) -> list[str]:
+    """Return a list of compliance violation tags; empty == clean."""
+    t = text or ""
+    tn = _norm(t)
+    out: list[str] = []
+    for original, norm in _BANNED_NORM:
+        if norm in tn:
+            out.append(f"banned_phrase:{original}")
+    if _MONEY.search(t):
+        out.append("absolute_money")
+    if _has_performance_pct(t):
+        out.append("performance_pct_claim")
+    return out
+
+
+def has_disclaimer(text: str, lang: str = "tr") -> bool:
+    """True if the mandated disclaimer for ``lang`` is present in ``text``."""
+    t = text or ""
+    if lang == "en":
+        return COMPLIANCE_EN in t
+    if lang == "both":
+        return COMPLIANCE_TR in t and COMPLIANCE_EN in t
+    return COMPLIANCE_TR in t
+
+
+__all__ = ["BANNED_TR_PHRASES", "find_violations", "has_disclaimer",
+           "COMPLIANCE_TR", "COMPLIANCE_EN"]
