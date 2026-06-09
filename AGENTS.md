@@ -68,3 +68,13 @@ When the user asks to plan a multi-step change, use the
 automations should I add?", use `claude-automation-recommender`.
 
 
+## gstack Skill Routing (2026-06-09)
+
+gstack workflow framework (50+ specialist skill) bu projeye entegre edildi.
+Skill'ler `~/.claude/skills/gstack/` altında global kurulu.
+
+Hermes üzerinden `skill_view(name='gstack-<name>')` ile yüklenir.
+Hermes skill'leri (`writing-plans`, `subagent-driven-development`, vs.)
+gstack karşılıklarından önceliklidir.
+
+

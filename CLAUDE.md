@@ -57,3 +57,29 @@ TradingView Pine Script v6'ya çevirmek — hem INDIKATÖR hem de STRATEGY (back
    - Local makinede `supabase_postgres` MCP server kuruldu (7 tool: `health`, `list_tables`, `table_columns`, `ensure_waitlist_leads`, `waitlist_count`, `waitlist_list`, `waitlist_insert`).
 
 
+## 🧠 Skill Routing (gstack integration — 2026-06-09)
+
+gstack workflow framework'ü bu projeye entegre edildi. 50+ specialist skill
+`~/.claude/skills/gstack/` altında global kurulu ve `hermes/skills/gstack-*`
+olarak Hermes'e kopyalandı.
+
+Kritik gstack skill'leri ve ne zaman kullanılacakları:
+- **Plan/Design fazı**: `/office-hours` (ürün fikri), `/plan-ceo-review` (strateji), `/plan-eng-review` (mimari), `/autoplan` (otomatik review pipeline)
+- **Implementasyon**: `/review` (PR review), `/investigate` (root-cause debugging), `/codex` (second opinion)
+- **Release**: `/ship` (PR aç), `/land-and-deploy` (merge + deploy), `/canary` (post-deploy monitoring)
+- **Operasyonel**: `/context-save` / `/context-restore` (session state), `/retro` (haftalık retro), `/health` (code quality)
+- **Güvenlik**: `/cso` (OWASP + STRIDE audit), `/careful` (destructive cmd warning), `/freeze` (edit lock)
+
+**Hermes tool'larıyla kullanım**: gstack skill'leri Claude Code `Skill` tool'u için yazılmıştır.
+Hermes'te karşılıkları `skill_view(name='gstack-<name>')` ile yüklenir.
+Workflow manuel uygulanır — Hermes'in native `delegate_task`, `terminal`, `search_files`
+araçları gstack'in `Bash`/`Read`/`Write`/`Grep`/`Glob` araçlarının yerine geçer.
+
+**Routing önceliği**: Hermes skill'leri (`writing-plans`, `subagent-driven-development`,
+`requesting-code-review`, `systematic-debugging`) gstack karşılıklarından ÖNCE yüklenir.
+Çakışma durumunda Hermes skill'i kazanır.
+
+**Not**: gstack browser daemon (`browse/`) Bun + Chromium bağımlılığı nedeniyle
+Windows'ta tam desteklenmez. Browser gerektiren skill'ler (`/qa`, `/design-review`,
+`/browse`, `/scrape`) atlanır.
+
