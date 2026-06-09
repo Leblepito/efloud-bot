@@ -19,6 +19,9 @@ def test_read_journal_history_returns_reconciled_closes(tmp_path):
     assert len(out) == 2
     assert out[0]["symbol"] == "SOL/USDT"   # newest first
     assert out[1]["realized_pnl"] == -2.5
+    assert out[0]["id"] == "b"
+    assert out[0]["pnl_usdt"] == 4.0
+    assert out[0]["closed_at"] == "2026-06-01T02:00:00Z"
 
 
 def test_read_journal_history_missing_file_returns_empty():
