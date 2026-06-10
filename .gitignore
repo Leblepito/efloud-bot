@@ -3,6 +3,21 @@
 .env.local
 *.key
 *.pem
+sb_vars.json          # Supabase vars dump — secret, never commit
+
+# Local scratch / investigation files (untracked, machine-local)
+*.zip
+/scratch/
+/backup_rollout/
+*.diff
+/combined_migrations.sql
+/check_*.py
+/dns_check.py
+/pooler_test.py
+/region_scan.py
+/test_db.py
+/test_db_conn.py
+/test_postgres_only.py
 
 # Runtime
 state/
