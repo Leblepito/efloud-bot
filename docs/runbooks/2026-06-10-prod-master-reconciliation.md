@@ -10,7 +10,7 @@
 
 | Ortam | Branch/Commit | Açıklama |
 |---|---|---|
-| **Prod VPS** | `feat/pr1-identity-tokens` @ `ca92ce7` | Çalışan bot (dry_run=true, canlı değil) |
+| **Prod VPS** | `feat/pr1-identity-tokens` @ `ca92ce7` | ⚠️ **CANLI MAINNET** — `EFLOUD_CONFIG_PATH=configs/config.phase2_1k.yaml` → `dry_run: false`, `testnet: false` = GERÇEK ORDER. (Root `/app/config.yaml`'daki `dry_run: true` İNERT default'tur, bot onu KULLANMAZ — Claude review düzeltmesi.) |
 | **Master (GitHub)** | `39c2738` (PR #177) | Kanonik kaynak |
 
 ### Diff Özeti
@@ -39,10 +39,10 @@ prod'da 2 commit master'da YOK:
 
 ### Adım 0 — Ön Koşul
 
-- [x] Prod bot çalışıyor (dry_run=true)
+- [x] Prod bot çalışıyor (⚠️ CANLI MAINNET, dry_run=false — gerçek emir/pozisyon riski var)
 - [x] `bebcc8c` patch'i hazır
-- [ ] Operatör onayı
-- [ ] Flat-book penceresi (en az 1 saat trade-free zaman)
+- [ ] Operatör onayı (ZORUNLU — canlı para)
+- [ ] Flat-book penceresi (0 açık pozisyon + 0 açık emir; Binance UI Conditional sekmesinden doğrula)
 
 ### Adım 1 — bebcc8c'yi master'a entegre et
 
@@ -65,8 +65,10 @@ git push -u origin feat/token-sync-merge
 # VPS üzerinde (Hermes/operatör):
 cd /opt/efloud-bot
 
-# Önce state backup
-cp -r state_1k/ /tmp/state_1k_backup_$(date +%s)/
+# Önce state backup — DİKKAT: canlı state docker NAMED VOLUME'larda
+# (/opt/efloud-bot/state_1k host dizini DEĞİL). Container'dan kopyala:
+docker cp efloud-bot:/app/state /tmp/state_backup_$(date +%s)/
+docker cp efloud-bot:/app/state_aggressive /tmp/state_aggr_backup_$(date +%s)/ 2>/dev/null || true
 
 # Master'a geç
 git fetch origin
@@ -74,14 +76,17 @@ git checkout master
 git -c safe.directory=/opt/efloud-bot pull origin master
 
 # AUTOSTART=0 → manuel start
-# docker-compose.prod.yml'da AUTOSTART=0 olduğundan emin ol
+# .env.production'da EFLOUD_AUTOSTART=0 olduğundan emin ol
 
-# Recreate (yeni kodla)
+# ⚠️ KOD IMAGE'E BAKED — build OLMADAN up -d ESKİ kodu çalıştırır
+docker compose -f docker-compose.prod.yml build efloud-bot
+
+# Recreate (yeni image ile)
 docker compose -f docker-compose.prod.yml up -d
 
 # Doğrula
 docker logs efloud-bot --tail 50
-curl -s localhost:8080/api/healthz
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8080/healthz
 ```
 
 ### Adım 3 — Post-deploy doğrulama
@@ -89,10 +94,10 @@ curl -s localhost:8080/api/healthz
 | Check | Komut | Beklenen |
 |---|---|---|
 | Container UP | `docker ps \| grep efloud` | `Up (running)` |
-| healthz | `curl -s localhost:8080/api/healthz` | `200 OK` |
-| Startup log | `docker logs efloud-bot --tail 30` | `SafeOrchestrator cycle started` |
-| dry_run flag | `docker exec efloud-bot grep dry_run /app/config.yaml` | `true` |
-| v2 inert | `docker exec efloud-bot grep smc_version /app/config.yaml` | `v1` |
+| healthz | `curl -s -o /dev/null -w "%{http_code}" localhost:8080/healthz` | `200` (bot STARTED ise; idle/breaker-halted → `503` beklenen) |
+| Startup log | `docker logs efloud-bot --tail 30` | hata yok |
+| dry_run flag | `docker exec efloud-bot grep dry_run /app/configs/config.phase2_1k.yaml` | `false` (⚠️ CANLI — root `/app/config.yaml` İNERT, ona bakma) |
+| v2 shadow | `docker exec efloud-bot grep -E "smc_version\|smc_v2_shadow" /app/configs/config.phase2_1k.yaml` | `v2` + `shadow: true` (v1 canlı trade, v2 sadece log) |
 
 ---
 
@@ -102,6 +107,7 @@ curl -s localhost:8080/api/healthz
 cd /opt/efloud-bot
 git checkout feat/pr1-identity-tokens
 git -c safe.directory=/opt/efloud-bot reset --hard ca92ce7
+docker compose -f docker-compose.prod.yml build efloud-bot   # eski koddan image rebuild — şart
 docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -127,10 +133,13 @@ docker compose -f docker-compose.prod.yml up -d
 **Neden:** Circuit breaker HALTED (daily/weekly limit aşıldı)
 **Durum:** Prod'da açık — bot trade üretmiyor
 
-**Çözüm seçenekleri:**
-1. **Reset:** `UPDATE breaker_state SET status='READY' WHERE id=(SELECT MAX(id) FROM breaker_state)`
-2. **Bekle:** Günlük reset window'da kendi açılır
-3. **Olduğu gibi bırak:** Dry-run'da zaten gerçek emir yok
+**Çözüm seçenekleri (Claude review düzeltmesi):**
+1. **Reset (tek geçerli yol):** Prod **DB-LESS** (DATABASE_URL yok, file-only StateStore) →
+   SQL `UPDATE breaker_state ...` ÇALIŞMAZ. Doğru yol: bot RUNNING iken
+   `POST /api/breaker/reset` (login → Secure-cookie'yi manuel `Cookie` header'ı olarak gönder;
+   bot idle iken 503 "Bot not running" döner — önce `/api/bot/start`).
+2. **Bekle / olduğu gibi bırak:** ⚠️ bot CANLI MAINNET'tir (dry_run=false) — "zaten gerçek
+   emir yok" varsayımı YANLIŞ. Breaker OPEN iken davranışı operatörle teyit et.
 
 **Karar:** Operatör. Bu runbook dışında.
 

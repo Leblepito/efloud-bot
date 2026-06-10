@@ -60,11 +60,14 @@ risk:
 ```
 
 ```bash
-# VPS'te:
+# VPS'te (Claude review düzeltmesi: config IMAGE'E BAKED — build'siz up -d uygulamaz):
 cd /opt/efloud-bot
 vi configs/config.phase2_1k.yaml   # yukarıdaki 2 satırı değiştir
-docker compose -f docker-compose.prod.yml up -d   # recreate
+docker compose -f docker-compose.prod.yml build efloud-bot   # ŞART — config baked
+docker compose -f docker-compose.prod.yml up -d              # recreate (yeni image)
 docker logs efloud-bot --tail 30
+# Alternatif (rebuild'siz, EPHEMERAL): set_confluence.sh benzeri in-container sed +
+# /api/bot/restart — ama sonraki rebuild'de kaybolur; kalıcı = repo edit + rebuild.
 ```
 
 ### Beklenen Etki
@@ -72,7 +75,9 @@ docker logs efloud-bot --tail 30
 - ~33% daha az trade (119 vs 178, 90g)
 - Daha yüksek kaliteli girişler (PF 2.76 vs 1.53)
 - Daha düşük drawdown (0.71% vs 2.20%)
-- Dry-run'da olduğu için gerçek fon riski YOK
+- ⚠️ **GERÇEK FON RİSKİ VAR (Claude review düzeltmesi):** prod `dry_run: false` CANLI
+  MAINNET'tir (root config.yaml'daki dry_run:true İNERT — bot phase2_1k kullanır).
+  Bu config değişikliği gerçek trade davranışını değiştirir → operatör onayı ZORUNLU.
 
 ---
 

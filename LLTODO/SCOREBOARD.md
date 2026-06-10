@@ -10,14 +10,14 @@
 | Aktif epic | 1 (P-001) |
 | Tamamlanan epic | 0 |
 | Toplam görev | 3 (T-001, T-002, T-003) |
-| Tamamlanan görev | 0 |
-| Claim edilmiş görev | 1 (T-001) |
+| Tamamlanan görev | 1 (T-001 ✅ 2026-06-10, G-T1 compile PASS) |
+| Claim edilmiş görev | 0 |
 
 ## P-001 Görev Skoru
 
 | Görev | Açıklama | Durum | Claim |
 |---|---|---|---|
-| T-001 | Swing detection + OB core (Pine Script) | 🟡 IMPL_READY | @hermes (2026-06-10) |
+| T-001 | Swing detection + OB core (Pine Script) | ✅ DONE (G-T1 PASS, @claude compile-verify) | @hermes (2026-06-10) |
 | T-002 | MTF confluence + SL/TP hesaplama | ⬜ BACKLOG | — |
 | T-003 | Strateji backtest + görsel validasyon | ⬜ BACKLOG | — |
 

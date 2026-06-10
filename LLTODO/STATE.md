@@ -23,13 +23,15 @@
 
 ### Aktif Durum
 
-**Durum:** `CONSENSUS_REACHED` (2026-06-10)
-**Sonraki adım:** T-001 IMPL_READY → compile-verify (G-T1 gate) → T-002 başlat
+**Durum:** `IN_PROGRESS` — FAZ 3 (2026-06-10)
+**Sonraki adım:** T-002 (MTF confluence + SL/TP) — @hermes claim edebilir
 
 ### Heartbeat
 
 ```
 2026-06-10  IN_PROGRESS      @hermes  T-001 IMPL_READY: pine/efloud_signals.pine (259 satır) + PINE_SPEC.md. Branch: feat/p001-t001-pine-indicator. Swing detection (manuel pivot lb=4), OB (seq=5, body>1.5×ATR), 1h bias (EMA20 overlay). G-T1 compile gate BEKLİYOR (VPS'te TV yok).
+2026-06-10  REVIEW_FIXES     @claude  Path çakışması düzeltildi: Wave-1 dosyaları pine/u2algo/ altına (mevcut SMC v2 port restore). OB 5-ardışık fidelity fix + ölü kod temizliği. Plan v1.3 (§3a path'leri güncellendi).
+2026-06-10  T-001 DONE ✅    @claude  G-T1 PASS: TV Pine Editor compile 0 hata 0 marker (pine_smart_compile + pine_get_errors). T-001 → tasks/DONE/. Sıra T-002'de.
 ```
 
 ### Review Özeti
@@ -46,7 +48,7 @@
 | FAZ 0 | Spec + plan yazımı | ✅ DONE |
 | FAZ 1 | External review (R-001, R-002) | ✅ DONE |
 | FAZ 2 | Consensus + plan revizyonu | ✅ CONSENSUS_REACHED |
-| FAZ 3 | Implementasyon (T-001 ✅ IMPL_READY, T-002, T-003) | 🟡 IN_PROGRESS |
+| FAZ 3 | Implementasyon (T-001 ✅ DONE [G-T1 PASS], T-002, T-003) | 🟡 IN_PROGRESS |
 | FAZ 4 | UltraReview (UR-001 @claude) | ⬜ BEKLİYOR |
 | FAZ 5 | Master merge + deploy | ⬜ BEKLİYOR |
 

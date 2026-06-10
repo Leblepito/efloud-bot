@@ -1,0 +1,301 @@
+//@version=6
+// ═══════════════════════════════════════════════
+// u2algo Wave-1 — SMC Indicator (P-001 / T-001)
+// 15m trigger + 1h bias overlay
+// v1.0.0 — T-001: Swing detection + OB core
+// ═══════════════════════════════════════════════
+//
+// © u2algo — Efloud SMC Core
+// Pine Script v6, NO legacy study()/ema()
+// INDICATOR (free, lead magnet)
+// STRATEGY version: pine/u2algo/wave1_strategy.pine (premium, T-003)
+//
+// NOT: pine/efloud_signals.pine (SMC v2 sadık port, compile-verified
+// 2026-05-30, PR #148 TV publish temeli) AYRI bir üründür — bu dosya
+// onu DEĞİŞTİRMEZ. Wave-1 = u2algo pazarlama indikatörü (daraltılmış kapsam).
+
+indicator(
+ "u2algo SMC — Wave 1",
+ overlay=true,
+ format=format.price,
+ max_labels_count=500,
+ max_boxes_count=200,
+ max_lines_count=200
+)
+
+// ═══════════════════════════════════════════════
+// INPUTS — Plan §3d parameter mapping
+// ═══════════════════════════════════════════════
+
+// Swing detection — hardcoded lookback=4 per Plan §2a
+// NOTE: ta.pivothigh/pivotlow require simple int; input.int is series int.
+// We embed the lookback values directly and expose a group label for docs.
+swing_lb_label = "Swing Lookback (fixed at 4 per Plan §2a)"
+swing_lb_left  = 4
+swing_lb_right = 4
+
+// Order Block
+ob_seq_group   = "Order Block"
+ob_seq_default = 5
+ob_body_mult   = input.float(1.5, "OB Body/ATR Mult", minval=0.5, maxval=5.0, step=0.1,
+ tooltip="Breakout body must exceed this × ATR(14)", group=ob_seq_group)
+
+// Confluence (T-002 uses this; define now for consistency)
+conf_thresh = input.int(55, "Confluence Threshold", minval=0, maxval=100,
+ tooltip="Minimum confluence score for signal validity", group="Confluence")
+
+// Visual
+visual_group = "Visual"
+use_cb_palette = input.bool(false, "Colorblind-Friendly Palette",
+ tooltip="Alternative palette for red/green color blindness", group=visual_group)
+
+// ═══════════════════════════════════════════════
+// COLOR PALETTE — Plan §4
+// ═══════════════════════════════════════════════
+
+// Dark theme (default)
+col_long  = use_cb_palette ? color.new(#4488FF, 0) : color.new(#00FF88, 0)
+col_short = use_cb_palette ? color.new(#FF8800, 0) : color.new(#FF4455, 0)
+col_sl    = use_cb_palette ? color.new(#FF0000, 0) : color.new(#FF6644, 0)
+col_tp1   = use_cb_palette ? color.new(#00CC44, 0) : color.new(#44DD88, 0)
+col_tp2   = use_cb_palette ? color.new(#AA44FF, 0) : color.new(#4488FF, 0)
+col_ob    = color.new(#FFDD44, 80)
+col_swing = color.new(#CCCCCC, 0)
+col_fvg   = color.new(#AA66FF, 40)
+col_trend = color.new(#666666, 60)
+
+// ═══════════════════════════════════════════════
+// ATR (14-period, for OB body check)
+// ═══════════════════════════════════════════════
+
+atr14  = ta.atr(14)
+
+// ═══════════════════════════════════════════════
+// 1H BIAS — Higher-Timeframe Trend via request.security()
+// ═══════════════════════════════════════════════
+
+// Use lookahead_off to prevent repaint from higher TF
+htf_sym = syminfo.tickerid
+htf_tf  = "60"  // 1 hour
+
+// Get 1h close (confirmed bars only). OHLC'nin kalanı T-002'de (CHoCH/BOS)
+// gerektiğinde eklenir — kullanılmayan request.security çağrısı tutulmaz.
+htf_close = request.security(htf_sym, htf_tf, close, lookahead=barmerge.lookahead_off)
+
+// Simple 1h bias: 20-bar EMA slope as directional bias
+htf_ema20      = ta.ema(htf_close, 20)
+htf_bias_up    = htf_close > htf_ema20
+htf_bias_down  = htf_close < htf_ema20
+
+// ═══════════════════════════════════════════════
+// SWING DETECTION — Plan §2a, Python swings() method
+// ═══════════════════════════════════════════════
+//
+// Python: for i in range(lb, n-lb):
+//   if all(h[i] > h[i-j] and h[i] > h[i+j] for j in range(1, lb+1)):
+//     → swing HIGH
+//   if all(l[i] < l[i-j] and l[i] < l[i+j] for j in range(1, lb+1)):
+//     → swing LOW
+//
+// In Pine: manual check using history reference operator [N]
+// lb=4 → check 4 bars left AND 4 bars right.
+// Only evaluate on barstate.isconfirmed to avoid repaint.
+
+lb = swing_lb_left  // 4
+
+// --- Swing High ---
+is_swing_high = false
+swing_high_val = 0.0
+
+if barstate.isconfirmed and bar_index >= lb * 2
+    is_swing_high := true
+    for j = 1 to lb
+        if high[lb] <= high[lb - j] or high[lb] <= high[lb + j]
+            is_swing_high := false
+            break
+    if is_swing_high
+        swing_high_val := high[lb]
+
+new_swing_high = is_swing_high
+
+// --- Swing Low ---
+is_swing_low = false
+swing_low_val = 0.0
+
+if barstate.isconfirmed and bar_index >= lb * 2
+    is_swing_low := true
+    for j = 1 to lb
+        if low[lb] >= low[lb - j] or low[lb] >= low[lb + j]
+            is_swing_low := false
+            break
+    if is_swing_low
+        swing_low_val := low[lb]
+
+new_swing_low = is_swing_low
+
+// Store most recent swing high/low prices and bar indices for OB proximity check
+var float last_sh_price = na
+var int   last_sh_bar   = na
+var float last_sl_price = na
+var int   last_sl_bar   = na
+
+// Only update when confirmed
+if barstate.isconfirmed
+    if new_swing_high
+        last_sh_price := swing_high_val
+        last_sh_bar   := bar_index - lb
+    if new_swing_low
+        last_sl_price := swing_low_val
+        last_sl_bar   := bar_index - lb
+
+// ═══════════════════════════════════════════════
+// ORDER BLOCK DETECTION — Plan §2a, Python order_blocks() method
+// ═══════════════════════════════════════════════
+
+// Bar classification
+bar_bull  = close > open
+bar_bear  = close < open
+bar_body  = math.abs(close - open)
+
+// Breakout condition: body > ob_body_mult × ATR(14)
+is_breakout_body = bar_body > ob_body_mult * atr14
+
+// --- Bullish OB ---
+// Current bar: BULLISH BREAKOUT (close > open, body > threshold)
+// Previous ob_seq bars: BEARISH (close < open), consecutive
+bull_breakout = barstate.isconfirmed and bar_bull and is_breakout_body
+
+var int   bullish_ob_seq_count = 0
+var float bullish_ob_top       = na
+var float bullish_ob_bot       = na
+var int   bullish_ob_bar       = na
+var bool  bullish_ob_near_swing = false  // T-002: confluence skorlamasında kullanılır
+
+if bull_breakout
+    cnt = 0
+    hi  = 0.0
+    lo  = 1e10
+    for k = 1 to ob_seq_default
+        if bar_index - k >= 0 and close[k] < open[k]
+            ct_i = open[k]
+            cb_i = close[k]
+            if cnt == 0
+                hi := ct_i
+                lo := cb_i
+            else
+                hi := math.max(hi, ct_i)
+                lo := math.min(lo, cb_i)
+            cnt += 1
+        else if cnt > 0
+            break
+    // Plan §2a fidelity: OB = TAM ob_seq (5) ardışık ters yönlü mum gerektirir
+    if cnt == ob_seq_default and hi > lo
+        // Check near swing proximity (within ~30 bars, 1.5% price)
+        ns = false
+        if not na(last_sl_price)
+            dist_pct_i = math.abs(lo - last_sl_price) / last_sl_price
+            bars_since_sl_i = bar_index - last_sl_bar
+            ns := dist_pct_i < 0.015 and bars_since_sl_i > 0 and bars_since_sl_i < 30
+        bullish_ob_seq_count := cnt
+        bullish_ob_top       := hi
+        bullish_ob_bot       := lo
+        bullish_ob_bar       := bar_index - cnt
+        bullish_ob_near_swing := ns
+        // Draw OB box
+        box.new(
+         bullish_ob_bar, bullish_ob_top,
+         bar_index,       bullish_ob_bot,
+         col_ob, 1, line.style_solid,
+         bgcolor=col_ob
+        )
+
+// --- Bearish OB ---
+// Current bar: BEARISH BREAKOUT (close < open, body > threshold)
+// Previous ob_seq bars: BULLISH (close > open), consecutive
+bear_breakout = barstate.isconfirmed and bar_bear and is_breakout_body
+
+var int   bearish_ob_seq_count = 0
+var float bearish_ob_top       = na
+var float bearish_ob_bot       = na
+var int   bearish_ob_bar       = na
+var bool  bearish_ob_near_swing = false  // T-002: confluence skorlamasında kullanılır
+
+if bear_breakout
+    cnt = 0
+    hi  = 0.0
+    lo  = 1e10
+    for k = 1 to ob_seq_default
+        if bar_index - k >= 0 and close[k] > open[k]
+            ct_i = close[k]
+            cb_i = open[k]
+            if cnt == 0
+                hi := ct_i
+                lo := cb_i
+            else
+                hi := math.max(hi, ct_i)
+                lo := math.min(lo, cb_i)
+            cnt += 1
+        else if cnt > 0
+            break
+    // Plan §2a fidelity: OB = TAM ob_seq (5) ardışık ters yönlü mum gerektirir
+    if cnt == ob_seq_default and hi > lo
+        ns = false
+        if not na(last_sh_price)
+            dist_pct_i = math.abs(hi - last_sh_price) / last_sh_price
+            bars_since_sh_i = bar_index - last_sh_bar
+            ns := dist_pct_i < 0.015 and bars_since_sh_i > 0 and bars_since_sh_i < 30
+        bearish_ob_seq_count := cnt
+        bearish_ob_top       := hi
+        bearish_ob_bot       := lo
+        bearish_ob_bar       := bar_index - cnt
+        bearish_ob_near_swing := ns
+        box.new(
+         bearish_ob_bar, bearish_ob_top,
+         bar_index,       bearish_ob_bot,
+         col_ob, 1, line.style_solid,
+         bgcolor=col_ob
+        )
+
+// ═══════════════════════════════════════════════
+// VISUAL OUTPUTS — Plan §4
+// ═══════════════════════════════════════════════
+
+// --- Swing labels ---
+if barstate.isconfirmed and new_swing_high
+    label.new(bar_index - lb, swing_high_val,
+     "HH", style=label.style_label_down,
+     color=color.new(col_swing, 90), textcolor=col_swing, size=size.small)
+
+if barstate.isconfirmed and new_swing_low
+    label.new(bar_index - lb, swing_low_val,
+     "LL", style=label.style_label_up,
+     color=color.new(col_swing, 90), textcolor=col_swing, size=size.small)
+
+// --- 1h bias trend ---
+bias_color = htf_bias_up ? col_long : htf_bias_down ? col_short : col_trend
+
+// Plot 1h EMA20 on the 15m chart (informational overlay)
+plot_htf = request.security(htf_sym, htf_tf,
+ ta.ema(close, 20), lookahead=barmerge.lookahead_off)
+
+plot(plot_htf, "1H EMA20", col_trend, 2, plot.style_line)
+
+// --- Bias text in a table (non-intrusive) ---
+var table bias_table = table.new(position.top_right, 1, 1,
+ border_width=0, frame_width=0)
+
+if barstate.islastconfirmedhistory
+    h1_text = htf_bias_up ? "▲ 1H BULL" : htf_bias_down ? "▼ 1H BEAR" : "— 1H FLAT"
+    h1_color = htf_bias_up ? col_long : htf_bias_down ? col_short : col_trend
+    table.cell(bias_table, 0, 0, h1_text, text_color=h1_color, text_size=size.small)
+    table.cell_set_bgcolor(bias_table, 0, 0, color.new(#000000, 80))
+
+// ═══════════════════════════════════════════════
+// ALERT CONDITION STUBS (T-002 fills)
+// ═══════════════════════════════════════════════
+
+long_signal  = false  // T-002: confluence scoring + SL/TP
+short_signal = false  // T-002: confluence scoring + SL/TP
+
+alertcondition(long_signal,  "Efloud LONG",  "LONG setup detected")
+alertcondition(short_signal, "Efloud SHORT", "SHORT setup detected")

@@ -1,115 +1,475 @@
-# PINE_SPEC — Python → Pine Script v6 Teknik Çeviri Haritası
+# PINE_SPEC.md — efloud-bot **SMC v2** → TradingView Pine Script v6
 
-> Efloud SMC mantığının Pine Script v6'ya çeviri kararları ve parametre eşlemesi.
-> Son güncelleme: 2026-06-10 — T-001
+> **Kaynak motor:** `engine/smc_v2/` (V2 rework, shadow mode).
+> **Karar:** V2 seçildi çünkü çevrilemeyen harici bağımlılığı (Gemini AI gate) YOK
+> → Pine portu davranışsal olarak sadık olabilir.
+> **Bu dosya onaylanmadan Pine koduna (`pine/efloud_signals.pine`,
+> `pine/efloud_strategy.pine`) geçilmeyecek.**
 
----
-
-## 1. Parametre Eşleme (Python → Pine Input)
-
-| Python Parametresi | Python Default | Pine Input | Pine Default | Not |
-|---|---|---|---|---|
-| `swing_lookback` | 4 | `swing_lb_left/right` (hardcoded) | 4 | Pine `ta.pivothigh` simple-int gerektirir; manuel pivot detection kullanıldı |
-| `ob_sequential` | 5 | `ob_seq_default` (hardcoded) | 5 | Pine for-loop sabit sayı ister |
-| `ob_body_atr_mult` | 1.5 | `ob_body_mult` (`input.float`) | 1.5 | ✅ Dinamik input |
-| `confluence_threshold` | 55 | `conf_thresh` (`input.int`) | 55 | T-002'de kullanılacak |
-| `sl_atr_mult` | 0.5 | — (T-002) | — | T-002'de eklenecek |
-| `sl_lookback` | 20 | — (T-002) | — | T-002'de eklenecek |
-| `min_rr` | 1.5 | — (T-002) | — | T-002'de eklenecek |
-| `body_mode` | True | `true` (hardcoded) | true | OB hesaplamada open/close referans; Pine'da body-mode zorunlu |
+Tüm satır referansları doğrulanmıştır (`engine/smc_v2/*.py`, `engine/smc.py`,
+`configs/config.phase2_1k.yaml` — üretimde çalışan config).
 
 ---
 
-## 2. Live-Prod Değerleri (Plan §3d Claude Review Notu)
+## 0. V1 vs V2 — neden bu spec V1'den farklı
 
-> Pine input **DEFAULT'ları** plan §3d referans değerleridir.
-> Canlı prod tuning farkları aşağıdadır. Operatör input'tan değiştirebilir.
-
-| Parametre | Plan Default | Live Prod | Açıklama |
-|---|---|---|---|
-| `conf_thresh` | 55 | **80** | Prod'da daha sıkı confluence filtresi |
-| `min_rr` | 1.5 | **1.8** | Prod'da daha yüksek R:R eşiği |
-| `ob_body_mult` | 1.5 | 1.5 | Aynı |
-| `swing_lb` | 4 | 4 | Aynı |
-| `ob_seq` | 5 | 5 | Aynı |
-
----
-
-## 3. Çeviri Kararları
-
-### 3a. Swing Detection (T-001)
-
-- **Python:** `all(h[i] > h[i-j] and h[i] > h[i+j] for j in range(1, lb+1))`
-- **Pine:** Manuel for-loop ile her bar için sol+sağ karşılaştırma. `ta.pivothigh()` simple-int istediği için kullanılamadı.
-- **Karar:** `high[lb]` referans noktası, `lb` sol + `lb` sağ bar karşılaştırması. Sadece `barstate.isconfirmed` altında değerlendirilir.
-- **Repaint koruması:** Değerlendirme `lb` bar gecikmeli (sağdaki `lb` barın da kapanması beklenir). Label `bar_index - lb` konumunda.
-
-### 3b. Order Block Detection (T-001)
-
-- **Python:** Son `ob_seq` ardışık ters yönlü mum + breakout mum gövdesi > 1.5×ATR(14)
-- **Pine:** Aynı mantık. `for k = 1 to ob_seq_default` ile geriye dönük tarama.
-- **Body mode:** Python'da `body_mode=True` default. Pine'da open/close ile gövde hesabı.
-- **Swing proximity:** Son swing'e 30 bar mesafe + %1.5 fiyat yakınlığı kontrolü.
-- **Görsel:** `box.new()` ile OB bölgesi çizimi.
-
-### 3c. 1h Bias (T-001)
-
-- **Python:** 1h timeframe'de `analyze()` → trend (CHoCH/BOS tabanlı). Karmaşık yapı kırılımı mantığı.
-- **Pine (Wave 1 basitleştirme):** `request.security(sym, "60", ...)` ile 1h EMA20 eğimi. `lookahead=barmerge.lookahead_off` ile repaint önlendi.
-- **Karar:** Wave 1 için EMA20 yeterli. Wave 2'de tam CHoCH/BOS yapısı eklenecek.
-
-### 3d. Repaint Politikası
-
-| Kural | Uygulama |
-|---|---|
-| Tüm sinyaller `barstate.isconfirmed` altında | ✅ |
-| `request.security()` → `lookahead=barmerge.lookahead_off` | ✅ |
-| Higher-TF değerler sadece kapanmış bar'dan | ✅ |
-| Swing detection `lb` bar gecikmeli (sağ pencere kapansın diye) | ✅ |
-| Tarihsel bar referansları `[N]` (look-ahead yok) | ✅ |
-
----
-
-## 4. Pine v6 Uyumluluk Matrisi
-
-| Özellik | v6 Kullanım | Legacy (KULLANILMAZ) |
+| Konu | V1 (`engine/smc.py`+`signals.py`) | **V2 (bu spec)** |
 |---|---|---|
-| Script tipi | `indicator()` | ~~`study()`~~ |
-| ATR | `ta.atr(14)` | ~~`atr(14)`~~ |
-| EMA | `ta.ema(src, 20)` | ~~`ema(src, 20)`~~ |
-| Box | `box.new()` | — |
-| Label | `label.new()` | — |
-| Table | `table.new()` / `table.cell()` | — |
-| Color | `color.new(hex, transp)` | — |
-| Input | `input.int/float/bool()` | — |
-| Alert | `alertcondition()` | — |
+| Yapı | Tek-geçiş, her bar bağımsız taranır | **Durum makinesi** — setup'lar barlar arası YAŞAR |
+| Giriş | CHoCH **veya** BOS, anlık snap | Sadece **CHoCH** → pullback bekle → **engulfing** teyidi |
+| Confluence | 100 puanlık skor + 55 eşik | **YOK** (`confluence_score=0` placeholder) |
+| AI gate | Gemini doğrulama (≥0.70) — **çevrilemez** | **Yok** — tam çevrilebilir |
+| SL aşırı | clamp'lenir | **>5×ATR ise setup REDDEDİLİR** (clamp yok) |
+
+**Pine'a etkisi:** V2 bir *bekleme-onay* makinesi. Her CHoCH anında işlem
+açılmaz; bir aday (`SetupCandidate`) oluşur, fiyat hedef zone'a gelene ve orada
+engulfing teyidi oluşana kadar bekler. Bu yüzden Pine'da **kalıcı durum**
+(`var`) ve **bar-bar ilerleyen mantık** gerekir — tek satırlık `plotshape`
+yetmez.
 
 ---
 
-## 5. T-001 Bölümü: Swing + OB Core
+## 1. Timeframe zinciri (`config.timeframes`)
 
-**Dosya:** `pine/efloud_signals.pine` (259 satır, 11.9 KB)
+| TF | Pine `request.security` | Rol |
+|---|---|---|
+| **4h** (HTF) | `"240"` | Bias yönü + yapısal SL anchor + TP likidite/FVG kaynakları |
+| **1h** (MTF) | `"60"` | (V2'de opsiyonel; TP likiditesi çoğunlukla 4h'tan) |
+| **15m** (Entry/LTF) | grafik TF'i (chart) | CHoCH tetik + pullback zone + engulfing teyit |
+| **1d** (Daily) | `"1D"` | Makro filtre (V1'de ±5 puan; V2'de sert/soft filtre olarak opsiyonel) |
 
-**İçerik:**
-- [x] `indicator()` header (v6, overlay)
-- [x] Parametre input'ları (§3d): `ob_body_mult`, `conf_thresh`, `use_cb_palette`
-- [x] Renk paleti (§4a + §4b): koyu tema + renk körü alternatif input flag
-- [x] ATR(14) hesaplama
-- [x] 1h bias: `request.security("60", ...)` + EMA20 eğimi
-- [x] Swing High/Low detection: manuel pivot, lookback=4, `barstate.isconfirmed`
-- [x] Order Block detection: bullish + bearish, `box.new()` görsel
-- [x] Swing label'ları: "HH" / "LL"
-- [x] 1h bias table: sağ üst köşe
-- [x] Alert stub'ları (T-002 dolduracak)
-
-**Derleme durumu:** `IMPL_READY, awaiting compile-verify` (VPS'te TradingView yok)
+> **Repaint kuralı (ZORUNLU):** Tüm `request.security()` çağrıları
+> `lookahead=barmerge.lookahead_off`, `gaps=barmerge.gaps_off` ile ve **HTF için
+> kapanmış bar** (`[1]` veya `barstate.isconfirmed`) kullanılarak yapılır.
+> Aksi halde backtest ileriye-bakar ve sahte sonuç üretir.
 
 ---
 
-## 6. Revizyon Geçmişi
+## 2. Paylaşılan SMC primitifleri (V2, bunları v1 `engine/smc.py`'den tüketir)
 
-| Tarih | Bölüm | Değişiklik | Yazar |
-|---|---|---|---|
-| 2026-06-10 | T-001 | İlk sürüm: swing + OB + 1h bias | @hermes |
-| — | T-002 | (bekliyor) | — |
-| — | T-003 | (bekliyor) | — |
+V2 modülleri kendi swing/FVG/yapı tespitini YAPMAZ; `SMCEngine`'in çıktısını
+girdi alır. Dolayısıyla Pine'da bu primitifleri **bir kez** uygulayıp her TF'de
+çağırırız.
+
+### 2.1 Swing tespiti — `smc.py:130-140` (`swing_lb=5`)
+```
+swingHigh[i]  = high[i] tüm high[i±1..5]'ten kesin büyük   (sol+sağ 5 bar)
+swingLow[i]   = low[i]  tüm low[i±1..5]'ten kesin küçük
+```
+Pine: `ta.pivothigh(5,5)` / `ta.pivotlow(5,5)`. **Not:** pivot 5 bar sağ teyit
+gerektirir → swing 5 bar gecikmeyle kesinleşir (repaint-safe, kabul edilebilir).
+
+### 2.2 Yapı kırılımı CHoCH/BOS — `smc.py:144-165`
+```
+trend takip et (BULL/BEAR/UNDEF), son swingHigh (last_sh) ve swingLow (last_sl) tut.
+close > last_sh.price  →  yön=BULL,  kind = (trend∈{BEAR,UNDEF}) ? CHoCH : BOS,  trend=BULL, last_sh temizle
+close < last_sl.price  →  yön=BEAR,  kind = (trend∈{BULL,UNDEF}) ? CHoCH : BOS,  trend=BEAR, last_sl temizle
+```
+**V2 SADECE CHoCH kullanır** (`triggers.py:74`). BOS göz ardı edilir.
+
+### 2.3 FVG tespiti — `smc.py:169-187`
+```
+Bullish FVG (bar i): low[i] > high[i-2]   → {top=low[i], bot=high[i-2], dir=BULL}
+Bearish FVG (bar i): high[i] < low[i-2]   → {top=low[i-2], bot=high[i], dir=BEAR}
+Mitigasyon: BULL → sonraki bir bar low <= bot; BEAR → sonraki bar high >= top
+```
+V2 zone/TP için **mitige OLMAMIŞ HTF FVG** ister (`zones.py`, `tp_calc.py`).
+Pine: FVG'leri `array<box>`/paralel dizilerde tut, mitige olunca işaretle.
+
+### 2.4 OTE bandı — `smc.py:286-294` (`ote_lo=0.618`, `ote_hi=0.786`)
+```
+d = lastSwingHigh - lastSwingLow
+BULL: top = SH - d*0.618 ; bot = SH - d*0.786
+BEAR: top = SL + d*0.786 ; bot = SL + d*0.618
+```
+V2'de zone fallback'i (FVG yoksa). HTF leg üzerinden hesaplanır.
+
+### 2.5 Equal-levels / likidite havuzları — `smc.py:298-354` (`eq_thr=0.1%`)
+Swing'leri 0.1% içinde kümeler → `EqLevel{price, kind=EQH/EQL}`. V2 TP1
+likidite adaylarında kullanılır.
+
+---
+
+## 3. HTF bias çözümü (V2 girdisi `htf_bias`)
+
+`triggers.py:66` — `htf_bias == "UNDEF"` ise **hiç setup üretilmez**. Bias şu
+sırayla çözülür (v1 `signals.py:251-274` ile aynı):
+```
+1. 4h yapı trendi (structure() son trend durumu)
+2. UNDEF ise: 40-bar % değişim slope → > +2% BULL, < -2% BEAR
+3. Hâlâ UNDEF ise: range aktifse range yönü (discount→BULL, premium→BEAR)
+4. Aksi halde: setup yok
+```
+Pine: 4h trendi yoksa `(close[1]/close[40] - 1)*100` ile fallback. Eşik input.
+
+---
+
+## 4. V2 SETUP DURUM MAKİNESİ (çekirdek) — `setup_state.py`
+
+```
+                  CHoCH tetik (§5)
+                        │
+                        ▼
+              ┌──────────────────┐  bars_waited > timeout
+              │ AWAITING_PULLBACK │ ─────────────────────────► EXPIRED
+              └──────────────────┘
+                        │  fiyat zone'a girdi (is_price_in_zone)
+                        ▼
+              ┌──────────────────┐  bars_waited > timeout
+              │      IN_ZONE      │ ─────────────────────────► EXPIRED
+              │  (sticky — zone'  │
+              │   dan çıksa da    │  engulfing teyidi (§6)
+              │   geri dönmez)    │ ─────────────────────────► CONFIRMED → [ENTRY]
+              └──────────────────┘
+```
+
+**Durum kuralları** (`setup_state.py`, agent-map + spec §4.3):
+- `AWAITING_PULLBACK`: her bar `bars_waited++`. `is_price_in_zone(price,zone)`
+  true olunca → `IN_ZONE`.
+- `IN_ZONE`: **yapışkan** — fiyat zone'dan çıksa bile geri DÖNMEZ. `bars_waited`
+  artmaya devam eder. Sadece timeout ile düşer.
+- Timeout: `bars_waited > pullback_timeout_bars` (**8** × 15m ≈ 2 saat) → `EXPIRED`.
+- `IN_ZONE` + engulfing teyit → `CONFIRMED` → giriş emri.
+- Sembol başına cap: `max_pending_per_symbol = 3` aktif aday (`AWAITING_PULLBACK`
+  + `IN_ZONE`). Cap doluysa yeni CHoCH reddedilir (`setup_state.py:37`).
+
+> **Pine port stratejisi:** Pine'da `SetupCandidate`'i paralel `var` dizilerinde
+> tut (`var float[] pendDir`, `pendZoneLow`, `pendZoneHigh`, `pendAnchor`,
+> `pendTriggerPx`, `pendState`, `pendBarsWaited`, `pendTriggerBarIdx`). Her bar
+> kapanışında (`barstate.isconfirmed`): (1) yeni CHoCH adayları ekle (cap kontrol),
+> (2) mevcut adayları ilerlet/expire et, (3) CONFIRMED olanı entry'e çevir ve
+> diziden çıkar. **Indikatörde** `label`/`line` ile çiz; **stratejide**
+> `strategy.entry`/`strategy.exit`. Tek-sembol grafik olduğu için cap pratikte
+> grafikteki aktif aday sayısıdır.
+
+---
+
+## 5. TETİK (CHoCH → SetupCandidate) — `triggers.py:36-128`
+
+Her **15m** yapı kırılımı için:
+```
+1. brk.kind == "CHoCH" değilse        → atla         (BOS göz ardı)
+2. brk.direction != htf_bias          → atla         (bias hizası şart)
+3. brk.idx < recency_cutoff           → atla         (recency filtresi)
+4. yön = BULL?LONG : SHORT
+5. anchor = select_htf_swing_anchor(...) ; None ise → atla   (§7)
+6. zone = build_pullback_zones(...)                          (§8)
+7. zone.source=="OTE" ve zone.low==zone.high → atla (dejenere sıfır-genişlik)
+8. SetupCandidate(state=AWAITING_PULLBACK, bars_waited=0, trigger_bar_ts=brk.idx,
+                  trigger_price=brk.price, htf_swing_anchor=anchor, target_zone=zone)
+```
+
+---
+
+## 6. ZONE seçimi — `zones.py:26-69` (`fvg_priority: true`)
+
+```
+SHORT (yukarı pullback bekle):
+  adaylar = trigger_price ÜSTÜNDEKİ BULL FVG'ler (f.bot > trigger_price)
+  varsa: en yakın = min(f.bot - trigger_price)  →  zone=[f.bot, f.top], source=HTF_FVG
+LONG (aşağı pullback bekle):
+  adaylar = trigger_price ALTINDAKİ BEAR FVG'ler (f.top < trigger_price)
+  varsa: en yakın = max(f.top)                  →  zone=[f.bot, f.top], source=HTF_FVG
+FVG yoksa → fallback OTE bandı (§2.4), source=OTE
+```
+Üyelik: `zone.low <= price <= zone.high` (kapsayıcı, `zones.py:72-74`).
+
+---
+
+## 7. YAPISAL SL ANCHOR — `swing_anchor.py:30-87`
+
+İşlemin **ters tarafındaki en son KIRILMAMIŞ HTF swing**:
+```
+SHORT: aday = swing_highs ; LONG: aday = swing_lows
+sadece swing.idx < trigger_idx (gelecekteki yapıya anchor yok)
+en yeni→eski sırala; her swing için:
+  kırılmış mı? = trigger sonrası bir HTF barı swing'i delmiş mi
+     SHORT: bar.high > swing.price  → kırık
+     LONG:  bar.low  < swing.price  → kırık
+  kırılmamış ilk swing'i döndür
+hiç yoksa → None → setup reddedilir (SLTooFarError ile aynı sonuç)
+```
+> **Ordinal eksen uyarısı** (`swing_anchor.py:13-24`): `trigger_idx` ve
+> `bar.ordinal` aynı bar-pozisyon ekseninden int olmalı (timestamp DEĞİL).
+> Pine'da `bar_index` doğal olarak bunu sağlar.
+
+---
+
+## 8. STOP LOSS formülü — `sl_calc.py:23-64`
+
+```
+buffer = sl_atr_buffer * ATR(14, 15m)            # 0.5 * ATR
+LONG:  structural_sl = min(zone.low,  anchor) - buffer
+SHORT: structural_sl = max(zone.high, anchor) + buffer
+
+stop_dist = |entry - structural_sl|
+min_dist  = min_sl_atr * ATR    # 0.5 * ATR
+max_dist  = max_sl_atr * ATR    # 5.0 * ATR
+
+if stop_dist > max_dist:  SETUP REDDEDİLİR (clamp YOK — yapıyı bozar)
+if stop_dist < min_dist:  SL'yi tabana genişlet:
+        LONG  → entry - min_dist ;  SHORT → entry + min_dist
+else:   structural_sl
+```
+ATR = 15m ATR(14). Pine: `ta.atr(14)` (chart 15m ise doğrudan).
+
+---
+
+## 9. TAKE PROFIT formülü — HİBRİT (`tp_calc.py:38-127` zinciri + `signals.py:519-585` Fibonacci ladder)
+
+Pine `calcTp`: v2 aday zinciri (likidite/FVG) **+** yapı yokken v1 Fibonacci discovery ladder.
+
+```
+risk = |entry - sl|
+min_dist = min_rr * risk        # min_rr = 1.8 (prod) / 1.5 (root)
+
+── TP1 aday zinciri (öncelik: LIQUIDITY > FVG_NEAR; fiyat eşitliğinde LIQUIDITY) ──
+LONG (entry ÜSTÜ):
+   en-yakın EQH (htfEqh, price>entry)                      [LIQUIDITY]
+ + en-yakın HTF swing high (htfSwingHigh, price>entry)     [LIQUIDITY]
+ + BEAR FVG yakın-kenar (bearFvgBot > entry)               [FVG_NEAR]
+SHORT (entry ALTI): ayna — htfEql + htfSwingLow + BULL FVG bullFvgTop  (hepsi <entry)
+
+bestLiq = mesafesi >= min_dist olan en-yakın LIQUIDITY; bestFvg = aynısı FVG_NEAR.
+tp1:
+   ikisi de varsa → daha yakını (eşit/belirsiz yakınlıkta LIQUIDITY; FVG yalnız STRICTLY yakınsa)
+   yalnız biri varsa → o
+   aday VAR ama hiçbiri >= min_dist → tp1 = na  (InsufficientTPDistance → setup RED)
+   HİÇ aday yoksa → Fibonacci price discovery: tp1 = entry ± max(min_rr, fibTp1)*risk
+                    (fibTp1=1.272; min R:R'yi koruyacak şekilde clamp), isDiscovery=true
+
+── TP2 ──
+isDiscovery → tp2 = entry ± fibDiscTp2*risk   (2.618)
+aksi halde:
+  LONG: tp1 ötesindeki BEAR FVG far-kenar (bearFvgTop > tp1) varsa → o   [FVG_FAR]
+        yoksa fib_tp2 = entry + fib_ext*risk ; (fib_tp2 > tp1) ise FIB_EXT, değilse na
+  SHORT: ayna (bullFvgBot < tp1 ; entry - fib_ext*risk)
+Değişmez kural: TP2 > TP1 (LONG) / TP2 < TP1 (SHORT) kesin, veya TP2 = na → TEK HEDEF modu.
+```
+- `fibTp1` ≈ **1.272** (price discovery TP1; `signals.py:521/563`); `min_rr` < 1.272 değilse `max()` clamp devreye girer.
+- `fibDiscTp2` ≈ **2.618** (discovery TP2; `signals.py:583`).
+- `fib_ext` ≈ **1.618** (yapısal TP2; v1 varsayılanı).
+- **EQH/EQL** (`htfEqh`/`htfEql`): `htfBundle`'da ardışık iki pivot `eqThr` (%0.1) içindeyse oluşur — `smc.py:308-353 liquidity_pools` küme mantığının tek-skaler karşılığı.
+- TP2 = na ise: lifecycle TP1'de **tam kapanış** yapar (50/50 ladder YOK).
+- TP2 varsa: TP1'de %50, TP2'de kalan %50 (strateji versiyonunda).
+
+---
+
+## 10. RED nedenleri (`exceptions.py`) → Pine'da "setup düşür"
+
+| Durum | Tetik | Pine karşılığı |
+|---|---|---|
+| `SLTooFarError` | stop_dist > 5×ATR | adayı oluşturma / düşür |
+| anchor=None | kırılmamış HTF swing yok | adayı oluşturma |
+| `InsufficientTPDistanceError` | yapısal TP adayları var ama hiçbiri min R:R'ye uzak değil | `calcTp` `tp1=na` döner → `tpOk` false → setup fire etmez |
+| timeout | bars_waited > 8 | EXPIRED, diziden çıkar |
+| cap | sembolde 3 aktif aday | yeni CHoCH'u reddet |
+| TP2 invalid | fib_tp2 ≤ tp1 | TP2=None (tek hedef) |
+
+---
+
+## 11. Config → Pine `input.*` (AYNI isimler indikatör+strateji)
+
+| Pine input | Default | Kaynak |
+|---|---|---|
+| `swingLb` | 5 | `smc.py:109` |
+| `obSeq` | 5 | `smc.py:109` |
+| `rangeLb` | 50 | `smc.py:111` |
+| `oteLo` / `oteHi` | 0.618 / 0.786 | `smc.py:111-112`, `smc_v2.ote_band` |
+| `pullbackTimeoutBars` | 8 | `config smc_v2` |
+| `maxPendingPerSymbol` | 3 | `setup_state.py:37` |
+| `requireConfirmation` | true | `config smc_v2` |
+| `slAtrBuffer` | 0.5 | config `risk.sl_atr_buffer` |
+| `minSlAtr` | 0.5 | config `safety.min_sl_atr` |
+| `maxSlAtr` | 5.0 | config `safety.max_sl_atr` |
+| `minRr` | 1.8 | `config.phase2_1k risk.min_rr` |
+| `eqThrPct` | 0.1 | `smc.py` eq_thr (EQH/EQL kümeleme) |
+| `fibTp1` | 1.272 | `signals.py:521/563` (price discovery TP1) |
+| `fibDiscTp2` | 2.618 | `signals.py:583` (discovery TP2) |
+| `fibExt` | 1.618 | v1 default |
+| `atrLen` | 14 | `smc.py` |
+| `htfSlopePct` | 2.0 | bias fallback |
+| `dailyFilterStrict` | false | v1 davranışı |
+| `riskPerTradePct` | 1.0 | strateji pozisyon boyutu |
+| `moveSlToBe` | true | strateji: TP1 sonrası SL → break-even (entry) |
+
+---
+
+## 12. ÇEVRİLEMEYEN / SAPMA noktaları (dürüst liste)
+
+1. **State persistence** (`setup_state.json`, atomik yazma): Pine'da kalıcı disk
+   yok. Backtest'te `var` durumu oturum-içi yaşar; bot restart senaryosu Pine'da
+   YOK → backtest'te bu fark görünmez (kabul edilebilir).
+2. **Engulfing-only teyit:** Spec §4.1 CHoCH/OB-tap'tan bahsetse de
+   `confirmation.py` sadece **engulfing** uygular. Pine de engulfing-only olacak
+   (MVP sadakati).
+3. **Çoklu-sembol cap:** V2 sembol başına 3 aday tutar; Pine tek grafik → cap
+   o grafikteki adaylar. Portföy seviyesi risk (toplam pozisyon) Pine'da yok.
+4. **`risk_per_trade_pct` pozisyon boyutu:** Pine `strategy`'de
+   `strategy.entry qty` ile simüle edilir; gerçek borsa marj/leverage birebir değil.
+5. **MTF(1h) rolü:** V2'de zayıf; spec'te 4h ağırlıklı. Pine'da 1h opsiyonel.
+6. **TP1 likidite kümeleri:** Python tüm EQH/EQL kümelerini + tüm swing'leri tarar; Pine `htfBundle`
+   skaler sınırı nedeniyle (request.security dizi döndüremez) yön başına **tek en-yakın** swing +
+   **tek skaler** EQH/EQL + FVG_NEAR yakın-kenarını taşır (3 skaler aday). Tam küme dizileri yok.
+   **EQH/EQL tespiti pencere-bazlı:** yeni pivot, son `eqWindow`(5) pivotun herhangi biriyle
+   `eqThr` (%0.1) içindeyse eşit-seviye sayılır — ardışık-OLMAYAN eşitlikleri de yakalar
+   (internal `var float[]` ring buffer; dönüş yine tek skaler `lastEqh`/`lastEql`).
+7. **SL → break-even (strateji):** `moveSlToBe=true` iken TP1 hedefine ulaşıldığında kalan
+   (runner) pozisyonun stop'u entry'e çekilir. V1 spec'inde yoktu; risk yönetimi iyileştirmesi.
+   Sadece strateji versiyonunda (indikatör pozisyon yaşam döngüsü tutmaz).
+
+---
+
+## 13. İndikatör ↔ Strateji senkronu (ZORUNLU)
+
+- İki dosya **aynı input isimleri** ve **aynı hesaplama fonksiyonlarını** kullanır.
+- Mantık değişirse HER İKİ dosya güncellenir (CLAUDE.md kuralı).
+- İndikatör: `plotshape` (CHoCH tetik), `box` (zone), `line`+`label` (entry/SL/TP1/TP2),
+  `alertcondition` (her giriş/çıkış).
+- Strateji: `strategy.entry` (CONFIRMED'da), `strategy.exit` (SL + TP1/TP2 ladder),
+  `commission_value=0.04`, `slippage=1`.
+
+---
+
+## 14. Onay sonrası sıradaki adım
+
+Bu spec onaylandıktan sonra **Faz B**: `pine/efloud_signals.pine` (indikatör)
+üretilir → TradingView MCP ile enjekte/derle/sıfır-hata → `pine_save`.
+Sonra **Faz C**: `pine/efloud_strategy.pine` (backtest).
+
+> **Açık karar:** `minRr` default'u **1.8** (üretim `config.phase2_1k`) mı yoksa
+> **1.5** (root `config.yaml`) mi olsun? Üretim davranışına sadık kalmak için
+> 1.8 öneriyorum.
+
+---
+---
+
+# EK A — V1 PORT (confluence makinesi)
+
+> **Kaynak:** `engine/smc.py` + `engine/signals.py` + `engine/confluence.py`
+> **Dosyalar:** `pine/efloud_signals_v1.pine` (indikatör) + `pine/efloud_strategy_v1.pine` (strateji)
+> **Amaç:** V2 ile **yan yana karşılaştırma**. V1, üretimde V2'den ÖNCE çalışan
+> tek-geçiş confluence mantığıdır. Bu ek, ana spec'in (§1-14) V2 odağını
+> bozmadan V1 portunu belgeler.
+
+## A.0 — V1 ↔ V2 özet (bkz. §0 tablosu)
+
+| Konu | **V1 (bu ek)** | V2 (ana spec) |
+|---|---|---|
+| Çekirdek | Tek-geçiş, her bar bağımsız taranır | Durum makinesi (setup barlar arası yaşar) |
+| Giriş tetiği | CHoCH **veya** BOS, anlık snap | Sadece CHoCH → pullback → engulfing |
+| Skorlama | **Confluence 0-100, eşik 55** | YOK |
+| AI gate | Gemini ≥0.70 (**çevrilemez**) | Yok |
+| SL aşırı | **clamp** (güvenlik mesafesi) | >5×ATR → setup RED |
+| minRr | **1.5** | 1.8 |
+
+## A.1 — 4-TF akış (`signals.py:215-661`)
+
+1. **Daily (1d)** — opsiyonel makro filtre. Soft: ±5 confluence; Strict: ters yön → reddet. Slope fallback: 30-bar %±5.
+2. **HTF (4h)** — bias (yapısal trend + slope fallback %±2), aktif BULL/BEAR FVG, swing likidite.
+3. **MTF (1h)** — CHoCH onayı (yön hizalı → +20 confluence).
+4. **Entry (15m)** — aligned CHoCH/BOS tetik → confluence skoru → eşik → SL/TP/RR.
+
+## A.2 — Confluence formülü (`confluence.py` BİREBİR)
+
+```
+score = 0
+bias aligned (is_long ↔ BULL / short ↔ BEAR)   +25   ← filtre garantisi: daima
+MTF CHoCH (yön hizalı)                          +20
+Price in HTF FVG                                +15
+Price at Order Block                            +10
+   └ OB near swing (±%1.5)                       +5
+   └ Price at OB EQ (±%0.3)                       +3
+Price in OTE (0.618–0.786)                      +10
+SFP likidite süpürmesi (±10 bar)                +10
+Doğru zone (long+discount / short+premium)       +5
+Range deviation                                  +5
+─────────────────────────────────────────────
+AI macro sentiment (manuel input ↔ Gemini)      ±5
+Daily aligned / diverging                        ±5
+score = clamp(0, 100)         eşik: min_confluence = 55
+```
+
+## A.3 — Order Block (`smc.py:191-252`)
+
+- Breakout mumu body `> 1.5 × SMA(high-low, 14)` (true-range ATR DEĞİL — Python `(h-l).rolling(14)`).
+- Ardışık ≤`obSeq`(5) ters mum; body_mode: BULL OB top=`open`, bot=`close` (bear mumlar); BEAR OB ayna.
+- Mitigasyon → breaker: BULL OB `close < bot` ile; BEAR `close > top` ile. Pine'da mitige OB diziden çıkarılır.
+- `near_swing`: OB kenarı son ters swing'e ±%1.5.
+
+## A.4 — SL (`signals.py:452-535`)
+
+```
+buffer_mult = close_spread > 1.2 × hl_spread ? 0.75 : 0.5   # volatilite-hizalı
+buffer = buffer_mult × ATR(14, true-range)
+LONG:  local_lo = lowest(low,20)[break öncesi] − buffer
+       sl = max(son_swing_low, local_lo)      # daha tight (yüksek) tarafı seç
+       if deviation: sl = min(sl, range.lo − buffer)
+       sl = min(sl, entry × 0.999)            # güvenlik clamp (≥%0.1 alt)
+SHORT: ayna
+```
+> **V2 farkı:** V1 SL'yi **clamp**'ler (asla reddetmez). V2 `>5×ATR` ise setup'ı reddeder.
+
+## A.5 — TP (`signals.py:498-585`)
+
+```
+risk = |entry − sl| ; min_tp = entry ± risk × min_rr (1.5)
+TP1:
+  deviation       → range.eq  (clamp: en az min_tp)
+  ranging (HTF UNDEF) + likidite → en yakın HTF swing likiditesi
+  trending        → en yakın {FVG kenarı, swing likidite} ≥ min_tp
+  hiçbiri yok     → entry ± risk × 1.272   (price discovery)
+TP2:
+  deviation                       → range extreme (hi/lo)
+  discovery VEYA ranging-likidite → entry ± risk × 2.618   (F1: Python is_discovery = htf_above_targets boş → ranging dalı da buraya girer)
+  trending-yapısal-hedef          → entry ± risk × fib_ext (1.618)
+Filtre: TP1 doğru tarafta + rr1 ≥ min_rr
+```
+
+## A.6 — Pullback refinement (`signals.py:372-383`)
+
+OB içindeyse: LONG `entry = min(ob.top, trigPx)` / SHORT `max(ob.bot, trigPx)`.
+Değilse OTE içindeyse: OTE kenarına çek. (Confluence skoru **orijinal** break fiyatında hesaplanır, refinement SONRA.)
+
+## A.7 — ÇEVRİLEMEYEN / SAPMA (V1'e özel — dürüst liste)
+
+1. **Gemini AI Structure Validation** (confidence ≥0.70 gate, `signals.py:120-212`) → ÇEVRİLEMEZ. Yerine kural-tabanlı confluence eşiği + manuel `aiSentiment` input'u (RISK_ON/OFF → ±5).
+2. **Tüm-geçmiş tarama → bar-bar:** Python her çağrıda tüm break'leri tarar (recency penceresi gerekir); Pine break OLUŞTUĞU bar'da değerlendiriri → recency içkin, `recencyBars` input'u parite-amaçlı.
+3. **HTF likidite TP:** Python tüm swing-high + eq-high tarar; Pine en-yakın tek HTF swing'e indirger (V2 §12 ile aynı sadeleştirme).
+4. **MTF CHoCH:** Python son 5 CHoCH; Pine en-son MTF CHoCH yönü.
+5. **Range deviation ÖLÜ KOD:** `smc.py:280-282` range-min'i CURRENT bar dahil hesaplar → `dev_bull/dev_bear` pratikte HİÇ tetiklenmez. Pine portu **niyeti** yansıtır (prior-range, current hariç penetrasyon+reclaim); `useIntendedDeviation=false` ile Python'a sadık (hep false) moda dönülür. **→ Bilinçli davranış farkı. (FIXED 2026-05-30: Default false yapılarak Python ölü-kod davranışı ile birebir hizalanmıştır - S4).**
+6. **PA Level confluence** (Major Opening / Stacked Zone, `signals.py:422-436`, +5/+8) → inject edilen harici seviye gerektirir, ATLANDI.
+7. **Target-Inversion Prevention (Y5):** Python `_enforce_tp2_beyond_tp1` ile TP2'yi daima TP1'den uzağa zorlar. Pine V1 signal ve strategy dosyalarına bu guard birebir eklenmiştir. **(FIXED 2026-05-30: Borsa immediate trigger rejects koruması - S3).**
+
+## A.8 — V1 input'ları (indikatör ↔ strateji AYNI isim)
+
+| Pine input | Default | Kaynak |
+|---|---|---|
+| `swingLb` | 5 | `smc.py:109` |
+| `obSeq` | 5 | `smc.py:109` |
+| `rangeLb` | 50 | `smc.py:111` |
+| `oteLo` / `oteHi` | 0.618 / 0.786 | `smc.py:111-112` |
+| `htfSlope` | 2.0 | bias fallback |
+| `minConfluence` | **50** (FIXED 2026-05-30) | `config.phase2_1k.yaml:96` (production-active - S1) |
+| `aiSentiment` | NONE | Gemini sentiment karşılığı (manuel) |
+| `atrLen` | 14 | `smc.py` |
+| `slAtrBuffer` / `volAtrBuffer` | 0.5 / 0.75 | `signals.py:472,477` |
+| `minRr` | **1.8** (FIXED 2026-05-30) | `config.phase2_1k.yaml:95` (production-active - S2) |
+| `fibExt` | 1.618 | `signals.py:223` |
+| `recencyBars` | **40** (FIXED 2026-05-30) | `config.phase2_1k.yaml:97` (production-active - S2) |
+| `useDaily` / `dailyStrict` | false / false | `signals.py` opsiyonel 4. TF |
+| `useIntendedDeviation` | **false** (FIXED 2026-05-30) | Python ölü kod uyumu (S4) |
+| `riskPerTradePct` (strateji) | 1.0 | pozisyon boyutu |
+| `tp1ClosePct` (strateji) | 50.0 | TP1'de %50 kapanış |
+| `moveSlToBe` (strateji) | true | TP1 sonrası SL → break-even (entry) |
+| `showSmcCtx` (indikatör) | true | sinyalde eşleşen OB kutusu + OTE bandı + LIQ çizgisi |
+
+## A.9 — İndikatör ↔ Strateji senkronu (V1)
+
+V2 ile aynı kural (§13): aynı input isimleri + aynı hesap fonksiyonları (`htfBundle`,
+`mtfBundle`, OB/SFP/OTE/range, `calcSl`/`calcTp` mantığı). Mantık değişirse her iki
+V1 dosyası birlikte güncellenir. Strateji: `strategy.entry` (CONFIRMED'da, risk-bazlı
+qty), `strategy.exit` (TP1 %50 + TP2 %50 ladder, ortak SL; `moveSlToBe`=true ise TP1 sonrası
+SL break-even'a çekilir), `commission=0.04`, `slippage=1`. İndikatörde `showSmcCtx` ile sinyalde
+eşleşen OB/OTE/LIQ görseli çizilir (strateji-only `moveSlToBe` ve indikatör-only `showSmcCtx`
+pozisyon/görsel yaşam döngüsü farkı; senkron kuralı paylaşılan hesap mantığı için geçerli).
