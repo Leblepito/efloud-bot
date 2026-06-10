@@ -57,13 +57,18 @@ efloud-bot'un çekirdek SMC (Smart Money Concepts) trade mantığını TradingVi
 
 ## 3. Teknik Tasarım
 
-### 3a. Mimari
+### 3a. Mimari (v1.3 — path düzeltmesi, Claude review)
 
 ```
-pine/efloud_signals.pine      ← INDICATOR: overlay, görsel sinyaller (ÜCRETSİZ)
-pine/efloud_strategy.pine     ← STRATEGY: backtest + alert (PREMIUM)
-pine/PINE_SPEC.md             ← Teknik harita, Python→Pine çeviri kararları
+pine/u2algo/wave1_signals.pine   ← INDICATOR: overlay, görsel sinyaller (ÜCRETSİZ)
+pine/u2algo/wave1_strategy.pine  ← STRATEGY: backtest + alert (PREMIUM, T-003)
+pine/u2algo/WAVE1_SPEC.md        ← Teknik harita, Python→Pine çeviri kararları
 ```
+
+> ⚠️ v1.2'deki orijinal path'ler (`pine/efloud_signals.pine` vb.) mevcut **SMC v2
+> sadık port** dosyalarıyla (PR #104/#105 merged, compile-verified 2026-05-30,
+> PR #148 TV publish temeli) ÇAKIŞIYORDU. Wave-1 ayrı ürün → `pine/u2algo/`
+> namespace'i altına alındı; mevcut port dosyalarına DOKUNULMAZ.
 
 ### 3b. Veri Akışı
 
@@ -192,6 +197,7 @@ pine/PINE_SPEC.md             ← Teknik harita, Python→Pine çeviri kararlar�
 |---|---|---|---|
 | 2026-06-07 | 1.0 | İlk sürüm | @claude |
 | 2026-06-10 | 1.2 | R-001+R-002 entegre: kapsam daraltma (4h/daily → Wave 2), görsel standartlar eklendi, CAC/gelir gate'leri eklendi, OOS backtest kriteri eklendi | @hermes |
+| 2026-06-10 | 1.3 | §3a path düzeltmesi: Wave-1 dosyaları `pine/u2algo/` altına (mevcut SMC v2 port ile çakışma giderildi, port restore edildi) | @claude (review) |
 
 ---
 

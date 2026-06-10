@@ -10,22 +10,24 @@
 | Aktif epic | 1 (P-001) |
 | Tamamlanan epic | 0 |
 | Toplam görev | 3 (T-001, T-002, T-003) |
-| Tamamlanan görev | 0 |
-| Claim edilmiş görev | 1 (T-001) |
+| Tamamlanan görev | 1 (T-001 ✅ 2026-06-10, G-T1 compile PASS) |
+| Claim edilmiş görev | 0 |
 
 ## P-001 Görev Skoru
 
 | Görev | Açıklama | Durum | Claim |
 |---|---|---|---|
-| T-001 | Swing detection + OB core (Pine Script) | 🟡 IN_PROGRESS | @hermes (2026-06-10) |
+| T-001 | Swing detection + OB core (Pine Script) | ✅ DONE (G-T1 PASS, @claude compile-verify) | @hermes (2026-06-10) |
 | T-002 | MTF confluence + SL/TP hesaplama | ⬜ BACKLOG | — |
 | T-003 | Strateji backtest + görsel validasyon | ⬜ BACKLOG | — |
 
 ## Sprint Görünümü
 
 **Sprint 1 (2026-06-10 → 2026-06-13):**
-- [ ] T-001: Swing detection + OB core
-- [ ] LLTODO scaffolding → master PR (GÖREV 2)
+- [x] T-001: Swing detection + OB core ✅ IMPL_READY
+- [ ] LLTODO scaffolding → master PR (GÖREV 2) — #177 merged ✅
+- [x] Prod reconciliation runbook ✅
+- [x] Strategy-opt re-verify report ✅
 
 **Sprint 2 (2026-06-14 → 2026-06-17):**
 - [ ] T-002: MTF confluence + SL/TP
