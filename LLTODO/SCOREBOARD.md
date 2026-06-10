@@ -17,7 +17,7 @@
 
 | Görev | Açıklama | Durum | Claim |
 |---|---|---|---|
-| T-001 | Swing detection + OB core (Pine Script) | 🟡 IN_PROGRESS | @hermes (2026-06-10) |
+| T-001 | Swing detection + OB core (Pine Script) | 🟡 IMPL_READY | @hermes (2026-06-10) |
 | T-002 | MTF confluence + SL/TP hesaplama | ⬜ BACKLOG | — |
 | T-003 | Strateji backtest + görsel validasyon | ⬜ BACKLOG | — |
 

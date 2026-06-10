@@ -24,7 +24,13 @@
 ### Aktif Durum
 
 **Durum:** `CONSENSUS_REACHED` (2026-06-10)
-**Sonraki adım:** T-001'i claim et → FAZ 3 implement başlat
+**Sonraki adım:** T-001 IMPL_READY → compile-verify (G-T1 gate) → T-002 başlat
+
+### Heartbeat
+
+```
+2026-06-10  IN_PROGRESS      @hermes  T-001 IMPL_READY: pine/efloud_signals.pine (259 satır) + PINE_SPEC.md. Branch: feat/p001-t001-pine-indicator. Swing detection (manuel pivot lb=4), OB (seq=5, body>1.5×ATR), 1h bias (EMA20 overlay). G-T1 compile gate BEKLİYOR (VPS'te TV yok).
+```
 
 ### Review Özeti
 
@@ -40,7 +46,7 @@
 | FAZ 0 | Spec + plan yazımı | ✅ DONE |
 | FAZ 1 | External review (R-001, R-002) | ✅ DONE |
 | FAZ 2 | Consensus + plan revizyonu | ✅ CONSENSUS_REACHED |
-| FAZ 3 | Implementasyon (T-001, T-002, T-003) | ⏳ BEKLİYOR |
+| FAZ 3 | Implementasyon (T-001 ✅ IMPL_READY, T-002, T-003) | 🟡 IN_PROGRESS |
 | FAZ 4 | UltraReview (UR-001 @claude) | ⬜ BEKLİYOR |
 | FAZ 5 | Master merge + deploy | ⬜ BEKLİYOR |
 

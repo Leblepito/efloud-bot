@@ -11,12 +11,12 @@
 
 ## Çıktılar
 
-- [ ] `pine/efloud_signals.pine` — INDICATOR iskeleti (v6 syntax, koyu tema palette)
-- [ ] `pine/PINE_SPEC.md` — Python→Pine teknik çeviri haritası (başlangıç)
-- [ ] Swing detection fonksiyonu: lookback=4, sol+sağ pivot
-- [ ] Order Block tanımlama: 5 ardışık mum, body > 1.5× ATR(14)
-- [ ] 1h bias overlay: `request.security()` ile higher-TF trend yönü
-- [ ] Görsel çıktılar: swing label'ları, OB box'ları, 1h trend çizgisi
+- [x] `pine/efloud_signals.pine` — INDICATOR iskeleti (v6 syntax, koyu tema palette)
+- [x] `pine/PINE_SPEC.md` — Python→Pine teknik çeviri haritası (başlangıç)
+- [x] Swing detection fonksiyonu: lookback=4, sol+sağ pivot (manuel)
+- [x] Order Block tanımlama: 5 ardışık mum, body > 1.5× ATR(14)
+- [x] 1h bias overlay: `request.security()` ile higher-TF trend yönü
+- [x] Görsel çıktılar: swing label'ları, OB box'ları, 1h trend çizgisi + bias table
 
 ## Acceptance Kriterleri
 
@@ -39,3 +39,4 @@
 | Zaman | Durum | Not |
 |---|---|---|
 | 2026-06-10 | STARTED | T-001 claimed by @hermes |
+| 2026-06-10 | IMPL_READY | pine/efloud_signals.pine (259 satır, 11.9KB) + PINE_SPEC.md yazıldı. Swing manuel pivot, OB box, 1h bias table. awaiting compile-verify (G-T1 gate). Branch: feat/p001-t001-pine-indicator |
