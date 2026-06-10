@@ -1,0 +1,148 @@
+# ══════════════════════════════════════════════════════════════════
+# FAZ 2.1 — Testnet Zone-Touch Experiment Configuration
+# ══════════════════════════════════════════════════════════════════
+# Gated OFF on mainnet. Active only on testnet for shadow/immediate entry timing verification.
+# Runs SMC v2 in direct zone-touch mode (require_confirmation: false).
+#
+# ⚠️ DANGER — DO NOT set `testnet: false` in this file. This config combines
+#   testnet:true + dry_run:false + smc_v2_symbols:["*"] + require_confirmation:false
+#   + smc_v2_shadow:false. A single flip of testnet→false would place LIVE immediate-entry
+#   orders on ALL symbols (only the EFLOUD_ALLOW_MAINNET=1 env gate would stand between
+#   this and real capital). Mainnet activation requires a separate, reviewed config +
+#   operator sign-off — never repurpose this experiment file.
+
+exchange:
+  name: binance
+  market_type: futures
+  api_key: ""              # Railway env: BINANCE_API_KEY
+  api_secret: ""           # Railway env: BINANCE_API_SECRET
+  testnet: true            # TESTNET ONLY
+  leverage: 5              # 5x kaldıraç
+  margin_mode: ISOLATED    # isolated margin isolation
+  hedge_mode: false        # one-way mode
+
+# ── SMC v2 timing (PR #C) ──
+engine:
+  smc_version: v2               # v2 active
+  smc_v2_symbols: ["*"]         # Whitelist all symbols
+  smc_v2_shadow: false          # Placing live orders on testnet for timing verification
+
+# ── SMC v2 tunables (PR #S6) ──
+smc_v2:
+  pullback_timeout_bars: 8      # 15m bars (~2h until SetupCandidate expires)
+  fvg_priority: true            # FVG before OTE for zone selection
+  ote_band: [0.618, 0.786]      # OTE fib levels for fallback zone
+  require_confirmation: false   # direct entry on zone-touch (disabled confirmation)
+  max_pending_per_symbol: 3     # SetupCandidate cap per symbol
+
+# ── 10 majör sembol ──
+symbols:
+  mode: fixed
+  fixed_core:
+    - BTC/USDT
+    - ETH/USDT
+    - XRP/USDT
+    - DOGE/USDT
+    - SOL/USDT
+    - BNB/USDT
+    - TRX/USDT
+    - LINK/USDT
+    - BCH/USDT
+    - ADA/USDT
+  dynamic_top_n: 0
+  dynamic_exclude: []
+  refresh_dynamic_hours: 24
+
+timeframes:
+  profile: mid
+  htf: 4h
+  mtf: 1h
+  entry: 15m
+  kline_limit: 500
+
+structure:
+  swing_lookback: 5
+  ob_sequential: 5
+  body_mode: true
+  eq_threshold_pct: 0.1
+  range_lookback: 50
+
+fibonacci:
+  ote_lower: 0.618
+  ote_upper: 0.786
+  ext_tp2: 1.618
+
+risk:
+  risk_per_trade_pct: 1.0
+  max_open_positions: 10
+  min_rr: 1.8
+  min_confluence: 50
+  recency_bars: 40
+  sl_atr_buffer: 0.5
+  daily_filter_strict: false
+  position_size_calculation: legacy
+  max_loss_per_trade_usdt: 20
+  target_stop_distance_pct: 5
+
+operation:
+  check_interval_sec: 30
+  dry_run: false
+  watch_only: false
+  symbol_scan_mode: sequential
+  parallel_workers: 3
+  log_level: INFO
+  log_file: ./logs/efloud_testnet_experiment.log
+  state_dir: ./state_testnet_experiment
+  reports_dir: ./reports_testnet_experiment
+
+llm:
+  provider: minimax
+  model: MiniMax-M2.7-highspeed
+
+kronos:
+  enabled: false
+  run_on: [trade_open]
+  data_source: yfinance
+  interval: "1h"
+  period: "1mo"
+  pred_len: 12
+  max_concurrency: 1
+  cooldown_sec: 3600
+  synth_timeout_sec: 30
+  prewarm_on_start: true
+  show_numeric_confidence: false
+
+safety:
+  daily_loss_limit_pct: 10.0
+  weekly_drawdown_limit_pct: 25.0
+  consecutive_loss_limit: 3
+  consecutive_pause_min: 120
+  starting_balance: 2000
+  adx_trend_threshold: 25
+  adx_range_threshold: 20
+  volatile_atr_mult: 2.5
+  max_position_notional_pct: 2.0
+  max_total_exposure: 1.0
+  max_holding_hours: 24
+  max_pyramid_adds: 0
+  min_sl_atr: 0.5
+  max_sl_atr: 5.0
+  emergency_balance_threshold: 1800
+  reserve_balance: 0
+  min_seconds_between_symbol_fetches: 0.5
+  max_entry_drift_pct: 1.0
+  enable_pnl_audit: true
+  pnl_audit_every_cycles: 20
+  enable_post_placement_verify: true
+  verify_delay_sec: 2.5
+  verify_max_attempts: 3
+  rollback_on_sl_failure: true
+  reverse_min_profit_pct: 0.2
+  pause_new_entries: false
+  orphan_protection:
+    enabled: true
+    mode: place_missing_sl
+    default_sl_pct: 2.0
+    max_auto_protect_per_cycle: 1
+    min_distance_to_mark_pct: 0.5
+    require_tp_present: false

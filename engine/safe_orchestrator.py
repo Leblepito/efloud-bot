@@ -260,11 +260,28 @@ class SafeOrchestrator:
             state_dir=state_dir,
         )
 
+        # Bounded executor for async review tasks
+        import concurrent.futures
+        import threading
+        self._review_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+        self._in_flight_reviews = set()
+        self._in_flight_lock = threading.Lock()
+
     def _get_planner(self, symbol: str) -> ScenarioPlanner:
         """Sembol başına ScenarioPlanner — senaryolar karışmasın."""
         if symbol not in self._planners:
             self._planners[symbol] = ScenarioPlanner()
         return self._planners[symbol]
+
+    def shutdown(self):
+        """Shutdown the executor for background reviews."""
+        try:
+            self._review_executor.shutdown(wait=False)
+        except Exception:
+            pass
+
+    def __del__(self):
+        self.shutdown()
 
     def _restore_state(self):
         """Startup'ta önceki state'i yükle."""
@@ -478,53 +495,188 @@ class SafeOrchestrator:
 
     # ── Trade journal hooks ───────────────────────────────────────────────
 
-    def _journal_record_entry(self, pos: Position,
-                               agent_review: Optional[dict] = None) -> None:
-        """Record a freshly-opened position to the trade journal.
+    def _journal_record_entry(
+        self,
+        pos: Position,
+        agent_review: Optional[dict] = None,
+        signal_entry_price: float = 0.0,
+        actual_fill_price: float = 0.0,
+        zone_mid: float = 0.0,
+        ts_signal: Optional[str] = None,
+        ts_fill: Optional[str] = None,
+    ) -> None:
+        """Record a freshly-opened position to the trade journal with telemetry.
 
         No-op when self.trade_journal is None (backwards-compat for backtest
-        and unit-test paths that don't wire a journal). Snapshot enrichment
-        (htf_bias, intent_score, confluence) is intentionally minimal here;
-        a follow-up PR will feed those from the signal context. The
-        minimum-viable snapshot is enough to make Phase 0 evidence
-        extraction return journal_rows > 0.
-
-        ``agent_review`` (canonical A7) is the AgentTeam verdict produced
-        before this position opened, so post-mortem analysis can
-        correlate team verdicts with realised PnL. ``None`` when the
-        team was disabled or didn't run for this symbol.
+        and unit-test paths that don't wire a journal).
         """
         if self.trade_journal is None:
             return
-        if not pos.entries:
-            return
-        entry = pos.entries[0]
+
+        entries = getattr(pos, "entries", None)
+        if entries:
+            entry = entries[0]
+            entry_timestamp = entry.timestamp
+            entry_price = entry.price
+            position_size = entry.size
+        else:
+            entry_timestamp = getattr(pos, "opened_at", None) or datetime.utcnow().isoformat()
+            entry_price = getattr(pos, "entry", 0.0)
+            position_size = getattr(pos, "size", 0.0)
+
+        if actual_fill_price == 0.0:
+            actual_fill_price = entry_price
+        if signal_entry_price == 0.0:
+            signal_entry_price = entry_price
+
+        # Calculate signed slippage_pct (LONG: (fill-signal)/signal*100, SHORT: (signal-fill)/signal*100; +=adverse)
+        slippage_val = 0.0
+        if signal_entry_price > 0.0:
+            if pos.direction == "LONG":
+                slippage_val = ((actual_fill_price - signal_entry_price) / signal_entry_price) * 100.0
+            else:
+                slippage_val = ((signal_entry_price - actual_fill_price) / signal_entry_price) * 100.0
+
+        # Calculate latency_ms (measures bar-open to order-fill latency, including the candle period)
+        latency_val = 0.0
+        if ts_signal and ts_fill:
+            t_sig = None
+            t_fil = None
+            try:
+                sig_str = ts_signal
+                if sig_str.endswith('Z'):
+                    sig_str = sig_str[:-1] + '+00:00'
+                t_sig = datetime.fromisoformat(sig_str)
+            except Exception:
+                pass
+            try:
+                fil_str = ts_fill
+                if fil_str.endswith('Z'):
+                    fil_str = fil_str[:-1] + '+00:00'
+                t_fil = datetime.fromisoformat(fil_str)
+            except Exception:
+                pass
+            if t_sig and t_fil:
+                if t_sig.tzinfo is not None and t_fil.tzinfo is None:
+                    t_sig = t_sig.replace(tzinfo=None)
+                elif t_fil.tzinfo is not None and t_sig.tzinfo is None:
+                    t_fil = t_fil.replace(tzinfo=None)
+                latency_val = (t_fil - t_sig).total_seconds() * 1000.0
+
+        trade_id = getattr(pos, "id", None) or getattr(pos, "order_id", "unknown_id")
+        initial_sl = getattr(pos, "initial_sl", None)
+        if initial_sl is None:
+            initial_sl = getattr(pos, "sl", 0.0)
+        scenario_id = getattr(pos, "scenario_id", None)
+
         snap = TradeSnapshot(
-            trade_id=pos.id,
+            trade_id=trade_id,
             symbol=pos.symbol,
             direction=pos.direction,
             timeframe="",
-            entry_timestamp=entry.timestamp,
-            entry_price=entry.price,
-            sl_initial=pos.initial_sl,
+            entry_timestamp=entry_timestamp,
+            entry_price=entry_price,
+            sl_initial=initial_sl,
             tp1_initial=pos.tp1,
             tp2_initial=pos.tp2,
-            position_size=entry.size,
+            position_size=position_size,
             htf_bias="",
             intent_score_entry=0,
             intent_label_entry="",
             confluence_score=0,
-            scenario_name=pos.scenario_id,
-            # Canonical A7: persist the AgentTeam verdict alongside the
-            # trade so post-mortem analysis can correlate team verdicts
-            # with realised PnL. The caller (``_journal_record_entry``
-            # below) passes the dict; the snapshot just stores it.
+            scenario_name=scenario_id,
             agent_review=agent_review,
+            # Telemetry fields
+            signal_entry_price=signal_entry_price,
+            actual_fill_price=actual_fill_price,
+            slippage_pct=slippage_val,
+            zone_mid=zone_mid,
+            ts_signal=ts_signal,
+            ts_fill=ts_fill,
+            latency_ms=latency_val,
         )
         try:
             self.trade_journal.record_entry(snap)
         except Exception as e:
-            log.warning(f"trade_journal.record_entry failed for {pos.id}: {e}")
+            log.warning(f"trade_journal.record_entry failed for {trade_id}: {e}")
+
+    def _run_agent_review_async(
+        self,
+        pos: Position,
+        confluence: int,
+        htf_bias: str,
+        df_htf: Optional[pd.DataFrame],
+        adx: float,
+        rr: float,
+        size_notional_pct: float,
+    ) -> None:
+        """Run the AgentTeam review in a background thread and update the journal."""
+        if self.agent_team is None or not self.agent_team.cfg.get("enabled", False):
+            return
+
+        # V2 async review: df_htf=None, adx=0.0 -> degraded RegimeAgent context.
+        # Note: V2 async reviews use partial context as they are advisory-only.
+
+        trade_id = None
+        in_flight_claimed = False
+        try:
+            # Defensive attribute access: V1/v2-paper use lifecycle Position, live-v2 uses exchange Position.
+            entry_price = getattr(pos, "avg_entry_price", None)
+            if entry_price is None:
+                entry_price = getattr(pos, "entry", 0.0)
+
+            trade_id = getattr(pos, "id", None) or getattr(pos, "order_id", "unknown_id")
+
+            # Thread-safe in-flight review deduplication
+            with self._in_flight_lock:
+                if trade_id in self._in_flight_reviews:
+                    log.info(f"🤖 [AgentTeam] Review for {pos.symbol} (trade_id={trade_id}) already in flight — skip submit.")
+                    return
+                self._in_flight_reviews.add(trade_id)
+                in_flight_claimed = True
+
+            htf_slope = self._htf_slope_pct(df_htf) if df_htf is not None else 0.0
+
+            ctx = {
+                "symbol": pos.symbol,
+                "direction": pos.direction,
+                "entry": float(entry_price),
+                "sl": float(pos.sl),
+                "tp1": float(pos.tp1),
+                "confluence": int(confluence),
+                "htf_bias": htf_bias,
+                "htf_slope_pct": htf_slope,
+                "adx": float(adx),
+                "rr": float(rr),
+                "size_notional_pct": size_notional_pct,
+            }
+
+            def task():
+                try:
+                    log.info(f"🤖 [AgentTeam] Starting async review for {pos.symbol} {pos.direction} (trade_id={trade_id})...")
+                    verdict = self.agent_team.review_trade(ctx)
+                    log.info(
+                        f"🤖 [AgentTeam] Async review finished for {pos.symbol}: "
+                        f"team_verdict={verdict.get('team_verdict')} score={verdict.get('score', 0.0):.2f}"
+                    )
+                    if self.trade_journal:
+                        self.trade_journal.update_agent_review(trade_id, verdict)
+                except Exception as e:
+                    log.warning(f"Error in async AgentTeam review execution: {e!r}")
+                finally:
+                    with self._in_flight_lock:
+                        self._in_flight_reviews.discard(trade_id)
+
+            self._review_executor.submit(task)
+        except Exception as e:
+            log.warning(f"Error submitting async AgentTeam review: {e!r}")
+            # ctx-build or submit() raised before task() could run its finally-discard;
+            # release the in-flight slot so this trade can still be reviewed next cycle
+            # (otherwise trade_id stays marked forever and never gets an advisory review).
+            if in_flight_claimed and trade_id is not None:
+                with self._in_flight_lock:
+                    self._in_flight_reviews.discard(trade_id)
+
 
     def _journal_record_exit(self, pos: Position, exit_price: float,
                               reason: str) -> None:
@@ -1001,62 +1153,38 @@ class SafeOrchestrator:
         elif signals:
             latest = signals[-1]
             # === Runtime Agent Team pre-review (canonical A4) ===
-            # Advisory layer; never touches the deterministic guard pipeline.
-            # ``enabled`` controls whether the team runs at all; ``gating``
-            # controls whether a hard REJECT actually blocks the trade
-            # (default off — shadow mode only).
-            agent_team_review = None
-            if self.agent_team is not None and self.agent_team.cfg.get("enabled", False):
+            _agent_veto = False
+            if self.agent_team and self.agent_team.cfg.get("gating", False):
+                # Run review trade SYNCHRONOUSLY pre-trade and veto on "REJECT"
+                rr = float(latest.rr1) if latest.rr1 else 0.0
+                actual_balance = balance if balance is not None else 10000.0
+                size_notional_pct = self._estimate_size_notional_pct(actual_balance, latest.entry, latest.sl)
+                htf_slope = self._htf_slope_pct(df_htf) if df_htf is not None else 0.0
+                ctx = {
+                    "symbol": symbol,
+                    "direction": latest.direction,
+                    "entry": float(latest.entry),
+                    "sl": float(latest.sl),
+                    "tp1": float(latest.tp1),
+                    "confluence": int(latest.confluence),
+                    "htf_bias": htf_bias,
+                    "htf_slope_pct": htf_slope,
+                    "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
+                    "rr": float(rr),
+                    "size_notional_pct": size_notional_pct,
+                }
                 try:
-                    # F1: estimate the notional % up-front (same sizer the open
-                    # step uses) so the RiskReviewer's "notional > 8% → REJECT"
-                    # rule can actually fire — previously hardcoded 0.0 (blind).
-                    notional_pct = self._estimate_size_notional_pct(
-                        balance, float(latest.entry), float(latest.sl)
-                    )
-                    agent_team_review = self.agent_team.review_trade({
-                        "symbol": symbol,
-                        "direction": latest.direction,
-                        "entry": float(latest.entry),
-                        "sl": float(latest.sl),
-                        "tp1": float(latest.tp1),
-                        "confluence": int(latest.confluence),
-                        "htf_bias": htf_bias,
-                        "htf_slope_pct": self._htf_slope_pct(df_htf),  # A4: was never supplied
-                        "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
-                        "rr": float(latest.rr1) if latest.rr1 else 0.0,
-                        "size_notional_pct": notional_pct,
-                    })
-                    # Attach to signal so journal/DB can persist (canonical A7)
-                    if isinstance(latest.meta, dict):
-                        latest.meta["agent_review"] = agent_team_review
-                        # F1: notional-blind only when the estimate was
-                        # unavailable (no balance) — otherwise the risk agent saw
-                        # a real notional and its cap rule could fire.
-                        latest.meta["risk_review_was_notional_blind"] = (notional_pct <= 0.0)
-                    log.info(
-                        f"🤖 AgentTeam[{symbol}] verdict={agent_team_review.get('team_verdict')} "
-                        f"score={agent_team_review.get('score', 0.0):.2f}"
-                    )
+                    review = self.agent_team.review_trade(ctx)
+                    latest.meta["agent_review"] = review
+                    latest.meta["risk_review_was_notional_blind"] = review.get("risk_review_was_notional_blind", False)
+                    if review.get("team_verdict") == "REJECT":
+                        _agent_veto = True
+                        log.warning(f"🚫 [AgentTeam] Signal vetoed by agent team verdict REJECT")
                 except Exception as e:
-                    log.warning(f"AgentTeam review failed (ignored): {e!r}")
-                    agent_team_review = None
+                    log.warning(f"Error in synchronous AgentTeam gating review: {e!r}")
 
-            # === Hard-veto gating (default off) ===
-            _agent_veto = (
-                self.agent_team is not None
-                and self.agent_team.cfg.get("gating", False)
-                and (agent_team_review or {}).get("team_verdict") == "REJECT"
-            )
             if _agent_veto:
-                log.info(
-                    f"🛑 [{symbol}] AgentTeam REJECT veto — signal blocked, "
-                    f"score={(agent_team_review or {}).get('score', 0.0):.2f}"
-                )
-                actions.append(
-                    f"[{symbol}] AgentTeam veto "
-                    f"(score={(agent_team_review or {}).get('score', 0.0):.2f})"
-                )
+                actions.append(f"[{symbol}] Vetoed by agent team")
             else:
 
                 # Time-windowed dedup: aynı signal 1 saat içinde iki kez açılmasın
@@ -1299,6 +1427,20 @@ class SafeOrchestrator:
                                         agent_review=(latest.meta.get("agent_review")
                                                       if isinstance(latest.meta, dict)
                                                       else None),
+                                        signal_entry_price=latest.entry,
+                                        actual_fill_price=getattr(exchange_pos, "entry", latest.entry) if exchange_pos else latest.entry,
+                                        zone_mid=latest.entry,
+                                        ts_signal=getattr(latest, "timestamp", None) or getattr(latest, "ts", None),
+                                        ts_fill=getattr(exchange_pos, "opened_at", None) or pos.opened_at,
+                                    )
+                                    self._run_agent_review_async(
+                                        pos=pos,
+                                        confluence=latest.confluence,
+                                        htf_bias=htf_bias,
+                                        df_htf=df_htf,
+                                        adx=float(regime_analysis.adx) if regime_analysis else 0.0,
+                                        rr=float(latest.rr1) if latest.rr1 else 0.0,
+                                        size_notional_pct=self._estimate_size_notional_pct(actual_balance, latest.entry, latest.sl),
                                     )
                                     log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
                                              f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
@@ -1482,6 +1624,10 @@ class SafeOrchestrator:
         if self.setup_state_store is None:
             return
 
+        smc_v2_cfg = self.config.get("smc_v2", {})
+        require_confirmation = smc_v2_cfg.get("require_confirmation", True)
+        effective_pullback_timeout_bars = smc_v2_cfg.get("pullback_timeout_bars", pullback_timeout_bars)
+
         # Local import to avoid module-level circular dependency on smc_v2
         from engine.smc_v2.zones import is_price_in_zone
         from engine.smc_v2.setup_state import PERSISTED_STATES
@@ -1495,16 +1641,39 @@ class SafeOrchestrator:
 
             cand.bars_waited += 1
 
-            if cand.bars_waited > pullback_timeout_bars:
+            if cand.bars_waited > effective_pullback_timeout_bars:
                 cand.state = "EXPIRED"
                 continue
 
             if cand.state == "AWAITING_PULLBACK" and is_price_in_zone(
                 current_price, cand.target_zone
             ):
-                cand.state = "IN_ZONE"
+                if not require_confirmation:
+                    cand.state = "CONFIRMED"
+                    clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
+                    self._place_v2_entry_order(
+                        cand,
+                        current_price=current_price,
+                        entry_price=clamped_entry_price,
+                    )
+                    continue
+                else:
+                    cand.state = "IN_ZONE"
 
             if cand.state == "IN_ZONE":
+                if not require_confirmation:
+                    if is_price_in_zone(current_price, cand.target_zone):
+                        cand.state = "CONFIRMED"
+                        clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
+                        self._place_v2_entry_order(
+                            cand,
+                            current_price=current_price,
+                            entry_price=clamped_entry_price,
+                        )
+                        continue
+                    else:
+                        # Price has left the zone, do NOT confirm/enter, let it expire on timeout
+                        continue
                 # Skip confirmation when df_15m not provided (state-machine-
                 # only test paths). Real run_cycle always passes df_entry.
                 if df_15m is None:
@@ -1795,32 +1964,70 @@ class SafeOrchestrator:
                 tp1=tp1,
                 tp2=tp2,
             )
-            # Record it in trade journal
-            self._journal_record_entry(pos)
             log.info(f"✅ [v2 paper] [{cand.symbol}] Opened {cand.direction} @ {entry_price:.4f} "
                      f"size={size:.6f} SL={sl:.4f} TP1={tp1:.4f} TP2={tp2_log}")
-            return pos
+        else:
+            # C7: the live-price re-validation for the v2 CONFIRMED→order path is the
+            # OrderManager entry-drift guard inside open_position — it re-reads the
+            # live price and rejects if it has drifted past max_entry_drift_pct from
+            # this confirmed `entry` (or is already past TP1). Combined with C1
+            # (closed-bar confirmation), the v2 entry cannot repaint into a
+            # stale-price order. See test_entry_order_placement TestV2EntryDriftGuard.
+            pos = self.order_manager.open_position(
+                symbol=cand.symbol,
+                direction=cand.direction,
+                size=size,
+                entry=entry_price,
+                sl=sl,
+                tp1=tp1,
+                tp2=tp2,
+                entry_setup_source=entry_setup_source,
+                tp1_target_type=tp_tags.get("tp1_source"),
+                tp2_target_type=tp_tags.get("tp2_source"),
+                bars_to_pullback=cand.bars_waited,
+                atr_value=float(atr_15m),
+            )
 
-        # C7: the live-price re-validation for the v2 CONFIRMED→order path is the
-        # OrderManager entry-drift guard inside open_position — it re-reads the
-        # live price and rejects if it has drifted past max_entry_drift_pct from
-        # this confirmed `entry` (or is already past TP1). Combined with C1
-        # (closed-bar confirmation), the v2 entry cannot repaint into a
-        # stale-price order. See test_entry_order_placement TestV2EntryDriftGuard.
-        return self.order_manager.open_position(
-            symbol=cand.symbol,
-            direction=cand.direction,
-            size=size,
-            entry=entry_price,
-            sl=sl,
-            tp1=tp1,
-            tp2=tp2,
-            entry_setup_source=entry_setup_source,
-            tp1_target_type=tp_tags.get("tp1_source"),
-            tp2_target_type=tp_tags.get("tp2_source"),
-            bars_to_pullback=cand.bars_waited,
-            atr_value=float(atr_15m),
-        )
+        if pos is not None:
+            # Plumb telemetry for V2 entry
+            z_mid = 0.0
+            if getattr(cand, "target_zone", None):
+                z_mid = (cand.target_zone.low + cand.target_zone.high) / 2.0
+
+            ts_sig = None
+            if getattr(cand, "trigger_bar_ts", None):
+                try:
+                    ts_sig = datetime.fromtimestamp(cand.trigger_bar_ts / 1000, tz=timezone.utc).isoformat()
+                except Exception:
+                    pass
+
+            act_fill = getattr(pos, "avg_entry_price", None)
+            if act_fill is None:
+                act_fill = getattr(pos, "entry", entry_price)
+
+            self._journal_record_entry(
+                pos,
+                agent_review=None,
+                signal_entry_price=entry_price,
+                actual_fill_price=act_fill,
+                zone_mid=z_mid,
+                ts_signal=ts_sig,
+                ts_fill=pos.opened_at,
+            )
+
+            rr = abs(tp1 - entry_price) / abs(entry_price - sl) if entry_price != sl else 0.0
+            size_notional_pct = (size * entry_price) / balance * 100.0 if balance > 0 else 0.0
+            self._run_agent_review_async(
+                pos=pos,
+                confluence=cand.confluence_score,
+                htf_bias=cand.htf_bias,
+                df_htf=None,
+                adx=0.0,
+                rr=rr,
+                size_notional_pct=size_notional_pct,
+            )
+
+        return pos
 
     def _log_shadow_signal(self, *, cand, entry_price, sl, tp1, tp2, size,
                             tp_tags, entry_setup_source, reason: str) -> None:
