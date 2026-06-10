@@ -24,8 +24,10 @@
 ## Sprint Görünümü
 
 **Sprint 1 (2026-06-10 → 2026-06-13):**
-- [ ] T-001: Swing detection + OB core
-- [ ] LLTODO scaffolding → master PR (GÖREV 2)
+- [x] T-001: Swing detection + OB core ✅ IMPL_READY
+- [ ] LLTODO scaffolding → master PR (GÖREV 2) — #177 merged ✅
+- [x] Prod reconciliation runbook ✅
+- [x] Strategy-opt re-verify report ✅
 
 **Sprint 2 (2026-06-14 → 2026-06-17):**
 - [ ] T-002: MTF confluence + SL/TP
