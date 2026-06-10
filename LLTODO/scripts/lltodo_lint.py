@@ -33,7 +33,7 @@ def violations() -> List[str]:
     if not state_path.exists():
         v.append("[R1] STATE.md not found")
     else:
-        text = state_path.read_text()
+        text = state_path.read_text(encoding="utf-8")
         valid = {"DRAFT", "REVIEW_OPEN", "CHANGES_REQUESTED",
                  "CONSENSUS_REACHED", "IN_PROGRESS", "ULTRA_REVIEW", "DONE"}
         found = set()
@@ -74,7 +74,7 @@ def violations() -> List[str]:
         for f in plans_dir.iterdir():
             if f.suffix != ".md":
                 continue
-            content = f.read_text()
+            content = f.read_text(encoding="utf-8")
             for sec in ["Hedef", "Kapsam", "Görevler", "Gate"]:
                 if sec not in content:
                     v.append(f"[R4] Plan {f.name} missing section: {sec}")
@@ -85,7 +85,7 @@ def violations() -> List[str]:
         for f in reviews_dir.iterdir():
             if f.suffix != ".md":
                 continue
-            content = f.read_text()
+            content = f.read_text(encoding="utf-8")
             for sec in ["Bulgular", "Karar", "Confidence"]:
                 if sec not in content:
                     v.append(f"[R5] Review {f.name} missing section: {sec}")
@@ -95,7 +95,7 @@ def violations() -> List[str]:
         for f in in_prog.iterdir():
             if f.suffix != ".md" or f.name.startswith("."):
                 continue
-            content = f.read_text()
+            content = f.read_text(encoding="utf-8")
             if "Epic:" not in content:
                 v.append(f"[R6] Task {f.name} missing Epic: header")
             if "Claimed by:" not in content:
@@ -104,7 +104,7 @@ def violations() -> List[str]:
     # ── Rule 7: SCOREBOARD.md consistency ──
     score_path = LLTODO_DIR / "SCOREBOARD.md"
     if score_path.exists():
-        stext = score_path.read_text()
+        stext = score_path.read_text(encoding="utf-8")
         itp = in_prog.exists() and len([f for f in in_prog.iterdir() if f.suffix == ".md" and not f.name.startswith(".")]) or 0
         claimed_match = re.search(r"Claim edilmiş görev.*?(\d+)", stext)
         if claimed_match and int(claimed_match.group(1)) != itp:
@@ -131,7 +131,7 @@ def violations() -> List[str]:
             if not fn.endswith(".md"):
                 continue
             fpath = os.path.join(root, fn)
-            content = Path(fpath).read_text()
+            content = Path(fpath).read_text(encoding="utf-8")
             # Find all P-001/R-001/T-001 references
             for m in re.finditer(r"\b([PRT]-\d{3})\b", content):
                 ref = m.group(1)
@@ -150,6 +150,12 @@ def violations() -> List[str]:
 
 
 def main():
+    # Windows consoles default to cp1252 and can't encode the ✅/❌ status emoji;
+    # force UTF-8 so the CLI status line never crashes on a non-UTF-8 stdout.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
     v = violations()
     if not v:
         print("✅ LLTODO lint: 8/8 tests passed. All clear.")

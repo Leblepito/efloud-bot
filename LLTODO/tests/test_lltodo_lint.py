@@ -17,7 +17,7 @@ def make_lltodo_structure(base: Path, files: dict):
     for relpath, content in files.items():
         full = base / relpath
         full.parent.mkdir(parents=True, exist_ok=True)
-        full.write_text(content)
+        full.write_text(content, encoding="utf-8")
 
 
 def test_r1_valid_states():
