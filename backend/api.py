@@ -264,6 +264,27 @@ async def equity(days: int = 7) -> list[dict]:
     return series
 
 
+@router.get("/reports/monthly", dependencies=[Depends(require_auth)])
+async def reports_monthly(window_days: int = 30) -> dict:
+    """Aylık statement (T-013) — operatör-only İÇ tüketim, journal-first.
+
+    Müşteri-yüzlü yayın T-012/T-014 statik snapshot yolundan yapılır; bu
+    endpoint hiçbir zaman public'e açılmaz (UR-003 pini).
+    """
+    from datetime import datetime, timezone as _tz
+
+    from ops.daily_report.monthly import (
+        MAX_WINDOW_DAYS,
+        build_monthly_statement,
+        read_journal_closed_trades,
+    )
+
+    days = min(max(window_days, 1), MAX_WINDOW_DAYS)
+    now_utc = datetime.now(_tz.utc)
+    trades = read_journal_closed_trades(_journal_path(), now_utc, days)
+    return build_monthly_statement(trades, now_utc, days)
+
+
 @router.get("/ai/sentiment", dependencies=[Depends(require_auth)])
 async def ai_sentiment() -> dict:
     """Yapay zeka makro duygu durumunu local registry'den yukler."""
