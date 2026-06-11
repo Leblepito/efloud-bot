@@ -99,3 +99,72 @@ jobs:
             echo '```'
           } > /tmp/comment.md
           gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/comment.md --repo "${{ github.repository }}"
+
+  # T-023 (P-003 W-R): secret scanning on the working tree. Uses `detect
+  # --no-git` deliberately — full-history scans would permanently flag
+  # already-rotated keys from old incidents (see PR #154 redaction); the
+  # commercial gate (P-002 G5) only requires the CURRENT tree to be clean.
+  # Pinned to v8.18.4 (last release with `detect --no-git`; later versions
+  # renamed it to `gitleaks dir`).
+  secret-scan:
+    name: gitleaks (working tree)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 \
+            detect --source /repo --no-git --no-banner --redact
+
+  # T-023: the Next.js build was previously validated only inside the prod
+  # Docker build — a broken frontend surfaced at deploy time, not PR time.
+  frontend:
+    name: frontend (typecheck + vitest + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+  # T-023: LLTODO process lint (naming, required sections, claim limits,
+  # scoreboard consistency, cross-refs) was previously run only by hand.
+  lltodo-lint:
+    name: lltodo lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run LLTODO lint
+        run: python LLTODO/scripts/lltodo_lint.py
