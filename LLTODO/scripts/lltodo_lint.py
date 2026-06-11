@@ -3,7 +3,8 @@
 
 8 test rules:
   1. STATE.md has valid status transitions
-  2. IN_PROGRESS has at most 1 task claimed
+  2. IN_PROGRESS has at most 1 task claimed PER AGENT (multi-agent: claude/
+     hermes/gemini paralel çalışır; claimant'sız IN_PROGRESS kartı da ihlaldir)
   3. Files follow naming conventions (P-XXX, R-XXX, T-XXX)
   4. Plan files have required sections (Hedef, Kapsam, Görevler, Gate)
   5. Review files have required sections (Bulgular, Karar, Confidence)
@@ -45,13 +46,25 @@ def violations() -> List[str]:
         if unknown:
             v.append(f"[R1] Unknown states in STATE.md: {unknown}")
 
-    # ── Rule 2: At most 1 task IN_PROGRESS ──
+    # ── Rule 2: At most 1 task IN_PROGRESS per agent ──
+    # 2026-06-11: global-1 limiti multi-agent akışta kilitleniyordu (T-020
+    # @claude beklerken @hermes T-002 claim edemiyordu) → agent bazına geçildi.
     in_prog = LLTODO_DIR / "tasks" / "IN_PROGRESS"
     if in_prog.exists():
         tasks = [f for f in in_prog.iterdir() if f.suffix == ".md" and not f.name.startswith(".")]
-        if len(tasks) > 1:
-            names = ", ".join(f.name for f in tasks)
-            v.append(f"[R2] Multiple tasks IN_PROGRESS ({len(tasks)}): {names}")
+        by_agent = {}
+        for f in tasks:
+            content = f.read_text(encoding="utf-8")
+            m = re.search(r"Claimed by:\*{0,2}\s*(@[\w-]+)", content)
+            if not m:
+                v.append(f"[R2] IN_PROGRESS task without claimant: {f.name} "
+                         f"(header'da 'Claimed by: @agent' gerekli)")
+                continue
+            by_agent.setdefault(m.group(1), []).append(f.name)
+        for agent, names in sorted(by_agent.items()):
+            if len(names) > 1:
+                v.append(f"[R2] {agent} has multiple tasks IN_PROGRESS "
+                         f"({len(names)}): {', '.join(sorted(names))}")
 
     # ── Rule 3: Naming conventions ──
     for root, _dirs, files in os.walk(LLTODO_DIR):
@@ -139,8 +152,10 @@ def violations() -> List[str]:
                 # Skip self-reference
                 if stem.startswith(ref):
                     continue
-                # Skip template placeholders and future epics
-                if ref in ("P-XXX", "R-XXX", "T-XXX", "P-002"):
+                # Skip template placeholders
+                # (2026-06-11: "P-002" whitelist'i kaldırıldı — plan dosyası
+                # artık master'da; whitelist typo'ları maskeliyordu)
+                if ref in ("P-XXX", "R-XXX", "T-XXX"):
                     continue
                 # Check if any file with this prefix exists
                 if ref not in prefix_to_files:
