@@ -1,0 +1,542 @@
+//@version=6
+// ═══════════════════════════════════════════════
+// u2algo Wave-1 — SMC Strategy (P-001 / T-003)
+// 15m trigger + 1h bias overlay
+// v1.0.0-draft — T-003: Strategy + backtest
+// ═══════════════════════════════════════════════
+//
+// © u2algo — Efloud SMC Core
+// Pine Script v6, NO legacy study()
+// STRATEGY version (premium, backtest + alert)
+// INDICATOR version: pine/u2algo/wave1_signals.pine (free, lead magnet)
+//
+// ⚠️ SENKRON KURALI: Bu dosyadaki TÜM input isimleri indicator
+//    (wave1_signals.pine) ile aynı olmak ZORUNDA. Aynı değişken adları,
+//    aynı default değerler, aynı group'lar.
+
+strategy(
+ "u2algo SMC — Wave 1 Strategy",
+ overlay=true,
+ format=format.price,
+ initial_capital=10000,
+ default_qty_type=strategy.percent_of_equity,
+ default_qty_value=100,  // %100 equity per trade (statik sizing)
+ commission_type=strategy.commission.percent,
+ commission_value=0.04,  // Binance futures taker 0.04%
+ pyramiding=1,
+ max_labels_count=500,
+ max_boxes_count=200,
+ max_lines_count=200,
+ calc_on_every_tick=false
+)
+
+// ═══════════════════════════════════════════════
+// INPUTS — indicator ile SENKRON (§3d)
+// ═══════════════════════════════════════════════
+
+// Swing detection
+swing_lb_label = "Swing Lookback (fixed at 4 per Plan §2a)"
+swing_lb_left  = 4
+swing_lb_right = 4
+
+// Order Block
+ob_seq_group   = "Order Block"
+ob_seq_default = 5
+ob_body_mult   = input.float(1.5, "OB Body/ATR Mult", minval=0.5, maxval=5.0, step=0.1,
+ tooltip="Breakout body must exceed this × ATR(14)", group=ob_seq_group)
+
+// Confluence & Risk
+confluence_group = "Confluence & Risk"
+conf_thresh = input.int(55, "Confluence Threshold", minval=0, maxval=100,
+ tooltip="Minimum confluence score for signal validity (live-prod: 80)", group=confluence_group)
+sl_lb     = input.int(20, "SL Lookback Bars", minval=5, maxval=50,
+ tooltip="Number of bars to scan for structural SL level", group=confluence_group)
+sl_atr_m  = input.float(0.5, "SL ATR Buffer", minval=0.1, maxval=2.0, step=0.1,
+ tooltip="ATR(14) multiplier for SL buffer", group=confluence_group)
+min_rr    = input.float(1.5, "Min R:R", minval=1.0, maxval=5.0, step=0.1,
+ tooltip="Minimum (TP1−entry)/(entry−SL) ratio (live-prod: 1.8)", group=confluence_group)
+fib_tp2   = input.float(1.618, "Fib TP2 Extension", minval=1.0, maxval=3.0, step=0.1,
+ tooltip="Fibonacci extension from swing range for TP2 target", group=confluence_group)
+
+// Visual
+visual_group = "Visual"
+show_sltp = input.bool(true, "Show SL/TP Levels",
+ tooltip="Plot dashed SL/TP lines on chart", group=visual_group)
+use_cb_palette = input.bool(false, "Colorblind-Friendly Palette",
+ tooltip="Alternative palette for red/green color blindness", group=visual_group)
+
+// Backtest
+bt_group = "Backtest"
+bt_date_start = input.time(timestamp("2025-01-01"), "Start Date",
+ tooltip="Backtest start (OOS: set to last 30% of data)", group=bt_group)
+bt_date_end   = input.time(timestamp("2025-12-31"), "End Date",
+ tooltip="Backtest end", group=bt_group)
+bt_oos_pct    = input.int(30, "OOS %", minval=10, maxval=50,
+ tooltip="% of data reserved for out-of-sample validation", group=bt_group)
+
+// ═══════════════════════════════════════════════
+// COLOR PALETTE — indicator ile aynı (§4)
+// ═══════════════════════════════════════════════
+
+col_long  = use_cb_palette ? color.new(#4488FF, 0) : color.new(#00FF88, 0)
+col_short = use_cb_palette ? color.new(#FF8800, 0) : color.new(#FF4455, 0)
+col_sl    = use_cb_palette ? color.new(#FF0000, 0) : color.new(#FF6644, 0)
+col_tp1   = use_cb_palette ? color.new(#00CC44, 0) : color.new(#44DD88, 0)
+col_tp2   = use_cb_palette ? color.new(#AA44FF, 0) : color.new(#4488FF, 0)
+col_ob    = color.new(#FFDD44, 80)
+col_swing = color.new(#CCCCCC, 0)
+col_fvg   = color.new(#AA66FF, 40)
+col_trend = color.new(#666666, 60)
+
+// ═══════════════════════════════════════════════
+// ATR (14-period)
+// ═══════════════════════════════════════════════
+
+atr14 = ta.atr(14)
+
+// ═══════════════════════════════════════════════
+// 1H BIAS — indicator ile aynı
+// ═══════════════════════════════════════════════
+
+htf_sym = syminfo.tickerid
+htf_tf  = "60"
+
+htf_close = request.security(htf_sym, htf_tf, close, lookahead=barmerge.lookahead_off)
+htf_high  = request.security(htf_sym, htf_tf, high,  lookahead=barmerge.lookahead_off)
+htf_low   = request.security(htf_sym, htf_tf, low,   lookahead=barmerge.lookahead_off)
+
+htf_ema20      = ta.ema(htf_close, 20)
+htf_bias_up    = htf_close > htf_ema20
+htf_bias_down  = htf_close < htf_ema20
+
+// ═══════════════════════════════════════════════
+// SWING DETECTION — indicator ile aynı
+// ═══════════════════════════════════════════════
+
+lb = swing_lb_left
+
+// --- Swing High ---
+is_swing_high = false
+swing_high_val = 0.0
+
+if barstate.isconfirmed and bar_index >= lb * 2
+    is_swing_high := true
+    for j = 1 to lb
+        if high[lb] <= high[lb - j] or high[lb] <= high[lb + j]
+            is_swing_high := false
+            break
+    if is_swing_high
+        swing_high_val := high[lb]
+
+new_swing_high = is_swing_high
+
+// --- Swing Low ---
+is_swing_low = false
+swing_low_val = 0.0
+
+if barstate.isconfirmed and bar_index >= lb * 2
+    is_swing_low := true
+    for j = 1 to lb
+        if low[lb] >= low[lb - j] or low[lb] >= low[lb + j]
+            is_swing_low := false
+            break
+    if is_swing_low
+        swing_low_val := low[lb]
+
+new_swing_low = is_swing_low
+
+// Persistent swing tracking
+var float last_sh_price = na
+var int   last_sh_bar   = na
+var float last_sl_price = na
+var int   last_sl_bar   = na
+
+if barstate.isconfirmed
+    if new_swing_high
+        last_sh_price := swing_high_val
+        last_sh_bar   := bar_index - lb
+    if new_swing_low
+        last_sl_price := swing_low_val
+        last_sl_bar   := bar_index - lb
+
+// ═══════════════════════════════════════════════
+// ORDER BLOCK DETECTION — indicator ile aynı
+// ═══════════════════════════════════════════════
+
+bar_bull  = close > open
+bar_bear  = close < open
+bar_body  = math.abs(close - open)
+is_breakout_body = bar_body > ob_body_mult * atr14
+
+// --- Bullish OB ---
+bull_breakout = barstate.isconfirmed and bar_bull and is_breakout_body
+
+var int   bullish_ob_seq_count = 0
+var float bullish_ob_top       = na
+var float bullish_ob_bot       = na
+var int   bullish_ob_bar       = na
+var bool  bullish_ob_near_swing = false
+
+if bull_breakout
+    cnt = 0
+    hi  = 0.0
+    lo  = 1e10
+    for k = 1 to ob_seq_default
+        if bar_index - k >= 0 and close[k] < open[k]
+            ct_i = open[k]
+            cb_i = close[k]
+            if cnt == 0
+                hi := ct_i
+                lo := cb_i
+            else
+                hi := math.max(hi, ct_i)
+                lo := math.min(lo, cb_i)
+            cnt += 1
+        else if cnt > 0
+            break
+    if cnt == ob_seq_default and hi > lo
+        ns = false
+        if not na(last_sl_price)
+            dist_pct_i = math.abs(lo - last_sl_price) / last_sl_price
+            bars_since_sl_i = bar_index - last_sl_bar
+            ns := dist_pct_i < 0.015 and bars_since_sl_i > 0 and bars_since_sl_i < 30
+        bullish_ob_seq_count := cnt
+        bullish_ob_top       := hi
+        bullish_ob_bot       := lo
+        bullish_ob_bar       := bar_index - cnt
+        bullish_ob_near_swing := ns
+
+// --- Bearish OB ---
+bear_breakout = barstate.isconfirmed and bar_bear and is_breakout_body
+
+var int   bearish_ob_seq_count = 0
+var float bearish_ob_top       = na
+var float bearish_ob_bot       = na
+var int   bearish_ob_bar       = na
+var bool  bearish_ob_near_swing = false
+
+if bear_breakout
+    cnt = 0
+    hi  = 0.0
+    lo  = 1e10
+    for k = 1 to ob_seq_default
+        if bar_index - k >= 0 and close[k] > open[k]
+            ct_i = close[k]
+            cb_i = open[k]
+            if cnt == 0
+                hi := ct_i
+                lo := cb_i
+            else
+                hi := math.max(hi, ct_i)
+                lo := math.min(lo, cb_i)
+            cnt += 1
+        else if cnt > 0
+            break
+    if cnt == ob_seq_default and hi > lo
+        ns = false
+        if not na(last_sh_price)
+            dist_pct_i = math.abs(hi - last_sh_price) / last_sh_price
+            bars_since_sh_i = bar_index - last_sh_bar
+            ns := dist_pct_i < 0.015 and bars_since_sh_i > 0 and bars_since_sh_i < 30
+        bearish_ob_seq_count := cnt
+        bearish_ob_top       := hi
+        bearish_ob_bot       := lo
+        bearish_ob_bar       := bar_index - cnt
+        bearish_ob_near_swing := ns
+
+// ═══════════════════════════════════════════════
+// CONFLUENCE SCORING — indicator ile aynı
+// ═══════════════════════════════════════════════
+
+bullish_ob_active = (bar_index - bullish_ob_bar) <= 5 and bullish_ob_bar > 0
+bearish_ob_active = (bar_index - bearish_ob_bar) <= 5 and bearish_ob_bar > 0
+
+htf_ema_slope = (htf_ema20 - htf_ema20[1]) / htf_ema20[1] * 100
+
+// FVG
+bullish_fvg = low > high[2]
+bearish_fvg = high < low[2]
+
+// Swing break
+var float prev_swing_high = na
+var float prev_swing_low  = na
+if barstate.isconfirmed
+    if new_swing_high
+        prev_swing_high := swing_high_val
+    if new_swing_low
+        prev_swing_low := swing_low_val
+
+recent_higher_high = not na(prev_swing_high) and high > prev_swing_high and (bar_index - last_sh_bar) < 50
+recent_lower_low   = not na(prev_swing_low) and low < prev_swing_low and (bar_index - last_sl_bar) < 50
+
+// Scores
+confluence_score_long  = 0
+confluence_score_long := bullish_ob_active ? confluence_score_long + 30 : confluence_score_long
+confluence_score_long := bullish_ob_near_swing ? confluence_score_long + 15 : confluence_score_long
+confluence_score_long := bull_breakout and bar_body > 2.0 * atr14 ? confluence_score_long + 10 : confluence_score_long
+confluence_score_long := htf_bias_up ? confluence_score_long + 20 : confluence_score_long
+confluence_score_long := htf_ema_slope > 0.1 ? confluence_score_long + 10 : confluence_score_long
+confluence_score_long := bullish_fvg ? confluence_score_long + 5 : confluence_score_long
+confluence_score_long := recent_higher_high ? confluence_score_long + 10 : confluence_score_long
+confluence_score_long := math.min(100, confluence_score_long)
+
+confluence_score_short  = 0
+confluence_score_short := bearish_ob_active ? confluence_score_short + 30 : confluence_score_short
+confluence_score_short := bearish_ob_near_swing ? confluence_score_short + 15 : confluence_score_short
+confluence_score_short := bear_breakout and bar_body > 2.0 * atr14 ? confluence_score_short + 10 : confluence_score_short
+confluence_score_short := htf_bias_down ? confluence_score_short + 20 : confluence_score_short
+confluence_score_short := htf_ema_slope < -0.1 ? confluence_score_short + 10 : confluence_score_short
+confluence_score_short := bearish_fvg ? confluence_score_short + 5 : confluence_score_short
+confluence_score_short := recent_lower_low ? confluence_score_short + 10 : confluence_score_short
+confluence_score_short := math.min(100, confluence_score_short)
+
+// ═══════════════════════════════════════════════
+// 1H SWING LEVELS — B1 repaint fix pattern
+// ═══════════════════════════════════════════════
+
+var float last_1h_swing_high = na
+var float last_1h_swing_low  = na
+
+if barstate.isconfirmed
+    // ⚠️ REPAINT FIX: pivot adayı [3], komşular [3±j] — TÜM offset'ler ≥ 0
+    is_1h_sh = true
+    for j = 1 to 3
+        if htf_high[3] <= htf_high[3 + j] or htf_high[3] <= htf_high[3 - j]
+            is_1h_sh := false
+            break
+    if is_1h_sh
+        last_1h_swing_high := htf_high[3]
+
+    is_1h_sl = true
+    for j = 1 to 3
+        if htf_low[3] >= htf_low[3 + j] or htf_low[3] >= htf_low[3 - j]
+            is_1h_sl := false
+            break
+    if is_1h_sl
+        last_1h_swing_low := htf_low[3]
+
+// ═══════════════════════════════════════════════
+// SL HESAPLAMA — indicator ile aynı
+// ═══════════════════════════════════════════════
+
+f_calc_sl(direction, entry_price) =>
+    low_min  = low
+    high_max = high
+    for i = 1 to sl_lb - 1
+        if bar_index - i >= 0
+            low_min  := math.min(low_min, low[i])
+            high_max := math.max(high_max, high[i])
+
+    atr_buf = sl_atr_m * atr14
+
+    if direction == "LONG"
+        structural = low_min - atr_buf
+        stop_dist  = entry_price - structural
+        min_dist   = 0.5 * atr14
+        max_dist   = 5.0 * atr14
+        if stop_dist < min_dist
+            structural := entry_price - min_dist
+        if stop_dist > max_dist
+            structural := entry_price - max_dist
+        structural
+    else
+        structural = high_max + atr_buf
+        stop_dist  = structural - entry_price
+        min_dist   = 0.5 * atr14
+        max_dist   = 5.0 * atr14
+        if stop_dist < min_dist
+            structural := entry_price + min_dist
+        if stop_dist > max_dist
+            structural := entry_price + max_dist
+        structural
+
+// ═══════════════════════════════════════════════
+// TP HESAPLAMA — indicator ile aynı
+// ═══════════════════════════════════════════════
+
+f_calc_tp(direction, entry_price, sl_price) =>
+    tp1 = na
+    tp2 = na
+
+    if direction == "LONG"
+        if not na(last_1h_swing_high) and last_1h_swing_high > entry_price
+            tp1 := last_1h_swing_high
+        else if not na(prev_swing_high)
+            tp1 := prev_swing_high
+        if na(tp1) or tp1 <= entry_price or (tp1 - entry_price) / (entry_price - sl_price) < min_rr
+            tp1 := entry_price + (entry_price - sl_price) * min_rr
+
+        if not na(prev_swing_low) and not na(prev_swing_high)
+            swing_range = prev_swing_high - prev_swing_low
+            tp2 := entry_price + swing_range * fib_tp2
+        if na(tp2) or tp2 < tp1
+            tp2 := tp1 * 1.02
+    else
+        if not na(last_1h_swing_low) and last_1h_swing_low < entry_price
+            tp1 := last_1h_swing_low
+        else if not na(prev_swing_low)
+            tp1 := prev_swing_low
+        if na(tp1) or tp1 >= entry_price or (entry_price - tp1) / (sl_price - entry_price) < min_rr
+            tp1 := entry_price - (sl_price - entry_price) * min_rr
+
+        if not na(prev_swing_low) and not na(prev_swing_high)
+            swing_range = prev_swing_high - prev_swing_low
+            tp2 := entry_price - swing_range * fib_tp2
+        if na(tp2) or tp2 > tp1
+            tp2 := tp1 * 0.98
+
+    [tp1, tp2]
+
+// ═══════════════════════════════════════════════
+// T-003: STRATEGY EXECUTION
+// ═══════════════════════════════════════════════
+
+f_entry_price(direction) =>
+    if direction == "LONG"
+        bullish_ob_bot
+    else
+        bearish_ob_top
+
+// Signal state (persistent across bars)
+var float sig_entry_long  = na
+var float sig_sl_long     = na
+var float sig_tp1_long    = na
+var float sig_tp2_long    = na
+var bool  sig_active_long = false
+
+var float sig_entry_short = na
+var float sig_sl_short    = na
+var float sig_tp1_short   = na
+var float sig_tp2_short   = na
+var bool  sig_active_short = false
+
+// In-trade flag for pyramiding prevention
+is_in_trade = strategy.position_size != 0
+
+// Generate signals only on confirmed bars, OB active, confluence ≥ threshold
+long_signal  = false
+short_signal = false
+
+if barstate.isconfirmed and not is_in_trade
+    // --- LONG ---
+    if bullish_ob_active and confluence_score_long >= conf_thresh and htf_bias_up
+        ln_entry = f_entry_price("LONG")
+        ln_sl    = f_calc_sl("LONG", ln_entry)
+        ln_tp    = f_calc_tp("LONG", ln_entry, ln_sl)
+        ln_tp1   = ln_tp[0]
+        ln_tp2   = ln_tp[1]
+
+        valid = not na(ln_sl) and not na(ln_tp1) and ln_sl < ln_entry and ln_tp1 > ln_entry
+        if valid
+            long_signal := true
+            sig_entry_long  := ln_entry
+            sig_sl_long     := ln_sl
+            sig_tp1_long    := ln_tp1
+            sig_tp2_long    := ln_tp2
+            sig_active_long := true
+
+    // --- SHORT ---
+    if bearish_ob_active and confluence_score_short >= conf_thresh and htf_bias_down
+        sh_entry = f_entry_price("SHORT")
+        sh_sl    = f_calc_sl("SHORT", sh_entry)
+        sh_tp    = f_calc_tp("SHORT", sh_entry, sh_sl)
+        sh_tp1   = sh_tp[0]
+        sh_tp2   = sh_tp[1]
+
+        valid = not na(sh_sl) and not na(sh_tp1) and sh_sl > sh_entry and sh_tp1 < sh_entry
+        if valid
+            short_signal := true
+            sig_entry_short := sh_entry
+            sig_sl_short    := sh_sl
+            sig_tp1_short   := sh_tp1
+            sig_tp2_short   := sh_tp2
+            sig_active_short := true
+
+// ═══════════════════════════════════════════════
+// STRATEGY ENTRY + EXIT
+// ═══════════════════════════════════════════════
+
+// LONG entry — limit order at OB bottom
+if sig_active_long and not na(sig_entry_long) and not na(sig_sl_long) and not na(sig_tp1_long)
+    strategy.entry("LONG", strategy.long, limit=sig_entry_long)
+    strategy.exit("XL", "LONG",
+     stop=sig_sl_long,
+     limit=sig_tp1_long,
+     comment="TP1")
+    // TP2 as separate exit for remaining position
+    if not na(sig_tp2_long)
+        strategy.exit("XT2", "LONG",
+         limit=sig_tp2_long,
+         comment="TP2")
+    sig_active_long := false
+
+// SHORT entry
+if sig_active_short and not na(sig_entry_short) and not na(sig_sl_short) and not na(sig_tp1_short)
+    strategy.entry("SHORT", strategy.short, limit=sig_entry_short)
+    strategy.exit("XS", "SHORT",
+     stop=sig_sl_short,
+     limit=sig_tp1_short,
+     comment="TP1")
+    if not na(sig_tp2_short)
+        strategy.exit("XT2S", "SHORT",
+         limit=sig_tp2_short,
+         comment="TP2")
+    sig_active_short := false
+
+// ═══════════════════════════════════════════════
+// VISUAL — SL/TP plot + OB boxes (indicator ile aynı)
+// ═══════════════════════════════════════════════
+
+if show_sltp and not na(sig_entry_long)
+    line.new(bar_index, sig_sl_long,  bar_index + 20, sig_sl_long,  col_sl, 2, line.style_dashed)
+    line.new(bar_index, sig_tp1_long, bar_index + 20, sig_tp1_long, col_tp1, 1, line.style_dashed)
+    if not na(sig_tp2_long) and sig_tp2_long > sig_tp1_long
+        line.new(bar_index, sig_tp2_long, bar_index + 20, sig_tp2_long, col_tp2, 1, line.style_dashed)
+    label.new(bar_index, sig_entry_long,
+     "LONG " + str.tostring(confluence_score_long, "0") + "%",
+     style=label.style_label_up,
+     color=color.new(col_long, 90), textcolor=col_long, size=size.small)
+
+if show_sltp and not na(sig_entry_short)
+    line.new(bar_index, sig_sl_short,  bar_index + 20, sig_sl_short,  col_sl, 2, line.style_dashed)
+    line.new(bar_index, sig_tp1_short, bar_index + 20, sig_tp1_short, col_tp1, 1, line.style_dashed)
+    if not na(sig_tp2_short) and sig_tp2_short < sig_tp1_short
+        line.new(bar_index, sig_tp2_short, bar_index + 20, sig_tp2_short, col_tp2, 1, line.style_dashed)
+    label.new(bar_index, sig_entry_short,
+     "SHORT " + str.tostring(confluence_score_short, "0") + "%",
+     style=label.style_label_down,
+     color=color.new(col_short, 90), textcolor=col_short, size=size.small)
+
+// ═══════════════════════════════════════════════
+// SWING LABELS + BIAS TABLE (indicator ile aynı)
+// ═══════════════════════════════════════════════
+
+if barstate.isconfirmed and new_swing_high
+    label.new(bar_index - lb, swing_high_val,
+     "HH", style=label.style_label_down,
+     color=color.new(col_swing, 90), textcolor=col_swing, size=size.small)
+
+if barstate.isconfirmed and new_swing_low
+    label.new(bar_index - lb, swing_low_val,
+     "LL", style=label.style_label_up,
+     color=color.new(col_swing, 90), textcolor=col_swing, size=size.small)
+
+plot_htf = request.security(htf_sym, htf_tf,
+ ta.ema(close, 20), lookahead=barmerge.lookahead_off)
+plot(plot_htf, "1H EMA20", col_trend, 2, plot.style_line)
+
+var table bias_table = table.new(position.top_right, 1, 1,
+ border_width=0, frame_width=0)
+
+if barstate.islastconfirmedhistory
+    h1_text = htf_bias_up ? "▲ 1H BULL" : htf_bias_down ? "▼ 1H BEAR" : "— 1H FLAT"
+    h1_color = htf_bias_up ? col_long : htf_bias_down ? col_short : col_trend
+    table.cell(bias_table, 0, 0, h1_text, text_color=h1_color, text_size=size.small)
+    table.cell_set_bgcolor(bias_table, 0, 0, color.new(#000000, 80))
+
+// ═══════════════════════════════════════════════
+// ALERT CONDITIONS
+// ═══════════════════════════════════════════════
+
+alertcondition(long_signal,  "Efloud LONG",  "LONG setup detected")
+alertcondition(short_signal, "Efloud SHORT", "SHORT setup detected")

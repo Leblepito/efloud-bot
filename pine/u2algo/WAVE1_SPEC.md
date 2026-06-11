@@ -141,7 +141,22 @@
 
 ---
 
-## 7. Revizyon Geçmişi
+## 7. T-003 Bölümü: Strateji + Backtest (DRAFT — R2 claim bekliyor)
+
+**Dosya:** `pine/u2algo/wave1_strategy.pine` (~430 satır — T-003)
+
+**İçerik (isklet):**
+- [x] `strategy()` header (v6, 10000 capital, %100 equity, 0.04% commission)
+- [x] indicator ile senkron: tüm input isimleri, palette, ATR, 1h bias, swing, OB, confluence, SL/TP
+- [x] B1 repaint fix kalıbı uygulandı: 1h pivot `[3±j]`
+- [x] `strategy.entry()` / `strategy.exit()` — limit entry + SL/TP1/TP2 exit
+- [x] Pyramiding=1, `calc_on_every_tick=false`
+- [x] Backtest input'ları: `bt_date_start`, `bt_date_end`, `bt_oos_pct`
+- [ ] Backtest validasyonu: min 100 trade + %30 OOS (bekliyor)
+- [ ] Repaint kontrolü: `barstate.isconfirmed` + gecikmeli pivot (bekliyor)
+- [ ] WAVE1_SPEC.md final güncelleme (bekliyor)
+
+**Derleme durumu:** `DRAFT — T-002 G-T2 compile PASS bekliyor`
 
 | Tarih | Bölüm | Değişiklik | Yazar |
 |---|---|---|---|
