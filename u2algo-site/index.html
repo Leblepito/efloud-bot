@@ -307,6 +307,7 @@
         <a href="#profiller">Profiller</a>
         <a href="#surec">Süreç</a>
         <a href="#kanit">Şeffaflık</a>
+        <a href="#guncellemeler">Güncellemeler</a>
         <a href="#erisim">Erişim</a>
         <a href="#sss">SSS</a>
       </div>
@@ -499,6 +500,43 @@
     </div>
   </div>
 </section>
+
+<!-- GÜNCELLEMELER (T-014: CHANGELOG.md -> updates.json statik beslemesi) -->
+<section id="guncellemeler" style="display:none">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">Build-in-public</span>
+      <h2>Güncellemeler</h2>
+      <p>Müşteri-görünür değişikliklerin kaydı. Kaynak: proje CHANGELOG'u — iç operasyon detayları burada yer almaz.</p>
+    </div>
+    <div id="updatesList" class="reveal" style="display:grid;gap:18px;max-width:760px"></div>
+  </div>
+</section>
+<script>
+  // updates.json statik dosyadır (build'de CHANGELOG'dan üretilir). Yüklenemezse
+  // bölüm gizli kalır — site davranışı değişmez.
+  fetch('./updates.json').then(r => r.ok ? r.json() : Promise.reject())
+    .then(data => {
+      const list = document.getElementById('updatesList');
+      (data.entries || []).forEach(entry => {
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid rgba(148,163,184,.15);border-radius:14px;padding:18px 20px;background:rgba(15,23,42,.35)';
+        const h = document.createElement('div');
+        h.style.cssText = 'font-weight:600;margin-bottom:10px;letter-spacing:-.01em';
+        h.textContent = entry.label || entry.date || '';
+        card.appendChild(h);
+        (entry.items || []).forEach(item => {
+          const row = document.createElement('p');
+          row.className = 'muted';
+          row.style.cssText = 'font-size:14.5px;margin:6px 0 0';
+          row.textContent = (item.type ? item.type + ' · ' : '') + item.text;
+          card.appendChild(row);
+        });
+        list.appendChild(card);
+      });
+      if (list.children.length) document.getElementById('guncellemeler').style.display = '';
+    }).catch(() => {});
+</script>
 
 <!-- ERİŞİM / PRICING -->
 <section id="erisim">

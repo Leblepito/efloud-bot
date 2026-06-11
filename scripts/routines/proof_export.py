@@ -29,16 +29,22 @@ from pathlib import Path
 from scripts.routines.runner import register
 from scripts.routines._base import RoutineResult
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"  # 1.1.0: +uptime bloğu (T-014, healthz-contract.md §3)
 
 # ── Whitelist (G-P3-1) ───────────────────────────────────────────────────
 ALLOWED_TOP_KEYS = frozenset({
     "schema_version", "generated_at", "period",
     "trade_count", "win_rate_pct", "profit_factor", "max_dd_pct",
-    "equity_curve",
+    "equity_curve", "uptime",
 })
 ALLOWED_PERIOD_KEYS = frozenset({"from", "to"})
 ALLOWED_CURVE_KEYS = frozenset({"date", "equity_norm"})
+# T-014 (healthz-contract.md §3): service_uptime ≠ trading_active — ayrı
+# metriklerdir, karıştırılmaz; suspended = "servis up / trading suspended"
+# (safety suspension — hata değil, ürün güvenlik özelliği).
+ALLOWED_UPTIME_KEYS = frozenset({
+    "window_days", "sample_count", "service_uptime_pct", "trading_active_pct",
+})
 
 # Defense-in-depth: no key anywhere in the snapshot may contain these.
 FORBIDDEN_KEY_SUBSTRINGS = (
@@ -75,6 +81,9 @@ def assert_whitelist(snapshot: dict) -> None:
     for point in snapshot.get("equity_curve", []):
         if set(point.keys()) - ALLOWED_CURVE_KEYS:
             raise ValueError("proof snapshot: non-whitelisted equity_curve keys")
+    uptime = snapshot.get("uptime")
+    if isinstance(uptime, dict) and set(uptime.keys()) - ALLOWED_UPTIME_KEYS:
+        raise ValueError("proof snapshot: non-whitelisted uptime keys")
     for key in _iter_keys(snapshot):
         lk = str(key).lower()
         for bad in FORBIDDEN_KEY_SUBSTRINGS:
@@ -182,7 +191,8 @@ def max_drawdown_pct(curve: list[dict]) -> float:
 
 
 def build_snapshot(trades: list[dict], baseline: dict,
-                   now_iso: str | None = None) -> dict:
+                   now_iso: str | None = None,
+                   uptime: dict | None = None) -> dict:
     since = baseline.get("since")
     if since:
         trades = [t for t in trades if str(t["exit_timestamp"])[:10] >= since]
@@ -206,9 +216,78 @@ def build_snapshot(trades: list[dict], baseline: dict,
         "profit_factor": round(abs(gross_win / gross_loss), 2) if gross_loss != 0 else 0.0,
         "max_dd_pct": max_drawdown_pct(curve),
         "equity_curve": curve,
+        # Anahtar her zaman mevcut (snap.keys() == ALLOWED_TOP_KEYS kontratı);
+        # None = "ölçüm yok" — tüketici (site) null'u gizler, %100 uydurmaz.
+        "uptime": uptime,
     }
     assert_whitelist(snapshot)
     return snapshot
+
+
+# ── Uptime (T-014, healthz-contract.md §3) ───────────────────────────────
+
+def load_uptime_samples(samples_path: str | Path) -> list[dict]:
+    """state/uptime_samples.jsonl satırları ({ts, status}); bozuk satır atlanır."""
+    p = Path(samples_path)
+    if not p.exists():
+        return []
+    samples: list[dict] = []
+    try:
+        raw = p.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            s = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(s, dict) and s.get("ts") and s.get("status"):
+            samples.append(s)
+    return samples
+
+
+def compute_uptime(samples: list[dict], now_iso: str | None = None,
+                   window_days: int = 30) -> dict:
+    """healthz-contract.md §3: pencere içi örneklerden İKİ ayrı metrik.
+
+    service_uptime_pct = (ok + suspended) / toplam  — "servis ayakta mıydı"
+    trading_active_pct = ok / toplam                — "trading fiilen açık mıydı"
+    Örnek yokken yüzdeler None (sahte %100 yayınlamak yerine "ölçüm yok").
+    """
+    from datetime import timedelta
+
+    now = (datetime.fromisoformat(now_iso) if now_iso
+           else datetime.now(timezone.utc))
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    since = now - timedelta(days=window_days)
+
+    in_window = []
+    for s in samples:
+        try:
+            ts = datetime.fromisoformat(str(s["ts"]))
+        except ValueError:
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        if since <= ts <= now:
+            in_window.append(str(s["status"]))
+
+    n = len(in_window)
+    if n == 0:
+        return {"window_days": window_days, "sample_count": 0,
+                "service_uptime_pct": None, "trading_active_pct": None}
+    ok = in_window.count("ok")
+    suspended = in_window.count("suspended")
+    return {
+        "window_days": window_days,
+        "sample_count": n,
+        "service_uptime_pct": round((ok + suspended) / n * 100, 1),
+        "trading_active_pct": round(ok / n * 100, 1),
+    }
 
 
 # ── Healthz sampling side effect (healthz-contract.md §3) ────────────────
@@ -273,7 +352,8 @@ def run(client=None, alert=None, cfg=None) -> RoutineResult:
 
     corrupt: list = []
     trades = load_closed_trades(paths["journal"], corrupt_sink=corrupt)
-    snapshot = build_snapshot(trades, baseline)
+    uptime = compute_uptime(load_uptime_samples(paths["uptime_samples"]))
+    snapshot = build_snapshot(trades, baseline, uptime=uptime)
 
     out = Path(paths["out"])
     out.parent.mkdir(parents=True, exist_ok=True)
