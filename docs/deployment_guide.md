@@ -44,7 +44,7 @@ Ajanın sunucuya şifresiz bağlanabilmesi için Railway üzerinde çalışacak 
 # Hetzner VPS Erişim Bilgileri
 HETZNER_VPS_IP=95.217.xx.xx
 HETZNER_SSH_USER=root
-HETZNER_SSH_KEY="-----BEGIN OPENSSH PRIVATE KEY-----\nMIIEogIBAAKCAQE...\n-----END OPENSSH PRIVATE KEY-----"
+HETZNER_SSH_KEY="<private-key-pem-buraya — repo'ya ASLA gerçek key koymayın>"
 ```
 
 ### 🤖 Otonom Deployment Scripti (`scripts/deploy_remote.py`)
