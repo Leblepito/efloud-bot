@@ -501,13 +501,17 @@ if sig_active_short and not na(sig_entry_short) and not na(sig_sl_short) and not
 
 // Limit-entry expiry: 20 bar sonra hâlâ fill olmadıysa order iptal
 // (review bulgusu: süresiz bekleyen limit order phantom pozisyon yaratıyor)
-if sig_active_long and sig_entry_bar_long > 0 and (bar_index - sig_entry_bar_long) > 20
+// (review-fix 2. tur: sig_active_* order yerleştirilince false olduğundan
+//  expiry sig_active'e bağlanamaz — pending takibi sig_entry_bar_* ile;
+//  fill olunca sayaçlar sıfırlanır ki açık pozisyonun exit'leri iptal edilmesin)
+if sig_entry_bar_long > 0 and not is_in_trade and (bar_index - sig_entry_bar_long) > 20
     strategy.cancel("LONG")
-    sig_active_long := false
     sig_entry_bar_long := 0
-if sig_active_short and sig_entry_bar_short > 0 and (bar_index - sig_entry_bar_short) > 20
+if sig_entry_bar_short > 0 and not is_in_trade and (bar_index - sig_entry_bar_short) > 20
     strategy.cancel("SHORT")
-    sig_active_short := false
+    sig_entry_bar_short := 0
+if is_in_trade
+    sig_entry_bar_long := 0
     sig_entry_bar_short := 0
 
 // ═══════════════════════════════════════════════
