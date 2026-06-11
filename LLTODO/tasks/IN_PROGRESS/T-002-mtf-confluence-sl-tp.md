@@ -1,7 +1,7 @@
 # T-002: MTF Confluence + SL/TP Hesaplama
 
 **Epic:** P-001
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @hermes (2026-06-11)
 **Tahmini süre:** 2-3 gün
 **Bağımlılık:** T-001
 
@@ -30,4 +30,4 @@
 
 | Zaman | Durum | Not |
 |---|---|---|
-| — | BACKLOG | T-001 tamamlanınca başlayacak |
+| 2026-06-11 | IMPL_READY | T-002 implemente edildi: confluence scoring + SL/TP + sinyal + plot. 608 satır, Pine v6. |

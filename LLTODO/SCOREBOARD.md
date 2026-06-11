@@ -17,8 +17,8 @@
 
 | Görev | Açıklama | Durum | Claim |
 |---|---|---|---|
-| T-001 | Swing detection + OB core (Pine Script) | ✅ DONE (G-T1 PASS, @claude compile-verify) | @hermes (2026-06-10) |
-| T-002 | MTF confluence + SL/TP hesaplama | ⬜ BACKLOG | — |
+| T-001 | Swing detection + OB core (Pine Script) | 🟢 DONE | @hermes (2026-06-10) |
+| T-002 | MTF confluence + SL/TP hesaplama | 🟡 IMPL_READY | @hermes (2026-06-11) |
 | T-003 | Strateji backtest + görsel validasyon | ⬜ BACKLOG | — |
 
 ## Sprint Görünümü

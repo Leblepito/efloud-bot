@@ -91,7 +91,7 @@
 
 ## 5. T-001 Bölümü: Swing + OB Core
 
-**Dosya:** `pine/efloud_signals.pine` (259 satır, 11.9 KB)
+**Dosya:** `pine/u2algo/wave1_signals.pine` (301 satır, 12.4 KB — T-001)
 
 **İçerik:**
 - [x] `indicator()` header (v6, overlay)
@@ -105,14 +105,32 @@
 - [x] 1h bias table: sağ üst köşe
 - [x] Alert stub'ları (T-002 dolduracak)
 
+**Derleme durumu:** `DONE` (T-001 tamamlandı, T-002'ye geçildi)
+
+---
+
+## 6. T-002 Bölümü: MTF Confluence + SL/TP
+
+**Dosya:** `pine/u2algo/wave1_signals.pine` (608 satır, 26.6 KB — T-002)
+
+**Eklenenler (v1.1.0):**
+- [x] Input'lar: `sl_lb`, `sl_atr_m`, `min_rr`, `fib_tp2`, `show_sltp`
+- [x] Confluence scoring (7 faktör, 0-100): OB (+30), OB near swing (+15), strong breakout (+10), 1h bias aligned (+20), EMA slope (+10), FVG (+5), recent swing break (+10)
+- [x] 1h swing level detection (lookback=3 HTF pivot, TP1 hedefi)
+- [x] SL hesaplama: `f_calc_sl()` — son 20 mum ekstremi + ATR(14)×0.5 buffer, 0.5-5.0×ATR clamp
+- [x] TP hesaplama: `f_calc_tp()` — TP1=1h swing/15m swing, TP2=Fib(1.618) extension, fallback min_rr
+- [x] Sinyal üretimi: `long_signal`/`short_signal` — confluence >= threshold + 1h bias alignment
+- [x] Görsel plot: SL (orange-red dashed 2px), TP1 (green dashed 1px), TP2 (blue dashed 1px), entry label (score %), entry zone box
+- [x] Alert condition'ları sinyal değişkenlerine bağlandı
+
 **Derleme durumu:** `IMPL_READY, awaiting compile-verify` (VPS'te TradingView yok)
 
 ---
 
-## 6. Revizyon Geçmişi
+## 7. Revizyon Geçmişi
 
 | Tarih | Bölüm | Değişiklik | Yazar |
 |---|---|---|---|
 | 2026-06-10 | T-001 | İlk sürüm: swing + OB + 1h bias | @hermes |
-| — | T-002 | (bekliyor) | — |
+| 2026-06-11 | T-002 | Confluence scoring + SL/TP + sinyal + görsel plot | @hermes |
 | — | T-003 | (bekliyor) | — |
