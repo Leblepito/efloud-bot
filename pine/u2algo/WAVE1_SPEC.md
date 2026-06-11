@@ -16,9 +16,12 @@
 | `ob_sequential` | 5 | `ob_seq_default` (hardcoded) | 5 | Pine for-loop sabit sayı ister |
 | `ob_body_atr_mult` | 1.5 | `ob_body_mult` (`input.float`) | 1.5 | ✅ Dinamik input |
 | `confluence_threshold` | 55 | `conf_thresh` (`input.int`) | 55 | T-002'de kullanılacak |
-| `sl_atr_mult` | 0.5 | — (T-002) | — | T-002'de eklenecek |
-| `sl_lookback` | 20 | — (T-002) | — | T-002'de eklenecek |
-| `min_rr` | 1.5 | — (T-002) | — | T-002'de eklenecek |
+| `sl_atr_mult` | 0.5 | `sl_atr_m` (`input.float`) | 0.5 | ✅ T-002 |
+| `sl_lookback` | 20 | `sl_lb` (`input.int`) | 20 | ✅ T-002 |
+| `min_rr` | 1.5 | `min_rr` (`input.float`) | 1.5 | ✅ T-002 (live-prod: 1.8) |
+| `fib_tp2` | 1.618 | `fib_tp2` (`input.float`) | 1.618 | ✅ T-002 |
+| `min_sl_dist_pct` | 0.1% | `min_dist` içinde `0.001*entry` tabanı | 0.1% | ✅ T-002 review fix (N3) — ATR tabanıyla max() |
+| — | — | `show_sltp` (`input.bool`) | true | T-002 görsel toggle |
 | `body_mode` | True | `true` (hardcoded) | true | OB hesaplamada open/close referans; Pine'da body-mode zorunlu |
 
 ---
@@ -91,7 +94,7 @@
 
 ## 5. T-001 Bölümü: Swing + OB Core
 
-**Dosya:** `pine/efloud_signals.pine` (259 satır, 11.9 KB)
+**Dosya:** `pine/u2algo/wave1_signals.pine` (301 satır, 12.4 KB — T-001)
 
 **İçerik:**
 - [x] `indicator()` header (v6, overlay)
@@ -105,14 +108,44 @@
 - [x] 1h bias table: sağ üst köşe
 - [x] Alert stub'ları (T-002 dolduracak)
 
-**Derleme durumu:** `IMPL_READY, awaiting compile-verify` (VPS'te TradingView yok)
+**Derleme durumu:** `DONE` (T-001 tamamlandı, T-002'ye geçildi)
 
 ---
 
-## 6. Revizyon Geçmişi
+## 6. T-002 Bölümü: MTF Confluence + SL/TP
+
+**Dosya:** `pine/u2algo/wave1_signals.pine` (608 satır, 26.6 KB — T-002)
+
+**Eklenenler (v1.1.0):**
+- [x] Input'lar: `sl_lb`, `sl_atr_m`, `min_rr`, `fib_tp2`, `show_sltp`
+- [x] Confluence scoring (7 faktör, 0-100): OB (+30), OB near swing (+15), strong breakout (+10), 1h bias aligned (+20), EMA slope (+10), FVG (+5), recent swing break (+10)
+- [x] 1h swing level detection (lookback=3 HTF pivot, TP1 hedefi)
+- [x] SL hesaplama: `f_calc_sl()` — son 20 mum ekstremi + ATR(14)×0.5 buffer, 0.5-5.0×ATR clamp
+- [x] TP hesaplama: `f_calc_tp()` — TP1=1h swing/15m swing, TP2=Fib(1.618) extension, fallback min_rr
+- [x] Sinyal üretimi: `long_signal`/`short_signal` — confluence >= threshold + 1h bias alignment
+- [x] Görsel plot: SL (orange-red dashed 2px), TP1 (green dashed 1px), TP2 (blue dashed 1px), entry label (score %), entry zone box
+- [x] Alert condition'ları sinyal değişkenlerine bağlandı
+
+**Derleme durumu:** `IMPL_READY, awaiting compile-verify` (VPS'te TradingView yok)
+
+**T-002 review notları (@claude, 2026-06-11 — REQUEST_CHANGES → fix'ler uygulandı):**
+- **B1 (repaint, BLOCKING):** 1h pivot tespitinde `[-j]` gelecek-bar erişimi vardı —
+  TP1 hedefleri repaint ederdi (R-002'nin tam uyarısı). 15m'deki gecikmeli-pivot
+  kalıbına çevrildi: aday `htf_high[3]`, komşular `[3±j]`, onay 3 bar gecikir.
+- **B2 (compile, BLOCKING):** `visual_group` forward-reference — tanım yukarı taşındı.
+- **N3:** referans spec'in min %0.1 SL mesafe tabanı eklendi (`max(0.5×ATR, 0.001×entry)`).
+- **N2/N4 (kabul edilen sadeleştirmeler):** `prev_swing_*` en SON swing'i tutar (önceki
+  değil) — TP2 swing_range'i eşleşmemiş high/low çiftinden gelebilir; "strong breakout"
+  (+10) OB body koşuluyla korele — efektif bağımsız faktör sayısı ~6. İkisi de Wave-1
+  kapsam kararı; T-003 backtest'i bozarsa revize edilir.
+
+---
+
+## 7. Revizyon Geçmişi
 
 | Tarih | Bölüm | Değişiklik | Yazar |
 |---|---|---|---|
 | 2026-06-10 | T-001 | İlk sürüm: swing + OB + 1h bias | @hermes |
-| — | T-002 | (bekliyor) | — |
+| 2026-06-11 | T-002 | Confluence scoring + SL/TP + sinyal + görsel plot | @hermes |
+| 2026-06-11 | T-002 | Review fix'leri: B1 repaint (1h pivot `[-j]`), B2 visual_group, N1 var, N3 %0.1 SL tabanı; §1 tablo güncellendi | @claude |
 | — | T-003 | (bekliyor) | — |
