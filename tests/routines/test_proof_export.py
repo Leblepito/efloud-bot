@@ -1,4 +1,7 @@
-"""T-012 proof_export tests — privacy whitelist (G-P3-1), curve math, gating."""
+"""T-012 proof_export tests — privacy whitelist (G-P3-1), curve math, gating.
+
+T-014 eki: uptime bloğu (compute_uptime/load_uptime_samples, schema 1.1.0).
+"""
 import json
 
 import pytest
@@ -8,8 +11,10 @@ from scripts.routines.proof_export import (
     assert_whitelist,
     build_daily_curve,
     build_snapshot,
+    compute_uptime,
     load_baseline,
     load_closed_trades,
+    load_uptime_samples,
     max_drawdown_pct,
     run,
     sample_healthz,
@@ -244,3 +249,101 @@ class TestHealthzSampling:
         lines = path.read_text(encoding="utf-8").strip().splitlines()
         assert [json.loads(line)["status"] for line in lines] == [
             "ok", "suspended", "unreachable", "unhealthy"]
+
+
+# ── Uptime (T-014, healthz-contract §3) ──────────────────────────────────
+
+NOW_ISO = "2026-06-11T12:00:00+00:00"
+
+
+def _sample(ts, status):
+    return {"ts": ts, "status": status}
+
+
+class TestUptime:
+    def test_two_metrics_separated(self):
+        """service_uptime = (ok+suspended)/n; trading_active = ok/n — KARIŞMAZ."""
+        samples = [
+            _sample("2026-06-10T00:00:00+00:00", "ok"),
+            _sample("2026-06-10T06:00:00+00:00", "ok"),
+            _sample("2026-06-10T12:00:00+00:00", "suspended"),
+            _sample("2026-06-10T18:00:00+00:00", "unreachable"),
+        ]
+        u = compute_uptime(samples, now_iso=NOW_ISO, window_days=30)
+        assert u["sample_count"] == 4
+        assert u["service_uptime_pct"] == 75.0   # (2 ok + 1 suspended) / 4
+        assert u["trading_active_pct"] == 50.0   # 2 ok / 4
+
+    def test_window_excludes_old_samples(self):
+        samples = [
+            _sample("2026-03-01T00:00:00+00:00", "unhealthy"),  # pencere dışı
+            _sample("2026-06-10T00:00:00+00:00", "ok"),
+        ]
+        u = compute_uptime(samples, now_iso=NOW_ISO, window_days=30)
+        assert u["sample_count"] == 1
+        assert u["service_uptime_pct"] == 100.0
+
+    def test_zero_samples_is_no_measurement_not_100(self):
+        u = compute_uptime([], now_iso=NOW_ISO)
+        assert u["sample_count"] == 0
+        assert u["service_uptime_pct"] is None
+        assert u["trading_active_pct"] is None
+
+    def test_naive_timestamps_tolerated(self):
+        u = compute_uptime([_sample("2026-06-10T00:00:00", "ok")], now_iso=NOW_ISO)
+        assert u["sample_count"] == 1
+
+    def test_load_samples_skips_corrupt_lines(self, tmp_path):
+        p = tmp_path / "u.jsonl"
+        p.write_text(
+            json.dumps(_sample("2026-06-10T00:00:00+00:00", "ok")) + "\nnot-json\n",
+            encoding="utf-8",
+        )
+        assert len(load_uptime_samples(p)) == 1
+
+    def test_snapshot_includes_uptime_and_passes_whitelist(self):
+        u = compute_uptime([_sample("2026-06-10T00:00:00+00:00", "ok")], now_iso=NOW_ISO)
+        snap = build_snapshot([_trade("2026-06-01T10:00:00", 5.0)], BASELINE,
+                              now_iso=NOW_ISO, uptime=u)
+        assert set(snap.keys()) == ALLOWED_TOP_KEYS
+        assert snap["uptime"]["service_uptime_pct"] == 100.0
+        assert snap["schema_version"] == "1.1.0"
+
+    def test_whitelist_rejects_non_dict_uptime(self):
+        """Tip-kapısı bypass'ı yok: dict olmayan uptime değeri reddedilir."""
+        snap = build_snapshot([_trade("2026-06-01T10:00:00", 1.0)], BASELINE,
+                              now_iso=NOW_ISO)
+        bad = json.loads(json.dumps(snap))
+        bad["uptime"] = [{"window_days": 30}]
+        with pytest.raises(ValueError, match="uptime"):
+            assert_whitelist(bad)
+
+    def test_whitelist_rejects_extra_uptime_key(self):
+        snap = build_snapshot([_trade("2026-06-01T10:00:00", 1.0)], BASELINE,
+                              now_iso=NOW_ISO,
+                              uptime={"window_days": 30, "sample_count": 1,
+                                      "service_uptime_pct": 100.0,
+                                      "trading_active_pct": 100.0})
+        bad = json.loads(json.dumps(snap))
+        bad["uptime"]["heartbeat_age"] = 5
+        with pytest.raises(ValueError, match="uptime"):
+            assert_whitelist(bad)
+
+    def test_run_snapshot_contains_uptime_block(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("EFLOUD_API_BASE_URL", "http://127.0.0.1:1")  # unreachable
+        j = tmp_path / "j.jsonl"
+        _write_journal(j, [_trade("2026-06-01T10:00:00", 25.0)])
+        (tmp_path / "baseline.json").write_text(json.dumps(BASELINE), encoding="utf-8")
+        cfg = {"proof_export": {
+            "journal": str(j),
+            "baseline": str(tmp_path / "baseline.json"),
+            "out": str(tmp_path / "snap.json"),
+            "uptime_samples": str(tmp_path / "u.jsonl"),
+        }}
+        result = run(cfg=cfg)
+        assert result.ok is True
+        snap = json.loads((tmp_path / "snap.json").read_text(encoding="utf-8"))
+        # run() önce sample alır (unreachable) → uptime bloğu 1 örnekle hesaplanır
+        assert snap["uptime"]["sample_count"] == 1
+        assert snap["uptime"]["service_uptime_pct"] == 0.0
+        assert snap["uptime"]["trading_active_pct"] == 0.0

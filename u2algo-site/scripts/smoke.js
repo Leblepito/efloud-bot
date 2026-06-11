@@ -46,6 +46,33 @@ if (lower.includes('kesin kazan') && !lower.includes('"kesin kazanır" sinyal se
   ok = false;
 }
 
+// T-014: updates.json runtime'da sayfaya enjekte edilir — compliance gate'ten
+// o kanal da geçmeli (CHANGELOG'a yazılan ifadeler müşteri yüzeyine ulaşır).
+const updatesPath = path.join(__dirname, '..', 'updates.json');
+if (fs.existsSync(updatesPath)) {
+  let updatesText = '';
+  try {
+    const updates = JSON.parse(fs.readFileSync(updatesPath, 'utf8'));
+    updatesText = (updates.entries || [])
+      .flatMap(e => [e.label || ''].concat((e.items || []).map(i => `${i.type || ''} ${i.text || ''}`)))
+      .join('\n')
+      .toLowerCase();
+  } catch (err) {
+    console.error('UPDATES_JSON_PARSE_FAILED');
+    ok = false;
+  }
+  for (const phrase of forbidden) {
+    if (updatesText.includes(phrase)) {
+      console.error(`FORBIDDEN_PHRASE_IN_UPDATES: ${phrase}`);
+      ok = false;
+    }
+  }
+  if (updatesText.includes('kesin kazan')) {
+    console.error('FORBIDDEN_CONTEXT_IN_UPDATES: kesin kazan');
+    ok = false;
+  }
+}
+
 for (const asset of ['favicon.ico', 'brand/logo-horizontal.svg', 'brand/logo-mark.svg', 'robots.txt', 'sitemap.xml']) {
   const p = path.join(__dirname, '..', asset);
   if (!fs.existsSync(p)) {
