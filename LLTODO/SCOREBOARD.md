@@ -11,7 +11,7 @@
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
 | Tamamlanan görev | ~~1~~ → 2 (T-001 ✅ 2026-06-10 G-T1 PASS; T-023 ✅ 2026-06-11 PR #182 → master `63b9872`) |
-| Claim edilmiş görev | 0 |
+| Claim edilmiş görev | 1 (T-020 @claude 2026-06-11) ~~önceki: 0~~ |
 
 ## P-001 Görev Skoru
 
@@ -89,7 +89,7 @@
 | T-017 | W2 | tv-access-grant runbook + kuyruk görünümü | ⬜ BACKLOG | — |
 | T-018 | W3 | telegram_notifier (default-OFF) + regression test | ⬜ BACKLOG | — |
 | T-019 | W3 | Müşteri quickstart + site FAQ/destek | ⬜ BACKLOG | — |
-| T-020 | W-R | Backup otomasyonu + restore tatbikatı (pre-UR-exempt) | ⬜ BACKLOG | — |
+| T-020 | W-R | Backup otomasyonu + restore tatbikatı (pre-UR-exempt) | 🟡 IN_PROGRESS (scriptler+runbook PR'da; VPS kurulum+drill GÖREV F sonrası) | @claude (2026-06-11) |
 | T-021 | W-R | Public status page + uptime monitor | ⬜ BACKLOG | — |
 | T-022 | W-R | SLA + DR + on-call dokümanları | ⬜ BACKLOG | — |
 | T-023 | W-R | CI hardening: gitleaks + frontend + lint (pre-UR-exempt) | ✅ DONE (PR #182 → master `63b9872`, CI 4/4) | @claude (2026-06-11) |
