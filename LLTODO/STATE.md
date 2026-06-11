@@ -55,6 +55,36 @@
 ---
 
 ## P-002: (Gelecek — henüz açılmadı)
+~~(yukarıdaki satır eski durumdur — P-002 2026-06-11'de açıldı, aşağıya bakın)~~
+
+## P-002: Commercial MVP — u2algo Satış Altyapısı
+
+**Başlangıç:** 2026-06-11
+**Sahip:** @hermes (implementor/infra), @claude (architect/reviewer)
+**Branch:** `claude/trading-bot-mvp-plan-l83v5s` (plan), implementasyon dalga başına ayrı branch
+**Plan:** `LLTODO/plans/P-002-commercial-mvp.md`
+**Dayanak:** `docs/audit/2026-06-11-commercial-mvp-gap-analysis.md`
+
+### Durum Geçmişi
+
+```
+2026-06-11  DRAFT            @claude  Kurumsal MVP boşluk analizi + tek parça plan yazıldı (W0 legal → W1 kanıt → W2 monetizasyon → W3 müşteri deneyimi)
+2026-06-11  REVIEW_OPEN      @claude  UltraReview (UR-002) için açıldı — operatör /ultrareview tetikleyecek
+```
+
+### Aktif Durum
+
+**Durum:** `REVIEW_OPEN` — UR-002 UltraReview bekliyor (2026-06-11)
+**Sonraki adım:** Operatör `/ultrareview` çalıştırır → bulgular plana entegre → FAZ 3 implementasyon (T-010..T-019, dalga sırasıyla)
+
+### Faz Planı
+
+| Faz | İçerik | Durum |
+|---|---|---|
+| FAZ 0 | Boşluk analizi + plan yazımı | ✅ DONE (2026-06-11) |
+| FAZ 1-2 | UltraReview (UR-002) + consensus/revizyon | ⬜ BEKLİYOR |
+| FAZ 3 | İmplementasyon W0→W1→W2→W3 (T-010..T-019) | ⬜ BEKLİYOR |
+| FAZ 4 | Dalga başına review + master merge | ⬜ BEKLİYOR |
 
 ---
 

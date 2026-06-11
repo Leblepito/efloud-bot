@@ -51,3 +51,38 @@
 | @hermes | P-001 | Plan revizyonu, implementasyon |
 | @claude | P-001 | R-001 review, UR-001 ultra review |
 | @gemini | P-001 | R-002 review |
+
+---
+
+## P-002 Eki (2026-06-11 — append-only)
+
+> P-002 "Commercial MVP" açıldı. Genel metrik tablosundaki eski değerler korunur;
+> güncel toplam: 2 epic (P-001 aktif, P-002 REVIEW_OPEN), 13 görev (T-001..T-003 + T-010..T-019).
+
+### P-002 Görev Skoru
+
+| Görev | Dalga | Açıklama | Durum | Claim |
+|---|---|---|---|---|
+| T-010 | W0 | u2algo-site legal sayfaları + footer + sitemap | ⬜ BACKLOG | — |
+| T-011 | W0 | Waitlist consent checkbox + server.js alanı | ⬜ BACKLOG | — |
+| T-012 | W1 | proof_export.py + snapshot şema + privacy testi | ⬜ BACKLOG | — |
+| T-013 | W1 | monthly.py + /api/reports/monthly | ⬜ BACKLOG | — |
+| T-014 | W1 | Uptime alanı + public CHANGELOG + site updates | ⬜ BACKLOG | — |
+| T-015 | W2 | Supabase entitlements migration + RLS | ⬜ BACKLOG | — |
+| T-016 | W2 | Lemon Squeezy webhook (HMAC) + onay e-postası | ⬜ BACKLOG | — |
+| T-017 | W2 | tv-access-grant runbook + kuyruk görünümü | ⬜ BACKLOG | — |
+| T-018 | W3 | telegram_notifier (default-OFF) + regression test | ⬜ BACKLOG | — |
+| T-019 | W3 | Müşteri quickstart + site FAQ/destek | ⬜ BACKLOG | — |
+
+### P-002 Review Skoru
+
+| Review | Epic | Reviewer | Sonuç | Conf |
+|---|---|---|---|---|
+| UR-002 | P-002 | @claude (operatör /ultrareview) | ⬜ BEKLİYOR | — |
+
+### Agent Katkıları (ek)
+
+| Agent | Epic | Roller |
+|---|---|---|
+| @claude | P-002 | Boşluk analizi, plan yazımı, UR-002 |
+| @hermes | P-002 | Infra ön-işleri (Supabase/Railway), W0-W3 implementasyon |
