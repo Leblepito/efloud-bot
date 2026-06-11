@@ -1,6 +1,6 @@
 # T-017: TradingView Erişim Grant Runbook + Kuyruk Görünümü
 
-**Epic:** P-002
+**Epic:** P-003
 **Claimed by:** — (henüz claim edilmedi)
 **Tahmini süre:** 0.5 gün
 **Bağımlılık:** T-016
@@ -24,4 +24,4 @@ Entitlement kuyruğundan TradingView invite-only erişimi manuel verme sürecini
 
 | Zaman | Durum | Not |
 |---|---|---|
-| 2026-06-11 | BACKLOG | P-002 W2 — UR-002 bekleniyor |
+| 2026-06-11 | BACKLOG | P-003 W2 — UR-003 bekleniyor |

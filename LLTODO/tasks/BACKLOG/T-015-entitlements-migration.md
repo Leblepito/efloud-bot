@@ -1,6 +1,6 @@
 # T-015: Supabase Entitlements Tablosu + RLS
 
-**Epic:** P-002
+**Epic:** P-003
 **Claimed by:** — (henüz claim edilmedi)
 **Tahmini süre:** 0.5 gün
 **Bağımlılık:** T-010 (legal pack), Hermes GÖREV A (DDL taslağı)
@@ -24,4 +24,4 @@ Satın alma → erişim hakkı kaydını tutan `entitlements` tablosunu migratio
 
 | Zaman | Durum | Not |
 |---|---|---|
-| 2026-06-11 | BACKLOG | P-002 W2 — UR-002 bekleniyor |
+| 2026-06-11 | BACKLOG | P-003 W2 — UR-003 bekleniyor |

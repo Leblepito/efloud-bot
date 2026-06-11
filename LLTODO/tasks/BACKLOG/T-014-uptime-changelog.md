@@ -1,6 +1,6 @@
 # T-014: Uptime Alanı + Public CHANGELOG + Site Updates Bölümü
 
-**Epic:** P-002
+**Epic:** P-003
 **Claimed by:** — (henüz claim edilmedi)
 **Tahmini süre:** 1 gün
 **Bağımlılık:** T-012 (snapshot şemasına alan ekler)
@@ -24,4 +24,4 @@ Proof snapshot'a alerter heartbeat'ten türetilen uptime % alanı eklemek; müş
 
 | Zaman | Durum | Not |
 |---|---|---|
-| 2026-06-11 | BACKLOG | P-002 W1 — UR-002 bekleniyor |
+| 2026-06-11 | BACKLOG | P-003 W1 — UR-003 bekleniyor |

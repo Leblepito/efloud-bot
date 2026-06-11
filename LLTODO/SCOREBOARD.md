@@ -6,10 +6,10 @@
 
 | Metrik | Değer |
 |---|---|
-| Toplam epic | 2 (P-001, P-002) |
-| Aktif epic | 2 (P-001, P-002) |
+| Toplam epic | 3 (P-001, P-002, P-003) |
+| Aktif epic | 3 (P-001 IN_PROGRESS, P-002 REVIEW_OPEN, P-003 REVIEW_OPEN) |
 | Tamamlanan epic | 0 |
-| Toplam görev | 3 (T-001, T-002, T-003) |
+| Toplam görev | 13 (T-001..T-003, T-010..T-019) |
 | Tamamlanan görev | 1 (T-001 ✅ 2026-06-10, G-T1 compile PASS) |
 | Claim edilmiş görev | 0 |
 
@@ -69,12 +69,13 @@
 
 ---
 
-## P-002 Eki (2026-06-11 — append-only)
+## P-003 Eki (2026-06-11 — append-only)
 
-> P-002 "Commercial MVP" açıldı. Genel metrik tablosundaki eski değerler korunur;
-> güncel toplam: 2 epic (P-001 aktif, P-002 REVIEW_OPEN), 13 görev (T-001..T-003 + T-010..T-019).
+> P-003 "Commercial MVP" açıldı (epic ID çakışması nedeniyle P-002'den renumber edildi;
+> P-002 = Marketing & Growth). Genel metrik tablosu rename commit'inde mutabıklandı:
+> 3 epic, 13 görev (T-001..T-003 + T-010..T-019).
 
-### P-002 Görev Skoru
+### P-003 Görev Skoru
 
 | Görev | Dalga | Açıklama | Durum | Claim |
 |---|---|---|---|---|
@@ -89,15 +90,15 @@
 | T-018 | W3 | telegram_notifier (default-OFF) + regression test | ⬜ BACKLOG | — |
 | T-019 | W3 | Müşteri quickstart + site FAQ/destek | ⬜ BACKLOG | — |
 
-### P-002 Review Skoru
+### P-003 Review Skoru
 
 | Review | Epic | Reviewer | Sonuç | Conf |
 |---|---|---|---|---|
-| UR-002 | P-002 | @claude (operatör /ultrareview) | ⬜ BEKLİYOR | — |
+| UR-003 | P-003 | @claude (operatör /ultrareview) | ⬜ BEKLİYOR | — |
 
 ### Agent Katkıları (ek)
 
 | Agent | Epic | Roller |
 |---|---|---|
-| @claude | P-002 | Boşluk analizi, plan yazımı, UR-002 |
-| @hermes | P-002 | Infra ön-işleri (Supabase/Railway), W0-W3 implementasyon |
+| @claude | P-003 | Boşluk analizi, plan yazımı, UR-003 |
+| @hermes | P-003 | Infra ön-işleri (Supabase/Railway), W0-W3 implementasyon |

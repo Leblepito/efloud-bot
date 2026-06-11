@@ -1,9 +1,9 @@
 # T-013: Aylık Statement (monthly.py + /api/reports/monthly)
 
-**Epic:** P-002
+**Epic:** P-003
 **Claimed by:** — (henüz claim edilmedi)
 **Tahmini süre:** 1-2 gün
-**Bağımlılık:** — (UR-002 onayı sonrası başlar)
+**Bağımlılık:** — (UR-003 onayı sonrası başlar)
 
 ## Hedef
 
@@ -26,4 +26,4 @@ Mevcut daily-report altyapısını yeniden kullanarak aylık performans statemen
 
 | Zaman | Durum | Not |
 |---|---|---|
-| 2026-06-11 | BACKLOG | P-002 W1 — UR-002 bekleniyor |
+| 2026-06-11 | BACKLOG | P-003 W1 — UR-003 bekleniyor |

@@ -1,6 +1,6 @@
 # T-018: Müşteri Telegram Kanal Bildirimi (default-OFF)
 
-**Epic:** P-002
+**Epic:** P-003
 **Claimed by:** — (henüz claim edilmedi)
 **Tahmini süre:** 1-2 gün
 **Bağımlılık:** T-016 (müşteri kohortu), efloud-risk-ops-reviewer onayı
@@ -14,7 +14,7 @@ u2algo Telegram kanalına gecikmeli/aggregate bildirim gönderen, `NullNotificat
 - [ ] `engine/notifications/telegram_notifier.py` (NullNotificationManager arayüzü)
 - [ ] `config.yaml` `notifications:` bloğu — **default OFF** (canlı config bu PR'da DEĞİŞMEZ; yalnız şema + örnek)
 - [ ] Bildirim içeriği: kapanmış/teyitli olayların gecikmeli özeti — gerçek zamanlı sinyal YOK ("sinyal servisi" regülasyon çerçevesi riski)
-- [ ] Regression test: flag kapalıyken davranış birebir mevcut (G-P2-3)
+- [ ] Regression test: flag kapalıyken davranış birebir mevcut (G-P3-3)
 
 ## Acceptance Kriterleri
 
@@ -26,4 +26,4 @@ u2algo Telegram kanalına gecikmeli/aggregate bildirim gönderen, `NullNotificat
 
 | Zaman | Durum | Not |
 |---|---|---|
-| 2026-06-11 | BACKLOG | P-002 W3 — UR-002 bekleniyor |
+| 2026-06-11 | BACKLOG | P-003 W3 — UR-003 bekleniyor |

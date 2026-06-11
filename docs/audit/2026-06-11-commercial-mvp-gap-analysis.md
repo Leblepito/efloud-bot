@@ -3,7 +3,7 @@
 **Tarih:** 2026-06-11
 **Hazırlayan:** @claude (Architect/Review)
 **Ticari çapa:** u2algo ürün hattı (P-001 ile uyumlu — TradingView indicator ücretsiz / strategy premium + u2algo-site funnel)
-**Bağlı plan:** `LLTODO/plans/P-002-commercial-mvp.md`
+**Bağlı plan:** `LLTODO/plans/P-003-commercial-mvp.md`
 
 ---
 
@@ -11,14 +11,14 @@
 
 Bu rapor, efloud-bot/u2algo projesini "algoritmik trade bot satan kurumsal bir firmada
 olması gereken MVP özellikler" çerçevesinde uçtan uca tarar. Her bulgu repo'daki
-dosya/davranış kanıtına dayanır. Rapor, P-002 Commercial MVP epic planının dayanağıdır.
+dosya/davranış kanıtına dayanır. Rapor, P-003 Commercial MVP epic planının dayanağıdır.
 
 İş modeli kararı (2026-06-11, operatör onaylı): **u2algo ürün hattı** çapa alınır.
 Repo'da belgeli iki alternatif yol bilinçli olarak çapa DEĞİLDİR:
 
 - `docs/superpowers/specs/2026-05-05-efloud-roadmap.md` → Binance Copy-Trading Lead
   Trader yolu ("No multi-tenant SaaS, no client API key storage"). Bu yol track-record
-  hattı olarak yaşamaya devam eder; P-002'nin W1 (kanıt katmanı) çıktıları bu yola da
+  hattı olarak yaşamaya devam eder; P-003'nin W1 (kanıt katmanı) çıktıları bu yola da
   hizmet eder.
 - Hosted SaaS / self-host lisans satışı → kapsam DIŞI (aşağıda §5'te gerekçesi).
 
@@ -130,7 +130,7 @@ W2 ────────────────────► W3 Müşteri 
 
 ---
 
-## 6. Safety Invariants (P-002'ye aynen taşınır)
+## 6. Safety Invariants (P-003'ye aynen taşınır)
 
 1. Canlı `config.yaml`, `.env`, `docker-compose.prod.yml`, VPS deploy bu epic ile değişmez.
 2. Hiçbir yeni bileşen trade karar yoluna (`SafeOrchestrator` → guard/breaker → order)

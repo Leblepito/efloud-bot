@@ -1,9 +1,9 @@
-# P-002: Commercial MVP — u2algo Satış Altyapısı (Legal + Kanıt + Monetizasyon + Müşteri Deneyimi)
+# P-003: Commercial MVP — u2algo Satış Altyapısı (Legal + Kanıt + Monetizasyon + Müşteri Deneyimi)
 
 **Başlangıç:** 2026-06-11
 **Sahip:** @hermes (implementor, infra), @claude (architect/reviewer), @gemini (ek reviewer adayı — review dosyası açılınca numaralanır)
 **Branch:** `claude/trading-bot-mvp-plan-l83v5s` (plan), implementasyon dalga başına ayrı feature-branch
-**Versiyon:** 1.0 (DRAFT — UltraReview UR-002 bekliyor)
+**Versiyon:** 1.0 (DRAFT — UltraReview UR-003 bekliyor)
 **Dayanak:** `docs/audit/2026-06-11-commercial-mvp-gap-analysis.md`
 
 ---
@@ -101,22 +101,22 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 
 ### 5a. Teknik Gate'ler
 
-- [ ] G-P2-1: Proof snapshot'ta mutlak bakiye/pozisyon büyüklüğü alanı YOK (test ile zorlanır).
-- [ ] G-P2-2: Purchase webhook imza doğrulaması — geçersiz imza 401, test kapsamında.
-- [ ] G-P2-3: `notifications:` flag default-OFF; flag kapalıyken davranış birebir mevcut
+- [ ] G-P3-1: Proof snapshot'ta mutlak bakiye/pozisyon büyüklüğü alanı YOK (test ile zorlanır).
+- [ ] G-P3-2: Purchase webhook imza doğrulaması — geçersiz imza 401, test kapsamında.
+- [ ] G-P3-3: `notifications:` flag default-OFF; flag kapalıyken davranış birebir mevcut
       (NullNotificationManager) — regression test.
-- [ ] G-P2-4: server.js 3'lü fallback zinciri (Supabase REST → PG → JSONL) consent
+- [ ] G-P3-4: server.js 3'lü fallback zinciri (Supabase REST → PG → JSONL) consent
       alanıyla bozulmadan çalışır — mevcut test kalıbıyla.
-- [ ] G-P2-5: `git diff` canlı dosyalara (config.yaml, compose, .env) temas etmez.
+- [ ] G-P3-5: `git diff` canlı dosyalara (config.yaml, compose, .env) temas etmez.
 
 ### 5b. İş Gate'leri (CAC/Gelir)
 
-- [ ] G-P2-B1: Legal metinlerde getiri vaadi/yatırım tavsiyesi dili yok (guardrail
+- [ ] G-P3-B1: Legal metinlerde getiri vaadi/yatırım tavsiyesi dili yok (guardrail
       checklist'ten geçirilir).
-- [ ] G-P2-B2: Fiyatlandırma + refund policy yayından önce operatör onayı.
-- [ ] G-P2-B3: İlk satış açılışı öncesi P-001 T-003 backtest gate'i (min 100 trade,
+- [ ] G-P3-B2: Fiyatlandırma + refund policy yayından önce operatör onayı.
+- [ ] G-P3-B3: İlk satış açılışı öncesi P-001 T-003 backtest gate'i (min 100 trade,
       OOS %30) PASS.
-- [ ] G-P2-B4: Proof sayfası yayını öncesi operatör onayı (hangi metriklerin kamuya
+- [ ] G-P3-B4: Proof sayfası yayını öncesi operatör onayı (hangi metriklerin kamuya
       açılacağı).
 
 ## 6. Görevler
@@ -138,15 +138,15 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 
 | Risk | Olasılık | Etki | Mitigasyon |
 |---|---|---|---|
-| Proof snapshot'tan hassas veri sızması | Düşük | Yüksek | Whitelist şema + G-P2-1 testi + yayın öncesi operatör onayı |
-| Webhook sahteciliği (sahte entitlement) | Orta | Yüksek | HMAC imza zorunlu (G-P2-2), secret yalnız Railway env |
+| Proof snapshot'tan hassas veri sızması | Düşük | Yüksek | Whitelist şema + G-P3-1 testi + yayın öncesi operatör onayı |
+| Webhook sahteciliği (sahte entitlement) | Orta | Yüksek | HMAC imza zorunlu (G-P3-2), secret yalnız Railway env |
 | "Sinyal servisi" regülasyon çerçevesine girme | Orta | Yüksek | W3 bildirimleri gecikmeli/aggregate + default-OFF + legal review |
 | TV manuel grant darboğazı (ölçek) | Düşük | Orta | MVP'de kabul; kuyruk + runbook; otomasyon W4+ |
-| Canlı sisteme yanlışlıkla temas | Düşük | Kritik | Tüm işler additive/flag'li; G-P2-5 diff gate; risk-ops review zorunlu |
+| Canlı sisteme yanlışlıkla temas | Düşük | Kritik | Tüm işler additive/flag'li; G-P3-5 diff gate; risk-ops review zorunlu |
 | P-001 T-003 gecikirse W2 boşta kalır | Orta | Orta | W2 altyapısı üründen bağımsız hazırlanır; satış açılışı gate'e bağlı |
 
 ## 8. Revizyon Geçmişi
 
 | Tarih | Revizyon | Yazar |
 |---|---|---|
-| 2026-06-11 | İlk sürüm (DRAFT, UR-002 bekliyor) | @claude |
+| 2026-06-11 | İlk sürüm (DRAFT, UR-003 bekliyor) | @claude |

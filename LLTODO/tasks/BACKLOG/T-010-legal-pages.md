@@ -1,9 +1,9 @@
 # T-010: u2algo-site Legal Sayfaları (ToS / Privacy / Risk Disclosure / Refund)
 
-**Epic:** P-002
+**Epic:** P-003
 **Claimed by:** — (henüz claim edilmedi)
 **Tahmini süre:** 1 gün
-**Bağımlılık:** — (UR-002 onayı sonrası başlar)
+**Bağımlılık:** — (UR-003 onayı sonrası başlar)
 
 ## Hedef
 
@@ -19,13 +19,13 @@ u2algo-site'a 4 statik legal sayfa ekleyip footer/sitemap'e bağlamak — satı�
 
 ## Acceptance Kriterleri
 
-- [ ] Metinlerde getiri vaadi / garanti kâr / yatırım tavsiyesi dili YOK (G-P2-B1)
+- [ ] Metinlerde getiri vaadi / garanti kâr / yatırım tavsiyesi dili YOK (G-P3-B1)
 - [ ] Mevcut dark-theme CSS değişkenleri (`--surface`, `--muted`, `--warn`) kullanılır
 - [ ] Yayın öncesi operatör onayı alındı
-- [ ] Canlı sistem dosyalarına temas yok (G-P2-5)
+- [ ] Canlı sistem dosyalarına temas yok (G-P3-5)
 
 ## Log
 
 | Zaman | Durum | Not |
 |---|---|---|
-| 2026-06-11 | BACKLOG | P-002 W0 — UR-002 bekleniyor |
+| 2026-06-11 | BACKLOG | P-003 W0 — UR-003 bekleniyor |

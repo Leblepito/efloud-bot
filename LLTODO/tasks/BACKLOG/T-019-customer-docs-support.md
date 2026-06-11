@@ -1,6 +1,6 @@
 # T-019: Müşteri Quickstart Dokümantasyonu + Site FAQ/Destek
 
-**Epic:** P-002
+**Epic:** P-003
 **Claimed by:** — (henüz claim edilmedi)
 **Tahmini süre:** 1 gün
 **Bağımlılık:** T-017 (erişim akışı netleşmiş olmalı)
@@ -17,11 +17,11 @@
 
 ## Acceptance Kriterleri
 
-- [ ] Dokümantasyon dili: yatırım tavsiyesi değil, araç kullanımı (G-P2-B1 guardrails)
+- [ ] Dokümantasyon dili: yatırım tavsiyesi değil, araç kullanımı (G-P3-B1 guardrails)
 - [ ] Quickstart, gerçek kurulum akışıyla test edilmiş (ekran görüntülü)
 
 ## Log
 
 | Zaman | Durum | Not |
 |---|---|---|
-| 2026-06-11 | BACKLOG | P-002 W3 — UR-002 bekleniyor |
+| 2026-06-11 | BACKLOG | P-003 W3 — UR-003 bekleniyor |

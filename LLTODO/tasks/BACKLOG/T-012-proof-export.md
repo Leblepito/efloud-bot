@@ -1,9 +1,9 @@
 # T-012: Public Proof Snapshot Export (proof_export.py)
 
-**Epic:** P-002
+**Epic:** P-003
 **Claimed by:** — (henüz claim edilmedi)
 **Tahmini süre:** 1-2 gün
-**Bağımlılık:** — (UR-002 onayı sonrası başlar)
+**Bağımlılık:** — (UR-003 onayı sonrası başlar)
 
 ## Hedef
 
@@ -18,12 +18,12 @@
 
 ## Acceptance Kriterleri
 
-- [ ] G-P2-1: whitelist dışı alan testi yeşil
+- [ ] G-P3-1: whitelist dışı alan testi yeşil
 - [ ] Bot API'si public'e AÇILMAZ — yayın statik dosya üzerinden
-- [ ] Yayın öncesi operatör onayı (G-P2-B4)
+- [ ] Yayın öncesi operatör onayı (G-P3-B4)
 
 ## Log
 
 | Zaman | Durum | Not |
 |---|---|---|
-| 2026-06-11 | BACKLOG | P-002 W1 — UR-002 bekleniyor |
+| 2026-06-11 | BACKLOG | P-003 W1 — UR-003 bekleniyor |
