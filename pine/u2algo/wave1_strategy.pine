@@ -355,8 +355,8 @@ f_calc_sl(direction, entry_price) =>
 // ═══════════════════════════════════════════════
 
 f_calc_tp(direction, entry_price, sl_price) =>
-    tp1 = na
-    tp2 = na
+    float tp1 = na
+    float tp2 = na
 
     if direction == "LONG"
         if not na(last_1h_swing_high) and last_1h_swing_high > entry_price
