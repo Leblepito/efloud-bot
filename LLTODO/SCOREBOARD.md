@@ -6,8 +6,8 @@
 
 | Metrik | Değer |
 |---|---|
-| Toplam epic | 1 (P-001) |
-| Aktif epic | 1 (P-001) |
+| Toplam epic | 2 (P-001, P-002) |
+| Aktif epic | 2 (P-001, P-002) |
 | Tamamlanan epic | 0 |
 | Toplam görev | 3 (T-001, T-002, T-003) |
 | Tamamlanan görev | 1 (T-001 ✅ 2026-06-10, G-T1 compile PASS) |
@@ -36,6 +36,21 @@
 **Sprint 3 (2026-06-18 → ...):**
 - [ ] UR-001 UltraReview
 - [ ] Master merge
+
+## P-002 (Marketing & Growth Pipeline)
+
+| Alan | Durum |
+|---|---|
+| Durum | ~~ULTRA_PLAN (Claude review bekliyor)~~ → REVIEW_OPEN (rekonstrüksiyon TAMAM 2026-06-11 @claude) |
+| Rekonstrükte plan | `LLTODO/plans/P-002-marketing-growth-pipeline.md` |
+| Hermes v1 draft | `LLTODO/plans/P-002-marketing-growth-pipeline.v1-hermes-draft.md` |
+| Claude prompt | `LLTODO/PROMPT-claude.md` + `LLTODO/plans/P-002-claude-ultraplan-prompt.md` |
+| Sonraki | @hermes plan onayı + operatör OQ#1-#12 kararları → M1-M4 implementasyon |
+
+| Agent | Rol |
+|---|---|
+| @hermes | v1 draft, implementasyon |
+| @claude | UltraPlan rekonstrüksiyonu, security audit, UR-002 |
 
 ## Review Skoru
 
