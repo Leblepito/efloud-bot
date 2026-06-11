@@ -163,6 +163,15 @@
 3 derleyici-zorlamalı fix: tuple destructuring, line.new named-arg, strategy'de alert())`
 — resmi **G-T3** final implementasyonda tekrar koşulacak.
 
+**Limit-fill intrabar caveat (F4 — gate raporunda kullanılacak):**
+- Strategy(`calc_on_every_tick=false`) bar kapanışında hesaplanır. Limit order
+  bar İÇİNDE fill olursa (`strategy.opentrades.entry_bar_index(0) == bar_index - 1`
+  durumu) backtest aynı bar'ın high/low'unu aynı anda kullanır — gerçek hayutta
+  fill sırası belirsizdir (eşitlikli backtestlerde fill fiyatı ≈ high/low ortalaması
+  alınır, real-world'de daha kötü olabilir). Bu nedenle G-T4..G-T6 gate eşiklerine
+  güven aralığı: OOS Sharpe × 0.7 → gerçekte 0.5-0.6'ya düşebilir. Risk_pct=0.5%
+  default seçimi bu yüzden muhafazakâr.
+
 ## 8. Revizyon Geçmişi
 
 | Tarih | Bölüm | Değişiklik | Yazar |
