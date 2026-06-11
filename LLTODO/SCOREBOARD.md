@@ -10,7 +10,7 @@
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
-| Tamamlanan görev | 6 (T-001 ✅; T-002 ✅ G-T2; T-023 ✅ #182; T-024 ✅ #184; T-012 ✅ #185; T-022 ✅ #187) ~~önceki: 5~~ |
+| Tamamlanan görev | 7 (T-001 ✅; T-002 ✅ G-T2; T-023 ✅ #182; T-024 ✅ #184; T-012 ✅ #185; T-022 ✅ #187; T-013 ✅ #191) ~~önceki: 6~~ |
 | Claim edilmiş görev | 1 (T-020 @claude) ~~önceki: 2~~ |
 
 ## P-001 Görev Skoru
@@ -82,7 +82,7 @@
 | T-010 | W0 | u2algo-site legal sayfaları + footer + sitemap | ⬜ BACKLOG | — |
 | T-011 | W0 | Waitlist consent checkbox + server.js alanı | ⬜ BACKLOG | — |
 | T-012 | W1 | proof_export.py + snapshot şema + privacy testi | ✅ DONE (PR #185; baseline-referans kararı operatörden; VPS cron+baseline = runbook §5) | @claude (2026-06-11) |
-| T-013 | W1 | monthly.py + /api/reports/monthly | ⬜ BACKLOG | — |
+| T-013 | W1 | monthly.py + /api/reports/monthly | ✅ DONE (PR #191; journal-first, DB-less equity "n/a", operatör-only İÇ) | @claude (2026-06-11) |
 | T-014 | W1 | Uptime alanı + public CHANGELOG + site updates | ⬜ BACKLOG | — |
 | T-015 | W2 | Supabase entitlements migration + RLS | ⬜ BACKLOG | — |
 | T-016 | W2 | Lemon Squeezy webhook (HMAC) + onay e-postası | ⬜ BACKLOG | — |

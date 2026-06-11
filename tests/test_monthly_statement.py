@@ -111,6 +111,33 @@ def test_corrupt_lines_skipped(tmp_path: Path):
     assert [t["id"] for t in trades] == ["ok"]
 
 
+def test_garbage_exit_timestamp_dropped(tmp_path: Path):
+    """Geçerli JSON ama parse edilemeyen exit_timestamp → satır sessizce düşer."""
+    journal = tmp_path / "journal.jsonl"
+    bad = _journal_line(trade_id="bad")
+    bad["exit_timestamp"] = "garbage"
+    _write_journal(journal, [bad, _journal_line(trade_id="ok")])
+
+    trades = read_journal_closed_trades(journal, now_utc=NOW, window_days=30)
+    assert [t["id"] for t in trades] == ["ok"]
+
+
+def test_trades_sorted_chronologically_by_parsed_ts(tmp_path: Path):
+    """Sıralama parse edilmiş exit_ts ile — naive + tz'li karışımında bile kronolojik."""
+    journal = tmp_path / "journal.jsonl"
+    older = _journal_line(trade_id="older", exit_offset_days=10)
+    newer = _journal_line(trade_id="newer", exit_offset_days=2)
+    # naive isoformat (journal'ın utcnow() emsali) — tz'li satırlarla karışsın
+    naive_mid = _journal_line(trade_id="mid", exit_offset_days=5)
+    naive_mid["exit_timestamp"] = (
+        (NOW - timedelta(days=5)).replace(tzinfo=None).isoformat()
+    )
+    _write_journal(journal, [newer, naive_mid, older])
+
+    trades = read_journal_closed_trades(journal, now_utc=NOW, window_days=30)
+    assert [t["id"] for t in trades] == ["older", "mid", "newer"]
+
+
 # ── statement (compute_summary integration) ──────────────────────────────
 
 
@@ -253,3 +280,7 @@ def test_endpoint_clamps_window(api_app, tmp_path, monkeypatch):
     r = TestClient(api_app).get("/api/reports/monthly?window_days=9999")
     assert r.status_code == 200
     assert r.json()["window"]["days"] <= 92
+
+    r = TestClient(api_app).get("/api/reports/monthly?window_days=0")
+    assert r.status_code == 200
+    assert r.json()["window"]["days"] == 1

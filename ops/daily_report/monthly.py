@@ -74,7 +74,7 @@ def read_journal_closed_trades(
     if not p.exists():
         return []
     since_utc = now_utc - timedelta(days=window_days)
-    rows: list[dict] = []
+    rows: list[tuple[datetime, dict]] = []
     try:
         raw = p.read_text(encoding="utf-8")
     except OSError:
@@ -102,9 +102,11 @@ def read_journal_closed_trades(
             "opened_at": obj.get("entry_timestamp"),
             "closed_at": obj.get("exit_timestamp"),
         })
-        rows.append(mapped)
-    rows.sort(key=lambda r: r.get("closed_at") or "")
-    return rows
+        rows.append((exit_ts, mapped))
+    # Parse edilmiş datetime ile sırala — ham isoformat string sort'u naive ve
+    # tz'li timestamp'ler karışırsa kronolojik olmaktan çıkar (review MINOR).
+    rows.sort(key=lambda r: r[0])
+    return [mapped for _, mapped in rows]
 
 
 def build_monthly_statement(

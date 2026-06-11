@@ -104,6 +104,7 @@
 2026-06-11  T-024 DONE ✅    @claude  PR #184: docs/runbooks/healthz-contract.md — durum matrisi + T-021 monitör kontratı (JSON status parse zorunlu; suspended=degraded) + uptime tasarımı (healthz-sampling, service_uptime ≠ trading_active; heartbeat kullanılmaz). Kod değişikliği SIFIR.
 2026-06-11  T-012 DONE ✅    @claude  PR #185: scripts/routines/proof_export.py + 20 test. Operatör kararı: baseline-equity referansı (gerçek %DD; baseline snapshot'a girmez, eğri 1.0-normalize). Günlük-kapanış granularity + yalnız kapanmış trade (G-P3-1). Healthz sampling yan etkisi başladı (uptime_samples.jsonl). YAYIN hâlâ T-014+G-P3-B4 arkasında.
 2026-06-11  T-022 DONE ✅    @claude  PR #187: docs/SLA.md (müşteri taahhütleri ≠ iç hedefler — "proof ≠ ürün") + disaster-recovery.md (3 senaryo; S2=2026-05-15 emsali) + on-call-playbook.md (P1/P2/P3) + BONUS breaker-reset.md. Tabletop tatbikatı: 1. tur 2 BLOCKING → fix → 2. tur PASS (DR §5 log). G-P3-B2 operatör paketi (SLA+fiyat+refund) HAZIR.
+2026-06-11  T-013 DONE ✅    @claude  PR #191: ops/daily_report/monthly.py + /api/reports/monthly (require_auth, clamp 1..92g) + 15 test. UR-003 pini uygulandı: journal-first adapter (read_journal_history key-mapping emsali, backend import edilmeden), DB-less equity "n/a" + equity_note, operatör-only İÇ endpoint (müşteri yayını T-012/T-014 yolundan). compute_summary DEĞİŞMEDİ. Review: api-integration APPROVE + code-reviewer APPROVE_WITH_NITS → nit'ler düzeltildi (parsed-ts sort + 3 test).
 ```
 
 ### Aktif Durum

@@ -1,7 +1,7 @@
 # T-013: Aylık Statement (monthly.py + /api/reports/monthly)
 
 **Epic:** P-003
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @claude (2026-06-11)
 **Tahmini süre:** 1-2 gün
 **Bağımlılık:** — (UR-003 onayı sonrası başlar)
 
@@ -11,16 +11,16 @@ Mevcut daily-report altyapısını yeniden kullanarak aylık performans statemen
 
 ## Çıktılar
 
-- [ ] `ops/daily_report/monthly.py` — `aggregate.compute_summary()` yeniden kullanımı, 30 günlük pencere
-- [ ] CSV + markdown çıktı (`reports/` altına)
-- [ ] `backend/api.py` auth'lu `/api/reports/monthly` endpoint'i (mevcut router + `require_auth` kalıbı)
-- [ ] pytest: aggregate doğruluğu + endpoint smoke
+- [x] `ops/daily_report/monthly.py` — `aggregate.compute_summary()` yeniden kullanımı, 30 günlük pencere (clamp 1..92)
+- [x] CSV + markdown çıktı (`reports/monthly/statement_YYYY-MM.{md,csv}`)
+- [x] `backend/api.py` auth'lu `/api/reports/monthly` endpoint'i (mevcut router + `require_auth` kalıbı)
+- [x] pytest: aggregate doğruluğu + endpoint smoke (15 test)
 
 ## Acceptance Kriterleri
 
-- [ ] `aggregate.compute_summary()` değiştirilmez, yalnız çağrılır
-- [ ] Endpoint auth'suz 401 döner
-- [ ] Mevcut daily report davranışı değişmez
+- [x] `aggregate.compute_summary()` değiştirilmez, yalnız çağrılır (diff'te aggregate.py yok)
+- [x] Endpoint auth'suz 401 döner (test)
+- [x] Mevcut daily report davranışı değişmez (report/render dokunulmadı; komşu testler yeşil)
 
 ## UR-003 Düzeltmesi (2026-06-11)
 
@@ -36,3 +36,4 @@ Ek netleştirme: bu endpoint operatör-only İÇ tüketimdir; müşteri-yüzlü 
 | Zaman | Durum | Not |
 |---|---|---|
 | 2026-06-11 | BACKLOG | P-003 W1 — UR-003 bekleniyor |
+| 2026-06-11 | DONE ✅ | PR #191: monthly.py (journal-first adapter, UR-003 pini: DB-less equity "n/a" + equity_note, operatör-only İÇ endpoint) + /api/reports/monthly + 15 test. Review: api-integration APPROVE + efloud-code-reviewer APPROVE_WITH_NITS (nit'ler düzeltildi: parsed-ts sort + 3 test boşluğu). @claude |
