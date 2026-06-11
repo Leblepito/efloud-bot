@@ -117,7 +117,7 @@ jobs:
       - name: Run gitleaks
         run: |
           docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 \
-            detect --source /repo --no-git --no-banner --redact
+            detect --source /repo --no-git --no-banner --redact --verbose
 
   # T-023: the Next.js build was previously validated only inside the prod
   # Docker build — a broken frontend surfaced at deploy time, not PR time.
