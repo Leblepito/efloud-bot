@@ -23,8 +23,8 @@
 
 ### Aktif Durum
 
-**Durum:** `IN_PROGRESS` — FAZ 3 (2026-06-10)
-**Sonraki adım:** T-002 (MTF confluence + SL/TP) — @hermes claim edebilir
+**Durum:** `IN_PROGRESS` — FAZ 3 (2026-06-11)
+**Sonraki adım:** T-003 (strateji versiyonu + backtest validasyonu) — @hermes claim edebilir
 
 ### Heartbeat
 
@@ -34,6 +34,7 @@
 2026-06-10  T-001 DONE ✅    @claude  G-T1 PASS: TV Pine Editor compile 0 hata 0 marker (pine_smart_compile + pine_get_errors). T-001 → tasks/DONE/. Sıra T-002'de.
 2026-06-11  IMPL_READY       @hermes  T-002: wave1_signals.pine v1.1.0 (+323 satır) — confluence 7-faktör, 1h swing TP1, f_calc_sl/f_calc_tp, sinyaller + görseller. Patch format-patch+sha256 ile transfer (yeni kural ilk kez uygulandı, bütünlük ✅). Ek teslimat: GÖREV A/B/E dosyaları (DDL taslakları + LS fizibilite + status-page eval).
 2026-06-11  REVIEW_FIXES     @claude  T-002 review REQUEST_CHANGES → fix: B1 REPAINT (1h pivot [-j] GELECEK-bar erişimi — R-002'nin tam uyarısı; gecikmeli-pivot kalıbına çevrildi) + B2 visual_group compile hatası + N1 var + N3 %0.1 SL tabanı. Hermes'in lokal lint-R2 varyantı düşürüldü (PR #186 superseded). G-T2 compile-verify BEKLİYOR — TV MCP bağlı değil (launch: TV Desktop'ı --remote-debugging-port=9222 ile).
+2026-06-11  T-002 DONE ✅    @claude  G-T2 PASS: TV Pine Editor compile 0 hata 0 marker (pine_smart_compile + pine_get_errors, master eb5af4f bazlı). eb5af4f hali 2 compile hatası verdi → minimal fix (v1.1.1, mantık değişikliği yok): (1) satır 315/317 '\' satır devamı Pine'da geçersiz ("no viable alternative at character '\'") → girintili satır sarma; (2) f_calc_tp tp1/tp2 = na → float tp1/tp2 = na ("Value with NA type cannot be assigned..."). T-002 → tasks/DONE/. Sıra T-003'te (@hermes).
 ```
 
 ### Review Özeti
@@ -50,7 +51,7 @@
 | FAZ 0 | Spec + plan yazımı | ✅ DONE |
 | FAZ 1 | External review (R-001, R-002) | ✅ DONE |
 | FAZ 2 | Consensus + plan revizyonu | ✅ CONSENSUS_REACHED |
-| FAZ 3 | Implementasyon (T-001 ✅ DONE [G-T1 PASS], T-002, T-003) | 🟡 IN_PROGRESS |
+| FAZ 3 | Implementasyon (T-001 ✅ DONE [G-T1 PASS], T-002 ✅ DONE [G-T2 PASS], T-003) | 🟡 IN_PROGRESS |
 | FAZ 4 | UltraReview (UR-001 @claude) | ⬜ BEKLİYOR |
 | FAZ 5 | Master merge + deploy | ⬜ BEKLİYOR |
 
