@@ -25,6 +25,14 @@ Proof snapshot'a alerter heartbeat'ten türetilen uptime % alanı eklemek; müş
 - [ ] Ayrı status-page servisi KURULMAZ (MVP'de snapshot alanı yeter)
 - [ ] Changelog'da iç operasyon detayı / güvenlik hassas bilgi yok
 
+## T-012 Devir Notları (2026-06-11)
+
+- PF gösterimi: all-win kayıtta `profit_factor = 0.0` döner (journal.stats() paritesi) —
+  public sayfada "0.0" felaket gibi okunur; display katmanında n/a sentinel'i kullan.
+- Equity eğrisi anchor noktası ilk trade gününden BİR GÜN ÖNCEDİR (tarih çakışması yok).
+- `uptime_samples.jsonl` birikimi T-012 cron'uyla başladı; alan tasarımı
+  healthz-contract §3 (service_uptime_pct ≠ trading_active_pct — KARIŞTIRMA).
+
 ## Log
 
 | Zaman | Durum | Not |

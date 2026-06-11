@@ -90,3 +90,42 @@ To stop scheduled cron reports, open the crontab editor (`crontab -e`) and comme
 ```bash
 docker compose -f docker-compose.prod.yml stop routines-watcher
 ```
+
+---
+
+## 5. proof_export (T-012 / P-003 W1) — Public Proof Snapshot
+
+Günlük şifresiz ama **whitelist-only** snapshot üretir (`state/proof_snapshot.json`):
+trade_count, win_rate_pct, profit_factor, max_dd_pct + normalize edilmiş günlük equity
+eğrisi. Mutlak bakiye / pozisyon / sembol / PnL değeri İÇERMEZ (G-P3-1; runtime guard +
+test ile zorlanır). Yan etki: her koşuda bir healthz örneği `state/uptime_samples.jsonl`'a
+eklenir (bkz. `docs/runbooks/healthz-contract.md` §3).
+
+### Kurulum (operatör adımı — bir kez)
+
+```bash
+# Baseline referansı (operatör kararı 2026-06-11: gerçek %DD için başlangıç bakiyesi).
+# Bu dosya state/'te kalır, snapshot'a ASLA girmez; yayınlanan eğri 1.0'dan başlar.
+docker compose -f docker-compose.prod.yml exec efloud-bot sh -c \
+  'cat > /app/state/proof_baseline.json <<EOF
+{"baseline_equity_usdt": <BAŞLANGIÇ_BAKİYESİ>, "since": "YYYY-MM-DD"}
+EOF'
+```
+
+### Cron (günlük 1× — G-P3-1 cadence sınırı: daha sık KOŞMA; §3'teki pattern ile)
+
+```cron
+30 0 * * * cd /opt/efloud-bot && docker compose -f docker-compose.prod.yml --profile routines-scheduled run --rm -e ROUTINE=proof_export routines-scheduled >> /var/log/efloud-routines-scheduled.log 2>&1
+```
+
+### Yayın (G-P3-B4 — operatör onayı olmadan YAYINLAMA)
+
+Snapshot'ın u2algo-site'a kopyalanması T-014 kapsamında ve **operatör onaylıdır**;
+bot API'si public'e açılmaz, yayın statik dosya kopyasıdır. Baseline eksikse routine
+snapshot üretmez ve alerter'a uyarı düşer (`proof_export_baseline_missing`).
+
+> ⚠️ **De-normalizasyon uyarısı:** Normalize eğri matematiksel olarak baseline'ı
+> sızdırmaz — AMA herhangi bir mutlak PnL değeri başka kanaldan ifşa edilirse
+> (örn. sosyal postta "bugün +$50"), o günün eğri deltasından baseline çözülür ve
+> TÜM geçmiş de-normalize olur. İçerik pipeline'ında (P-002 M6/M13) mutlak $ PnL
+> paylaşımı zaten compliance-yasak — bu kuralın proof sayfası yaşadıkça istisnası yok.
