@@ -10,7 +10,7 @@
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
-| Tamamlanan görev | ~~1~~ → 2 (T-001 ✅ 2026-06-10 G-T1 PASS; T-023 ✅ 2026-06-11 PR #182 → master `63b9872`) |
+| Tamamlanan görev | 3 (T-001 ✅ G-T1 PASS; T-023 ✅ PR #182; T-024 ✅ PR #184) ~~önceki: 2~~ |
 | Claim edilmiş görev | 1 (T-020 @claude 2026-06-11) ~~önceki: 0~~ |
 
 ## P-001 Görev Skoru
@@ -93,7 +93,7 @@
 | T-021 | W-R | Public status page + uptime monitor | ⬜ BACKLOG | — |
 | T-022 | W-R | SLA + DR + on-call dokümanları | ⬜ BACKLOG | — |
 | T-023 | W-R | CI hardening: gitleaks + frontend + lint (pre-UR-exempt) | ✅ DONE (PR #182 → master `63b9872`, CI 4/4) | @claude (2026-06-11) |
-| T-024 | W-R | Healthz kontrat dokümanı + uptime metriği | ⬜ BACKLOG | — |
+| T-024 | W-R | Healthz kontrat dokümanı + uptime metriği | ✅ DONE (PR #184 — `docs/runbooks/healthz-contract.md`) | @claude (2026-06-11) |
 
 ### P-003 Review Skoru
 
