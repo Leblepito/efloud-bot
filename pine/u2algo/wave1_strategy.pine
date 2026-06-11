@@ -588,9 +588,35 @@ if barstate.islastconfirmedhistory
 // ALERTS — strategy'de alertcondition() etkisizdir (derleyici warning'i);
 // dinamik alert() kullanılır. Sinyaller confirmed-bar'da üretildiği için
 // freq_once_per_bar_close ile repaint'siz tetikleme.
+//
+// Mesaj formatı (Telegram/Discord webhook consumer tarafından parse edilebilir):
+//   SYMBOL  DIRECTION  ENTRY=price  SL=price  TP1=price  TP2=price
+//   CONF=n%  RISK_PCT=n%  TF=15m+1h
+// Örnek: "BTCUSDT-PERP  LONG  ENTRY=67500.5  SL=67200.0  TP1=68100.0
+//         TP2=68800.0  CONF=78%  RISK_PCT=0.5%  TF=15m+1h"
 // ═══════════════════════════════════════════════
 
-if long_signal
-    alert("LONG setup detected", alert.freq_once_per_bar_close)
-if short_signal
-    alert("SHORT setup detected", alert.freq_once_per_bar_close)
+// Sym: Pine default ticker (örn. "BTCUSDT" / "BINANCE:BTCUSDT")
+sym = syminfo.ticker
+
+if long_signal and not na(sig_entry_long) and not na(sig_sl_long) and not na(sig_tp1_long)
+    msg = sym + "  LONG  ENTRY=" + str.tostring(sig_entry_long, "#.##") +
+     "  SL=" + str.tostring(sig_sl_long, "#.##") +
+     "  TP1=" + str.tostring(sig_tp1_long, "#.##")
+    if not na(sig_tp2_long)
+        msg := msg + "  TP2=" + str.tostring(sig_tp2_long, "#.##")
+    msg := msg + "  CONF=" + str.tostring(confluence_score_long, "0") + "%" +
+     "  RISK_PCT=" + str.tostring(risk_pct, "#.#") + "%" +
+     "  TF=15m+1h"
+    alert(msg, alert.freq_once_per_bar_close)
+
+if short_signal and not na(sig_entry_short) and not na(sig_sl_short) and not na(sig_tp1_short)
+    msg = sym + "  SHORT  ENTRY=" + str.tostring(sig_entry_short, "#.##") +
+     "  SL=" + str.tostring(sig_sl_short, "#.##") +
+     "  TP1=" + str.tostring(sig_tp1_short, "#.##")
+    if not na(sig_tp2_short)
+        msg := msg + "  TP2=" + str.tostring(sig_tp2_short, "#.##")
+    msg := msg + "  CONF=" + str.tostring(confluence_score_short, "0") + "%" +
+     "  RISK_PCT=" + str.tostring(risk_pct, "#.#") + "%" +
+     "  TF=15m+1h"
+    alert(msg, alert.freq_once_per_bar_close)
