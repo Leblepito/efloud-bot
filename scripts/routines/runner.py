@@ -37,6 +37,10 @@ try:
     from scripts.routines import market_collect
 except ImportError:
     pass
+try:
+    from scripts.routines import proof_export
+except ImportError:
+    pass
 
 
 def run_one(name, client=None, alert=None, cfg=None) -> int:

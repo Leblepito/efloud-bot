@@ -1,7 +1,7 @@
 # T-012: Public Proof Snapshot Export (proof_export.py)
 
 **Epic:** P-003
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @claude (2026-06-11, T-023/T-024 emsali — R2 limiti: IN_PROGRESS'te T-020 var)
 **Tahmini süre:** 1-2 gün
 **Bağımlılık:** — (UR-003 onayı sonrası başlar)
 
@@ -37,3 +37,5 @@ Not: M11-supersession'daki "DB bağımlılığı çözüldü" iddiası yalnız t
 | Zaman | Durum | Not |
 |---|---|---|
 | 2026-06-11 | BACKLOG | P-003 W1 — UR-003 bekleniyor |
+| 2026-06-11 | IMPL | @claude — `scripts/routines/proof_export.py` (+runner kaydı) + 20 test. **Baseline-equity kararı operatörden alındı:** başlangıç bakiyesi referansı (`state/proof_baseline.json`, snapshot'a ASLA girmez) → gerçek %DD; eğri 1.0-normalize, günlük-kapanış, yalnız kapanmış trade (G-P3-1 cadence sınırı). Healthz sampling yan etkisi (T-024 tasarımı) `uptime_samples.jsonl`'a. Runtime whitelist guard + privacy testleri |
+| 2026-06-11 | ✅ DONE | Bu PR merge'üyle. VPS adımları (baseline dosyası + günlük cron) `routines-cron-setup.md` §5 — operatör/Hermes; YAYIN T-014 + G-P3-B4 operatör onayı arkasında |
