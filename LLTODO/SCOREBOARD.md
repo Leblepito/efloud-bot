@@ -10,7 +10,7 @@
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
-| Tamamlanan görev | 4 (T-001 ✅; T-023 ✅ #182; T-024 ✅ #184; T-012 ✅ #185) ~~önceki: 3~~ |
+| Tamamlanan görev | 5 (T-001 ✅; T-023 ✅ #182; T-024 ✅ #184; T-012 ✅ #185; T-022 ✅ #187) ~~önceki: 4~~ |
 | Claim edilmiş görev | 1 (T-020 @claude 2026-06-11) ~~önceki: 0~~ |
 
 ## P-001 Görev Skoru
@@ -91,7 +91,7 @@
 | T-019 | W3 | Müşteri quickstart + site FAQ/destek | ⬜ BACKLOG | — |
 | T-020 | W-R | Backup otomasyonu + restore tatbikatı (pre-UR-exempt) | 🟡 IN_PROGRESS (scriptler+runbook PR'da; VPS kurulum+drill GÖREV F sonrası) | @claude (2026-06-11) |
 | T-021 | W-R | Public status page + uptime monitor | ⬜ BACKLOG | — |
-| T-022 | W-R | SLA + DR + on-call dokümanları | ⬜ BACKLOG | — |
+| T-022 | W-R | SLA + DR + on-call dokümanları | ✅ DONE (PR #187; tabletop PASS 2. tur — breaker-reset.md bonus; G-P3-B2 paketi hazır) | @claude (2026-06-11) |
 | T-023 | W-R | CI hardening: gitleaks + frontend + lint (pre-UR-exempt) | ✅ DONE (PR #182 → master `63b9872`, CI 4/4) | @claude (2026-06-11) |
 | T-024 | W-R | Healthz kontrat dokümanı + uptime metriği | ✅ DONE (PR #184 — `docs/runbooks/healthz-contract.md`) | @claude (2026-06-11) |
 
