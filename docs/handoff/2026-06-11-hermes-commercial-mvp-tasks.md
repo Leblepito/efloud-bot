@@ -74,7 +74,60 @@ belgele.
 
 ---
 
+## GÖREV E — Status page sağlayıcı seçimi (T-021 girdisi) *(2026-06-11 eki)*
+
+**Durum:** W-R dalgası (T-021) public status page + harici uptime monitör istiyor.
+
+**Yapılacak:**
+1. Sağlayıcı değerlendir: UptimeRobot / BetterStack / benzeri — ücretsiz tier yeterli mi?
+2. KRİTİK kısıt: probe `/healthz`'nin **JSON `status` alanını parse edebilmeli** —
+   HTTP 200 + `status:"suspended"` = trading durdu (breaker), servis ayakta.
+   Yalnız HTTP koduna bakan sağlayıcı YANLIŞ "operational" gösterir (T-024 kontratı).
+3. Public görünürlük kapsamını operatörle netleştir (incident geçmişi kamuya açık mı?).
+
+**Acceptance:** sağlayıcı önerisi + JSON-parse yeteneği doğrulaması operatöre iletildi.
+
+---
+
+## GÖREV F — Backup hedefi provizyonu (T-020 girdisi) *(2026-06-11 eki)*
+
+**Durum:** Prod state volume'larının (`efloud_state*`, `trade_journal.jsonl`) backup'ı
+SIFIR — W-R'nin en kritik işi T-020 bunun üstüne kurulacak.
+
+**Yapılacak:**
+1. Off-VPS şifreli hedef provizyon et: Hetzner Storage Box (VPS'le aynı DC avantajı)
+   veya S3-uyumlu alternatif. Anahtar/credential YALNIZ VPS'te.
+2. Kısıt: backup script'i canlı volume'lara **asla read-write dokunmaz** — snapshot
+   `docker run --rm -v efloud_state:/src:ro ...` kalıbıyla alınır.
+3. Restore tatbikatı YALNIZ scratch volume'da; restore-to-live operatör-gated.
+
+**Acceptance:** hedef hazır + erişim test edildi (1 dosya yaz/oku/sil) + T-020'ye haber.
+
+---
+
+## Transfer Workflow'u (GAP9 dersi — Telegram'la dosya YOK) *(2026-06-11 eki)*
+
+VPS deploy key read-only olduğu sürece (OQ#11 operatör kararı bekliyor):
+
+1. Hermes: commit'leri lokal branch'e al → `git format-patch origin/master --stdout > seri.patch`
+2. Transfer mesajına ekle: `git diff --stat` çıktısı + **her patch'in sha256'sı**
+3. Claude: sha256 doğrula → `git am` (Hermes authorship korunur) → PR açar
+4. Telegram'a dosya İÇERİĞİ yapıştırılmaz (2026-06-11'de orta bölüm kaybı yaşandı)
+
+---
+
+## Sahiplik Matrisi (P-002 + P-003)
+
+| Agent | Sorumluluk |
+|---|---|
+| @hermes | u2algo-site/infra/VPS işleri (GÖREV A/B/E/F; T-010/T-011/T-015/T-016 site tarafı; M9/M10/M12) + **P-001 T-002/T-003 (gelir kritik yolu — içerik işlerinden ÖNCELİKLİ)** |
+| @claude | Architect/review (UR-002/UR-003, dalga review'leri) + bot-repo Python (T-012/T-013/T-018 adayı) + T-020/T-023 pre-UR işleri |
+| @gemini | P-003 external review (sıradaki boş ID: R-003) + frontend/test desteği |
+
+---
+
 ### Bitince
 
 Her görev: branch + PR (master) + test. Claude'a "review" sinyali ver.
-P-003 implementasyonu (T-010..T-019) UR-003 onayı olmadan BAŞLAMAZ.
+P-003 implementasyonu (T-010..T-019 + T-021/T-022/T-024) UR-003 onayı olmadan BAŞLAMAZ;
+**istisna: T-020 ve T-023 pre-UR-exempt** (CI-only / read-only-snapshot).

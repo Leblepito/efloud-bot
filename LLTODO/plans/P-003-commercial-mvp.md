@@ -27,6 +27,11 @@ katmanı → ödeme/entitlement rayı → müşteri deneyimi. Canlı trade siste
   runbook'u.
 - **W3 Müşteri Deneyimi:** opt-in (default-OFF) gecikmeli/aggregate Telegram kanal
   bildirimi, müşteri quickstart dokümantasyonu, destek kanalı + FAQ.
+- **W-R Reliability/SLA (2026-06-11 eki, ops/SLA keşfi sonrası):** state backup
+  otomasyonu + restore tatbikatı (T-020), public status page + uptime monitor (T-021),
+  SLA/DR/on-call dokümanları (T-022), CI hardening — secret-scan/frontend-build/LLTODO-lint
+  (T-023), healthz kontrat dokümanı (T-024). Saf kod-sağlığı işleri (metrics backend,
+  API rate-limit, Gemini key header) Track A'da kalır.
 
 ### 2b. Hariç (Kapsam Daraltma)
 
@@ -78,6 +83,14 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 - W2 ⇐ P-001 T-003 (satılacak premium strategy script'in backtest/validasyonu).
 - W3 ⇐ W2 (ödeyen müşteri kohortu).
 - W1 bağımsız, hemen başlayabilir (Lead Trader yoluna da hizmet eder).
+- W-R dalga sıralamasından bağımsız; **T-020 ve T-023 pre-UR-exempt** (UR-003 öncesi
+  başlayabilir — CI-only / read-only-snapshot, trade-path riski sıfır). G-P3-6 ilk
+  proof yayınını T-020 tatbikatına bağlar; T-023, P-002 M1-M4'ü (G5 secret-scan
+  gate'i) bloklar.
+- Çapraz-epic dedup (P-002 Marketing ile): **M11 SUPERSEDED-BY T-012+T-014** (statik
+  export kazandı; bot API kapalı kalır, P-002 OQ#12 kapandı); M9 → T-011 sıralaması;
+  M8 ↔ T-018 ayrı token/kanal; M10 ↔ T-010/T-014 aynı site — tek sahip (Hermes),
+  serileştir; M12 domain değişiminde LS webhook URL'i yeniden kaydedilir (GÖREV B notu).
 - Hermes altyapı ön-işleri: `docs/handoff/2026-06-11-hermes-commercial-mvp-tasks.md`.
 
 ## 4. Görsel Standartlar
@@ -108,6 +121,9 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 - [ ] G-P3-4: server.js 3'lü fallback zinciri (Supabase REST → PG → JSONL) consent
       alanıyla bozulmadan çalışır — mevcut test kalıbıyla.
 - [ ] G-P3-5: `git diff` canlı dosyalara (config.yaml, compose, .env) temas etmez.
+      (u2algo-site PR'ları için efloud-bot CI bunu göremez — dalga review'ünde manuel checklist.)
+- [ ] G-P3-6: İlk public proof yayını (G-P3-B4) öncesi backup + restore tatbikatı
+      (T-020) PASS.
 
 ### 5b. İş Gate'leri (CAC/Gelir)
 
@@ -133,6 +149,11 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 | T-017 | W2 | `docs/runbooks/tv-access-grant.md` + entitlement kuyruk görünümü | 0.5 gün | T-016 |
 | T-018 | W3 | `engine/notifications/telegram_notifier.py` (default-OFF) + regression test | 1-2 gün | T-016 |
 | T-019 | W3 | `docs/customer/quickstart-tradingview.md` + site FAQ/destek bölümü | 1 gün | T-017 |
+| T-020 | W-R | State backup otomasyonu (read-only tar, şifreli off-VPS) + restore runbook + tatbikat | 2-3 gün | GÖREV F; **pre-UR-exempt** |
+| T-021 | W-R | Public status page + external uptime monitor (healthz JSON `status` parse) | 1 gün | T-024, T-014, GÖREV E |
+| T-022 | W-R | SLA + DR + on-call dokümanları (G-P3-B2 paketi) | 1-2 gün | T-020 |
+| T-023 | W-R | CI hardening: gitleaks + frontend build + LLTODO lint + whitelist temizliği | 1 gün | — ; **pre-UR-exempt**, M1-M4 blokeri |
+| T-024 | W-R | Healthz kontrat dokümanı + uptime metriği | 0.5 gün | — |
 
 ## 7. Riskler
 
@@ -144,9 +165,13 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 | TV manuel grant darboğazı (ölçek) | Düşük | Orta | MVP'de kabul; kuyruk + runbook; otomasyon W4+ |
 | Canlı sisteme yanlışlıkla temas | Düşük | Kritik | Tüm işler additive/flag'li; G-P3-5 diff gate; risk-ops review zorunlu |
 | P-001 T-003 gecikirse W2 boşta kalır | Orta | Orta | W2 altyapısı üründen bağımsız hazırlanır; satış açılışı gate'e bağlı |
+| T-020 canlı volume teması (tek blast-radius'lu W-R işi) | Düşük | Kritik | Read-only mount (`-v ...:ro`), tatbikat yalnız scratch volume, restore-to-live operatör-gated |
+| Satış kritik yolu takvime bağlı | Yüksek | Orta | T-003 min-100-trade OOS kanıtı + 90 gün proof penceresi takvim zamanı işler — Hermes saatleri T-002'ye öncelikli |
 
 ## 8. Revizyon Geçmişi
 
 | Tarih | Revizyon | Yazar |
 |---|---|---|
 | 2026-06-11 | İlk sürüm (DRAFT, UR-003 bekliyor) | @claude |
+| 2026-06-11 | P-002→P-003 renumber (epic ID çakışması; P-002 = Marketing & Growth) | @claude |
+| 2026-06-11 | W-R Reliability/SLA dalgası (T-020..T-024) + G-P3-6 + çapraz-epic dedup notları (ops/SLA keşfi: backup SIFIR, status page yok, SLA/DR dokümanı yok, CI'da secret-scan/frontend/lint yok) | @claude |

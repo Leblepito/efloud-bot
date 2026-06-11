@@ -9,7 +9,7 @@
 | Toplam epic | 3 (P-001, P-002, P-003) |
 | Aktif epic | 3 (P-001 IN_PROGRESS, P-002 REVIEW_OPEN, P-003 REVIEW_OPEN) |
 | Tamamlanan epic | 0 |
-| Toplam görev | 13 (T-001..T-003, T-010..T-019) |
+| Toplam görev | 18 (T-001..T-003, T-010..T-024) |
 | Tamamlanan görev | 1 (T-001 ✅ 2026-06-10, G-T1 compile PASS) |
 | Claim edilmiş görev | 0 |
 
@@ -73,7 +73,7 @@
 
 > P-003 "Commercial MVP" açıldı (epic ID çakışması nedeniyle P-002'den renumber edildi;
 > P-002 = Marketing & Growth). Genel metrik tablosu rename commit'inde mutabıklandı:
-> 3 epic, 13 görev (T-001..T-003 + T-010..T-019).
+> 3 epic, 18 görev (T-001..T-003 + T-010..T-019 + W-R eki T-020..T-024).
 
 ### P-003 Görev Skoru
 
@@ -89,6 +89,11 @@
 | T-017 | W2 | tv-access-grant runbook + kuyruk görünümü | ⬜ BACKLOG | — |
 | T-018 | W3 | telegram_notifier (default-OFF) + regression test | ⬜ BACKLOG | — |
 | T-019 | W3 | Müşteri quickstart + site FAQ/destek | ⬜ BACKLOG | — |
+| T-020 | W-R | Backup otomasyonu + restore tatbikatı (pre-UR-exempt) | ⬜ BACKLOG | — |
+| T-021 | W-R | Public status page + uptime monitor | ⬜ BACKLOG | — |
+| T-022 | W-R | SLA + DR + on-call dokümanları | ⬜ BACKLOG | — |
+| T-023 | W-R | CI hardening: gitleaks + frontend + lint (pre-UR-exempt) | ⬜ BACKLOG | — |
+| T-024 | W-R | Healthz kontrat dokümanı + uptime metriği | ⬜ BACKLOG | — |
 
 ### P-003 Review Skoru
 

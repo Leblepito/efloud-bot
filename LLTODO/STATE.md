@@ -67,6 +67,7 @@
 2026-06-11  TRANSFERRED       @claude  Dosyalar LLTODO/plans/'a işlendi; v1 orta bölümü transferde kayıp (işaretli)
 2026-06-11  ULTRA_PLAN_DONE   @claude  UltraPlan rekonstrüksiyonu: 10 ground-truth + 9 gap + 15 PR (M1-M15) + security audit (S1-S7) + G1-G8 checklist
 2026-06-11  REVIEW_OPEN       @claude  Plan Hermes + operatör onayına açıldı (özellikle OQ#1-#12 operatör kararları)
+2026-06-11  DEDUP-NOTU        @claude  M11 SUPERSEDED-BY P-003 T-012/T-014 (statik proof export; bot API kapalı kalır) → OQ#12 KAPANDI. M9→T-011 sıralaması; M10↔T-010 site serializasyonu; M12 domain değişiminde LS webhook yeniden kaydı.
 ```
 
 ### Aktif Durum
@@ -91,12 +92,13 @@
 2026-06-11  DRAFT            @claude  Kurumsal MVP boşluk analizi + tek parça plan yazıldı (W0 legal → W1 kanıt → W2 monetizasyon → W3 müşteri deneyimi)
 2026-06-11  REVIEW_OPEN      @claude  UltraReview (UR-003) için açıldı — operatör /ultrareview tetikleyecek
 2026-06-11  RENUMBERED       @claude  Epic ID çakışması çözüldü: P-002→P-003, UR-002→UR-003, G-P2→G-P3 (P-002 = Marketing & Growth, Hermes scoreboard precedent'i)
+2026-06-11  W-R-EKLENDI      @claude  Reliability/SLA dalgası T-020..T-024 (ops keşfi: backup SIFIR, status page yok, SLA/DR yok, CI eksik). T-020+T-023 pre-UR-exempt. G-P3-6 eklendi.
 ```
 
 ### Aktif Durum
 
 **Durum:** `REVIEW_OPEN` — UR-003 UltraReview bekliyor (2026-06-11)
-**Sonraki adım:** Operatör `/ultrareview` çalıştırır → bulgular plana entegre → FAZ 3 implementasyon (T-010..T-019, dalga sırasıyla)
+**Sonraki adım:** Operatör `/ultrareview` çalıştırır → bulgular plana entegre → FAZ 3 implementasyon (T-010..T-024, dalga sırasıyla; T-020/T-023 pre-UR-exempt hemen başlayabilir)
 
 ### Faz Planı
 
@@ -104,7 +106,7 @@
 |---|---|---|
 | FAZ 0 | Boşluk analizi + plan yazımı | ✅ DONE (2026-06-11) |
 | FAZ 1-2 | UltraReview (UR-003) + consensus/revizyon | ⬜ BEKLİYOR |
-| FAZ 3 | İmplementasyon W0→W1→W2→W3 (T-010..T-019) | ⬜ BEKLİYOR |
+| FAZ 3 | İmplementasyon W0→W1→W2→W3 + W-R (T-010..T-024) | ⬜ BEKLİYOR |
 | FAZ 4 | Dalga başına review + master merge | ⬜ BEKLİYOR |
 
 ---

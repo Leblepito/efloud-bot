@@ -99,7 +99,7 @@ SMC strateji değişiklikleri, paid-ads harcaması (90-gün proof + operatör on
 |---|---|---|---|
 | **M9** | Supabase waitlist tablosu (migration) + REST doğrulama | u2algo-site (+supabase MCP) | PGRST205 kapanır; JSONL fallback'teki kayıtlar import |
 | **M10** | SEO: meta/sitemap/OG/blog iskeleti | u2algo-site | Lighthouse SEO ≥90; bot dashboard noindex KALIR |
-| **M11** | Public read-only snapshot: `/api/public/snapshot` (auth'suz, rate-limit'li, cache'li) + statik sayfa | efloud-bot `backend/api.py` + u2algo-site | PnL gösterimi yüzde-bazlı (OQ#6 operatör kararına kadar); rate-limit testi |
+| ~~**M11**~~ | ~~Public read-only snapshot: `/api/public/snapshot`~~ **SUPERSEDED-BY P-003 T-012/T-014 (2026-06-11):** statik `proof_export.py` yaklaşımı kazandı — bot API public'e AÇILMAZ, DB bağımlılığı çözüldü (OQ#12 kapandı) | — | Bkz. `P-003-commercial-mvp.md` §3b |
 | **M12** | Domain kararı (OQ#1) sonrası DNS/Railway bağlama | infra | **Operatör-gated** |
 
 ### Faz D — Growth
@@ -110,8 +110,11 @@ SMC strateji değişiklikleri, paid-ads harcaması (90-gün proof + operatör on
 | **M14** | YouTube Shorts serisi (ilk 3 eğitim videosu, OQ#8 kararına göre) | Draft→onay→manuel publish |
 | **M15** | KPI takibi: followers/waitlist/engagement (basit cron + JSON/sheet) | Haftalık otomatik rapor Telegram'a |
 
-**Sıralama/bağımlılık:** M1-M4 paralel → M5-M8 (M5, M3'e bağımsız; M6, M3'e bağımlı) → M9-M10 hemen
-başlayabilir (bağımsız) → M11, Track-A DB enablement SONRASI → M12-M15 operatör kararları sonrası.
+**Sıralama/bağımlılık (2026-06-11 dedup revizyonu):** M1-M4 paralel, **P-003 T-023 (CI secret-scan)
+yeşil SONRASI** (G5 gate'i) → M5-M8 (M5, M3'e bağımsız; M6, M3'e bağımlı) → M9 hemen (T-011'in
+ön-şartı), M10 **T-010 (legal sayfalar) SONRASI** (aynı site, tek sahip Hermes, serileştir) →
+~~M11~~ SUPERSEDED → M12-M15 operatör kararları sonrası (M12 domain değişiminde LS webhook
+URL'i yeniden kaydedilir — P-003 GÖREV B notu). M8 ↔ P-003 T-018: ayrı bot token/kanal.
 
 ## 3. Marketing & SEO Strategy
 
