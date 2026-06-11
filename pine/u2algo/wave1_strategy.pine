@@ -20,7 +20,7 @@ strategy(
  format=format.price,
  initial_capital=10000,
  default_qty_type=strategy.percent_of_equity,
- default_qty_value=10,  // %10 equity per trade (G-T4..G-T6 MaxDD≤%5 gate uyumu)
+ default_qty_value=10,  // YALNIZ fallback — fiili sizing risk_pct ile qty= üzerinden (F3)
  commission_type=strategy.commission.percent,
  commission_value=0.04,  // Binance futures taker 0.04%
  slippage=2,             // 2 tick slippage bütçesi (gerçekçi futures)

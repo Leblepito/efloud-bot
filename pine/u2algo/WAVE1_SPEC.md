@@ -143,7 +143,7 @@
 
 ## 7. T-003 Bölümü: Strateji + Backtest (DRAFT — IN_PROGRESS)
 
-**Dosya:** `pine/u2algo/wave1_strategy.pine` (546 satır — T-003 iskeleti)
+**Dosya:** `pine/u2algo/wave1_strategy.pine` (596 satır — T-003 round-3)
 
 **İçerik (iskelet):**
 - [x] `strategy()` header (v6, 10000 capital, %100 equity, 0.04% commission)
@@ -166,7 +166,7 @@
 **Limit-fill intrabar caveat (F4 — gate raporunda kullanılacak):**
 - Strategy(`calc_on_every_tick=false`) bar kapanışında hesaplanır. Limit order
   bar İÇİNDE fill olursa (`strategy.opentrades.entry_bar_index(0) == bar_index - 1`
-  durumu) backtest aynı bar'ın high/low'unu aynı anda kullanır — gerçek hayutta
+  durumu) backtest aynı bar'ın high/low'unu aynı anda kullanır — gerçek hayatta
   fill sırası belirsizdir (eşitlikli backtestlerde fill fiyatı ≈ high/low ortalaması
   alınır, real-world'de daha kötü olabilir). Bu nedenle G-T4..G-T6 gate eşiklerine
   güven aralığı: OOS Sharpe × 0.7 → gerçekte 0.5-0.6'ya düşebilir. Risk_pct=0.5%
@@ -181,3 +181,4 @@
 | 2026-06-11 | T-002 | Review fix'leri: B1 repaint (1h pivot `[-j]`), B2 visual_group, N1 var, N3 %0.1 SL tabanı; §1 tablo güncellendi | @claude |
 | 2026-06-11 | T-003 | Strategy iskeleti (542 satır) + §7 T-003 bölümü | @hermes |
 | 2026-06-11 | T-003 | Ön-compile fix ×3 (tuple destructuring, line.new named-arg, alert()) + §8 başlık restore | @claude |
+
