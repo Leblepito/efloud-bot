@@ -54,11 +54,12 @@ min_rr    = input.float(1.5, "Min R:R", minval=1.0, maxval=5.0, step=0.1,
  tooltip="Minimum (TP1−entry)/(entry−SL) ratio (live-prod: 1.8)", group=confluence_group)
 fib_tp2   = input.float(1.618, "Fib TP2 Extension", minval=1.0, maxval=3.0, step=0.1,
  tooltip="Fibonacci extension from swing range for TP2 target", group=confluence_group)
+// Visual
+// (REVIEW B2 fix: visual_group, kullanıldığı show_sltp input'undan ÖNCE
+//  tanımlanmalı — Pine yukarıdan aşağı derler, forward-ref compile hatasıydı)
+visual_group = "Visual"
 show_sltp = input.bool(true, "Show SL/TP Levels",
  tooltip="Plot dashed SL/TP lines on chart", group=visual_group)
-
-// Visual
-visual_group = "Visual"
 use_cb_palette = input.bool(false, "Colorblind-Friendly Palette",
  tooltip="Alternative palette for red/green color blindness", group=visual_group)
 
@@ -299,6 +300,10 @@ bearish_fvg = high < low[2]
 fvg_active  = bullish_fvg or bearish_fvg
 
 // --- Recent swing break (higher high / lower low) ---
+// REVIEW N2 notu: bu değişkenler EN SON onaylanan swing'i tutar ("previous"
+// = bir önceki swing DEĞİL). Break tespiti için doğru; TP2'nin swing_range'i
+// de bu çiftten türediği için high/low farklı yapısal noktalardan gelebilir —
+// Wave-1 kapsamında kabul edilen sadeleştirme (bkz. WAVE1_SPEC §6).
 var float prev_swing_high = na
 var float prev_swing_low  = na
 if barstate.isconfirmed
@@ -348,26 +353,30 @@ var float last_1h_swing_low  = na
 var int   last_1h_swing_high_bar = na
 var int   last_1h_swing_low_bar  = na
 
+// REVIEW B1 fix (repaint): [-j] = GELECEK bar erişimiydi — pivot ancak sağ
+// pencere kapandıktan sonra değerlendirilebilir. 15m bloğundaki kanıtlı
+// gecikmeli-pivot kalıbının aynısı: pivot adayı htf_high[3], komşular [3±j]
+// (tüm offset'ler >= 0, look-ahead yok). Onay 3 bar gecikir — repaint etmez.
 if barstate.isconfirmed
-    // 1h swing high: current 1h high > previous 3 and next 3
+    // 1h swing high: pivot adayı [3], solunda ve sağında 3'er bar daha düşük
     is_1h_sh = true
     for j = 1 to 3
-        if htf_high <= htf_high[j] or htf_high <= htf_high[-j]
+        if htf_high[3] <= htf_high[3 + j] or htf_high[3] <= htf_high[3 - j]
             is_1h_sh := false
             break
     if is_1h_sh
-        last_1h_swing_high := htf_high
-        last_1h_swing_high_bar := bar_index
-    
+        last_1h_swing_high := htf_high[3]
+        last_1h_swing_high_bar := bar_index - 3
+
     // 1h swing low
     is_1h_sl = true
     for j = 1 to 3
-        if htf_low >= htf_low[j] or htf_low >= htf_low[-j]
+        if htf_low[3] >= htf_low[3 + j] or htf_low[3] >= htf_low[3 - j]
             is_1h_sl := false
             break
     if is_1h_sl
-        last_1h_swing_low := htf_low
-        last_1h_swing_low_bar := bar_index
+        last_1h_swing_low := htf_low[3]
+        last_1h_swing_low_bar := bar_index - 3
 
 // ═══════════════════════════════════════════════
 // T-002: SL HESAPLAMA — Plan §2a
@@ -377,23 +386,25 @@ if barstate.isconfirmed
 // ═══════════════════════════════════════════════
 
 f_calc_sl(direction, entry_price) =>
-    var low_min  = 0.0
-    var high_max = 0.0
+    // REVIEW N1 fix: `var` kaldırıldı — her çağrıda zaten yeniden atanıyordu;
+    // var, ileride atama silinirse taramayı sessizce bozardı.
+    low_min  = low
+    high_max = high
     // Scan last sl_lb bars for extremes
-    low_min  := low
-    high_max := high
     for i = 1 to sl_lb - 1
         if bar_index - i >= 0
             low_min  := math.min(low_min, low[i])
             high_max := math.max(high_max, high[i])
-    
+
     atr_buf = sl_atr_m * atr14
-    
+    // REVIEW N3 fix: referans spec'teki minimum %0.1 fiyat-mesafe tabanı
+    // (CLAUDE.md çekirdek mantık) — düşük-ATR rejimlerinde ATR tabanını tamamlar.
+    min_dist = math.max(0.5 * atr14, 0.001 * entry_price)
+    max_dist = 5.0 * atr14
+
     if direction == "LONG"
         structural = low_min - atr_buf
         stop_dist  = entry_price - structural
-        min_dist   = 0.5 * atr14
-        max_dist   = 5.0 * atr14
         // Clamp
         if stop_dist < min_dist
             structural := entry_price - min_dist
@@ -403,8 +414,6 @@ f_calc_sl(direction, entry_price) =>
     else  // SHORT
         structural = high_max + atr_buf
         stop_dist  = structural - entry_price
-        min_dist   = 0.5 * atr14
-        max_dist   = 5.0 * atr14
         if stop_dist < min_dist
             structural := entry_price + min_dist
         if stop_dist > max_dist

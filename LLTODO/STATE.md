@@ -32,6 +32,8 @@
 2026-06-10  IN_PROGRESS      @hermes  T-001 IMPL_READY: pine/efloud_signals.pine (259 satır) + PINE_SPEC.md. Branch: feat/p001-t001-pine-indicator. Swing detection (manuel pivot lb=4), OB (seq=5, body>1.5×ATR), 1h bias (EMA20 overlay). G-T1 compile gate BEKLİYOR (VPS'te TV yok).
 2026-06-10  REVIEW_FIXES     @claude  Path çakışması düzeltildi: Wave-1 dosyaları pine/u2algo/ altına (mevcut SMC v2 port restore). OB 5-ardışık fidelity fix + ölü kod temizliği. Plan v1.3 (§3a path'leri güncellendi).
 2026-06-10  T-001 DONE ✅    @claude  G-T1 PASS: TV Pine Editor compile 0 hata 0 marker (pine_smart_compile + pine_get_errors). T-001 → tasks/DONE/. Sıra T-002'de.
+2026-06-11  IMPL_READY       @hermes  T-002: wave1_signals.pine v1.1.0 (+323 satır) — confluence 7-faktör, 1h swing TP1, f_calc_sl/f_calc_tp, sinyaller + görseller. Patch format-patch+sha256 ile transfer (yeni kural ilk kez uygulandı, bütünlük ✅). Ek teslimat: GÖREV A/B/E dosyaları (DDL taslakları + LS fizibilite + status-page eval).
+2026-06-11  REVIEW_FIXES     @claude  T-002 review REQUEST_CHANGES → fix: B1 REPAINT (1h pivot [-j] GELECEK-bar erişimi — R-002'nin tam uyarısı; gecikmeli-pivot kalıbına çevrildi) + B2 visual_group compile hatası + N1 var + N3 %0.1 SL tabanı. Hermes'in lokal lint-R2 varyantı düşürüldü (PR #186 superseded). G-T2 compile-verify BEKLİYOR — TV MCP bağlı değil (launch: TV Desktop'ı --remote-debugging-port=9222 ile).
 ```
 
 ### Review Özeti

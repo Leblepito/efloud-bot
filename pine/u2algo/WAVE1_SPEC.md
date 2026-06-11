@@ -16,9 +16,12 @@
 | `ob_sequential` | 5 | `ob_seq_default` (hardcoded) | 5 | Pine for-loop sabit sayı ister |
 | `ob_body_atr_mult` | 1.5 | `ob_body_mult` (`input.float`) | 1.5 | ✅ Dinamik input |
 | `confluence_threshold` | 55 | `conf_thresh` (`input.int`) | 55 | T-002'de kullanılacak |
-| `sl_atr_mult` | 0.5 | — (T-002) | — | T-002'de eklenecek |
-| `sl_lookback` | 20 | — (T-002) | — | T-002'de eklenecek |
-| `min_rr` | 1.5 | — (T-002) | — | T-002'de eklenecek |
+| `sl_atr_mult` | 0.5 | `sl_atr_m` (`input.float`) | 0.5 | ✅ T-002 |
+| `sl_lookback` | 20 | `sl_lb` (`input.int`) | 20 | ✅ T-002 |
+| `min_rr` | 1.5 | `min_rr` (`input.float`) | 1.5 | ✅ T-002 (live-prod: 1.8) |
+| `fib_tp2` | 1.618 | `fib_tp2` (`input.float`) | 1.618 | ✅ T-002 |
+| `min_sl_dist_pct` | 0.1% | `min_dist` içinde `0.001*entry` tabanı | 0.1% | ✅ T-002 review fix (N3) — ATR tabanıyla max() |
+| — | — | `show_sltp` (`input.bool`) | true | T-002 görsel toggle |
 | `body_mode` | True | `true` (hardcoded) | true | OB hesaplamada open/close referans; Pine'da body-mode zorunlu |
 
 ---
@@ -125,6 +128,17 @@
 
 **Derleme durumu:** `IMPL_READY, awaiting compile-verify` (VPS'te TradingView yok)
 
+**T-002 review notları (@claude, 2026-06-11 — REQUEST_CHANGES → fix'ler uygulandı):**
+- **B1 (repaint, BLOCKING):** 1h pivot tespitinde `[-j]` gelecek-bar erişimi vardı —
+  TP1 hedefleri repaint ederdi (R-002'nin tam uyarısı). 15m'deki gecikmeli-pivot
+  kalıbına çevrildi: aday `htf_high[3]`, komşular `[3±j]`, onay 3 bar gecikir.
+- **B2 (compile, BLOCKING):** `visual_group` forward-reference — tanım yukarı taşındı.
+- **N3:** referans spec'in min %0.1 SL mesafe tabanı eklendi (`max(0.5×ATR, 0.001×entry)`).
+- **N2/N4 (kabul edilen sadeleştirmeler):** `prev_swing_*` en SON swing'i tutar (önceki
+  değil) — TP2 swing_range'i eşleşmemiş high/low çiftinden gelebilir; "strong breakout"
+  (+10) OB body koşuluyla korele — efektif bağımsız faktör sayısı ~6. İkisi de Wave-1
+  kapsam kararı; T-003 backtest'i bozarsa revize edilir.
+
 ---
 
 ## 7. Revizyon Geçmişi
@@ -133,4 +147,5 @@
 |---|---|---|---|
 | 2026-06-10 | T-001 | İlk sürüm: swing + OB + 1h bias | @hermes |
 | 2026-06-11 | T-002 | Confluence scoring + SL/TP + sinyal + görsel plot | @hermes |
+| 2026-06-11 | T-002 | Review fix'leri: B1 repaint (1h pivot `[-j]`), B2 visual_group, N1 var, N3 %0.1 SL tabanı; §1 tablo güncellendi | @claude |
 | — | T-003 | (bekliyor) | — |
