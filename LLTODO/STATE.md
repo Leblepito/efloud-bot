@@ -96,6 +96,7 @@
 2026-06-11  W-R-EKLENDI      @claude  Reliability/SLA dalgası T-020..T-024 (ops keşfi: backup SIFIR, status page yok, SLA/DR yok, CI eksik). T-020+T-023 pre-UR-exempt. G-P3-6 eklendi.
 2026-06-11  ULTRA_REVIEW     @claude  UR-003 KOŞTU — lokal 4-lens adversarial (cloud /ultrareview 30dk timeout, PR #175 emsali fallback): süreç 9/10, risk 9/10, iş 8/10, fizibilite 8/10 — 4×APPROVED_WITH_NITS, 0 blocker. Detay: reviews/R-003-claude-ur003-commercial-mvp.md
 2026-06-11  CONSENSUS_REACHED @claude  14 should-fix plan v1.1'e entegre: T-020 key-escrow, G-P3-1 cadence sınırı, G-P3-5 dosya listesi, G-P3-B5 gelir-modeli kararı, T-016 refund/cancel event'leri, T-014/T-024 uptime kaynağı düzeltmesi, T-018 composition, T-012 baseline-equity, T-013 veri kaynağı, LS fizibilite (GÖREV B). Operatör merge onayı bekleniyor (PR #181 + #182).
+2026-06-11  T-023 DONE ✅     @claude  PR #182 → master 63b9872 (operatör onayıyla merge). CI artık gitleaks + frontend build + LLTODO lint koşuyor; gitleaks triage 5/5 false-positive, gerçek secret YOK. P-002 G5 gate'i otomatikleşti. FAZ 3'ün ilk DONE'ı.
 ```
 
 ### Aktif Durum
