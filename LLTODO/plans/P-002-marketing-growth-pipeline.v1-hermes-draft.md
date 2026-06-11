@@ -7,7 +7,8 @@
 > aktarım sırasında orta bölüm (Safety Invariants gövdesi + WS-A/WS-B workstream detayları
 > + WS-C başlangıcı) KESİLDİ. Kesik bölümler `[TELEGRAM AKTARIMINDA KESİLDİ]` ile işaretli.
 > Orijinalin tamamı VPS'te `LLTODO/plans/2026-06-10-efloud-marketing-growth.md` içinde durur.
-> Kanonik rekonstrüksiyon: aynı dizinde suffix'siz dosya.
+> Kanonik rekonstrüksiyon: `P-002-marketing-growth-pipeline.md` (aynı dizin).
+> **Lint notu:** Hedef/Kapsam/Görevler/Gate bölümleri kanonik plandadır; bu dosya tarihsel backup'tır.
 
 **Goal:** Efloud-bot için marketing/growth pipeline'ını kurmak: organic content → waitlist → proof archive → (sonra) paid ads. Ana kanallar: X/Twitter, YouTube Shorts, Higgsfield video, Manus.im otomasyon, web dashboard SEO.
 

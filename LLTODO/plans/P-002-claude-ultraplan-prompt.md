@@ -2,7 +2,8 @@
 
 > **Hedef:** Efloud-bot için marketing + growth pipeline'ının tam planını rekonstrükte et.
 > **Format:** UltraPlan (ground-truth → gap → atomic PR'lar → strateji → security)
-> **Sonraki adım:** Bu dosyayı Claude'a gönder, UltraPlan çıktısını `LLTODO/plans/2026-06-10-efloud-marketing-growth.md`'e yaz.
+> **Sonraki adım:** Bu dosyayı Claude'a gönder, UltraPlan çıktısını `LLTODO/plans/P-002-marketing-growth-pipeline.md`'e yaz.
+> **Kapsam:** P-002 marketing/growth — trade path ve safety katmanları kapsam dışı.
 
 ---
 
@@ -18,9 +19,9 @@ Sen efloud-bot projesinin Claude agentsın. Çift rolün var:
 
 **Epic:** P-002 (önerilen)
 **Branch:** `feat/marketing-growth-pipeline`
-**Hermes v1 draft:** `LLTODO/plans/2026-06-10-efloud-marketing-growth.v1-hermes-draft.md`
+**Hermes v1 draft:** `LLTODO/plans/P-002-marketing-growth-pipeline.v1-hermes-draft.md`
 
-### 6 Faz
+### Görevler (6 Faz)
 
 **Faz 1 — Ground-Truth:**
 Repo'yu baştan sona tara (master 39c2738). CLAUDE.md, HERMES.md, README, docs/, LLTODO/, engine/, frontend/, pine/, configs/ her şeyi oku. CLAUDE.md'deki iddiaları gerçek kodla karşılaştır. "Next.js 15" claim'i doğru mu? Hangi dosya statik hangisi dinamik? List all API/MCP/CLI.
@@ -42,7 +43,7 @@ Hedef kitle, keyword research, content calendar, conversion funnel, CAC, MRR pro
 API key surface, data leak vectors, rate limit riskleri, dashboard auth, dry-run/live karışıklığı
 
 **Faz 6 — UltraReview Checklist:**
-G1-G8 compliance gate'leri
+G1-G8 compliance Gate'leri
 
 ### Teknik Kısıtlar
 
@@ -70,8 +71,9 @@ G1-G8 compliance gate'leri
 ## 6. Open Questions
 ```
 
-Canonical path: `LLTODO/plans/2026-06-10-efloud-marketing-growth.md`
+Canonical path: `LLTODO/plans/P-002-marketing-growth-pipeline.md`
 Hermes v1 backup: `.v1-hermes-draft` suffix ile aynı dizinde
 
-> **Path notu (@claude, 2026-06-11):** Orijinal prompt `.hermes/plans/` path'ini kullanıyordu;
-> kanonik yer `LLTODO/plans/` olarak güncellendi (Hermes 2026-06-11 talimatı, süreç-görünürlük).
+> **Path notu (@claude, 2026-06-11):** Orijinal prompt `.hermes/plans/2026-06-10-efloud-marketing-growth.md`
+> path'ini kullanıyordu; kanonik yer `LLTODO/plans/` + lint uyumlu `P-002-*` adlandırması olarak
+> güncellendi (Hermes 2026-06-11 talimatı + lltodo_lint R3/R4 kuralları).

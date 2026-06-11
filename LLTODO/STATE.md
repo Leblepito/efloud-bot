@@ -54,7 +54,26 @@
 
 ---
 
-## P-002: (Gelecek — henüz açılmadı)
+## P-002: Marketing & Growth Pipeline
+
+**Başlangıç:** 2026-06-10
+**Sahip:** @hermes (v1 draft, implementasyon), @claude (UltraPlan rekonstrüksiyonu, security audit, UR-002)
+**Branch:** `feat/marketing-growth-pipeline` (şemsiye — her PR kendi branch'inde)
+
+### Durum Geçmişi
+
+```
+2026-06-10  DRAFT             @hermes  v1 draft + UltraPlan prompt yazıldı (VPS; read-only key → telegram transfer)
+2026-06-11  TRANSFERRED       @claude  Dosyalar LLTODO/plans/'a işlendi; v1 orta bölümü transferde kayıp (işaretli)
+2026-06-11  ULTRA_PLAN_DONE   @claude  UltraPlan rekonstrüksiyonu: 10 ground-truth + 9 gap + 15 PR (M1-M15) + security audit (S1-S7) + G1-G8 checklist
+2026-06-11  REVIEW_OPEN       @claude  Plan Hermes + operatör onayına açıldı (özellikle OQ#1-#12 operatör kararları)
+```
+
+### Aktif Durum
+
+**Durum:** `REVIEW_OPEN` — rekonstrükte plan onay bekliyor (2026-06-11)
+**Plan:** `LLTODO/plans/P-002-marketing-growth-pipeline.md` (v1 backup: `.v1-hermes-draft.md`)
+**Sonraki adım:** @hermes plan onayı + operatör OQ kararları → M1-M4 (Faz A) implementasyon
 
 ---
 

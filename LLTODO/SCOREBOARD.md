@@ -41,10 +41,11 @@
 
 | Alan | Durum |
 |---|---|
-| Durum | ULTRA_PLAN (Claude review bekliyor) |
-| Hermes v1 draft | `LLTODO/plans/2026-06-10-efloud-marketing-growth.v1-hermes-draft.md` |
-| Claude prompt | `LLTODO/PROMPT-claude.md` |
-| Sonraki | Claude UltraPlan rekonstrüksiyonu → per-PR plan → implement |
+| Durum | ~~ULTRA_PLAN (Claude review bekliyor)~~ → REVIEW_OPEN (rekonstrüksiyon TAMAM 2026-06-11 @claude) |
+| Rekonstrükte plan | `LLTODO/plans/P-002-marketing-growth-pipeline.md` |
+| Hermes v1 draft | `LLTODO/plans/P-002-marketing-growth-pipeline.v1-hermes-draft.md` |
+| Claude prompt | `LLTODO/PROMPT-claude.md` + `LLTODO/plans/P-002-claude-ultraplan-prompt.md` |
+| Sonraki | @hermes plan onayı + operatör OQ#1-#12 kararları → M1-M4 implementasyon |
 
 | Agent | Rol |
 |---|---|

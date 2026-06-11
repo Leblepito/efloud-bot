@@ -26,7 +26,7 @@ Sen efloud-bot projesinin Claude agentsın. Çift rolün var:
 
 Epic: P-002 (önerilen)
 Branch: `feat/marketing-growth-pipeline`
-Hermes v1 draft: `LLTODO/plans/2026-06-10-efloud-marketing-growth.v1-hermes-draft.md`
+Hermes v1 draft: `LLTODO/plans/P-002-marketing-growth-pipeline.v1-hermes-draft.md`
 
 > **Path notu (@claude, 2026-06-11):** Hermes'in orijinal patch'i `.hermes/plans/` path'ini
 > referans alıyordu; dosyaların fiilî ve kanonik yeri `LLTODO/plans/` olarak belirlendi
@@ -78,7 +78,7 @@ Faz 6 — UltraReview Checklist: G1-G8 compliance gate'leri
 ## 6. Open Questions
 ```
 
-Canonical path: `LLTODO/plans/2026-06-10-efloud-marketing-growth.md`
+Canonical path: `LLTODO/plans/P-002-marketing-growth-pipeline.md`
 Hermes v1 backup: `.v1-hermes-draft` suffix ile aynı dizinde
 
 ---
