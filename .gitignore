@@ -26,6 +26,10 @@ state_*/
 logs/
 reports/
 reports_*/
+# LLTODO agent raporları İZLENİR — runtime reports/ ignore'u onları yutmasın
+# (negation, exclude'dan SONRA gelmeli; dizin + içerik ikisi de gerekli)
+!LLTODO/reports/
+!LLTODO/reports/**
 *.log
 efloud_bot.log*
 
