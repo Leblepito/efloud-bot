@@ -10,15 +10,15 @@
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
-| Tamamlanan görev | 5 (T-001 ✅; T-023 ✅ #182; T-024 ✅ #184; T-012 ✅ #185; T-022 ✅ #187) ~~önceki: 4~~ |
-| Claim edilmiş görev | 2 (T-020 @claude, T-002 @hermes 2026-06-11) ~~önceki: 1~~ |
+| Tamamlanan görev | 6 (T-001 ✅; T-002 ✅ G-T2; T-023 ✅ #182; T-024 ✅ #184; T-012 ✅ #185; T-022 ✅ #187) ~~önceki: 5~~ |
+| Claim edilmiş görev | 1 (T-020 @claude) ~~önceki: 2~~ |
 
 ## P-001 Görev Skoru
 
 | Görev | Açıklama | Durum | Claim |
 |---|---|---|---|
 | T-001 | Swing detection + OB core (Pine Script) | 🟢 DONE | @hermes (2026-06-10) |
-| T-002 | MTF confluence + SL/TP hesaplama | 🟡 IMPL_READY | @hermes (2026-06-11) |
+| T-002 | MTF confluence + SL/TP hesaplama | 🟢 DONE (G-T2 PASS 2026-06-11) | @hermes (2026-06-11) |
 | T-003 | Strateji backtest + görsel validasyon | ⬜ BACKLOG | — |
 
 ## Sprint Görünümü
@@ -30,7 +30,7 @@
 - [x] Strategy-opt re-verify report ✅
 
 **Sprint 2 (2026-06-14 → 2026-06-17):**
-- [ ] T-002: MTF confluence + SL/TP
+- [x] T-002: MTF confluence + SL/TP ✅ DONE (erken bitti — G-T2 PASS 2026-06-11)
 - [ ] T-003: Strateji backtest
 
 **Sprint 3 (2026-06-18 → ...):**

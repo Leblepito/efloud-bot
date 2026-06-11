@@ -3,6 +3,7 @@
 // u2algo Wave-1 — SMC Indicator (P-001 / T-001)
 // 15m trigger + 1h bias overlay
 // v1.1.0 — T-002: MTF confluence + SL/TP hesaplama
+// v1.1.1 — G-T2: compile fix ×2 (TV Pine Editor doğrulandı — 0 hata 0 marker)
 // ═══════════════════════════════════════════════
 //
 // © u2algo — Efloud SMC Core
@@ -312,9 +313,11 @@ if barstate.isconfirmed
     if new_swing_low
         prev_swing_low := swing_low_val
 
-recent_higher_high = not na(prev_swing_high) and high > prev_swing_high and\
+// (G-T2 fix: '\' satır devamı Pine'da geçersizdi — "no viable alternative at
+//  character '\'". Pine satır sarması girintili devam satırıyla yapılır.)
+recent_higher_high = not na(prev_swing_high) and high > prev_swing_high and
                       (bar_index - last_sh_bar) < 50
-recent_lower_low   = not na(prev_swing_low) and low < prev_swing_low and\
+recent_lower_low   = not na(prev_swing_low) and low < prev_swing_low and
                       (bar_index - last_sl_bar) < 50
 swing_break_active = recent_higher_high or recent_lower_low
 
@@ -427,8 +430,10 @@ f_calc_sl(direction, entry_price) =>
 // ═══════════════════════════════════════════════
 
 f_calc_tp(direction, entry_price, sl_price) =>
-    tp1 = na
-    tp2 = na
+    // (G-T2 fix: `na` ile başlatma tip anahtar kelimesi gerektirir — "Value
+    //  with NA type cannot be assigned to a variable ... without type keyword")
+    float tp1 = na
+    float tp2 = na
     
     // TP1: nearest 1h swing level
     if direction == "LONG"
