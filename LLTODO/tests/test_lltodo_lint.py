@@ -39,12 +39,12 @@ def test_r1_valid_states():
 
 
 def test_r2_at_most_one_in_progress():
-    """R2: Should flag >1 task IN_PROGRESS."""
+    """R2: Should flag >1 task IN_PROGRESS for the SAME agent."""
     with tempfile.TemporaryDirectory() as td:
         base = Path(td)
         make_lltodo_structure(base, {
             "STATE.md": "P-001: IN_PROGRESS",
-            "SCOREBOARD.md": "Claim edilmiş görev | 0",
+            "SCOREBOARD.md": "Claim edilmiş görev | 2",
             "tasks/IN_PROGRESS/T-001-test.md": "Epic: P-001\nClaimed by: @hermes",
             "tasks/IN_PROGRESS/T-002-test.md": "Epic: P-001\nClaimed by: @hermes",
         })
@@ -54,6 +54,46 @@ def test_r2_at_most_one_in_progress():
             v = lltodo_lint.violations()
             r2 = [x for x in v if x.startswith("[R2]")]
             assert len(r2) == 1, f"Expected 1 R2 violation, got: {r2}"
+        finally:
+            lltodo_lint.LLTODO_DIR = old
+
+
+def test_r2_different_agents_may_claim_in_parallel():
+    """R2: 2026-06-11 multi-agent kuralı — farklı agent'lar paralel claim edebilir."""
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        make_lltodo_structure(base, {
+            "STATE.md": "P-001: IN_PROGRESS",
+            "SCOREBOARD.md": "Claim edilmiş görev | 2",
+            # Markdown-bold header biçimi de (gerçek kart formatı) parse edilmeli:
+            "tasks/IN_PROGRESS/T-020-test.md": "**Epic:** P-003\n**Claimed by:** @claude (2026-06-11)",
+            "tasks/IN_PROGRESS/T-002-test.md": "Epic: P-001\nClaimed by: @hermes",
+        })
+        old = lltodo_lint.LLTODO_DIR
+        lltodo_lint.LLTODO_DIR = base
+        try:
+            v = lltodo_lint.violations()
+            r2 = [x for x in v if x.startswith("[R2]")]
+            assert not r2, f"Different agents must be allowed in parallel, got: {r2}"
+        finally:
+            lltodo_lint.LLTODO_DIR = old
+
+
+def test_r2_unclaimed_in_progress_flagged():
+    """R2: IN_PROGRESS'te claimant'sız kart = ihlal."""
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        make_lltodo_structure(base, {
+            "STATE.md": "P-001: IN_PROGRESS",
+            "SCOREBOARD.md": "Claim edilmiş görev | 1",
+            "tasks/IN_PROGRESS/T-005-test.md": "Epic: P-001\nClaimed by: — (henüz claim edilmedi)",
+        })
+        old = lltodo_lint.LLTODO_DIR
+        lltodo_lint.LLTODO_DIR = base
+        try:
+            v = lltodo_lint.violations()
+            r2 = [x for x in v if x.startswith("[R2]")]
+            assert len(r2) == 1 and "without claimant" in r2[0], f"Expected unclaimed violation, got: {r2}"
         finally:
             lltodo_lint.LLTODO_DIR = old
 
@@ -173,9 +213,17 @@ def test_r8_broken_references():
 
 
 if __name__ == "__main__":
+    # Windows konsolu cp1252 — emoji status satırları crash etmesin
+    # (lltodo_lint.py main()'indeki fix'in aynısı; PR #172/#177 pattern'i).
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
     tests = [
         test_r1_valid_states,
         test_r2_at_most_one_in_progress,
+        test_r2_different_agents_may_claim_in_parallel,
+        test_r2_unclaimed_in_progress_flagged,
         test_r3_naming_conventions,
         test_r4_plan_required_sections,
         test_r5_review_required_sections,

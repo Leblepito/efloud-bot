@@ -27,4 +27,4 @@ CI'daki üç boşluğu kapatmak: (1) secret scanning yok — yeni ödeme/sosyal 
 |---|---|---|
 | 2026-06-11 | BACKLOG | P-003 W-R — pre-UR-exempt, M1-M4 blokeri |
 | 2026-06-11 | IMPL | @claude PR #182 (`feat/t023-ci-hardening`): 3 CI job + gitleaks triage (5/5 false-positive, gerçek secret YOK — doc placeholder fix + 4 fingerprint .gitleaksignore) |
-| 2026-06-11 | ✅ DONE | PR #182 → master `63b9872`, CI 4/4 yeşil. P-002 G5 gate'i artık otomatik. KALAN (FAZ 3 follow-up, #181 merge sonrası): lltodo_lint.py:143 "P-002" whitelist temizliği + R1 vakum fix + R6/R7 genişletme (R-003 nice-to-have) |
+| 2026-06-11 | ✅ DONE | PR #182 → master `63b9872`, CI 4/4 yeşil. P-002 G5 gate'i artık otomatik. KALAN follow-up'lardan whitelist temizliği + R2-per-agent PR #186'da yapıldı (2026-06-11); R1 vakum fix + R6/R7 genişletme hâlâ açık (R-003 nice-to-have) |
