@@ -9,6 +9,18 @@
 
 u2algo Telegram kanalına gecikmeli/aggregate bildirim gönderen, `NullNotificationManager` ile aynı duck-type arayüzlü opt-in notifier eklemek. Trade karar yoluna SIFIR temas.
 
+## UR-003 Düzeltmesi (2026-06-11) — Composition kararı ZORUNLU
+
+⚠️ Gap-analizi G4'teki "engine/notifications/ içinde tek implementasyon null_manager.py" iddiası
+**YANLIŞ**: `engine/notifications/__init__.py`'de gerçek `NotificationManager` var ve canlıda
+`main.py` → SafeOrchestrator `notification_mgr` seam'ine bağlı (channels=['terminal','log'] +
+content_emitter; ~8 çağrı noktası). telegram_notifier'ı bu seam'e DOĞRUDAN takmak operatör
+bildirimlerini YERİNDEN EDER. Tasarım: mevcut NotificationManager'a 'telegram' **channel** olarak
+eklenmeli (sınıf zaten bu genişleme için tasarlanmış) veya composite/fan-out sarmalayıcı.
+G-P3-3 regression testi "flag ON iken operatör terminal/log bildirimleri KAYBOLMAZ" senaryosunu
+da kapsamalı. Ek nicelik: "gecikmeli" = olay kapanışından ≥1 saat VEYA yalnız günlük özet
+(implementasyonda biri pinlenir, regülasyon guard'ı test edilebilir olur).
+
 ## Çıktılar
 
 - [ ] `engine/notifications/telegram_notifier.py` (NullNotificationManager arayüzü)

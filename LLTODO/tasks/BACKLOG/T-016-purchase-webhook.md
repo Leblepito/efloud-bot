@@ -13,8 +13,12 @@ Lemon Squeezy satın alma webhook'unu imza doğrulamalı şekilde alıp entitlem
 
 - [ ] `u2algo-site/server.js` → `POST /api/purchase-webhook` (X-Signature HMAC-SHA256 doğrulaması, secret env'den)
 - [ ] Geçerli event → `entitlements` insert (`status=pending`) + onay e-postası (TV username toplama linki)
+- [ ] **Refund/chargeback event'leri (UR-003):** `order_refunded` / dispute → `status=revoked`
+      + T-017 revoke kuyruğuna düşer (refund-sonrası-erişim-devam riskine karşı otomatik tetik)
+- [ ] **G-P3-B5 kararına göre:** abonelik seçilirse `subscription_cancelled/expired/payment_failed`
+      event'leri + `expires_at` işleme (tek-seferlikse bu satır düşer)
 - [ ] index.html pricing bölümüne checkout linki (operatör onayı sonrası — G-P3-B2)
-- [ ] Test: geçersiz imza 401, duplicate order_ref idempotent
+- [ ] Test: geçersiz imza 401, duplicate order_ref idempotent, refund→revoked geçişi
 
 ## Acceptance Kriterleri
 

@@ -86,9 +86,12 @@ Bir "kurumsal firma" iddiasının zaten karşılanan kısımları:
 
 ### G4 — Müşteri deneyimi katmanı YOK (kritiklik: P1, müşteri oluşunca)
 
-- `engine/notifications/` içinde tek implementasyon `null_manager.py`
-  (`NullNotificationManager` — tüm çağrılar no-op). Müşteri-yüzlü trade/sinyal
-  bildirimi altyapısı yok; `ops/alerter/` yalnız operatör Telegram'ı.
+- ~~`engine/notifications/` içinde tek implementasyon `null_manager.py`~~
+  **ERRATUM (UR-003, 2026-06-11):** Bu iddia YANLIŞ — `engine/notifications/__init__.py`'de
+  gerçek `NotificationManager` var ve canlıda SafeOrchestrator `notification_mgr` seam'ine
+  bağlı (channels=['terminal','log'] + content_emitter). G4'ün özü geçerli (müşteri-yüzlü
+  bildirim YOK) ama T-018 mevcut manager'ı YERİNDEN ETMEMELİ — channel ekleme/composite
+  tasarımı zorunlu (detay T-018 kartında). `ops/alerter/` yalnız operatör Telegram'ı.
 - Müşteri dokümantasyonu yok (`docs/runbooks/` iç operasyon içindir; "indicator nasıl
   eklenir, alert nasıl kurulur" tipi quickstart yok).
 - Destek kanalı tanımsız (support e-postası, FAQ-destek akışı yok).

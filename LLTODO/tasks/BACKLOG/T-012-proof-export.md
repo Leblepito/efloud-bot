@@ -21,6 +21,16 @@
 - [ ] G-P3-1: whitelist dışı alan testi yeşil
 - [ ] Bot API'si public'e AÇILMAZ — yayın statik dosya üzerinden
 - [ ] Yayın öncesi operatör onayı (G-P3-B4)
+- [ ] Cadence/granularity: snapshot ≥ günlük, equity günlük-kapanış, yalnız kapanmış trade'ler (G-P3-1 eki)
+
+## UR-003 Düzeltmesi (2026-06-11)
+
+⚠️ **max_dd_pct + normalize % equity eğrisi journal'dan TEMİZ türetilemez:** TradeSnapshot'ta
+hesap bakiyesi alanı yok; DB-less emsal (`backend/api.py /api/equity`) 0-bazlı kümülatif-PnL
+kurar — bunun üstünde peak-relative %DD yanıltıcıdır. Çözüm implementasyonda PİNLENMELİ:
+(a) operatör-girdili baseline-equity (state dosyası) VEYA (b) R-multiple/return-bazlı eğri.
+win_rate/profit_factor/trade_count sorunsuz (`engine/journal.py stats()` hazır).
+Not: M11-supersession'daki "DB bağımlılığı çözüldü" iddiası yalnız trade-stats için geçerli.
 
 ## Log
 

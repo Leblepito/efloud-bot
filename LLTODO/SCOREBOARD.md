@@ -1,15 +1,15 @@
 # LLTODO — SCOREBOARD
 
-> Son güncelleme: 2026-06-10 @hermes
+> Son güncelleme: 2026-06-11 @claude (önceki: 2026-06-10 @hermes)
 
 ## Genel Metrikler
 
 | Metrik | Değer |
 |---|---|
-| Toplam epic | 3 (P-001, P-002, P-003) |
-| Aktif epic | 3 (P-001 IN_PROGRESS, P-002 REVIEW_OPEN, P-003 REVIEW_OPEN) |
+| Toplam epic | ~~1 (P-001)~~ → 3 (P-001, P-002, P-003) |
+| Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
-| Toplam görev | 18 (T-001..T-003, T-010..T-024) |
+| Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
 | Tamamlanan görev | 1 (T-001 ✅ 2026-06-10, G-T1 compile PASS) |
 | Claim edilmiş görev | 0 |
 
@@ -41,7 +41,7 @@
 
 | Alan | Durum |
 |---|---|
-| Durum | ~~ULTRA_PLAN (Claude review bekliyor)~~ → REVIEW_OPEN (rekonstrüksiyon TAMAM 2026-06-11 @claude) |
+| Durum | ~~ULTRA_PLAN (Claude review bekliyor)~~ → ~~REVIEW_OPEN~~ → CONSENSUS_REACHED (UR-003 oturumunda kapsandı; M11 dedup bulguları entegre, 2026-06-11 @claude) |
 | Rekonstrükte plan | `LLTODO/plans/P-002-marketing-growth-pipeline.md` |
 | Hermes v1 draft | `LLTODO/plans/P-002-marketing-growth-pipeline.v1-hermes-draft.md` |
 | Claude prompt | `LLTODO/PROMPT-claude.md` + `LLTODO/plans/P-002-claude-ultraplan-prompt.md` |
@@ -99,7 +99,10 @@
 
 | Review | Epic | Reviewer | Sonuç | Conf |
 |---|---|---|---|---|
-| UR-003 | P-003 | @claude (operatör /ultrareview) | ⬜ BEKLİYOR | — |
+| UR-003 | P-003 | @claude (lokal 4-lens; cloud /ultrareview 30dk timeout — PR #175 emsali fallback) | ✅ APPROVED_WITH_NITS (0 blocker; 14 should-fix → plan v1.1'e entegre) | 8.5/10 |
+
+> UR-003 detayı: `LLTODO/reviews/R-003-claude-ur003-commercial-mvp.md`
+> P-002 Marketing planı da aynı oturumda kapsandı (UR-002 işlevi) — dedup/M11 bulguları entegre.
 
 ### Agent Katkıları (ek)
 

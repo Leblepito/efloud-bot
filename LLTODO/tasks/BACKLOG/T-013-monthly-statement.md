@@ -22,6 +22,15 @@ Mevcut daily-report altyapısını yeniden kullanarak aylık performans statemen
 - [ ] Endpoint auth'suz 401 döner
 - [ ] Mevcut daily report davranışı değişmez
 
+## UR-003 Düzeltmesi (2026-06-11)
+
+**Veri kaynağı pinlendi:** `compute_summary` DB-row anahtarları bekler (`pnl_usdt/opened_at/closed_at`),
+journal ise `realized_pnl/entry_timestamp/exit_timestamp` taşır → **adapter gerekli**. Prod DB-LESS
+olduğundan monthly.py journal'dan okumalı (`backend/api.py read_journal_history` emsali);
+equity_start/end alanları DB yokken None döner — statement şablonu bunu açıkça göstermeli.
+Ek netleştirme: bu endpoint operatör-only İÇ tüketimdir; müşteri-yüzlü yayın T-012/T-014
+üzerinden (operatör onaylı statik) yapılır.
+
 ## Log
 
 | Zaman | Durum | Not |

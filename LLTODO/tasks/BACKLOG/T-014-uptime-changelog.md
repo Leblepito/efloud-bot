@@ -11,7 +11,12 @@ Proof snapshot'a alerter heartbeat'ten türetilen uptime % alanı eklemek; müş
 
 ## Çıktılar
 
-- [ ] `proof_export.py`'a uptime alanı (`state/alerter_heartbeat.json` yaşından türetilir)
+- [ ] `proof_export.py`'a uptime alanı — **UR-003 düzeltmesi:** tek-timestamp heartbeat'ten
+      uptime YÜZDESİ türetilemez (yalnız anlık liveness) ve heartbeat ALERTER sidecar'ının
+      canlılığıdır, trading bot'un değil. Kaynak **healthz-türevi sampling**: proof_export cron'u
+      her koşuda healthz durumunu örnekleyip kendi birikim geçmişini tutar (T-024 kontratına göre
+      `status:"suspended"` ayrı kategori — "servis up / trading suspended"); ya da alan
+      "monitoring liveness" olarak adlandırılır. Tasarım T-024 ile birlikte pinlenir
 - [ ] Repo köküne public `CHANGELOG.md` (Keep-a-Changelog formatı, müşteri diliyle)
 - [ ] u2algo-site "updates" bölümü (changelog'dan beslenen statik liste)
 

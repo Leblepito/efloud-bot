@@ -3,7 +3,9 @@
 > Hazırlayan: Claude (Architect/Review). Bitince Claude review edecek.
 > Kurallar: canlı mainnet → feature-branch + PR, atomic, secrets sadece VPS/Railway,
 > destructive-op yok. Bu dosyadaki görevler P-003 planının **infra ön-işleri** —
-> implementasyon görevleri (T-010..T-019) UR-003 UltraReview onayından SONRA başlar.
+> implementasyon görevleri (T-010..T-024; istisna T-020/T-023 pre-UR-exempt) UR-003
+> UltraReview onayından SONRA başlar. **UR-003 2026-06-11'de KOŞTU: 4×APPROVED_WITH_NITS,
+> 0 blocker — nits plan v1.1'e entegre. Operatör merge sonrası FAZ 3 açık.**
 
 Bağlam: P-003 "Commercial MVP" epic'i açıldı (`LLTODO/plans/P-003-commercial-mvp.md`,
 durum REVIEW_OPEN). Ticari çapa: u2algo ürün hattı (TradingView indicator ücretsiz /
@@ -24,6 +26,9 @@ ensure_waitlist_leads, waitlist_*).
 2. `entitlements` tablosu için DDL taslağı hazırla (henüz UYGULAMA, taslak):
    `id, email, product, status (pending|granted|revoked), source (lemonsqueezy|manual),
    tv_username, order_ref, granted_at, created_at` + RLS (service-role-only yazma).
+   **UR-003 eki:** `expires_at timestamptz NULL` kolonu da taslağa ekle — G-P3-B5 gelir-modeli
+   kararı (tek-seferlik vs abonelik) ne çıkarsa çıksın şema hazır olsun; abonelikse
+   cancel/expire/payment_failed event'leri T-016'da işlenecek.
 3. `waitlist_leads`'e `consent boolean` + `consent_at timestamptz` kolonları için
    migration taslağı (mevcut kayıtlar `consent=null` kalır, geriye dönük varsayım yok).
 
@@ -44,7 +49,19 @@ taslağı `u2algo-site/supabase/` altında PR olarak. → Claude review.
 3. Webhook URL planı: `https://u2algo-site-production.up.railway.app/api/purchase-webhook`
    — endpoint kodu T-016'da gelecek, şimdi sadece LS panel tarafını not et.
 
-**Acceptance:** env hazır + LS ürün taslağı linki operatöre iletildi.
+**UR-003 ekleri (fizibilite doğrulaması — W2'ye girmeden ZORUNLU):**
+4. LS AUP/store-aktivasyon kontrolü: trading/finans-ilişkili ürün kabul ediliyor mu?
+   Red riski varsa fallback (Paddle) değerlendirmesi not edilir.
+5. Türkiye satıcı payout rayı teyidi (PayPal TR'de yok — LS'nin TR satıcıya ödeme yolu
+   teyit edilmeden W2 implementasyonuna girilmez).
+6. Tüzel kişilik + vergi (LS'ye hizmet ihracı faturası/KDV istisnası) → operatör-gate maddesi.
+7. Transactional e-posta altyapısı: sağlayıcı seçimi + domain SPF/DKIM (M12 domain kararına
+   bağımlı) — T-016 onay e-postası + T-019 support adresi bunu kullanacak.
+8. Railway deploy kaynağı teyidi: u2algo-site ayrı repo mu, bu repodaki vendored `u2algo-site/`
+   dizini mi deploy ediliyor? T-010/T-011/T-016 PR'ları doğru hedefe açılacak.
+
+**Acceptance:** env hazır + LS ürün taslağı linki operatöre iletildi + fizibilite (md.4-6)
+ve deploy-kaynağı (md.8) bulguları yazılı raporlandı.
 
 ---
 
@@ -96,7 +113,9 @@ SIFIR — W-R'nin en kritik işi T-020 bunun üstüne kurulacak.
 
 **Yapılacak:**
 1. Off-VPS şifreli hedef provizyon et: Hetzner Storage Box (VPS'le aynı DC avantajı)
-   veya S3-uyumlu alternatif. Anahtar/credential YALNIZ VPS'te.
+   veya S3-uyumlu alternatif. Anahtar/credential VPS'te + **operatör password-manager'ında
+   offline escrow kopyası ZORUNLU (UR-003):** VPS total-loss senaryosunda (2026-05-15 rebuild
+   emsali) anahtar veriyle birlikte yok olursa şifreli backup açılamaz. Repo'ya ASLA girmez.
 2. Kısıt: backup script'i canlı volume'lara **asla read-write dokunmaz** — snapshot
    `docker run --rm -v efloud_state:/src:ro ...` kalıbıyla alınır.
 3. Restore tatbikatı YALNIZ scratch volume'da; restore-to-live operatör-gated.

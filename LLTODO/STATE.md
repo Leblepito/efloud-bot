@@ -1,7 +1,7 @@
 # LLTODO — Epic State
 
 > Append-only. Her durum geçişi yeni satır olarak eklenir. Eski satır silinmez.
-> Son güncelleme: 2026-06-10 @hermes
+> Son güncelleme: 2026-06-11 @claude (önceki: 2026-06-10 @hermes)
 
 ---
 
@@ -68,6 +68,7 @@
 2026-06-11  ULTRA_PLAN_DONE   @claude  UltraPlan rekonstrüksiyonu: 10 ground-truth + 9 gap + 15 PR (M1-M15) + security audit (S1-S7) + G1-G8 checklist
 2026-06-11  REVIEW_OPEN       @claude  Plan Hermes + operatör onayına açıldı (özellikle OQ#1-#12 operatör kararları)
 2026-06-11  DEDUP-NOTU        @claude  M11 SUPERSEDED-BY P-003 T-012/T-014 (statik proof export; bot API kapalı kalır) → OQ#12 KAPANDI. M9→T-011 sıralaması; M10↔T-010 site serializasyonu; M12 domain değişiminde LS webhook yeniden kaydı.
+2026-06-11  CONSENSUS_REACHED @claude  UR-003 oturumunda kapsandı (UR-002 işlevi): M11 dedup bulgularının §4/§5/§6'ya yayılımı tamamlandı (plan v1.1). Operatör merge onayı bekleniyor.
 ```
 
 ### Aktif Durum
@@ -93,12 +94,14 @@
 2026-06-11  REVIEW_OPEN      @claude  UltraReview (UR-003) için açıldı — operatör /ultrareview tetikleyecek
 2026-06-11  RENUMBERED       @claude  Epic ID çakışması çözüldü: P-002→P-003, UR-002→UR-003, G-P2→G-P3 (P-002 = Marketing & Growth, Hermes scoreboard precedent'i)
 2026-06-11  W-R-EKLENDI      @claude  Reliability/SLA dalgası T-020..T-024 (ops keşfi: backup SIFIR, status page yok, SLA/DR yok, CI eksik). T-020+T-023 pre-UR-exempt. G-P3-6 eklendi.
+2026-06-11  ULTRA_REVIEW     @claude  UR-003 KOŞTU — lokal 4-lens adversarial (cloud /ultrareview 30dk timeout, PR #175 emsali fallback): süreç 9/10, risk 9/10, iş 8/10, fizibilite 8/10 — 4×APPROVED_WITH_NITS, 0 blocker. Detay: reviews/R-003-claude-ur003-commercial-mvp.md
+2026-06-11  CONSENSUS_REACHED @claude  14 should-fix plan v1.1'e entegre: T-020 key-escrow, G-P3-1 cadence sınırı, G-P3-5 dosya listesi, G-P3-B5 gelir-modeli kararı, T-016 refund/cancel event'leri, T-014/T-024 uptime kaynağı düzeltmesi, T-018 composition, T-012 baseline-equity, T-013 veri kaynağı, LS fizibilite (GÖREV B). Operatör merge onayı bekleniyor (PR #181 + #182).
 ```
 
 ### Aktif Durum
 
-**Durum:** `REVIEW_OPEN` — UR-003 UltraReview bekliyor (2026-06-11)
-**Sonraki adım:** Operatör `/ultrareview` çalıştırır → bulgular plana entegre → FAZ 3 implementasyon (T-010..T-024, dalga sırasıyla; T-020/T-023 pre-UR-exempt hemen başlayabilir)
+**Durum:** `CONSENSUS_REACHED` — UR-003 tamam (4×APPROVED_WITH_NITS, 0 blocker), nits plan v1.1'e entegre (2026-06-11)
+**Sonraki adım:** Operatör PR #181 + #182 merge → FAZ 3 implementasyon (T-010..T-024, dalga sırasıyla; T-020/T-023 pre-UR-exempt — T-023 PR #182'de CI 4/4 yeşil)
 
 ### Faz Planı
 

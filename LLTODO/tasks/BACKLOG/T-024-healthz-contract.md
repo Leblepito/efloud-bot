@@ -12,7 +12,10 @@
 ## Çıktılar
 
 - [ ] `docs/runbooks/healthz-contract.md` — durum matrisi: 200/ok, 200/suspended, 503/transient; her birinin monitör yorumu
-- [ ] Uptime metriği yüzeyi: alerter heartbeat'ten türetilen basit uptime alanı (T-014'ün site "uptime" bölümünü besler)
+- [ ] Uptime metriği yüzeyi — **UR-003 düzeltmesi:** heartbeat tek-timestamp'tir ve alerter'ın
+      canlılığını ölçer (bot down + alerter up → heartbeat taze) → uptime % İÇİN KULLANILMAZ.
+      Tasarım: healthz-türevi sampling (T-014 ile ortak pinlenir); `status:"suspended"` ayrı
+      kategori olarak raporlanır ("servis up / trading suspended")
 - [ ] Kod değişikliği YOK veya minimum (yalnız metrik yüzeyi; healthz semantiği DEĞİŞMEZ)
 
 ## Acceptance Kriterleri

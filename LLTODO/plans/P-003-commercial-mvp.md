@@ -81,6 +81,13 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 
 - W2 ⇐ W0 (legal pack olmadan satış açılamaz).
 - W2 ⇐ P-001 T-003 (satılacak premium strategy script'in backtest/validasyonu).
+  **Duruş netleştirmesi (UR-003):** satışın SERT gate'i G-P3-B3 backtest'idir; 90-gün canlı
+  proof penceresi pazarlama varlığıdır, satış blokeri DEĞİLDİR (gap-analizi §4'teki W1→W2 oku
+  bu anlamda gevşetildi; operatör isterse G-P3-B4 ile bağlayabilir). Proof ≠ ürün ayrımı
+  G-P3-B4 disclaimer'ıyla korunur.
+- **u2algo-site kaynak-of-truth (UR-003):** bu repo'daki `u2algo-site/` dizini vendored kopyadır;
+  Railway deploy kaynağının hangisi olduğu Hermes GÖREV B'de teyit edilecek — T-010/T-011/T-016
+  PR'ları teyitten sonra doğru repoya açılır, iki kopya senkron notu PR body'sine yazılır.
 - W3 ⇐ W2 (ödeyen müşteri kohortu).
 - W1 bağımsız, hemen başlayabilir (Lead Trader yoluna da hizmet eder).
 - W-R dalga sıralamasından bağımsız; **T-020 ve T-023 pre-UR-exempt** (UR-003 öncesi
@@ -115,12 +122,19 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 ### 5a. Teknik Gate'ler
 
 - [ ] G-P3-1: Proof snapshot'ta mutlak bakiye/pozisyon büyüklüğü alanı YOK (test ile zorlanır).
+      **Cadence/granularity sınırı (UR-003):** snapshot güncellemesi ≥ günlük; equity eğrisi
+      günlük-kapanış çözünürlüğünde; yalnız KAPANMIŞ trade'ler — daha sık/granüler yayın fiilî
+      gerçek-zamanlı sinyal beslemesine dönüşür (§2b "sinyal servisi" guard'ını deler) ve
+      strateji reverse-engineering yüzeyi açar.
 - [ ] G-P3-2: Purchase webhook imza doğrulaması — geçersiz imza 401, test kapsamında.
 - [ ] G-P3-3: `notifications:` flag default-OFF; flag kapalıyken davranış birebir mevcut
       (NullNotificationManager) — regression test.
 - [ ] G-P3-4: server.js 3'lü fallback zinciri (Supabase REST → PG → JSONL) consent
       alanıyla bozulmadan çalışır — mevcut test kalıbıyla.
-- [ ] G-P3-5: `git diff` canlı dosyalara (config.yaml, compose, .env) temas etmez.
+- [ ] G-P3-5: `git diff` canlı dosyalara temas etmez. **Dokunulmaz liste (UR-003 netleştirmesi):**
+      `configs/config.phase2_1k.yaml` (gerçek prod config), `docker-compose.prod.yml`, `.env*`.
+      Root `config.yaml` prod'da İNERTtir — T-018'in oraya `notifications:` ŞEMA örneği eklemesi
+      İZİNLİDİR (canlı davranış değişmez); prod config'e flag-flip ayrı operatör-gated commit ister.
       (u2algo-site PR'ları için efloud-bot CI bunu göremez — dalga review'ünde manuel checklist.)
 - [ ] G-P3-6: İlk public proof yayını (G-P3-B4) öncesi backup + restore tatbikatı
       (T-020) PASS.
@@ -133,7 +147,14 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 - [ ] G-P3-B3: İlk satış açılışı öncesi P-001 T-003 backtest gate'i (min 100 trade,
       OOS %30) PASS.
 - [ ] G-P3-B4: Proof sayfası yayını öncesi operatör onayı (hangi metriklerin kamuya
-      açılacağı).
+      açılacağı). **Zorunlu disclaimer (UR-003):** proof sayfası + risk-disclosure'a
+      "proof metrikleri Python botun canlı performansıdır; satın alınan TV strategy
+      script'inin performansı DEĞİLDİR" ifadesi (G-P3-B1 checklist'ine eklendi).
+- [ ] G-P3-B5 **(UR-003 eki):** Gelir modeli ŞEKLİ operatör kararı — tek-seferlik alım mı,
+      abonelik mi? P-001 G-B3 abonelik/MRR modelliyor; W2 rayı şu an tek-seferlik şekilli.
+      Abonelikse: `entitlements.expires_at` + `subscription_cancelled/expired/payment_failed`
+      event'leri + periyodik revoke süpürmesi ZORUNLU (T-015/T-016/T-017 buna göre inşa edilir).
+      Karar W2 implementasyonu başlamadan verilmeli.
 
 ## 6. Görevler
 
@@ -167,6 +188,8 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 | P-001 T-003 gecikirse W2 boşta kalır | Orta | Orta | W2 altyapısı üründen bağımsız hazırlanır; satış açılışı gate'e bağlı |
 | T-020 canlı volume teması (tek blast-radius'lu W-R işi) | Düşük | Kritik | Read-only mount (`-v ...:ro`), tatbikat yalnız scratch volume, restore-to-live operatör-gated |
 | Satış kritik yolu takvime bağlı | Yüksek | Orta | T-003 min-100-trade OOS kanıtı + 90 gün proof penceresi takvim zamanı işler — Hermes saatleri T-002'ye öncelikli |
+| Lemon Squeezy fizibilitesi doğrulanmadan tek ray seçildi (UR-003) | Orta | Yüksek | GÖREV B'ye eklendi: (a) trading-ürün AUP/store-aktivasyon kontrolü, (b) Türkiye satıcı payout rayı teyidi, (c) tüzel kişilik + vergi (hizmet ihracı/KDV) operatör-gate. Fallback aday: Paddle. Teyit olmadan W2 implementasyonuna girilmez |
+| Transactional e-posta altyapısı görevsizdi (UR-003) | Orta | Orta | GÖREV B'ye eklendi: sağlayıcı seçimi + SPF/DKIM (M12 domain kararına bağımlı); T-016 onay e-postası + T-019 support adresi bu altyapıyı kullanır |
 
 ## 8. Revizyon Geçmişi
 
@@ -175,3 +198,4 @@ SafeOrchestrator ───┴─ W3: engine/notifications/telegram_notifier.py
 | 2026-06-11 | İlk sürüm (DRAFT, UR-003 bekliyor) | @claude |
 | 2026-06-11 | P-002→P-003 renumber (epic ID çakışması; P-002 = Marketing & Growth) | @claude |
 | 2026-06-11 | W-R Reliability/SLA dalgası (T-020..T-024) + G-P3-6 + çapraz-epic dedup notları (ops/SLA keşfi: backup SIFIR, status page yok, SLA/DR dokümanı yok, CI'da secret-scan/frontend/lint yok) | @claude |
+| 2026-06-11 | **v1.1 — UR-003 entegrasyonu** (lokal 4-lens, 4×APPROVED_WITH_NITS, 0 blocker): G-P3-1 cadence sınırı, G-P3-5 dokunulmaz dosya listesi, G-P3-B4 proof≠ürün disclaimer'ı, G-P3-B5 gelir-modeli kararı, W1→W2 duruş netleştirmesi, u2algo-site kaynak teyidi, LS fizibilite + e-posta altyapısı riskleri; kart düzeltmeleri T-012/T-013/T-014/T-016/T-018/T-020/T-024. Detay: `reviews/R-003-claude-ur003-commercial-mvp.md` | @claude |

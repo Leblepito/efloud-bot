@@ -12,7 +12,13 @@ Prod'daki korumasız named volume'ların (`efloud_state`, `efloud_state_1k`, `ef
 ## Çıktılar
 
 - [ ] `deploy/backup/backup_state.sh` — read-only snapshot: `docker run --rm -v efloud_state:/src:ro ... tar czf` (canlı volume'a ASLA yazma)
-- [ ] Şifreli off-VPS hedef (Hetzner Storage Box / S3 — GÖREV F kararı); anahtar yalnız VPS'te
+- [ ] Şifreli off-VPS hedef (Hetzner Storage Box / S3 — GÖREV F kararı)
+- [ ] **Anahtar escrow (UR-003 düzeltmesi):** şifreleme anahtarı VPS'te + **operatör password-manager'ında
+      offline escrow kopyası ZORUNLU** — DR'nin ana senaryosu VPS total-loss (2026-05-15 rebuild emsali)
+      anahtarı veriyle birlikte yok ederse şifreli backup açılamaz. "Repo'ya asla" kuralı değişmez
+- [ ] Restore runbook'una tutarlılık notu: trade_journal.jsonl append-only — canlı yazım sırasındaki
+      snapshot'ta kesik (torn) son satır tolere edilir
+- [ ] VPS lokal staging için disk-doluluk/retention hijyeni (disk full → journal yazımına dolaylı etki)
 - [ ] Cron entry + başarısızlıkta alerter'a Telegram alarmı
 - [ ] `docs/runbooks/backup-restore.md` — RTO/RPO hedefleri + scratch-volume restore tatbikatı adımları
 - [ ] İlk restore tatbikatı SCRATCH volume'da koşulup PASS olarak loglanır

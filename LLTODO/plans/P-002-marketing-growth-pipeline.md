@@ -136,11 +136,11 @@ URL'i yeniden kaydedilir — P-003 GÖREV B notu). M8 ↔ P-003 T-018: ayrı bot
 | # | Bulgu | Aksiyon | PR |
 |---|---|---|---|
 | S1 | Gemini API key URL query'sinde (`engine/agents/gemini_client.py`) | Header'a taşı; httpx error path redaction testi | Track A |
-| S2 | Public snapshot endpoint'i (M11) auth'suz | Rate-limit + cache + sadece türetilmiş metrikler (ham pozisyon verisi ASLA) | M11 |
-| S3 | Dashboard cookie auth + public yüzey aynı origin riski | Public sayfa u2algo-site'ta (ayrı origin); bot dashboard noindex+auth kalır | M10/M11 |
+| S2 | ~~Public snapshot endpoint'i (M11) auth'suz~~ **UR-003: M11 superseded** — koruma P-003 G-P3-1 whitelist şemasına devredildi | Statik export (bot API kapalı) | ~~M11~~ → P-003 T-012 |
+| S3 | Dashboard cookie auth + public yüzey aynı origin riski | Public sayfa u2algo-site'ta (ayrı origin); bot dashboard noindex+auth kalır | M10 / ~~M11~~→T-012 |
 | S4 | dry-run/live karışıklığı → içerik sızıntısı | İçerik pipeline'ı TESTNET/LIVE etiketini metadata'dan süzer; canlı PnL yayını operatör onaylı | M6 |
 | S5 | Yeni secret'lar (Manus, YouTube, X) | VPS .env-only; repo'ya gitleaks/secret-scan CI adımı | M1-M4 |
-| S6 | API rate-limit yok | Public yüzey açılmadan önce FastAPI rate-limit middleware | M11 öncesi |
+| S6 | API rate-limit yok | ~~M11 öncesi~~ **UR-003: M11 superseded — statik dosya yayını için moot**; bot API'sine ileride public yüzey açılırsa ön-şart olarak geri gelir | Track A |
 | S7 | Telegram aktarımıyla dosya transferi | Plan/patch transferinde bütünlük kaybı yaşandı (GAP9) → transferler git branch push'a taşınmalı (Hermes read-only key'ine PR-only write scope'lu deploy key değerlendirilebilir — operatör kararı) | süreç |
 
 ## 5. Gate — UltraReview Compliance Checklist (G1-G8)
@@ -151,7 +151,7 @@ URL'i yeniden kaydedilir — P-003 GÖREV B notu). M8 ↔ P-003 T-018: ayrı bot
 - [ ] **G4 Risk disclaimer:** Her içerik template'inde zorunlu disclaimer + compliance script geçişi
 - [ ] **G5 Secrets:** Repo'da sıfır secret; yeni key'ler VPS .env-only; secret-scan yeşil
 - [ ] **G6 Testler:** Tam suite (423+) + yeni PR testleri yeşil; CI py3.11 geçti
-- [ ] **G7 Operatör sign-off:** Domain (M12), gerçek-PnL gösterimi (M11), paid ads (M15 sonrası) operatör onaylı
+- [ ] **G7 Operatör sign-off:** Domain (M12), gerçek-PnL gösterimi (~~M11~~ → P-003 T-012 / G-P3-B4), paid ads (M15 sonrası) operatör onaylı
 - [ ] **G8 LLTODO süreç uyumu:** append-only STATE, atomic commit, lint 8/8, review zinciri (R-00X → UR-002)
 
 ## 6. Open Questions
@@ -160,6 +160,6 @@ Hermes v1'in 8 sorusu (operatöre — domain, X handle, dil, takvim, waitlist ar
 ads bütçesi, ilk video konusu) **aynen açık**. Yeni eklenenler:
 
 9. X API tier'ı ve aylık maliyeti — hangi pakete bütçe var? (GAP6)
-10. Public snapshot'ta PnL formatı: yüzde-bazlı mı, $ mi, sadece equity-curve şekli mi? (S2/OQ#6 türevi)
+10. Public snapshot'ta PnL formatı: yüzde-bazlı mı, $ mi, sadece equity-curve şekli mi? (S2/OQ#6 türevi — karar P-003 T-012 whitelist şemasında somutlaşır)
 11. Hermes'e PR-only write scope'lu ikinci deploy key verilecek mi, patch-transfer süreci mi kalacak? (S7)
-12. M11 public endpoint'i Track-A DB enablement'ı beklesin mi, file-journal'dan mı servis etsin? (G9)
+12. ~~M11 public endpoint'i Track-A DB enablement'ı beklesin mi, file-journal'dan mı servis etsin? (G9)~~ **KAPANDI (UR-003, 2026-06-11):** M11 superseded — P-003 T-012 statik export file-journal'dan üretir; ANCAK max-DD/% equity eğrisi için baseline-equity sorunu T-012 kartında ayrıca adreslendi (G9 kısmen geçerli kalır).
