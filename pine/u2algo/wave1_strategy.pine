@@ -20,9 +20,10 @@ strategy(
  format=format.price,
  initial_capital=10000,
  default_qty_type=strategy.percent_of_equity,
- default_qty_value=100,  // %100 equity per trade (statik sizing)
+ default_qty_value=10,  // %10 equity per trade (G-T4..G-T6 MaxDD≤%5 gate uyumu)
  commission_type=strategy.commission.percent,
  commission_value=0.04,  // Binance futures taker 0.04%
+ slippage=2,             // 2 tick slippage bütçesi (gerçekçi futures)
  pyramiding=1,
  max_labels_count=500,
  max_boxes_count=200,
@@ -332,7 +333,7 @@ f_calc_sl(direction, entry_price) =>
     if direction == "LONG"
         structural = low_min - atr_buf
         stop_dist  = entry_price - structural
-        min_dist   = 0.5 * atr14
+        min_dist   = math.max(0.5 * atr14, 0.001 * entry_price)  // SENKRON: indicator v1.1.1 N3 parite
         max_dist   = 5.0 * atr14
         if stop_dist < min_dist
             structural := entry_price - min_dist
@@ -342,7 +343,7 @@ f_calc_sl(direction, entry_price) =>
     else
         structural = high_max + atr_buf
         stop_dist  = structural - entry_price
-        min_dist   = 0.5 * atr14
+        min_dist   = math.max(0.5 * atr14, 0.001 * entry_price)  // SENKRON: indicator v1.1.1 N3 parite
         max_dist   = 5.0 * atr14
         if stop_dist < min_dist
             structural := entry_price + min_dist
@@ -403,12 +404,14 @@ var float sig_sl_long     = na
 var float sig_tp1_long    = na
 var float sig_tp2_long    = na
 var bool  sig_active_long = false
+var int   sig_entry_bar_long = 0  // limit-order expiry takibi (0 = inaktif)
 
 var float sig_entry_short = na
 var float sig_sl_short    = na
 var float sig_tp1_short   = na
 var float sig_tp2_short   = na
 var bool  sig_active_short = false
+var int   sig_entry_bar_short = 0
 
 // In-trade flag for pyramiding prevention
 is_in_trade = strategy.position_size != 0
@@ -434,6 +437,7 @@ if barstate.isconfirmed and not is_in_trade
             sig_tp1_long    := ln_tp1
             sig_tp2_long    := ln_tp2
             sig_active_long := true
+            sig_entry_bar_long := bar_index
 
     // --- SHORT ---
     if bearish_ob_active and confluence_score_short >= conf_thresh and htf_bias_down
@@ -449,6 +453,7 @@ if barstate.isconfirmed and not is_in_trade
             sig_tp1_short   := sh_tp1
             sig_tp2_short   := sh_tp2
             sig_active_short := true
+            sig_entry_bar_short := bar_index
 
 // ═══════════════════════════════════════════════
 // STRATEGY ENTRY + EXIT
@@ -456,30 +461,54 @@ if barstate.isconfirmed and not is_in_trade
 
 // LONG entry — limit order at OB bottom
 if sig_active_long and not na(sig_entry_long) and not na(sig_sl_long) and not na(sig_tp1_long)
-    strategy.entry("LONG", strategy.long, limit=sig_entry_long)
-    strategy.exit("XL", "LONG",
-     stop=sig_sl_long,
-     limit=sig_tp1_long,
-     comment="TP1")
-    // TP2 as separate exit for remaining position
-    if not na(sig_tp2_long)
-        strategy.exit("XT2", "LONG",
-         limit=sig_tp2_long,
-         comment="TP2")
-    sig_active_long := false
+    // Time-window gate: bt_date_start..bt_date_end penceresi dışında entry yok
+    // (bt_oos_pct: son %30 OOS olarak ayrılır — G-T4..G-T6 backtest gate'leri)
+    in_window = (time >= bt_date_start) and (time <= bt_date_end)
+    if in_window
+        strategy.entry("LONG", strategy.long, limit=sig_entry_long)
+        // TP1: %50 pozisyon kapat (qty_percent=50), stop korunur
+        strategy.exit("XL", "LONG",
+         stop=sig_sl_long,
+         limit=sig_tp1_long,
+         qty_percent=50,
+         comment="TP1")
+        // TP2: kalan %50, ayrı exit'te stop da bağlı (review bulgusu: stop= eksikti)
+        if not na(sig_tp2_long)
+            strategy.exit("XT2", "LONG",
+             stop=sig_sl_long,
+             limit=sig_tp2_long,
+             qty_percent=50,
+             comment="TP2")
+        sig_active_long := false
 
 // SHORT entry
 if sig_active_short and not na(sig_entry_short) and not na(sig_sl_short) and not na(sig_tp1_short)
-    strategy.entry("SHORT", strategy.short, limit=sig_entry_short)
-    strategy.exit("XS", "SHORT",
-     stop=sig_sl_short,
-     limit=sig_tp1_short,
-     comment="TP1")
-    if not na(sig_tp2_short)
-        strategy.exit("XT2S", "SHORT",
-         limit=sig_tp2_short,
-         comment="TP2")
+    in_window = (time >= bt_date_start) and (time <= bt_date_end)
+    if in_window
+        strategy.entry("SHORT", strategy.short, limit=sig_entry_short)
+        strategy.exit("XS", "SHORT",
+         stop=sig_sl_short,
+         limit=sig_tp1_short,
+         qty_percent=50,
+         comment="TP1")
+        if not na(sig_tp2_short)
+            strategy.exit("XT2S", "SHORT",
+             stop=sig_sl_short,
+             limit=sig_tp2_short,
+             qty_percent=50,
+             comment="TP2")
+        sig_active_short := false
+
+// Limit-entry expiry: 20 bar sonra hâlâ fill olmadıysa order iptal
+// (review bulgusu: süresiz bekleyen limit order phantom pozisyon yaratıyor)
+if sig_active_long and sig_entry_bar_long > 0 and (bar_index - sig_entry_bar_long) > 20
+    strategy.cancel("LONG")
+    sig_active_long := false
+    sig_entry_bar_long := 0
+if sig_active_short and sig_entry_bar_short > 0 and (bar_index - sig_entry_bar_short) > 20
+    strategy.cancel("SHORT")
     sig_active_short := false
+    sig_entry_bar_short := 0
 
 // ═══════════════════════════════════════════════
 // VISUAL — SL/TP plot + OB boxes (indicator ile aynı)
