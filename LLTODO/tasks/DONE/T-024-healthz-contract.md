@@ -1,7 +1,7 @@
 # T-024: Healthz Kontrat Dokümanı + Uptime Metriği
 
 **Epic:** P-003
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @claude (2026-06-11, T-023 emsali — IN_PROGRESS'te T-020 dururken R2 limiti nedeniyle doğrudan PR akışı)
 **Tahmini süre:** 0.5 gün
 **Bağımlılık:** —
 
@@ -28,3 +28,5 @@
 | Zaman | Durum | Not |
 |---|---|---|
 | 2026-06-11 | BACKLOG | P-003 W-R — T-014/T-021 besleyici |
+| 2026-06-11 | IMPL | @claude — `docs/runbooks/healthz-contract.md`: durum matrisi (200/ok, 200/suspended×2, 503/transient×4+startup), T-021 monitör kontratı (JSON status parse + filtrelenmiş public yüzey önerisi), uptime tasarımı (healthz-sampling → service_uptime_pct + trading_active_pct AYRI; heartbeat KULLANILMAZ — UR-003). Kod değişikliği SIFIR |
+| 2026-06-11 | ✅ DONE | Bu PR'ın merge'üyle tamamlanır; T-014/T-021 implementasyonları bu kontrata referans verir |
