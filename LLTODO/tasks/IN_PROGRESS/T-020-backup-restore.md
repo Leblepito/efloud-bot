@@ -1,7 +1,7 @@
 # T-020: State Backup Otomasyonu + Restore Runbook
 
 **Epic:** P-003
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @claude (2026-06-11)
 **Tahmini süre:** 2-3 gün
 **Bağımlılık:** GÖREV F (backup hedefi provizyonu — Hermes); **pre-UR-exempt** (canlı bot için ticaretten bağımsız KRİTİK; UR-003 öncesi başlayabilir)
 
@@ -34,3 +34,4 @@ Prod'daki korumasız named volume'ların (`efloud_state`, `efloud_state_1k`, `ef
 | Zaman | Durum | Not |
 |---|---|---|
 | 2026-06-11 | BACKLOG | P-003 W-R — pre-UR-exempt, GÖREV F ile koordineli |
+| 2026-06-11 | IN_PROGRESS | @claude claim — `deploy/backup/{backup_state.sh,restore_state.sh}` + `docs/runbooks/backup-restore.md` (escrow zorunlu, :ro mount, drill-default restore, live-restore çift kilit). VPS kurulum+cron+ilk drill = GÖREV F sonrası Hermes/operatör |
