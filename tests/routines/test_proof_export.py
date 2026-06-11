@@ -309,6 +309,15 @@ class TestUptime:
         assert snap["uptime"]["service_uptime_pct"] == 100.0
         assert snap["schema_version"] == "1.1.0"
 
+    def test_whitelist_rejects_non_dict_uptime(self):
+        """Tip-kapısı bypass'ı yok: dict olmayan uptime değeri reddedilir."""
+        snap = build_snapshot([_trade("2026-06-01T10:00:00", 1.0)], BASELINE,
+                              now_iso=NOW_ISO)
+        bad = json.loads(json.dumps(snap))
+        bad["uptime"] = [{"window_days": 30}]
+        with pytest.raises(ValueError, match="uptime"):
+            assert_whitelist(bad)
+
     def test_whitelist_rejects_extra_uptime_key(self):
         snap = build_snapshot([_trade("2026-06-01T10:00:00", 1.0)], BASELINE,
                               now_iso=NOW_ISO,

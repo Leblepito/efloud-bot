@@ -50,10 +50,14 @@ for (const rawLine of text.split(/\r?\n/)) {
   }
 }
 
+// generated_at runtime tarihi DEĞİL — en yeni dated entry'den türetilir ki
+// CHANGELOG değişmeden regenerasyon diff churn'ü üretmesin (deterministik çıktı).
+const kept = entries.filter(e => e.items.length > 0);
+const newestDate = kept.map(e => e.date).filter(Boolean).sort().pop() || null;
 const output = {
   generated_from: 'CHANGELOG.md',
-  generated_at: new Date().toISOString().slice(0, 10),
-  entries: entries.filter(e => e.items.length > 0)
+  generated_at: newestDate,
+  entries: kept
 };
 
 fs.writeFileSync(outPath, JSON.stringify(output, null, 2) + '\n', 'utf-8');

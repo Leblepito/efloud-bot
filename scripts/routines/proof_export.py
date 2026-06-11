@@ -82,8 +82,11 @@ def assert_whitelist(snapshot: dict) -> None:
         if set(point.keys()) - ALLOWED_CURVE_KEYS:
             raise ValueError("proof snapshot: non-whitelisted equity_curve keys")
     uptime = snapshot.get("uptime")
-    if isinstance(uptime, dict) and set(uptime.keys()) - ALLOWED_UPTIME_KEYS:
-        raise ValueError("proof snapshot: non-whitelisted uptime keys")
+    if uptime is not None:
+        if not isinstance(uptime, dict):
+            raise ValueError("proof snapshot: uptime must be a dict or None")
+        if set(uptime.keys()) - ALLOWED_UPTIME_KEYS:
+            raise ValueError("proof snapshot: non-whitelisted uptime keys")
     for key in _iter_keys(snapshot):
         lk = str(key).lower()
         for bad in FORBIDDEN_KEY_SUBSTRINGS:
