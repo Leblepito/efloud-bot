@@ -422,9 +422,9 @@ if barstate.isconfirmed and not is_in_trade
     if bullish_ob_active and confluence_score_long >= conf_thresh and htf_bias_up
         ln_entry = f_entry_price("LONG")
         ln_sl    = f_calc_sl("LONG", ln_entry)
-        ln_tp    = f_calc_tp("LONG", ln_entry, ln_sl)
-        ln_tp1   = ln_tp[0]
-        ln_tp2   = ln_tp[1]
+        // (G-T3 ön-fix: tuple dönüşü destructuring ile alınır — `ln_tp[0]`
+        //  strategy derlemesinde "operator SQBR" hatası veriyor)
+        [ln_tp1, ln_tp2] = f_calc_tp("LONG", ln_entry, ln_sl)
 
         valid = not na(ln_sl) and not na(ln_tp1) and ln_sl < ln_entry and ln_tp1 > ln_entry
         if valid
@@ -439,9 +439,7 @@ if barstate.isconfirmed and not is_in_trade
     if bearish_ob_active and confluence_score_short >= conf_thresh and htf_bias_down
         sh_entry = f_entry_price("SHORT")
         sh_sl    = f_calc_sl("SHORT", sh_entry)
-        sh_tp    = f_calc_tp("SHORT", sh_entry, sh_sl)
-        sh_tp1   = sh_tp[0]
-        sh_tp2   = sh_tp[1]
+        [sh_tp1, sh_tp2] = f_calc_tp("SHORT", sh_entry, sh_sl)
 
         valid = not na(sh_sl) and not na(sh_tp1) and sh_sl > sh_entry and sh_tp1 < sh_entry
         if valid
@@ -487,21 +485,23 @@ if sig_active_short and not na(sig_entry_short) and not na(sig_sl_short) and not
 // VISUAL — SL/TP plot + OB boxes (indicator ile aynı)
 // ═══════════════════════════════════════════════
 
+// (G-T3 ön-fix: line.new pozisyonel 5./6./7. argümanlar xloc/extend/color'a
+//  düşüyor — named arg zorunlu: color=/width=/style=)
 if show_sltp and not na(sig_entry_long)
-    line.new(bar_index, sig_sl_long,  bar_index + 20, sig_sl_long,  col_sl, 2, line.style_dashed)
-    line.new(bar_index, sig_tp1_long, bar_index + 20, sig_tp1_long, col_tp1, 1, line.style_dashed)
+    line.new(bar_index, sig_sl_long,  bar_index + 20, sig_sl_long,  color=col_sl,  width=2, style=line.style_dashed)
+    line.new(bar_index, sig_tp1_long, bar_index + 20, sig_tp1_long, color=col_tp1, width=1, style=line.style_dashed)
     if not na(sig_tp2_long) and sig_tp2_long > sig_tp1_long
-        line.new(bar_index, sig_tp2_long, bar_index + 20, sig_tp2_long, col_tp2, 1, line.style_dashed)
+        line.new(bar_index, sig_tp2_long, bar_index + 20, sig_tp2_long, color=col_tp2, width=1, style=line.style_dashed)
     label.new(bar_index, sig_entry_long,
      "LONG " + str.tostring(confluence_score_long, "0") + "%",
      style=label.style_label_up,
      color=color.new(col_long, 90), textcolor=col_long, size=size.small)
 
 if show_sltp and not na(sig_entry_short)
-    line.new(bar_index, sig_sl_short,  bar_index + 20, sig_sl_short,  col_sl, 2, line.style_dashed)
-    line.new(bar_index, sig_tp1_short, bar_index + 20, sig_tp1_short, col_tp1, 1, line.style_dashed)
+    line.new(bar_index, sig_sl_short,  bar_index + 20, sig_sl_short,  color=col_sl,  width=2, style=line.style_dashed)
+    line.new(bar_index, sig_tp1_short, bar_index + 20, sig_tp1_short, color=col_tp1, width=1, style=line.style_dashed)
     if not na(sig_tp2_short) and sig_tp2_short < sig_tp1_short
-        line.new(bar_index, sig_tp2_short, bar_index + 20, sig_tp2_short, col_tp2, 1, line.style_dashed)
+        line.new(bar_index, sig_tp2_short, bar_index + 20, sig_tp2_short, color=col_tp2, width=1, style=line.style_dashed)
     label.new(bar_index, sig_entry_short,
      "SHORT " + str.tostring(confluence_score_short, "0") + "%",
      style=label.style_label_down,
@@ -535,8 +535,12 @@ if barstate.islastconfirmedhistory
     table.cell_set_bgcolor(bias_table, 0, 0, color.new(#000000, 80))
 
 // ═══════════════════════════════════════════════
-// ALERT CONDITIONS
+// ALERTS — strategy'de alertcondition() etkisizdir (derleyici warning'i);
+// dinamik alert() kullanılır. Sinyaller confirmed-bar'da üretildiği için
+// freq_once_per_bar_close ile repaint'siz tetikleme.
 // ═══════════════════════════════════════════════
 
-alertcondition(long_signal,  "Efloud LONG",  "LONG setup detected")
-alertcondition(short_signal, "Efloud SHORT", "SHORT setup detected")
+if long_signal
+    alert("LONG setup detected", alert.freq_once_per_bar_close)
+if short_signal
+    alert("SHORT setup detected", alert.freq_once_per_bar_close)

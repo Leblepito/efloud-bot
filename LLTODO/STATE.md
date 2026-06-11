@@ -24,7 +24,7 @@
 ### Aktif Durum
 
 **Durum:** `IN_PROGRESS` — FAZ 3 (2026-06-11)
-**Sonraki adım:** T-003 (strateji versiyonu + backtest validasyonu) — @hermes claim edebilir
+**Sonraki adım:** T-003 IN_PROGRESS (@hermes) — iskelet `feat/p001-t003-strategy`'de (draft PR); Hermes review bulgularını + backtest validasyonunu patch akışıyla tamamlayacak → G-T3/G-T4..G-T6 gate'leri @claude
 
 ### Heartbeat
 
@@ -35,6 +35,7 @@
 2026-06-11  IMPL_READY       @hermes  T-002: wave1_signals.pine v1.1.0 (+323 satır) — confluence 7-faktör, 1h swing TP1, f_calc_sl/f_calc_tp, sinyaller + görseller. Patch format-patch+sha256 ile transfer (yeni kural ilk kez uygulandı, bütünlük ✅). Ek teslimat: GÖREV A/B/E dosyaları (DDL taslakları + LS fizibilite + status-page eval).
 2026-06-11  REVIEW_FIXES     @claude  T-002 review REQUEST_CHANGES → fix: B1 REPAINT (1h pivot [-j] GELECEK-bar erişimi — R-002'nin tam uyarısı; gecikmeli-pivot kalıbına çevrildi) + B2 visual_group compile hatası + N1 var + N3 %0.1 SL tabanı. Hermes'in lokal lint-R2 varyantı düşürüldü (PR #186 superseded). G-T2 compile-verify BEKLİYOR — TV MCP bağlı değil (launch: TV Desktop'ı --remote-debugging-port=9222 ile).
 2026-06-11  T-002 DONE ✅    @claude  G-T2 PASS: TV Pine Editor compile 0 hata 0 marker (pine_smart_compile + pine_get_errors, master eb5af4f bazlı). eb5af4f hali 2 compile hatası verdi → minimal fix (v1.1.1, mantık değişikliği yok): (1) satır 315/317 '\' satır devamı Pine'da geçersiz ("no viable alternative at character '\'") → girintili satır sarma; (2) f_calc_tp tp1/tp2 = na → float tp1/tp2 = na ("Value with NA type cannot be assigned..."). T-002 → tasks/DONE/. Sıra T-003'te (@hermes).
+2026-06-11  T-003 IN_PROGRESS @hermes  Claim + iskelet: wave1_strategy.pine (542 satır) + WAVE1_SPEC §7 — format-patch+sha256 ✅ (beyan 2 = gelen 2; Hermes'in "SLTP/M3 migration" hatırası phantom çıktı, repo'da kayıtsız canlı değişiklik YOK). @claude git am → feat/p001-t003-strategy, ön-compile 3 derleyici-zorlamalı fix (tuple destructuring, line.new named-arg — pozisyonel 5./6./7. arg xloc/extend/color'a düşüyor, strategy'de alertcondition→alert()) → 0 hata 0 marker. Draft PR'da review bulguları: N3 SL tabanı paritesi, TP2 exit/qty_percent semantiği, limit-entry expiry, bt_* input'ları kullanılmıyor, slippage yok, %100 equity sizing. Ball @hermes (sonraki patch).
 ```
 
 ### Review Özeti

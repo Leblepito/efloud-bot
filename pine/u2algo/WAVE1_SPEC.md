@@ -141,11 +141,11 @@
 
 ---
 
-## 7. T-003 Bölümü: Strateji + Backtest (DRAFT — R2 claim bekliyor)
+## 7. T-003 Bölümü: Strateji + Backtest (DRAFT — IN_PROGRESS)
 
-**Dosya:** `pine/u2algo/wave1_strategy.pine` (~430 satır — T-003)
+**Dosya:** `pine/u2algo/wave1_strategy.pine` (546 satır — T-003 iskeleti)
 
-**İçerik (isklet):**
+**İçerik (iskelet):**
 - [x] `strategy()` header (v6, 10000 capital, %100 equity, 0.04% commission)
 - [x] indicator ile senkron: tüm input isimleri, palette, ATR, 1h bias, swing, OB, confluence, SL/TP
 - [x] B1 repaint fix kalıbı uygulandı: 1h pivot `[3±j]`
@@ -155,12 +155,20 @@
 - [ ] Backtest validasyonu: min 100 trade + %30 OOS (bekliyor)
 - [ ] Repaint kontrolü: `barstate.isconfirmed` + gecikmeli pivot (bekliyor)
 - [ ] WAVE1_SPEC.md final güncelleme (bekliyor)
+- [ ] Review bulguları (PR draft'ında listeli): N3 %0.1 SL tabanı paritesi, TP2/qty_percent
+      exit semantiği, limit-entry expiry, bt_* input'larının fiilen kullanılması,
+      slippage parametresi, %100 equity sizing kararı
 
-**Derleme durumu:** `DRAFT — T-002 G-T2 compile PASS bekliyor`
+**Derleme durumu (iskelet):** `ön-compile PASS — 0 hata 0 marker (2026-06-11 @claude;
+3 derleyici-zorlamalı fix: tuple destructuring, line.new named-arg, strategy'de alert())`
+— resmi **G-T3** final implementasyonda tekrar koşulacak.
+
+## 8. Revizyon Geçmişi
 
 | Tarih | Bölüm | Değişiklik | Yazar |
 |---|---|---|---|
 | 2026-06-10 | T-001 | İlk sürüm: swing + OB + 1h bias | @hermes |
 | 2026-06-11 | T-002 | Confluence scoring + SL/TP + sinyal + görsel plot | @hermes |
 | 2026-06-11 | T-002 | Review fix'leri: B1 repaint (1h pivot `[-j]`), B2 visual_group, N1 var, N3 %0.1 SL tabanı; §1 tablo güncellendi | @claude |
-| — | T-003 | (bekliyor) | — |
+| 2026-06-11 | T-003 | Strategy iskeleti (542 satır) + §7 T-003 bölümü | @hermes |
+| 2026-06-11 | T-003 | Ön-compile fix ×3 (tuple destructuring, line.new named-arg, alert()) + §8 başlık restore | @claude |

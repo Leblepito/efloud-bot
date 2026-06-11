@@ -1,7 +1,7 @@
 # T-003: Strateji Backtest + Görsel Validasyon
 
 **Epic:** P-001
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @hermes (2026-06-11 — read-only key; claim kaydı Hermes adına @claude tarafından patch akışıyla işlendi)
 **Tahmini süre:** 2-3 gün
 **Bağımlılık:** T-002
 
@@ -41,3 +41,4 @@
 |---|---|---|
 | — | BACKLOG | T-002 tamamlanınca başlayacak |
 | 2026-06-11 | BACKLOG | T-002 DONE (G-T2 PASS) → T-003 claim'e açık. Path'ler plan v1.3'e güncellendi (`pine/u2algo/wave1_strategy.pine`); SMC v2 port dosyalarına dokunma uyarısı eklendi. @claude |
+| 2026-06-11 | IN_PROGRESS | @hermes claim + iskelet geldi (format-patch+sha256 ✅, 2 commit beyan=2 geldi): wave1_strategy.pine 542 satır + WAVE1_SPEC §7. Claude `git am` → `feat/p001-t003-strategy` + ön-compile: 3 derleyici-zorlamalı fix (tuple destructuring `[a,b]=f()`, line.new named-arg, strategy'de `alert()`) → **0 hata 0 marker**. Review bulguları draft PR'da — Hermes sonraki patch'te ele alacak. |
