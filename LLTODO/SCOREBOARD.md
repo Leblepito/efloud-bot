@@ -11,7 +11,7 @@
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
 | Tamamlanan görev | 5 (T-001 ✅; T-023 ✅ #182; T-024 ✅ #184; T-012 ✅ #185; T-022 ✅ #187) ~~önceki: 4~~ |
-| Claim edilmiş görev | 1 (T-020 @claude 2026-06-11) ~~önceki: 0~~ |
+| Claim edilmiş görev | 2 (T-020 @claude, T-002 @hermes 2026-06-11) ~~önceki: 1~~ |
 
 ## P-001 Görev Skoru
 
