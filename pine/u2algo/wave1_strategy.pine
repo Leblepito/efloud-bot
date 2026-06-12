@@ -80,6 +80,26 @@ bt_oos_pct    = input.int(30, "OOS %", minval=10, maxval=50,
 risk_pct = input.float(0.5, "Risk % per trade", minval=0.1, maxval=2.0, step=0.1,
  tooltip="Risk per trade as % of equity. qty = (equity × risk%) / |entry − SL|. MaxDD≤%5 gate uyumu.", group=bt_group)
 
+// T-003 R1 (Plan v1.4 §8a.2) — indicator ile SENKRON
+r1_group = "T-003 R1 — Signal Loosening"
+ob_active_window_bars = input.int(15, "OB Active Window (bars)",
+ minval=1, maxval=50,
+ tooltip="OB-aktif penceresi (eski: hardcoded 5). 3× daha uzun hafıza — indicator ile SENKRON.",
+ group=r1_group)
+allow_ob_less = input.bool(false, "Allow OB-Less Signals",
+ tooltip="true: OB-aktif ön koşulu kaldırılır; sinyal 'conf_thresh + 1h bias + (swing_break OR strong_breakout)'a iner. OB confluence'a +30 verir ama zorunlu değildir. indicator ile SENKRON.",
+ group=r1_group)
+
+// T-003 R3 (Plan v1.4 §8a.2) — fill güvenilirliği (sadece strategy)
+r3_group = "T-003 R3 — Fill Reliability"
+limit_expiry_bars = input.int(40, "Limit-Entry Expiry (bars)",
+ minval=10, maxval=100,
+ tooltip="Limit-entry expiry (eski: hardcoded 20). 15m'de 40 bar = 10 saat.",
+ group=r3_group)
+extended_expiry_in_trend = input.bool(false, "Extended Expiry in 1H Trend",
+ tooltip="true: 1h bias aligned durumda expiry 80 bar (20 saat). Range/flat'te 40 bar.",
+ group=r3_group)
+
 // ═══════════════════════════════════════════════
 // COLOR PALETTE — indicator ile aynı (§4)
 // ═══════════════════════════════════════════════
@@ -253,9 +273,9 @@ if bear_breakout
 // ═══════════════════════════════════════════════
 // CONFLUENCE SCORING — indicator ile aynı
 // ═══════════════════════════════════════════════
-
-bullish_ob_active = (bar_index - bullish_ob_bar) <= 5 and bullish_ob_bar > 0
-bearish_ob_active = (bar_index - bearish_ob_bar) <= 5 and bearish_ob_bar > 0
+// Recent OB detection window (T-003 R1.a: 5 → ob_active_window_bars, indicator SENKRON)
+bullish_ob_active = (bar_index - bullish_ob_bar) <= ob_active_window_bars and bullish_ob_bar > 0
+bearish_ob_active = (bar_index - bearish_ob_bar) <= ob_active_window_bars and bearish_ob_bar > 0
 
 htf_ema_slope = (htf_ema20 - htf_ema20[1]) / htf_ema20[1] * 100
 
@@ -429,8 +449,16 @@ long_signal  = false
 short_signal = false
 
 if barstate.isconfirmed and not is_in_trade and sig_entry_bar_long == 0 and sig_entry_bar_short == 0
+    // T-003 R1.b: sinyal mantığı gevşetme (indicator SENKRON)
+    long_precondition = allow_ob_less ?
+     (recent_higher_high or (bar_body > 2.0 * atr14)) :
+     bullish_ob_active
+    short_precondition = allow_ob_less ?
+     (recent_lower_low or (bar_body > 2.0 * atr14)) :
+     bearish_ob_active
+
     // --- LONG ---
-    if bullish_ob_active and confluence_score_long >= conf_thresh and htf_bias_up
+    if long_precondition and confluence_score_long >= conf_thresh and htf_bias_up
         ln_entry = f_entry_price("LONG")
         ln_sl    = f_calc_sl("LONG", ln_entry)
         // (G-T3 ön-fix: tuple dönüşü destructuring ile alınır — `ln_tp[0]`
@@ -448,7 +476,7 @@ if barstate.isconfirmed and not is_in_trade and sig_entry_bar_long == 0 and sig_
             sig_entry_bar_long := bar_index
 
     // --- SHORT ---
-    if bearish_ob_active and confluence_score_short >= conf_thresh and htf_bias_down
+    if short_precondition and confluence_score_short >= conf_thresh and htf_bias_down
         sh_entry = f_entry_price("SHORT")
         sh_sl    = f_calc_sl("SHORT", sh_entry)
         [sh_tp1, sh_tp2] = f_calc_tp("SHORT", sh_entry, sh_sl)
@@ -514,7 +542,10 @@ if sig_active_short and not na(sig_entry_short) and not na(sig_sl_short) and not
              comment="TP2")
         sig_active_short := false
 
-// Limit-entry expiry + karşı-yön cancel (F5)
+// Limit-entry expiry + karşı-yön cancel (F5 + T-003 R3)
+// Default 40 bar (15m'de 10 saat). extended_expiry_in_trend=true ise 1h bias
+// aligned durumda 80 bar. R3 expiry uzatması bar-içi yarış durumunu seyreltir
+// (Plan v1.4 §8a.2 — F4 caveat genişletme).
 // 20 bar sonra hâlâ fill olmadıysa order iptal. Bir yön fill olunca karşı yön
 // pending order yaşıyordu (is_in_trade gate'i trade-içinde ateşlenmeyi engelliyor
 // ama fill-OLMUŞ taraftaki LONG/SHORT'u da iptal etmiyordu). F5 fix: trade açıkken
@@ -524,10 +555,13 @@ if is_in_trade and (sig_entry_bar_long > 0 or sig_entry_bar_short > 0)
     strategy.cancel("SHORT")
     sig_entry_bar_long  := 0
     sig_entry_bar_short := 0
-if sig_entry_bar_long > 0 and not is_in_trade and (bar_index - sig_entry_bar_long) > 20
+// T-003 R3: effective_expiry = extended_expiry_in_trend && htf_bias aligned ? 80 : limit_expiry_bars
+long_effective_expiry  = extended_expiry_in_trend and htf_bias_up ? 80 : limit_expiry_bars
+short_effective_expiry = extended_expiry_in_trend and htf_bias_down ? 80 : limit_expiry_bars
+if sig_entry_bar_long > 0 and not is_in_trade and (bar_index - sig_entry_bar_long) > long_effective_expiry
     strategy.cancel("LONG")
     sig_entry_bar_long := 0
-if sig_entry_bar_short > 0 and not is_in_trade and (bar_index - sig_entry_bar_short) > 20
+if sig_entry_bar_short > 0 and not is_in_trade and (bar_index - sig_entry_bar_short) > short_effective_expiry
     strategy.cancel("SHORT")
     sig_entry_bar_short := 0
 
