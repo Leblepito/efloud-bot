@@ -24,7 +24,7 @@
 ### Aktif Durum
 
 **Durum:** `IN_PROGRESS` — FAZ 3 (2026-06-11)
-| **Sonraki adım:** | T-003 R1+R3 patch'leri (Plan v1.4) + çoklu-sembol agregasyonlu gate re-run — @claude claim etti (LLTODO/tasks/IN_PROGRESS/T-003-strategy-backtest.md) |
+| **Sonraki adım:** | T-003 R1+R3 patch'leri (Plan v1.4) + çoklu-sembol agregasyonlu gate re-run — @hermes claim etti (LLTODO/tasks/IN_PROGRESS/T-003-strategy-backtest.md). R1+R3 Pine patch'leri feat/p001-t003-strategy branch'inde SENKRON uygulandı (66dde7e + 3643a47 + 0980afd). @claude reviewer — patch SENKRON doğrulayacak, gate re-run PASS sonrası FAZ 4 UR-001 |
 
 ### Heartbeat
 

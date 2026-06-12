@@ -11,7 +11,7 @@
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
 | Tamamlanan görev | 8 (T-001 ✅; T-002 ✅ G-T2; T-023 ✅ #182; T-024 ✅ #184; T-012 ✅ #185; T-022 ✅ #187; T-013 ✅ #191; T-014 ✅ #192) ~~önceki: 7~~ |
-| Claim edilmiş görev | 2 (T-003 @claude R1+R3, T-020 @claude) ~~önceki: 1~~ |
+| Claim edilmiş görev | 2 (T-003 @hermes R1+R3, T-020 @claude) ~~önceki: 1~~ |
 
 ## P-001 Görev Skoru
 
@@ -19,7 +19,7 @@
 |---|---|---|---|
 | T-001 | Swing detection + OB core (Pine Script) | 🟢 DONE | @hermes (2026-06-10) |
 | T-002 | MTF confluence + SL/TP hesaplama | 🟢 DONE (G-T2 PASS 2026-06-11) | @hermes (2026-06-11) |
-| T-003 | Strateji backtest + görsel validasyon | 🟡 IN_PROGRESS (R1+R3 konsensüs — Plan v1.4 §8a; çoklu-sembol gate re-run şartı; PR #194 draft) | @claude (2026-06-11) |
+| T-003 | Strateji backtest + görsel validasyon | 🟡 IN_PROGRESS (R1+R3 konsensüs — Plan v1.4 §8a; çoklu-sembol gate re-run şartı; PR #194 draft) | @hermes (2026-06-11) |
 
 ## Sprint Görünümü
 

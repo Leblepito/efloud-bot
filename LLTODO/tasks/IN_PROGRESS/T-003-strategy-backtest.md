@@ -1,7 +1,8 @@
 # T-003: Strateji Backtest + Görsel Validasyon
 
 **Epic:** P-001
-**Claimed by:** @claude (2026-06-11) — R1+R3 konsensüs + çoklu-sembol gate re-run şartı
+**Claimed by:** @hermes (2026-06-11) — R1+R3 konsensüs + çoklu-sembol gate re-run şartı
+**Reviewer:** @claude (Plan v1.4 §8a konsensüs, patch'leri SENKRON doğrulayacak)
 **Tahmini süre:** 2-3 gün (R1+R3 patch'leri + gate re-run)
 **Bağımlılık:** T-002 ✅ DONE (G-T2 PASS), T-001 ✅ DONE (G-T1 PASS)
 **Branch:** `feat/p001-t003-strategy` (push edilmemiş, R1+R3 patch'leri bu branch'e eklenecek)
