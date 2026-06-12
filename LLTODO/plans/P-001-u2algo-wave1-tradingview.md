@@ -3,7 +3,7 @@
 **Başlangıç:** 2026-06-07
 **Sahip:** @hermes (implementor), @claude (reviewer)
 **Branch:** `feat/lltodo-p001-implement`
-**Versiyon:** 1.2 (post-consensus revize — 2026-06-10)
+**Versiyon:** 1.4 (T-003 R1+R3 konsensüs + çoklu-sembol gate — 2026-06-11)
 
 ---
 
@@ -198,6 +198,77 @@ pine/u2algo/WAVE1_SPEC.md        ← Teknik harita, Python→Pine çeviri kararl
 | 2026-06-07 | 1.0 | İlk sürüm | @claude |
 | 2026-06-10 | 1.2 | R-001+R-002 entegre: kapsam daraltma (4h/daily → Wave 2), görsel standartlar eklendi, CAC/gelir gate'leri eklendi, OOS backtest kriteri eklendi | @hermes |
 | 2026-06-10 | 1.3 | §3a path düzeltmesi: Wave-1 dosyaları `pine/u2algo/` altına (mevcut SMC v2 port ile çakışma giderildi, port restore edildi) | @claude (review) |
+| 2026-06-11 | 1.4 | T-003 R1+R3 konsensüs: sinyal mantığı gevşetme (R1) + fill güvenilirliği artışı (R3). Çoklu-sembol agregasyonlu gate re-run şartı (Plan §6 kaçış). SENKRON kuralı: `wave1_signals.pine` (indicator) + `wave1_strategy.pine` (strategy) + `WAVE1_SPEC.md` birlikte güncellenecek. Python tarafı kapsam notu (CLAUDE.md "Python kaynak mantığını değiştirme" istisnası). Detay: §8a. | @claude (T-003 review) |
+
+---
+
+## 8a. v1.4 — T-003 R1+R3 Konsensüs Detayı (2026-06-11)
+
+### 8a.1. Kök neden (G-T4 FAIL analizi)
+
+T-003 gate run 1 sonucu (`LLTODO/reports/REPORT-T-003-gate-run-1.md`):
+- **G-T3 PASS** — 0 hata, 0 marker (Pine v6 compile temiz, f8ce5c2).
+- **G-T4 FAIL** — `trade_count = 0` (BTCUSDT.P/ETHUSDT.P 15m, ~4.3 ay TV verisi).
+- **G-T5/G-T6 N/A** — trade olmadığı için tetiklenmedi.
+
+**Kök neden:** Wave-1 daraltmasının bedeli. Sinyal mantığı §2a'daki **5-ardışık-ters-mum × 1.5×ATR gövde × ≤5-bar pencere × 1h bias aligned × conf≥55** kombinasyonu 15m'de neredeyse hiç oluşmuyor (~1-2 sinyal/4 ay/sembol). Limit entry fill'i de 0/0 — limit OB zaten fill olacak bir entry bırakmıyor. **R-002'nin backtest-validasyon gate'i tam bu senaryoyu yakalamak için konmuştu, gate işini yaptı ✅.**
+
+### 8a.2. Plan §6 kaçış maddesi devrede
+
+§6 G-T4 "min 100 trade zorunlu" kriteri, TV 15m derinliği ~4.3 ay ile tek sembolde matematiksel olarak zor. **v1.4 ile iki yönlü düzeltme:**
+
+1. **Sinyal mantığı gevşetme (R1)** — Konfigürasif olmayan, scope-prensibi karar:
+   - **R1.a** (varsayılan, herkes için): OB-aktif penceresi `5 bar → 15 bar` (3× daha uzun hafıza). OB nadir ama oluştuğunda 15 bar geçerli sayılsın.
+   - **R1.b** (operatör-toggle, default OFF): OB-aktif ZORUNLULUĞU tamamen kaldırılır; sinyal `confluence_score >= conf_thresh AND 1h bias aligned AND (recent_swing_break OR strong_breakout)` mantığına iner. OB hâlâ confluence'a +30 puan katkıda bulunur ama ön koşul değildir. Bu, "OB'siz swing break + bias" sinyallerini de üretir.
+   - Pine SENKRON: `ob_active_window_bars` input + `allow_ob_less` bool input → hem `wave1_signals.pine` hem `wave1_strategy.pine` aynı anda değişmeli.
+
+2. **Çoklu-sembol agregasyonlu gate re-run** — Tek sembol yerine BTC+ETH+SOL+BNB+XRP perp 15m, ~4.3 ay = 5 sembol × ~120 trade = 600 trade beklenir (gating için min 100 trade kolay geçilir, 5 sembol × 4.3 ay × 15m ≈ ~8.6k bar/sembol).
+
+3. **Fill güvenilirliği artışı (R3)** — Konfigürasif, risk-yan etkisi kontrollü:
+   - **R3.a** (varsayılan): limit-entry expiry `20 bar → 40 bar` (1×15m = 15dk → 10 saate yakın). 15m'de 40 bar = 10 saat işlem seansı; gündüz pivotları doldurur.
+   - **R3.b** (operatör-toggle, default OFF): `extended_expiry_in_trend = true` → 1h bias aligned durumda expiry 80 bar'a çıkar (20 saat, günü kapsayan). Range/flat'te 40 bar kalır.
+   - Pine SENKRON: `limit_expiry_bars` input + `extended_expiry_in_trend` bool input → `wave1_strategy.pine`'e eklenir, indicator'da kullanılmaz (sadece strategy'de).
+
+### 8a.3. SENKRON kuralı (zorunlu)
+
+**Plan §3a "indikatör ve strateji versiyonlarını senkron tut" kuralı v1.4'te sertleştirildi:**
+
+- **R1 patch'leri 3 dosyaya birlikte uygulanır:**
+  - `pine/u2algo/wave1_signals.pine` (indicator, 622 satır) — `ob_active_window_bars` input + `allow_ob_less` input
+  - `pine/u2algo/wave1_strategy.pine` (strategy) — aynı input'lar SENKRON
+  - `pine/u2algo/WAVE1_SPEC.md` — §1 tablo + §7 R1+R3 paragrafı
+- **R3 patch'leri 1 dosyaya uygulanır** (sadece strategy): `pine/u2algo/wave1_strategy.pine` + `WAVE1_SPEC.md` §7.
+- **Patch transfer kuralı:** CLAUDE.md format-patch + sha256 VEYA git push (operatör onayıyla). Push yasağı korunur.
+- **Lint doğrulama:** LLTODO lint R6 "tek task tek agent" kuralı — R1+R3 patch'leri tek PR'da birleştirilir (R1 sinyal mantığı + R3 fill güvenilirliği bağımlı).
+
+### 8a.4. Python tarafı kapsam notu (CLAUDE.md istisnası)
+
+CLAUDE.md: "Python kaynak mantığını DEĞİŞTİRME. Sadece oku ve referans al. *(İstisna: `engine/agents/` LLM danışma katmanı additive, `safe_orchestrator` trade mantığına dokunmaz.)*"
+
+T-003 R1+R3 **yalnız Pine tarafında** uygulanır. Python SMC v1 (engine.signals / engine.smc_v2) **bu task kapsamında değişmez.** Gerekçe:
+- Wave-1 Pine → Python referans DEĞİL; Python → Pine çeviri yönünde çalışıyoruz. Pine v1 davranışı bağımsız evrim geçirebilir.
+- G-T4 gate'i TV Pine Editor backtest'inde ölçülüyor; Python backtest.engine.py bu görevi görmüyor.
+- CLAUDE.md "Python değiştirme" kuralı trade execution'ı (canlı bot) korumak için konmuş; Pine indikatörü/stratejisi Python çekirdek mantığıyla aynı olmak zorunda değil (SMC v2 port ayrı ürün emsal).
+
+İleride (T-003 sonrası) Pine R1+R3 mantığının Python parity'si istenirse, **ayrı bir task** (T-003-bis önerisi) ile ele alınır ve CLAUDE.md istisnası genişletilir.
+
+### 8a.5. PR #184 / PR #194 durumu
+
+- **PR #184 (master `c1f224`):** T-024 healthz contract — DONE, merged.
+- **PR #194 (draft, `pr-194-t003` branch HEAD `118a597`):** 4 dosya 66+/0- (`.gitignore` negation + LLTODO/STATE.md CODE_READY + LLTODO/reports/REPORT-T-003-gate-run-1.md + LLTODO/tasks/IN_PROGRESS/T-003-strategy-backtest.md).
+  - **Karar (2026-06-11 @hermes+@claude konsensüs):** G-T4 FAIL devam ettiği sürece PR #194 merge EDİLMEYECEK. Draft kalır. R1+R3 patch'leri + çoklu-sembol gate re-run PASS olduktan sonra merge onayı verilir.
+- **`feat/p001-t003-strategy` branch:** 5 dosya 664+/6-, push edilmemiş, uzak sunucuda YOK. R1+R3 patch'leri bu branch'e eklenecek → push operatör onayıyla.
+
+### 8a.6. Gate re-run kabul kriterleri (R1+R3 sonrası)
+
+| ID | Kriter | Eşik |
+|---|---|---|
+| G-T3 | Pine v6 compile | 0 hata 0 marker (Pine Editor) |
+| G-T4 | OOS backtest, çoklu-sembol agregasyon | trade_count ≥ 100, OOS Sharpe ≥ IS×0.7 |
+| G-T5 | Inverted SL/TP | 0 trade (long'da SL>entry>TP veya short'ta SL<entry<TP olamaz) |
+| G-T6 | Sub-min-RR | 0 trade realized_rr < min_rr |
+
+Tüm 4 gate geçilirse → `LLTODO/STATE.md` `IMPL_READY` → FAZ 4 UR-001 (Claude ultra-review).
 
 ---
 
