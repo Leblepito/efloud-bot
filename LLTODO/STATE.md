@@ -1,7 +1,7 @@
 # LLTODO — Epic State
 
 > Append-only. Her durum geçişi yeni satır olarak eklenir. Eski satır silinmez.
-> Son güncelleme: 2026-06-11 @claude (önceki: 2026-06-10 @hermes)
+**Son güncelleme:** 2026-06-11 @claude (R1+R3 konsensüs + Plan v1.4) (önceki: 2026-06-11 @claude)
 
 ---
 
@@ -24,7 +24,7 @@
 ### Aktif Durum
 
 **Durum:** `IN_PROGRESS` — FAZ 3 (2026-06-11)
-**Sonraki adım:** T-003 (strateji versiyonu + backtest validasyonu) — @hermes claim edebilir
+| **Sonraki adım:** | T-003 R1+R3 patch'leri (Plan v1.4) + çoklu-sembol agregasyonlu gate re-run — @claude claim etti (LLTODO/tasks/IN_PROGRESS/T-003-strategy-backtest.md) |
 
 ### Heartbeat
 
@@ -35,6 +35,7 @@
 2026-06-11  IMPL_READY       @hermes  T-002: wave1_signals.pine v1.1.0 (+323 satır) — confluence 7-faktör, 1h swing TP1, f_calc_sl/f_calc_tp, sinyaller + görseller. Patch format-patch+sha256 ile transfer (yeni kural ilk kez uygulandı, bütünlük ✅). Ek teslimat: GÖREV A/B/E dosyaları (DDL taslakları + LS fizibilite + status-page eval).
 2026-06-11  REVIEW_FIXES     @claude  T-002 review REQUEST_CHANGES → fix: B1 REPAINT (1h pivot [-j] GELECEK-bar erişimi — R-002'nin tam uyarısı; gecikmeli-pivot kalıbına çevrildi) + B2 visual_group compile hatası + N1 var + N3 %0.1 SL tabanı. Hermes'in lokal lint-R2 varyantı düşürüldü (PR #186 superseded). G-T2 compile-verify BEKLİYOR — TV MCP bağlı değil (launch: TV Desktop'ı --remote-debugging-port=9222 ile).
 2026-06-11  T-002 DONE ✅    @claude  G-T2 PASS: TV Pine Editor compile 0 hata 0 marker (pine_smart_compile + pine_get_errors, master eb5af4f bazlı). eb5af4f hali 2 compile hatası verdi → minimal fix (v1.1.1, mantık değişikliği yok): (1) satır 315/317 '\' satır devamı Pine'da geçersiz ("no viable alternative at character '\'") → girintili satır sarma; (2) f_calc_tp tp1/tp2 = na → float tp1/tp2 = na ("Value with NA type cannot be assigned..."). T-002 → tasks/DONE/. Sıra T-003'te (@hermes).
+2026-06-11  R1+R3_KONSENSÜS @claude  T-003 plan v1.4 notu (LLTODO/plans/P-001 §8a): G-T4 FAIL kök neden tespit edildi (5-ardışık-ters-mum × 1.5×ATR × ≤5-bar pencere × bias × conf≥55 kombinasyonu 15m'de nadir). R1 (sinyal mantığı gevşetme: ob_active_window_bars 5→15 + allow_ob_less input) + R3 (fill güvenilirliği: limit_expiry_bars 20→40 + extended_expiry_in_trend) konsensüs. Çoklu-sembol agregasyonlu gate re-run şartı (BTC+ETH+SOL+BNB+XRP perp 15m ~4.3 ay → 5×~120 trade = 600 trade). SENKRON kuralı 3 dosya (wave1_signals.pine + wave1_strategy.pine + WAVE1_SPEC.md). Python tarafı CLAUDE.md istisnasız. PR #194 draft kalır (G-T4 FAIL), merge-onayı R1+R3 patch'leri + çoklu-sembol gate re-run PASS sonrası. Operatör kararı 2026-06-11 (T-003'e R1+R3 ile başla, çoklu-sembol re-run şartlı, #194 merge gate re-run PASS'a kadar).
 ```
 
 ### Review Özeti
