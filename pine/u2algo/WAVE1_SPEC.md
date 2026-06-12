@@ -141,27 +141,56 @@
 
 ---
 
-## 7. T-003 Bölümü: Strateji + Backtest (DRAFT — IN_PROGRESS)
+## 7. T-003 Bölümü: Strateji + Backtest (R1+R3 konsensüs — 2026-06-11, Plan v1.4 §8a)
 
-**Dosya:** `pine/u2algo/wave1_strategy.pine` (596 satır — T-003 round-3)
+**Dosya:** `pine/u2algo/wave1_strategy.pine` (622+ satır, 5 patch: round-1 + limit-expiry + round-3 + alert + gate-raporu + R1+R3 konsensüs)
 
-**İçerik (iskelet):**
-- [x] `strategy()` header (v6, 10000 capital, %100 equity, 0.04% commission)
-- [x] indicator ile senkron: tüm input isimleri, palette, ATR, 1h bias, swing, OB, confluence, SL/TP
-- [x] B1 repaint fix kalıbı uygulandı: 1h pivot `[3±j]`
-- [x] `strategy.entry()` / `strategy.exit()` — limit entry + SL/TP1/TP2 exit
-- [x] Pyramiding=1, `calc_on_every_tick=false`
-- [x] Backtest input'ları: `bt_date_start`, `bt_date_end`, `bt_oos_pct`
-- [ ] Backtest validasyonu: min 100 trade + %30 OOS (bekliyor)
-- [ ] Repaint kontrolü: `barstate.isconfirmed` + gecikmeli pivot (bekliyor)
-- [ ] WAVE1_SPEC.md final güncelleme (bekliyor)
-- [ ] Review bulguları (PR draft'ında listeli): N3 %0.1 SL tabanı paritesi, TP2/qty_percent
-      exit semantiği, limit-entry expiry, bt_* input'larının fiilen kullanılması,
-      slippage parametresi, %100 equity sizing kararı
+**SENKRON kuralı (Plan v1.4 §8a.3):** Bu dosyadaki tüm input isimleri + default değerler `wave1_signals.pine` (indicator) ile aynı olmak ZORUNLU. Yeni input'lar (aşağıdaki R1+R3) 3 dosyaya birlikte uygulanır.
 
-**Derleme durumu (iskelet):** `ön-compile PASS — 0 hata 0 marker (2026-06-11 @claude;
-3 derleyici-zorlamalı fix: tuple destructuring, line.new named-arg, strategy'de alert())`
-— resmi **G-T3** final implementasyonda tekrar koşulacak.
+### 7a. R1 — Sinyal Mantığı Gevşetme (Plan v1.4 §8a.2)
+
+**Kök neden:** §2a kombinasyonu (5-ardışık-ters-mum × 1.5×ATR × ≤5-bar pencere × bias × conf≥55) 15m'de nadir.
+
+| Input | Tip | Default | Açıklama |
+|---|---|---|---|
+| `ob_active_window_bars` | `input.int(15, ..., minval=1, maxval=50)` | 15 | OB-aktif penceresi (eski: hardcoded 5). 3× daha uzun hafıza. |
+| `allow_ob_less` | `input.bool(false, ...)` | false | true: OB-aktif ön koşulu kaldırılır; sinyal `conf_thresh + 1h bias + (swing_break OR strong_breakout)`'a iner. OB confluence'a +30 verir ama zorunlu değil. |
+
+**Sinyal mantığı (R1 sonrası):**
+```
+long_precondition = allow_ob_less ?
+ (recent_higher_high or (bar_body > 2.0*atr14)) :
+ bullish_ob_active
+
+long_signal := barstate.isconfirmed AND
+               confluence_score_long >= conf_thresh AND
+               htf_bias_up AND
+               long_precondition
+```
+
+### 7b. R3 — Fill Güvenilirliği Artışı (Plan v1.4 §8a.2)
+
+| Input | Tip | Default | Açıklama |
+|---|---|---|---|
+| `limit_expiry_bars` | `input.int(40, ..., minval=10, maxval=100)` | 40 | Limit-entry expiry (eski: hardcoded 20). 15m'de 40 bar = 10 saat. |
+| `extended_expiry_in_trend` | `input.bool(false, ...)` | false | true: 1h bias aligned durumda expiry 80 bar (20 saat). Range/flat'te 40 bar. |
+
+**Limit-expiry + cancel mantığı (R3 sonrası, F5+F6 round-3 fix'leri korunur):**
+- F5 (karşı-yön cancel): `if is_in_trade AND (sig_entry_bar_long > 0 OR sig_entry_bar_short > 0)` → her iki yöne `strategy.cancel`
+- F6 (pending gate): sinyal üretimi `... AND sig_entry_bar_long == 0 AND sig_entry_bar_short == 0`
+- R3 expiry: `long_effective_expiry = extended_expiry_in_trend and htf_bias_up ? 80 : limit_expiry_bars`; `if sig_entry_bar_long > 0 AND not is_in_trade AND (bar_index - sig_entry_bar_long) > long_effective_expiry` → `strategy.cancel`
+
+### 7c. Çoklu-Sembol Gate Re-Run (Plan v1.4 §8a.5)
+
+Gate run 1 (BTCUSDT.P/ETHUSDT.P 15m, ~4.3 ay) → trade_count=0. R1+R3 sonrası:
+- Semboller: BTCUSDT-PERP, ETHUSDT-PERP, SOLUSDT-PERP, BNBUSDT-PERP, XRPUSDT-PERP
+- TF: 15m
+- Period: 2026-01-26 → 2026-06-11 (~4.3 ay TV 15m derinliği)
+- Beklenen: 5 × ~120 trade = 600 trade (min 100 kolay geçilir)
+
+### 7d. Limit-fill Intrabar Caveat (F4 — round-3'ten korunur, genişletildi)
+
+Strategy(`calc_on_every_tick=false`) bar kapanışında hesaplanır. Limit order bar İÇİNDE fill olursa backtest aynı bar'ın high/low'unu aynı anda kullanır — gerçek hayutta fill sırası belirsizdir. R3 expiry uzatması (20→40 bar) bu riski AZALTIR (daha fazla bar'da fill olma şansı, bar-içi yarış durumunu seyreltir) ama tamamen ortadan kaldırmaz. Güven aralığı: OOS Sharpe × 0.7 → gerçekte 0.5-0.6'ya düşebilir. Risk_pct=0.5% default muhafazakâr.
 
 **Limit-fill intrabar caveat (F4 — gate raporunda kullanılacak):**
 - Strategy(`calc_on_every_tick=false`) bar kapanışında hesaplanır. Limit order
@@ -181,4 +210,4 @@
 | 2026-06-11 | T-002 | Review fix'leri: B1 repaint (1h pivot `[-j]`), B2 visual_group, N1 var, N3 %0.1 SL tabanı; §1 tablo güncellendi | @claude |
 | 2026-06-11 | T-003 | Strategy iskeleti (542 satır) + §7 T-003 bölümü | @hermes |
 | 2026-06-11 | T-003 | Ön-compile fix ×3 (tuple destructuring, line.new named-arg, alert()) + §8 başlık restore | @claude |
-
+| 2026-06-11 | T-003 §7a-§7d | R1 sinyal gevşetme (ob_active_window_bars=15, allow_ob_less) + R3 fill güvenilirliği (limit_expiry_bars=40, extended_expiry_in_trend) + çoklu-sembol gate notu + F4 caveat genişletme. SENKRON kuralı 3 dosyaya | @claude (R1+R3 konsensüs, Plan v1.4) |
