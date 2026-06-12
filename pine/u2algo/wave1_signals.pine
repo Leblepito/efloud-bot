@@ -64,6 +64,16 @@ show_sltp = input.bool(true, "Show SL/TP Levels",
 use_cb_palette = input.bool(false, "Colorblind-Friendly Palette",
  tooltip="Alternative palette for red/green color blindness", group=visual_group)
 
+// T-003 R1 (Plan v1.4 §8a.2): sinyal mantığı gevşetme
+r1_group = "T-003 R1 — Signal Loosening"
+ob_active_window_bars = input.int(15, "OB Active Window (bars)",
+ minval=1, maxval=50,
+ tooltip="OB-aktif penceresi (eski: hardcoded 5). 3× daha uzun hafıza — OB nadir ama oluştuğunda 15 bar geçerli sayılsın.",
+ group=r1_group)
+allow_ob_less = input.bool(false, "Allow OB-Less Signals",
+ tooltip="true: OB-aktif ön koşulu kaldırılır; sinyal 'conf_thresh + 1h bias + (swing_break OR strong_breakout)'a iner. OB confluence'a +30 verir ama zorunlu değildir.",
+ group=r1_group)
+
 // ═══════════════════════════════════════════════
 // COLOR PALETTE — Plan §4
 // ═══════════════════════════════════════════════
@@ -287,9 +297,9 @@ if bear_breakout
 //   max 100
 // ═══════════════════════════════════════════════
 
-// --- Recent OB detection window (last 5 bars) ---
-bullish_ob_active  = (bar_index - bullish_ob_bar) <= 5 and bullish_ob_bar > 0
-bearish_ob_active  = (bar_index - bearish_ob_bar) <= 5 and bearish_ob_bar > 0
+// --- Recent OB detection window (T-003 R1.a: 5 → ob_active_window_bars) ---
+bullish_ob_active  = (bar_index - bullish_ob_bar) <= ob_active_window_bars and bullish_ob_bar > 0
+bearish_ob_active  = (bar_index - bearish_ob_bar) <= ob_active_window_bars and bearish_ob_bar > 0
 
 // --- 1h EMA slope (trend strength, % per bar) ---
 htf_ema_slope = (htf_ema20 - htf_ema20[1]) / htf_ema20[1] * 100
@@ -498,8 +508,19 @@ short_signal = false
 
 // Only generate signals on confirmed bars, when OB is active and confluence meets threshold
 if barstate.isconfirmed
+    // T-003 R1.b: sinyal mantığı gevşetme
+    //   allow_ob_less=false → mevcut davranış (OB-aktif ön koşul)
+    //   allow_ob_less=true  → (swing_break OR strong_breakout) OB yerine geçer
+    //   Pine v6 ?: ternary string'de sorunlu, if/else ayrı blok kullanıldı
+    long_precondition = allow_ob_less ?
+     (recent_higher_high or (bar_body > 2.0 * atr14)) :
+     bullish_ob_active
+    short_precondition = allow_ob_less ?
+     (recent_lower_low or (bar_body > 2.0 * atr14)) :
+     bearish_ob_active
+
     // --- LONG signal ---
-    if bullish_ob_active and confluence_score_long >= conf_thresh and htf_bias_up
+    if long_precondition and confluence_score_long >= conf_thresh and htf_bias_up
         ln_entry = f_entry_price("LONG")
         ln_sl    = f_calc_sl("LONG", ln_entry)
         ln_tp    = f_calc_tp("LONG", ln_entry, ln_sl)
@@ -517,7 +538,7 @@ if barstate.isconfirmed
             sig_score_long  := confluence_score_long
     
     // --- SHORT signal ---
-    if bearish_ob_active and confluence_score_short >= conf_thresh and htf_bias_down
+    if short_precondition and confluence_score_short >= conf_thresh and htf_bias_down
         sh_entry = f_entry_price("SHORT")
         sh_sl    = f_calc_sl("SHORT", sh_entry)
         sh_tp    = f_calc_tp("SHORT", sh_entry, sh_sl)
