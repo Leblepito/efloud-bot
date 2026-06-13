@@ -168,17 +168,34 @@ long_signal := barstate.isconfirmed AND
                long_precondition
 ```
 
-### 7b. R3 — Fill Güvenilirliği Artışı (Plan v1.4 §8a.2)
+### 7b. ROUND-5 — Limit-entry KALDIRILDI → Market Entry (2026-06-13, Plan §6 eskalasyonu)
 
-| Input | Tip | Default | Açıklama |
-|---|---|---|---|
-| `limit_expiry_bars` | `input.int(40, ..., minval=10, maxval=100)` | 40 | Limit-entry expiry (eski: hardcoded 20). 15m'de 40 bar = 10 saat. |
-| `extended_expiry_in_trend` | `input.bool(false, ...)` | false | true: 1h bias aligned durumda expiry 80 bar (20 saat). Range/flat'te 40 bar. |
+> ⚠️ **GÜNCEL DURUM:** GATE_RUN_2 (round-4 limit) limit-fill ~%41 nedeniyle FAIL etti
+> (F-01). Round-5'te limit-at-OB entry tamamen kaldırıldı, **sinyal barı kapanışında
+> market entry**'ye geçildi. R3'ün `limit_expiry_bars`/`extended_expiry_in_trend`
+> input'ları + F5/F6 limit-cancel mantığı **SİLİNDİ** (market emri anında fill olur,
+> pending-order takibi gereksiz).
 
-**Limit-expiry + cancel mantığı (R3 sonrası, F5+F6 round-3 fix'leri korunur):**
-- F5 (karşı-yön cancel): `if is_in_trade AND (sig_entry_bar_long > 0 OR sig_entry_bar_short > 0)` → her iki yöne `strategy.cancel`
-- F6 (pending gate): sinyal üretimi `... AND sig_entry_bar_long == 0 AND sig_entry_bar_short == 0`
-- R3 expiry: `long_effective_expiry = extended_expiry_in_trend and htf_bias_up ? 80 : limit_expiry_bars`; `if sig_entry_bar_long > 0 AND not is_in_trade AND (bar_index - sig_entry_bar_long) > long_effective_expiry` → `strategy.cancel`
+**Round-5 entry mekaniği:**
+- `strategy()` header: `process_orders_on_close=true` → emir sinyal barının KAPANIŞINDA fill (deterministik; F4 intrabar-fill iyimserliği yok olur).
+- Entry fiyatı = `close` (sinyal barı). OB seviyesi (`bullish_ob_bot`/`bearish_ob_top`) **DEĞİL**. SL/TP `close`'dan hesaplanır (`f_calc_sl`/`f_calc_tp`); `valid` (sl<entry<tp1) + `min_rr` clamp korunur.
+- OB **confluence faktörü olarak KALIR** (+30); zorunlu entry kaynağı değil.
+- `strategy.entry(..., qty=risk_qty)` — `limit=` YOK (market). Çift-giriş koruması: `barstate.isconfirmed and not is_in_trade` + `pyramiding=1` (htf_bias mutually-exclusive → aynı barda long+short imkânsız).
+- Kaldırılan vars: `sig_entry_bar_*`, `f_entry_price`, `limit_expiry_bars`, `extended_expiry_in_trend`, `bullish/bearish_ob_top/bot/seq_count` (unused-var temizliği).
+
+> ❌ **GATE_RUN_3 SONUCU (2026-06-13): round-5 market entry FAIL** — fill ~%100 oldu ama
+> EDGE YOK: agg PF 0.71, net −%14.3 (5 hesap), 4/5 kaybeden, çoğu maxDD>%5, Sharpe negatif.
+> **Çekirdek edge OB-retrace limit girişine bağlıymış** (close'da geç market girişi para
+> kaybettiriyor). Detay: `LLTODO/reports/REPORT-T-003-gate-run-3.md`.
+
+### 7b-2. ROUND-5 — Defekt Fix + OOS-Split
+
+| Değişiklik | Detay |
+|---|---|
+| `bt_date_start/end` default | 2025-* → `2020-01-01` / `2035-01-01` (LATENT BUG: 2025 default → TV 15m 2026 verisinde `in_window` 0 trade). Default artık "tüm yüklü veri"; operatör OOS için daraltır. |
+| `bt_segment` input | `input.string("Full", options=["Full","IS","OOS"])` — OOS-split (G-T4b ölçülebilir). `oos_start_idx = last_bar_index - int(last_bar_index*bt_oos_pct/100)`; `seg_ok` entry gate'ine `in_window` ile AND'lenir. |
+
+**OOS-split notu (H-02):** `last_bar_index` tüm bar'larda dataset sonunu bilir → backtest segmentasyonu için repaint DEĞİL. Segment sınırı entry-fill barında (= sinyal barı, `process_orders_on_close`) değerlendirilir; IS/OOS karşılaştırmasında ±1 bar oynama ihmal edilebilir.
 
 ### 7c. Çoklu-Sembol Gate Re-Run (Plan v1.4 §8a.5)
 
@@ -211,3 +228,4 @@ Strategy(`calc_on_every_tick=false`) bar kapanışında hesaplanır. Limit order
 | 2026-06-11 | T-003 | Strategy iskeleti (542 satır) + §7 T-003 bölümü | @hermes |
 | 2026-06-11 | T-003 | Ön-compile fix ×3 (tuple destructuring, line.new named-arg, alert()) + §8 başlık restore | @claude |
 | 2026-06-11 | T-003 §7a-§7d | R1 sinyal gevşetme (ob_active_window_bars=15, allow_ob_less) + R3 fill güvenilirliği (limit_expiry_bars=40, extended_expiry_in_trend) + çoklu-sembol gate notu + F4 caveat genişletme. SENKRON kuralı 3 dosyaya | @claude (R1+R3 konsensüs, Plan v1.4) |
+| 2026-06-13 | T-003 §7b ROUND-5 | Limit-entry KALDIRILDI → market entry (entry=close, `process_orders_on_close=true`); `limit_expiry_bars`/`extended_expiry_in_trend`/F5-F6 cancel/`f_entry_price`/`sig_entry_bar_*` + unused OB vars silindi. `bt_date` default fix (2020/2035, latent bug). `bt_segment` OOS-split (G-T4b). Indicator f_entry_price→close SENKRON. **GATE_RUN_3: FAIL** (market entry → edge yok, agg PF 0.71, 4/5 kaybeden). | @claude (round-5, Plan §6 eskalasyonu) |

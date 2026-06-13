@@ -484,12 +484,11 @@ f_calc_tp(direction, entry_price, sl_price) =>
 //   SHORT: confluence_score ≥ conf_thresh AND 1h bias down
 // ═══════════════════════════════════════════════
 
-// Entry price: use close (most recent confirmed bar)
-f_entry_price(direction) =>
-    if direction == "LONG"
-        bullish_ob_bot  // OB bottom as entry zone
-    else
-        bearish_ob_top  // OB top as entry zone
+// round-5 SENKRON: strategy market-entry'ye geçti → entry = sinyal barı close
+// (OB seviyesi DEĞİL). OB confluence faktörü olarak kalır + box görseli çizilir.
+// Böylece indicator'ın gösterdiği entry/SL/TP, strategy'nin fiili market girişiyle örtüşür.
+f_entry_price(_direction) =>
+    close
 
 var float sig_entry_long  = na
 var float sig_sl_long     = na
