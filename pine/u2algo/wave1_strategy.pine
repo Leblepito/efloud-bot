@@ -28,8 +28,7 @@ strategy(
  max_labels_count=500,
  max_boxes_count=200,
  max_lines_count=200,
- calc_on_every_tick=false,
- process_orders_on_close=true  // round-5: market entry sinyal barı KAPANIŞINDA fill (deterministik; F4 intrabar iyimserliği yok)
+ calc_on_every_tick=false
 )
 
 // ═══════════════════════════════════════════════
@@ -92,13 +91,12 @@ ob_active_window_bars = input.int(15, "OB Active Window (bars)",
  minval=1, maxval=50,
  tooltip="OB-aktif penceresi (eski: hardcoded 5). 3× daha uzun hafıza — indicator ile SENKRON.",
  group=r1_group)
-allow_ob_less = input.bool(false, "Allow OB-Less Signals",
- tooltip="true: OB-aktif ön koşulu kaldırılır; sinyal 'conf_thresh + 1h bias + (swing_break OR strong_breakout)'a iner. OB confluence'a +30 verir ama zorunlu değildir. indicator ile SENKRON.",
- group=r1_group)
+// round-6: allow_ob_less KALDIRILDI — zone-pullback entry bir zone (OB|BB) gerektirir.
 
-// T-003 R3 → round-5: LİMİT-ENTRY KALDIRILDI → market entry (sinyal barı kapanışı).
-// limit_expiry_bars / extended_expiry_in_trend input'ları gereksizleşti (kaldırıldı);
-// market emri anında fill olduğundan pending-expiry/cancel mantığı yok.
+// T-003 R6: zone-pullback entry — fiyat zone'a (OB|BB near-edge) geri çekilince LİMİT fill.
+pullback_timeout_bars = input.int(40, "Pullback Timeout (bars)", minval=10, maxval=100,
+ tooltip="Fiyat zone'a pullback için kaç bar beklenir; dolmazsa iptal (engine pullback_timeout_bars).",
+ group=r1_group)
 
 // ═══════════════════════════════════════════════
 // COLOR PALETTE — indicator ile aynı (§4)
@@ -185,6 +183,32 @@ if barstate.isconfirmed
         last_sl_price := swing_low_val
         last_sl_bar   := bar_index - lb
 
+// ═══ EQH/EQL LIQUIDITY (engine smc.py:91-101,318-364 — Wave-1 pairwise) — round-6 ═══
+var array<float> sh_arr = array.new<float>()
+var array<float> sl_arr = array.new<float>()
+int SW_CAP = 30
+float eq_thr = 0.001
+if barstate.isconfirmed and new_swing_high
+    array.push(sh_arr, swing_high_val)
+    if array.size(sh_arr) > SW_CAP
+        array.shift(sh_arr)
+if barstate.isconfirmed and new_swing_low
+    array.push(sl_arr, swing_low_val)
+    if array.size(sl_arr) > SW_CAP
+        array.shift(sl_arr)
+
+f_eq_levels(arr) =>
+    res = array.new<float>()
+    n = array.size(arr)
+    if n >= 2
+        for i = 0 to n - 2
+            for j = i + 1 to n - 1
+                a = array.get(arr, i)
+                b = array.get(arr, j)
+                if math.abs(a - b) / math.max(a, 1e-10) <= eq_thr
+                    array.push(res, (a + b) / 2)
+    res
+
 // ═══════════════════════════════════════════════
 // ORDER BLOCK DETECTION — indicator ile aynı
 // ═══════════════════════════════════════════════
@@ -193,6 +217,14 @@ bar_bull  = close > open
 bar_bear  = close < open
 bar_body  = math.abs(close - open)
 is_breakout_body = bar_body > ob_body_mult * atr14
+
+// ═══ OB+BREAKER ZONE ARRAY (engine smc.py:200-256) — round-6 ═══
+var array<float> ob_top = array.new<float>()
+var array<float> ob_bot = array.new<float>()
+var array<int>   ob_dir = array.new<int>()   // 1=demand(LONG), -1=supply(SHORT)
+var array<int>   ob_bar = array.new<int>()
+var array<bool>  ob_brk = array.new<bool>()
+int OB_CAP = 30
 
 // --- Bullish OB ---
 bull_breakout = barstate.isconfirmed and bar_bull and is_breakout_body
@@ -227,6 +259,17 @@ if bull_breakout
             ns := dist_pct_i < 0.015 and bars_since_sl_i > 0 and bars_since_sl_i < 30
         bullish_ob_bar       := bar_index - cnt
         bullish_ob_near_swing := ns
+        array.push(ob_top, hi)
+        array.push(ob_bot, lo)
+        array.push(ob_dir, 1)
+        array.push(ob_bar, bar_index - cnt)
+        array.push(ob_brk, false)
+        if array.size(ob_top) > OB_CAP
+            array.shift(ob_top)
+            array.shift(ob_bot)
+            array.shift(ob_dir)
+            array.shift(ob_bar)
+            array.shift(ob_brk)
 
 // --- Bearish OB ---
 bear_breakout = barstate.isconfirmed and bar_bear and is_breakout_body
@@ -260,6 +303,55 @@ if bear_breakout
             ns := dist_pct_i < 0.015 and bars_since_sh_i > 0 and bars_since_sh_i < 30
         bearish_ob_bar       := bar_index - cnt
         bearish_ob_near_swing := ns
+        array.push(ob_top, hi)
+        array.push(ob_bot, lo)
+        array.push(ob_dir, -1)
+        array.push(ob_bar, bar_index - cnt)
+        array.push(ob_brk, false)
+        if array.size(ob_top) > OB_CAP
+            array.shift(ob_top)
+            array.shift(ob_bot)
+            array.shift(ob_dir)
+            array.shift(ob_bar)
+            array.shift(ob_brk)
+
+// breaker flip: close OB içinden geçince yönü flip + breaker işaretle (round-6)
+for i = 0 to array.size(ob_top) - 1
+    if not array.get(ob_brk, i) and bar_index - array.get(ob_bar, i) >= 2
+        d = array.get(ob_dir, i)
+        if d == 1 and close < array.get(ob_bot, i)
+            array.set(ob_dir, i, -1)
+            array.set(ob_brk, i, true)
+        else if d == -1 and close > array.get(ob_top, i)
+            array.set(ob_dir, i, 1)
+            array.set(ob_brk, i, true)
+
+// ═══ FVG DETECTION (engine smc.py:38-44 portu) — round-6 ═══
+// BULL FVG: low > high[2] (boşluk yukarı) · BEAR FVG: high < low[2] (boşluk aşağı)
+var array<float> fvg_top = array.new<float>()
+var array<float> fvg_bot = array.new<float>()
+var array<int>   fvg_dir = array.new<int>()   // 1=BULL, -1=BEAR
+var array<bool>  fvg_mit = array.new<bool>()
+int FVG_CAP = 40
+if barstate.isconfirmed
+    if low > high[2]
+        array.push(fvg_top, low)
+        array.push(fvg_bot, high[2])
+        array.push(fvg_dir, 1)
+        array.push(fvg_mit, false)
+    if high < low[2]
+        array.push(fvg_top, low[2])
+        array.push(fvg_bot, high)
+        array.push(fvg_dir, -1)
+        array.push(fvg_mit, false)
+    while array.size(fvg_top) > FVG_CAP
+        array.shift(fvg_top)
+        array.shift(fvg_bot)
+        array.shift(fvg_dir)
+        array.shift(fvg_mit)
+    for i = 0 to array.size(fvg_top) - 1
+        if not array.get(fvg_mit, i) and low <= array.get(fvg_top, i) and high >= array.get(fvg_bot, i)
+            array.set(fvg_mit, i, true)
 
 // ═══════════════════════════════════════════════
 // CONFLUENCE SCORING — indicator ile aynı
@@ -368,41 +460,125 @@ f_calc_sl(direction, entry_price) =>
         structural
 
 // ═══════════════════════════════════════════════
-// TP HESAPLAMA — indicator ile aynı
+// TP HESAPLAMA — round-6 engine-faithful (tp_calc.py:38-127)
+// TP1 = en yakın {EQH/EQL likidite, HTF swing, FVG near} ≥ min_rr; yoksa RR-proj;
+//       aday var ama yetersiz → tp1=na (REDDET). TP2 = FVG-far/fib (>TP1) / single-target.
+// dönüş: [tp1, tp2, t1src, t2src]  (t1src: 0=LIQ,1=FVG_NEAR,2=RR_PROJ,-1=REJECT · t2src:0=FVG_FAR,1=FIB,2=NONE)
 // ═══════════════════════════════════════════════
 
-f_calc_tp(direction, entry_price, sl_price) =>
-    float tp1 = na
-    float tp2 = na
-
+f_engine_tp(direction, entry, sl) =>
+    risk = math.abs(entry - sl)
+    min_dist = min_rr * risk
+    cands = array.new<float>()
+    csrc  = array.new<int>()
+    eqh = f_eq_levels(sh_arr)
+    eql = f_eq_levels(sl_arr)
     if direction == "LONG"
-        if not na(last_1h_swing_high) and last_1h_swing_high > entry_price
-            tp1 := last_1h_swing_high
-        else if not na(prev_swing_high)
-            tp1 := prev_swing_high
-        if na(tp1) or tp1 <= entry_price or (tp1 - entry_price) / (entry_price - sl_price) < min_rr
-            tp1 := entry_price + (entry_price - sl_price) * min_rr
-
-        if not na(prev_swing_low) and not na(prev_swing_high)
-            swing_range = prev_swing_high - prev_swing_low
-            tp2 := entry_price + swing_range * fib_tp2
-        if na(tp2) or tp2 < tp1
-            tp2 := tp1 * 1.02
+        if array.size(eqh) > 0
+            for i = 0 to array.size(eqh) - 1
+                if array.get(eqh, i) > entry
+                    array.push(cands, array.get(eqh, i))
+                    array.push(csrc, 0)
+        if not na(last_1h_swing_high) and last_1h_swing_high > entry
+            array.push(cands, last_1h_swing_high)
+            array.push(csrc, 0)
+        if array.size(fvg_top) > 0
+            for i = 0 to array.size(fvg_top) - 1
+                if not array.get(fvg_mit, i) and array.get(fvg_dir, i) == -1 and array.get(fvg_bot, i) > entry
+                    array.push(cands, array.get(fvg_bot, i))
+                    array.push(csrc, 1)
     else
-        if not na(last_1h_swing_low) and last_1h_swing_low < entry_price
-            tp1 := last_1h_swing_low
-        else if not na(prev_swing_low)
-            tp1 := prev_swing_low
-        if na(tp1) or tp1 >= entry_price or (entry_price - tp1) / (sl_price - entry_price) < min_rr
-            tp1 := entry_price - (sl_price - entry_price) * min_rr
+        if array.size(eql) > 0
+            for i = 0 to array.size(eql) - 1
+                if array.get(eql, i) < entry
+                    array.push(cands, array.get(eql, i))
+                    array.push(csrc, 0)
+        if not na(last_1h_swing_low) and last_1h_swing_low < entry
+            array.push(cands, last_1h_swing_low)
+            array.push(csrc, 0)
+        if array.size(fvg_top) > 0
+            for i = 0 to array.size(fvg_top) - 1
+                if not array.get(fvg_mit, i) and array.get(fvg_dir, i) == 1 and array.get(fvg_top, i) < entry
+                    array.push(cands, array.get(fvg_top, i))
+                    array.push(csrc, 1)
+    float tp1 = na
+    int   t1src = 2
+    float best = 1e20
+    if array.size(cands) > 0
+        for i = 0 to array.size(cands) - 1
+            p = array.get(cands, i)
+            dist = direction == "LONG" ? p - entry : entry - p
+            if dist >= min_dist and dist < best
+                best := dist
+                tp1 := p
+                t1src := array.get(csrc, i)
+    float tp2 = na
+    int   t2src = 2
+    if na(tp1) and array.size(cands) > 0
+        t1src := -1
+    else
+        if na(tp1)
+            tp1 := direction == "LONG" ? entry + min_dist : entry - min_dist
+            t1src := 2
+        float ff = na
+        if array.size(fvg_top) > 0
+            for i = 0 to array.size(fvg_top) - 1
+                if not array.get(fvg_mit, i)
+                    if direction == "LONG" and array.get(fvg_dir, i) == -1 and array.get(fvg_top, i) > tp1
+                        ff := na(ff) ? array.get(fvg_top, i) : math.min(ff, array.get(fvg_top, i))
+                    if direction == "SHORT" and array.get(fvg_dir, i) == 1 and array.get(fvg_bot, i) < tp1
+                        ff := na(ff) ? array.get(fvg_bot, i) : math.max(ff, array.get(fvg_bot, i))
+        if not na(ff)
+            tp2 := ff
+            t2src := 0
+        else
+            fib = direction == "LONG" ? entry + fib_tp2 * risk : entry - fib_tp2 * risk
+            if (direction == "LONG" and fib > tp1) or (direction == "SHORT" and fib < tp1)
+                tp2 := fib
+                t2src := 1
+    [tp1, tp2, t1src, t2src]
 
-        if not na(prev_swing_low) and not na(prev_swing_high)
-            swing_range = prev_swing_high - prev_swing_low
-            tp2 := entry_price - swing_range * fib_tp2
-        if na(tp2) or tp2 > tp1
-            tp2 := tp1 * 0.98
-
-    [tp1, tp2]
+// ═══ NEAREST ZONE (OB|BB near-edge, engine clamp karşılığı) — round-6 ═══
+// want_dir: 1=LONG zone(demand) near-edge=top · -1=SHORT zone(supply) near-edge=bot
+// round-6 FVG/OTE genişletme: entry zone evreni = OB|BB + FVG (engine primary) + OTE (fallback).
+// LONG near-edge: zone üstü (yukarıdan ilk dokunuş) · SHORT near-edge: zone altı.
+f_nearest_zone(want_dir) =>
+    float best_edge = na
+    float best_dist = 1e20
+    // OB|BB zones
+    if array.size(ob_top) > 0
+        for i = 0 to array.size(ob_top) - 1
+            if array.get(ob_dir, i) == want_dir
+                edge = want_dir == 1 ? array.get(ob_top, i) : array.get(ob_bot, i)
+                ok = want_dir == 1 ? (edge < close) : (edge > close)
+                d = math.abs(close - edge)
+                if ok and d < best_dist
+                    best_dist := d
+                    best_edge := edge
+    // FVG zones (engine zones.py primary): LONG=BEAR FVG below (edge=top) · SHORT=BULL FVG above (edge=bot)
+    if array.size(fvg_top) > 0
+        for i = 0 to array.size(fvg_top) - 1
+            if not array.get(fvg_mit, i)
+                fdir = array.get(fvg_dir, i)
+                if want_dir == 1 and fdir == -1
+                    e = array.get(fvg_top, i)
+                    if e < close and math.abs(close - e) < best_dist
+                        best_dist := math.abs(close - e)
+                        best_edge := e
+                if want_dir == -1 and fdir == 1
+                    e = array.get(fvg_bot, i)
+                    if e > close and math.abs(close - e) < best_dist
+                        best_dist := math.abs(close - e)
+                        best_edge := e
+    // OTE band (engine fallback): son swing leg'in 0.618 retracement near-edge'i
+    if not na(last_sh_price) and not na(last_sl_price) and last_sh_price > last_sl_price
+        dd = last_sh_price - last_sl_price
+        ote_edge = want_dir == 1 ? last_sh_price - dd * 0.618 : last_sl_price + dd * 0.618
+        ote_ok = want_dir == 1 ? (ote_edge < close) : (ote_edge > close)
+        if ote_ok and math.abs(close - ote_edge) < best_dist
+            best_dist := math.abs(close - ote_edge)
+            best_edge := ote_edge
+    best_edge
 
 // ═══════════════════════════════════════════════
 // T-003: STRATEGY EXECUTION
@@ -417,113 +593,112 @@ var float sig_sl_long     = na
 var float sig_tp1_long    = na
 var float sig_tp2_long    = na
 var bool  sig_active_long = false
+var int   sig_entry_bar_long = 0   // round-6: pending limit pullback takibi (0=inaktif)
 
 var float sig_entry_short = na
 var float sig_sl_short    = na
 var float sig_tp1_short   = na
 var float sig_tp2_short   = na
 var bool  sig_active_short = false
+var int   sig_entry_bar_short = 0
 
-// In-trade flag for pyramiding prevention
+// round-6 diagnostik: son entry'nin TP kaynak etiketleri (0=LIQ,1=FVG_NEAR,2=RR_PROJ / 0=FVG_FAR,1=FIB,2=NONE)
+var int last_t1src = -9
+var int last_t2src = -9
+var int g_orders   = 0   // round-6 diagnostik: yerleştirilen limit emri sayısı (fill metriği)
+
 is_in_trade = strategy.position_size != 0
-
-// round-5: market entry fill anında pozisyon açıldığından pending-order (sig_entry_bar)
-// takibi gereksiz; is_in_trade gate'i çift girişi önler (htf_bias_up/down mutually
-// exclusive → aynı barda hem long hem short imkânsız).
 long_signal  = false
 short_signal = false
 
-if barstate.isconfirmed and not is_in_trade
-    // T-003 R1.b: sinyal mantığı gevşetme (indicator SENKRON)
-    long_precondition = allow_ob_less ?
-     (recent_higher_high or (bar_body > 2.0 * atr14)) :
-     bullish_ob_active
-    short_precondition = allow_ob_less ?
-     (recent_lower_low or (bar_body > 2.0 * atr14)) :
-     bearish_ob_active
-
+// round-6: sinyal = conf≥thresh + 1h bias + geçerli zone (OB|BB near-edge) + geçerli TP.
+// pending limit varken (sig_entry_bar>0) yeni sinyal durur; entry zone'a pullback LİMİT'i.
+if barstate.isconfirmed and not is_in_trade and sig_entry_bar_long == 0 and sig_entry_bar_short == 0
     // --- LONG ---
-    if long_precondition and confluence_score_long >= conf_thresh and htf_bias_up
-        ln_entry = close  // round-5: market entry @ sinyal barı close
-        ln_sl    = f_calc_sl("LONG", ln_entry)
-        // (G-T3 ön-fix: tuple dönüşü destructuring ile alınır)
-        [ln_tp1, ln_tp2] = f_calc_tp("LONG", ln_entry, ln_sl)
-
-        valid = not na(ln_sl) and not na(ln_tp1) and ln_sl < ln_entry and ln_tp1 > ln_entry
-        if valid
-            long_signal := true
-            sig_entry_long  := ln_entry
-            sig_sl_long     := ln_sl
-            sig_tp1_long    := ln_tp1
-            sig_tp2_long    := ln_tp2
-            sig_active_long := true
+    if htf_bias_up and (recent_higher_high or confluence_score_long >= conf_thresh)
+        ln_entry = f_nearest_zone(1)
+        if not na(ln_entry)
+            ln_sl = f_calc_sl("LONG", ln_entry)
+            [ln_tp1, ln_tp2, ln_t1s, ln_t2s] = f_engine_tp("LONG", ln_entry, ln_sl)
+            valid = not na(ln_sl) and not na(ln_tp1) and ln_sl < ln_entry and ln_tp1 > ln_entry
+            if valid
+                long_signal := true
+                sig_entry_long  := ln_entry
+                sig_sl_long     := ln_sl
+                sig_tp1_long    := ln_tp1
+                sig_tp2_long    := ln_tp2
+                sig_active_long := true
+                sig_entry_bar_long := bar_index
+                last_t1src := ln_t1s
+                last_t2src := ln_t2s
 
     // --- SHORT ---
-    if short_precondition and confluence_score_short >= conf_thresh and htf_bias_down
-        sh_entry = close  // round-5: market entry @ sinyal barı close
-        sh_sl    = f_calc_sl("SHORT", sh_entry)
-        [sh_tp1, sh_tp2] = f_calc_tp("SHORT", sh_entry, sh_sl)
-
-        valid = not na(sh_sl) and not na(sh_tp1) and sh_sl > sh_entry and sh_tp1 < sh_entry
-        if valid
-            short_signal := true
-            sig_entry_short := sh_entry
-            sig_sl_short    := sh_sl
-            sig_tp1_short   := sh_tp1
-            sig_tp2_short   := sh_tp2
-            sig_active_short := true
+    if htf_bias_down and (recent_lower_low or confluence_score_short >= conf_thresh)
+        sh_entry = f_nearest_zone(-1)
+        if not na(sh_entry)
+            sh_sl = f_calc_sl("SHORT", sh_entry)
+            [sh_tp1, sh_tp2, sh_t1s, sh_t2s] = f_engine_tp("SHORT", sh_entry, sh_sl)
+            valid = not na(sh_sl) and not na(sh_tp1) and sh_sl > sh_entry and sh_tp1 < sh_entry
+            if valid
+                short_signal := true
+                sig_entry_short := sh_entry
+                sig_sl_short    := sh_sl
+                sig_tp1_short   := sh_tp1
+                sig_tp2_short   := sh_tp2
+                sig_active_short := true
+                sig_entry_bar_short := bar_index
+                last_t1src := sh_t1s
+                last_t2src := sh_t2s
 
 // ═══════════════════════════════════════════════
-// STRATEGY ENTRY + EXIT
+// STRATEGY ENTRY + EXIT (round-6: near-edge zone-pullback LİMİT + timeout)
 // ═══════════════════════════════════════════════
-
-// round-5 OOS-split: last_bar_index ile IS/OOS sınırı (G-T4b ölçülebilir kılınır).
-// last_bar_index Pine'da tüm bar'larda bilinir (sabit dataset sonu) → backtest
-// segmentasyonu için repaint sorunu değil.
 oos_start_idx = last_bar_index - int(last_bar_index * bt_oos_pct / 100)
 seg_ok = bt_segment == "Full" ? true : bt_segment == "OOS" ? (bar_index >= oos_start_idx) : (bar_index < oos_start_idx)
 
-// LONG entry — round-5: MARKET order @ sinyal barı close (process_orders_on_close=true)
+// LONG — LİMİT @ near edge (zone üstü); fiyat pullback edince fill
 if sig_active_long and not na(sig_entry_long) and not na(sig_sl_long) and not na(sig_tp1_long)
-    // Time-window + segment gate: pencere/segment dışında entry yok
     in_window = (time >= bt_date_start) and (time <= bt_date_end)
     if in_window and seg_ok
-        // Risk-based qty (F3): qty = (equity * risk_pct/100) / |entry - SL|
         risk_per_unit = math.abs(sig_entry_long - sig_sl_long)
         float risk_qty = risk_per_unit > 0 ? (strategy.equity * risk_pct / 100) / risk_per_unit : na
-        strategy.entry("LONG", strategy.long, qty=risk_qty)
-        // TP1: kalanın %50'sini kapat, stop korunur
-        strategy.exit("XL", "LONG",
-         stop=sig_sl_long,
-         limit=sig_tp1_long,
-         qty_percent=50,
-         comment="TP1")
-        // TP2: kalanın TAMAMI kendi stop'uyla (çift non-OCA stop belirsizliği çözüldü)
-        if not na(sig_tp2_long)
-            strategy.exit("XT2", "LONG",
-             stop=sig_sl_long,
-             limit=sig_tp2_long,
-             comment="TP2")
-    sig_active_long := false  // round-5: pencere dışı olsa da sinyali tüket (stale carry-over yok)
+        strategy.entry("LONG", strategy.long, limit=sig_entry_long, qty=risk_qty)
+        g_orders += 1
+        if na(sig_tp2_long)
+            strategy.exit("XL", "LONG", stop=sig_sl_long, limit=sig_tp1_long, comment="TP1")
+        else
+            strategy.exit("XL", "LONG", stop=sig_sl_long, limit=sig_tp1_long, qty_percent=50, comment="TP1")
+            strategy.exit("XT2", "LONG", stop=sig_sl_long, limit=sig_tp2_long, comment="TP2")
+    sig_active_long := false
 
-// SHORT entry
+// SHORT — LİMİT @ near edge (zone altı)
 if sig_active_short and not na(sig_entry_short) and not na(sig_sl_short) and not na(sig_tp1_short)
     in_window = (time >= bt_date_start) and (time <= bt_date_end)
     if in_window and seg_ok
         risk_per_unit = math.abs(sig_entry_short - sig_sl_short)
         float risk_qty = risk_per_unit > 0 ? (strategy.equity * risk_pct / 100) / risk_per_unit : na
-        strategy.entry("SHORT", strategy.short, qty=risk_qty)
-        strategy.exit("XS", "SHORT",
-         stop=sig_sl_short,
-         limit=sig_tp1_short,
-         qty_percent=50,
-         comment="TP1")
-        if not na(sig_tp2_short)
-            strategy.exit("XT2S", "SHORT",
-             stop=sig_sl_short,
-             limit=sig_tp2_short,
-             comment="TP2")
+        strategy.entry("SHORT", strategy.short, limit=sig_entry_short, qty=risk_qty)
+        g_orders += 1
+        if na(sig_tp2_short)
+            strategy.exit("XS", "SHORT", stop=sig_sl_short, limit=sig_tp1_short, comment="TP1")
+        else
+            strategy.exit("XS", "SHORT", stop=sig_sl_short, limit=sig_tp1_short, qty_percent=50, comment="TP1")
+            strategy.exit("XT2S", "SHORT", stop=sig_sl_short, limit=sig_tp2_short, comment="TP2")
     sig_active_short := false
+
+// round-6 pullback timeout + fill reset (round-4 mantığı):
+// fill olunca (is_in_trade) her iki yöne cancel + sayaç reset; timeout aşılınca cancel.
+if is_in_trade and (sig_entry_bar_long > 0 or sig_entry_bar_short > 0)
+    strategy.cancel("LONG")
+    strategy.cancel("SHORT")
+    sig_entry_bar_long  := 0
+    sig_entry_bar_short := 0
+if sig_entry_bar_long > 0 and not is_in_trade and (bar_index - sig_entry_bar_long) > pullback_timeout_bars
+    strategy.cancel("LONG")
+    sig_entry_bar_long := 0
+if sig_entry_bar_short > 0 and not is_in_trade and (bar_index - sig_entry_bar_short) > pullback_timeout_bars
+    strategy.cancel("SHORT")
+    sig_entry_bar_short := 0
 
 // ═══════════════════════════════════════════════
 // VISUAL — SL/TP plot + OB boxes (indicator ile aynı)
@@ -577,6 +752,51 @@ if barstate.islastconfirmedhistory
     h1_color = htf_bias_up ? col_long : htf_bias_down ? col_short : col_trend
     table.cell(bias_table, 0, 0, h1_text, text_color=h1_color, text_size=size.small)
     table.cell_set_bgcolor(bias_table, 0, 0, color.new(#000000, 80))
+
+// ═══ ROUND-6 DIAGNOSTIC TABLE (Faz-0 ölçüm; Faz-1'de sökülür) ═══
+if barstate.islastconfirmedhistory
+    n = strategy.closedtrades
+    msum = 0.0
+    for i = 0 to (n > 0 ? n - 1 : 0)
+        if i < n
+            msum += strategy.closedtrades.profit(i)
+    mean = n > 0 ? msum / n : 0.0
+    ssq = 0.0
+    for i = 0 to (n > 0 ? n - 1 : 0)
+        if i < n
+            d = strategy.closedtrades.profit(i) - mean
+            ssq += d * d
+    sd = n > 1 ? math.sqrt(ssq / (n - 1)) : 0.0
+    sharpe = sd > 0 ? mean / sd : 0.0
+    pf = strategy.grossloss > 0 ? strategy.grossprofit / strategy.grossloss : 0.0
+    winp = n > 0 ? strategy.wintrades / n * 100 : 0.0
+    netp = strategy.netprofit / strategy.initial_capital * 100
+    ddp = strategy.max_drawdown / strategy.initial_capital * 100
+    var table gt = table.new(position.middle_right, 2, 12, border_width=1, frame_color=color.gray, bgcolor=color.new(color.black, 0))
+    table.cell(gt, 0, 0, "R6", text_color=color.yellow)
+    table.cell(gt, 1, 0, syminfo.ticker + "/" + bt_segment, text_color=color.yellow)
+    table.cell(gt, 0, 1, "closedlegs", text_color=color.white)
+    table.cell(gt, 1, 1, str.tostring(n), text_color=color.white)
+    table.cell(gt, 0, 2, "orders", text_color=color.white)
+    table.cell(gt, 1, 2, str.tostring(g_orders), text_color=color.white)
+    table.cell(gt, 0, 3, "win%", text_color=color.white)
+    table.cell(gt, 1, 3, str.tostring(winp, "0.0"), text_color=color.white)
+    table.cell(gt, 0, 4, "PF", text_color=color.aqua)
+    table.cell(gt, 1, 4, str.tostring(pf, "0.00"), text_color=color.aqua)
+    table.cell(gt, 0, 5, "net%", text_color=color.white)
+    table.cell(gt, 1, 5, str.tostring(netp, "0.0"), text_color=color.white)
+    table.cell(gt, 0, 6, "maxDD%", text_color=color.white)
+    table.cell(gt, 1, 6, str.tostring(ddp, "0.0"), text_color=color.white)
+    table.cell(gt, 0, 7, "sharpe", text_color=color.white)
+    table.cell(gt, 1, 7, str.tostring(sharpe, "0.000"), text_color=color.white)
+    table.cell(gt, 0, 8, "gprofit", text_color=color.white)
+    table.cell(gt, 1, 8, str.tostring(strategy.grossprofit, "0"), text_color=color.white)
+    table.cell(gt, 0, 9, "gloss", text_color=color.white)
+    table.cell(gt, 1, 9, str.tostring(strategy.grossloss, "0"), text_color=color.white)
+    table.cell(gt, 0, 10, "t1src", text_color=color.white)
+    table.cell(gt, 1, 10, str.tostring(last_t1src), text_color=color.white)
+    table.cell(gt, 0, 11, "t2src", text_color=color.white)
+    table.cell(gt, 1, 11, str.tostring(last_t2src), text_color=color.white)
 
 // ═══════════════════════════════════════════════
 // ALERTS — strategy'de alertcondition() etkisizdir (derleyici warning'i);
