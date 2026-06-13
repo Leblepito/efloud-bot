@@ -1,7 +1,7 @@
 # LLTODO — Epic State
 
 > Append-only. Her durum geçişi yeni satır olarak eklenir. Eski satır silinmez.
-> Son güncelleme: 2026-06-11 @claude (önceki: 2026-06-10 @hermes)
+> Son güncelleme: 2026-06-13 @claude (önceki: 2026-06-11 @claude)
 
 ---
 
@@ -23,8 +23,8 @@
 
 ### Aktif Durum
 
-**Durum:** `IN_PROGRESS` — FAZ 3 (2026-06-11)
-**Sonraki adım:** T-003 IN_PROGRESS (@hermes) — iskelet `feat/p001-t003-strategy`'de (draft PR); Hermes review bulgularını + backtest validasyonunu patch akışıyla tamamlayacak → G-T3/G-T4..G-T6 gate'leri @claude
+**Durum:** `IN_PROGRESS` — FAZ 3, T-003 GATE_RUN_2 FAIL (2026-06-13)
+**Sonraki adım:** **Round-5 (@hermes patch):** R3 gerçek market-entry (sinyal barı kapanışında market entry; OB-kenarı limit yerine — ~%59 expire'ı çözer) + `bt_date_end` default fix (Bulgu #1) + OOS-split kodda implement (Bulgu #2, G-T4b'yi gerçek kılar). Sonra gate re-run (@claude TV). #194 draft kalır — MERGE/IMPL_READY DEĞİL. Detay: REPORT-T-003-gate-run-2.md + plan v1.4 §6 kaçış maddesi (round-5 konsensüsü gerekebilir).
 
 ### Heartbeat
 
@@ -39,6 +39,7 @@
 2026-06-11  REVIEW_ROUND_2   @claude  Hermes round-2 patch'i uygulandı (60e6421: N3+qty_percent+in_window+slippage; expiry ölü kod → 39df356 Claude fix) + compile 0 hata. smc-strategy-reviewer: **REQUEST_CHANGES** — parite APPROVE, execution'da 3 BLOCKING (F1 qty basis ≈%75 yönetim, F2 non-OCA çift stop, F3 notional≠risk-bazlı sizing) + 2 HIGH (F5 karşı-yön pending iptal edilmiyor, F6 pending'ken sinyal state ezilebilir). G-T4..G-T6 bunlar kapanmadan koşulmaz. Bulgular PR #194 yorumunda; ball @hermes (round-3).
 2026-06-11  T-003 CODE_READY @claude  Round-3 (Hermes b1bd38b, sha256 ✅): F1-F6 tamamı kapandı. Compile 0 hata 0 marker (596 satır). smc-strategy-reviewer: **APPROVE_WITH_NITS — gate'ler koşulabilir** (G-T4/G-T5 sağlam; G-T6 OOS-Sharpe spec §7 intrabar-caveat güven bandıyla raporlanacak). Nit'ler aynı turda kapandı. Kalan: G-T3 resmi compile + G-T4..G-T6 backtest koşuları + rapor (@claude TV Strategy Tester) + alert template → T-003 DONE → FAZ 4 UR-001.
 2026-06-11  GATE_RUN_1       @claude  **G-T3 PASS · G-T4 FAIL (trade_count=0; BTC+ETH perp 15m ~4.3 ay) · G-T5/G-T6 N/A.** Kök neden: Wave-1 daraltması OB-aktif'i ZORUNLU ön koşul yaptı (bot'ta OB confluence faktörü, sinyal kaynağı yapı kırılımı) + 5-ardışık-mum × 1.5×ATR × ≤5-bar pencere × bias × conf≥55 birleşimi → ~1-2 sinyal/4ay/sembol; o da limit-retrace dolmadan expire. Rapor: LLTODO/reports/REPORT-T-003-gate-run-1.md (R1/R2/R3 revizyon seçenekleri; R1 önerilen = OB'yi faktöre indir, tetik yapı kırılımı). **Plan §6 kaçış maddesi devrede → revizyon konsensüsü @hermes+@claude (plan v1.4) → kod revize → gate re-run (çoklu-sembol agregasyonlu).** Yan bulgu: görsel katman her bar yeniden çiziyor (kozmetik, revizyonda düzelir); TV internal-api strateji okuma tool'ları kırık (screenshot+labels ile doğrulandı).
+2026-06-13  GATE_RUN_2       @claude  **G-T3 PASS · G-T4a PASS (trade_count=168 closed-leg agg ≈84 pozisyon, 5 perp 15m; allow_ob_less=true) · G-T4b OOS-Sharpe DEĞERLENDİRİLEMEZ (bt_oos_pct ÖLÜ input — kodda IS/OOS bölme yok) · G-T5 PASS (inverted=0) · G-T6 PASS (subRR=0) · WR/PF/Fill FAIL.** R1+R3 trade'i 0→168 çıkardı AMA kalite gate'leri geçmiyor: WR ~%10-15 (sadece ETH %66.7), agg PF 1.44<1.5 (XRP PF 0.38 net −%2.0 kaybeden), limit-fill ~%41 (9-60 değişken; ETH %9 → sinyallerin >%59'u expire). MaxDD ≤%2.6 ✅. Metrik: ölçüm-amaçlı diagnostik build (committed mantık değişmedi, G-T3 EXACT committed'da; `table.new`+sayaç → data_get_pine_tables; TV internal-api kırık). **Yan-bulgu (LATENT BUG): bt_date_end default=2025 → yayınlanan strateji 2026 verisinde 0 trade.** Rapor: LLTODO/reports/REPORT-T-003-gate-run-2.md. **NET: FAIL → round-5 (gerçek market-entry R3; F-01 BLOCKING'e yükselir) + bt_date_end & OOS-split defekt fix'leri. #194 MERGE EDİLMEZ / IMPL_READY DEĞİL.** Ball @hermes (round-5 patch).
 ```
 
 ### Review Özeti
