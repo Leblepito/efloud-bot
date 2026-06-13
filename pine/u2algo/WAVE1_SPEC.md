@@ -229,3 +229,47 @@ Strategy(`calc_on_every_tick=false`) bar kapanışında hesaplanır. Limit order
 | 2026-06-11 | T-003 | Ön-compile fix ×3 (tuple destructuring, line.new named-arg, alert()) + §8 başlık restore | @claude |
 | 2026-06-11 | T-003 §7a-§7d | R1 sinyal gevşetme (ob_active_window_bars=15, allow_ob_less) + R3 fill güvenilirliği (limit_expiry_bars=40, extended_expiry_in_trend) + çoklu-sembol gate notu + F4 caveat genişletme. SENKRON kuralı 3 dosyaya | @claude (R1+R3 konsensüs, Plan v1.4) |
 | 2026-06-13 | T-003 §7b ROUND-5 | Limit-entry KALDIRILDI → market entry (entry=close, `process_orders_on_close=true`); `limit_expiry_bars`/`extended_expiry_in_trend`/F5-F6 cancel/`f_entry_price`/`sig_entry_bar_*` + unused OB vars silindi. `bt_date` default fix (2020/2035, latent bug). `bt_segment` OOS-split (G-T4b). Indicator f_entry_price→close SENKRON. **GATE_RUN_3: FAIL** (market entry → edge yok, agg PF 0.71, 4/5 kaybeden). | @claude (round-5, Plan §6 eskalasyonu) |
+| 2026-06-13 | §9 INDICATOR v1.2.0 | **Indicator-only ship** kararı: round-6 görsel detektörleri (FVG/EQH-EQL/Breaker/OB box) `wave1_signals.pine`'a port edildi. **G-T2 compile PASS (0 hata) + TV'de render-verified** (screenshot: FVG mor zone'lar, EQH/EQL turuncu likidite çizgileri, HH/LL, 1H EMA20, bias tablosu hepsi çiziliyor). Sinyal/SL/TP **tamamen inline** yeniden yazıldı (UDF YOK) — bkz. §9 RE10045 by-pass. | @claude (indicator-only ship) |
+
+---
+
+## 9. INDICATOR v1.2.0 — Round-6 Detektör Portu + RE10045 By-pass (2026-06-13)
+
+**Dosya:** `pine/u2algo/wave1_signals.pine` (~448 satır). **Karar:** GATE_RUN_4-prelim NO-GO sonrası
+(strateji shippable değil), lead-magnet **indicator-only** ship edilir. Indicator'ın değeri
+**görsel SMC tespiti** (zone/likidite/FVG/breaker + SL/TP görseli) — kompleks engine-TP değil.
+
+### 9a. Port edilen round-6 detektörleri (strategy SENKRON)
+- **OB + Breaker zone array** (engine smc.py:200-256): OB tespiti → `ob_top/bot/dir/bar/brk` array; close zone'dan geçince yön flip + "BB" breaker etiketi. OB kutuları çizilir.
+- **FVG array + mitigation** (engine smc.py:38-44): `low>high[2]` / `high<low[2]`; mitigation takibi; FVG kutuları çizilir.
+- **EQH/EQL likidite** (engine smc.py pairwise): swing array'lerinden eşit-seviye (±%0.1) tespiti; son bar'da turuncu likidite çizgileri (max 8'er).
+- Swing (HH/LL), 1h EMA20 bias, confluence (7-faktör 0-100), 1h swing (B1 repaint-fix) — T-001/T-002'den korundu.
+
+### 9b. ⚠️ RE10045 RUNTIME HATASI — KÖK NEDEN + BY-PASS
+İlk port (strategy'nin user-defined fonksiyonlarını — `f_engine_tp`/`f_nearest_zone`/`f_calc_sl`/`f_eq_levels` — birebir kullanan) TV'de **compile PASS (0 hata) ama RUNTIME `RE10045`** verdi (chart'ta kırmızı "!", hiçbir çizim render olmuyor). Sistematik bisect ile lokalize edildi:
+
+| Test | Sonuç |
+|---|---|
+| Tüm çizimler kaldırıldı (sadece hesaplama) | ❌ RE10045 — hata çizimde değil |
+| `max_bars_back=500` eklendi | ❌ RE10045 |
+| Sinyal bloğu son-bar'a gate'lendi | ❌ RE10045 (kümülatif çağrı değil) |
+| `g_eqh` var-array reassign → strategy-internal pattern | ❌ RE10045 |
+| **Engine fonksiyon ÇAĞRILARI kaldırıldı** | ✅ **TEMİZ** → hata UDF'lerde |
+| `f_calc_sl` / `f_engine_tp`+`f_eq_levels` / `f_nearest_zone` **izole tek tek** | ✅ üçü de TEMİZ |
+
+**Bulgu:** Üç UDF de izole TEMİZ; hata YALNIZ üçü + gerçek detection tam-script bağlamında birlikteyken. `RE10045` TradingView'de dokümante DEĞİL (Pine docs sadece RE10139=memory, RE10143=historical-buffer listeler). Tam-script ölçeğinde UDF+collection etkileşimine bağlı bir Pine iç limiti olduğu değerlendirildi.
+
+**By-pass:** Indicator **tamamen inline** yazıldı — **user-defined function YOK**. Sinyal SL/TP sadeleştirildi:
+- entry = en yakın aktif OB|BB near-edge (inline tarama, aday-array yok)
+- SL = `ta.lowest/ta.highest(±sl_lb) ± ATR buffer` (her bar; N3 %0.1 taban korundu)
+- TP1 = en yakın 1h swing (RR sağlıyorsa) yoksa RR-projeksiyon; TP2 = fib(1.618) projeksiyon
+- Çok-adaylı engine-TP (EQH/EQL+FVG-aday seçimi) DROP edildi → bu strategy'ye özgü; lead-magnet için 1h-swing+RR yeterli.
+
+### 9c. SENKRON durumu (divergence dokümante)
+- ✅ Input isimleri + default'lar strategy ile AYNI (`ob_body_mult`, `conf_thresh`, `sl_lb`, `sl_atr_m`, `min_rr`, `fib_tp2`, `ob_active_window_bars` + görsel toggle'lar).
+- ✅ Detektörler (OB/Breaker/FVG/EQH-EQL/swing/confluence/1h-bias) strategy ile AYNI mantık.
+- ⚠️ **Divergence:** indicator sinyal SL/TP = sadeleştirilmiş inline; strategy = çok-adaylı engine-TP UDF'leri. Lead-magnet kapsam kararı (strateji shelved/NO-GO).
+- ⚠️ **Strateji notu:** strategy aynı UDF'leri kullanıyor → güncel TV'de RE10045 verip vermediği DOĞRULANMALI (eğer veriyorsa GATE_RUN verileri yeniden-değerlendirilmeli). Strateji zaten NO-GO/rafta — düşük öncelik.
+
+### 9d. Yayın (publish)
+TV publish = MANUEL operatör adımı (MCP publish otomasyonu kırık, bkz. [[reference_tradingview_mcp_launch]]). Pine TV cloud'a kaydedildi (`pine_save`). Repo source-of-truth: `pine/u2algo/wave1_signals.pine`.
