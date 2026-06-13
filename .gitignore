@@ -87,3 +87,4 @@ graphify-out/
 
 
 .env.supabase
+node_modules

@@ -55,6 +55,8 @@
 | 2026-05-28 | Claude Opus 4.7 | code-review (Hermes mode) | Reviewer follow-up fixes on #96-98 | ✅ | kısa | İki minor: research_runs docstring monotonic-claim düzeltmesi + isinstance guards (#97), verdictStyle fallback (#98). Hepsi aynı PR'lara amend commit. |
 | 2026-05-28 | Claude Opus 4.7 | efloud-risk-ops-reviewer + deploy | PR #99 live deploy (SL/TP delivery fix) | ✅ | uzun | Risk-ops APPROVE-WITH-CONDITIONS, 13/13 new tests yeşil. Merge bfd2724 → VPS git pull 58041c9→bfd2724 → docker compose -f docker-compose.prod.yml up -d --build (recreate). Container `Started 14:02:10 UTC`, healthcheck 503 = bot trading loop kapalı (EFLOUD_AUTOSTART=0 design — operator manuel başlatacak). |
 | 2026-05-31 | Antigravity (Orchestrator) | test-driven-development + TradingView MCP | Trade-Horizon Profiles & TV Desktop MCP Bridge | ✅ | orta | Trade-Horizon Profiles spec, resolution logic, 14 green unit tests, efloud_signals_v1.pine compiled with zero errors in TV Desktop via MCP bridge. |
+| 2026-06-13 | Antigravity (SMR) | git-rebase-conflict-resolution | Frontend Dashboard Redesign Rebase | ✅ | orta | Rebased claude/frontend-ultraplan-review-BMuiu onto master, resolved InteractiveChart.tsx and tailwind.config.ts conflicts, built successfully (Next.js build green) and force-pushed. |
+
 
 
 ## Skill Etkinlik Özeti (Aylık Güncellenir)
