@@ -36,7 +36,8 @@ def violations() -> List[str]:
     else:
         text = state_path.read_text(encoding="utf-8")
         valid = {"DRAFT", "REVIEW_OPEN", "CHANGES_REQUESTED",
-                 "CONSENSUS_REACHED", "IN_PROGRESS", "ULTRA_REVIEW", "DONE"}
+                 "CONSENSUS_REACHED", "SPLIT_AGREED", "IN_PROGRESS",
+                 "ULTRA_REVIEW", "CROSS_TEST", "TEST_CONSENSUS", "DONE"}
         found = set()
         for line in text.splitlines():
             for st in valid:
@@ -80,6 +81,13 @@ def violations() -> List[str]:
             if "tasks" in root and "IN_PROGRESS" in root:
                 if not re.match(r"^T-\d{3}-.+\.md$", fname):
                     v.append(f"[R3] Bad task name: {root}/{fname} (expected T-NNN-slug.md)")
+            # v3 (2026-06-13): split + cross-test artefaktları
+            if "splits" in root:
+                if not re.match(r"^S-\d{3}-.+\.md$", fname):
+                    v.append(f"[R3] Bad split name: {root}/{fname} (expected S-NNN-slug.md)")
+            if root.endswith("tests") and fname != "test_lltodo_lint.py":
+                if not re.match(r"^X-\d{3}-.+\.md$", fname):
+                    v.append(f"[R3] Bad cross-test name: {root}/{fname} (expected X-NNN-tester.md)")
 
     # ── Rule 4: Plan files have required sections ──
     plans_dir = LLTODO_DIR / "plans"

@@ -50,3 +50,20 @@ lltodo(<epic>): <kısa açıklama>
 6. STATE.md + SCOREBOARD.md güncelle
 7. Lint: 8/8 yeşil
 ```
+
+---
+
+## Consensus v3 (2026-06-13 @claude) — bkz. `LLTODO/CONSENSUS.md`
+
+Pipeline: `PLAN → PLAN-CONSENSUS → SPLIT → IMPLEMENT → ULTRAREVIEW → CROSS-TEST → TEST-CONSENSUS → DONE`
+
+Senin (Hermes) consensus rolün:
+- **SPLIT yazarı:** Plan CONSENSUS_REACHED olunca `splits/S-XXX-<epic>.md` yaz (template:
+  `templates/split.md`). Her görevi tek `owner`'a ata + `tester` (owner'dan farklı) belirle +
+  **her atamanın tek cümlelik gerekçesini yaz**. 3/3 ACK → SPLIT_AGREED.
+- **Implementor:** Yalnızca `owner == @hermes` görevleri claim+impl et. **Self-only:** sana açıkça
+  atanmamış işi yapma. İş bitince `reports/hermes/YYYY-MM-DD-*.md` raporu yaz + sıradaki adımı
+  self-owned BACKLOG görevi olarak ekle.
+- **Cross-tested:** Senin implementasyonun @claude veya @gemini tarafından `tests/X-XXX-*.md` ile
+  test edilir (sen kendi işini test etmezsin).
+- **Self-scheduling:** repo içi cron yok; tetikleme operatör veya `/loop`. Sıradaki adımı BACKLOG'a yaz.
