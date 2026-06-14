@@ -1,52 +1,50 @@
 //@version=6
 // ═══════════════════════════════════════════════
-// u2algo Wave-1 — SMC Indicator (P-001 / T-001)
+// u2algo Wave-1 — SMC Indicator (P-001 / T-001..T-003)
 // 15m trigger + 1h bias overlay
-// v1.1.0 — T-002: MTF confluence + SL/TP hesaplama
-// v1.1.1 — G-T2: compile fix ×2 (TV Pine Editor doğrulandı — 0 hata 0 marker)
+// v1.2.0 — round-6 SENKRON-port: FVG + EQH/EQL + Breaker zone detektörleri
+//          (görsel) + zone-pullback entry + R:R/swing TP görseli.
+//          INDICATOR emir VERMEZ — sadece çizer.
+// v1.2.1 — PR #198 review-fix: OB cnt>=1 (engine SENKRON, smc.py:216 — tam-5 değil),
+//          confluence near-swing window-gate (bayat +15 fix), EQH/EQL 5-komşu
+//          penceresi (smc.py:311), FVG mitigation no-op + dead array temizliği.
 // ═══════════════════════════════════════════════
 //
-// © u2algo — Efloud SMC Core
-// Pine Script v6, NO legacy study()/ema()
-// INDICATOR (free, lead magnet)
+// © u2algo — Efloud SMC Core · Pine Script v6 · INDICATOR (free, lead magnet)
 // STRATEGY version: pine/u2algo/wave1_strategy.pine (premium, T-003)
 //
-// NOT: pine/efloud_signals.pine (SMC v2 sadık port, compile-verified
-// 2026-05-30, PR #148 TV publish temeli) AYRI bir üründür — bu dosya
-// onu DEĞİŞTİRMEZ. Wave-1 = u2algo pazarlama indikatörü (daraltılmış kapsam).
+// ⚠️ TASARIM NOTU (RE10045 by-pass): Bu indicator tüm SMC mantığını **inline**
+//    hesaplar — user-defined function YOK. Strategy'nin (wave1_strategy.pine)
+//    çok-adaylı engine-TP/zone fonksiyonları (f_engine_tp/f_nearest_zone/
+//    f_calc_sl/f_eq_levels) tam-script bağlamında TradingView'de RE10045 runtime
+//    hatası veriyordu (her biri izole TEMİZ; hata yalnız hepsi + gerçek detection
+//    birlikteyken). Lead-magnet'in değeri görsel zone/likidite/FVG/breaker tespiti
+//    olduğundan, sinyal SL/TP mantığı sadeleştirilip inline edildi. SENKRON: input
+//    isimleri + detektörler (OB/FVG/EQH-EQL/Breaker) strategy ile aynı.
+//
+// NOT: pine/efloud_signals.pine (SMC v2 sadık port) AYRI üründür — değiştirilmez.
 
 indicator(
  "u2algo SMC — Wave 1",
  overlay=true,
  format=format.price,
+ max_bars_back=500,
  max_labels_count=500,
- max_boxes_count=200,
- max_lines_count=200
+ max_boxes_count=500,
+ max_lines_count=500
 )
 
 // ═══════════════════════════════════════════════
-// INPUTS — Plan §3d parameter mapping
+// INPUTS — strategy ile SENKRON
 // ═══════════════════════════════════════════════
-
-// Swing detection — hardcoded lookback=4 per Plan §2a
-// NOTE: ta.pivothigh/pivotlow require simple int; input.int is series int.
-// We embed the lookback values directly and expose a group label for docs.
-swing_lb_label = "Swing Lookback (fixed at 4 per Plan §2a)"
-swing_lb_left  = 4
-swing_lb_right = 4
-
-// Order Block
 ob_seq_group   = "Order Block"
 ob_seq_default = 5
 ob_body_mult   = input.float(1.5, "OB Body/ATR Mult", minval=0.5, maxval=5.0, step=0.1,
  tooltip="Breakout body must exceed this × ATR(14)", group=ob_seq_group)
 
-// T-001: conf_thresh (T-002'de kullanılacak)
 confluence_group = "Confluence & Risk"
 conf_thresh = input.int(55, "Confluence Threshold", minval=0, maxval=100,
  tooltip="Minimum confluence score for signal validity (live-prod: 80)", group=confluence_group)
-
-// T-002: SL/TP inputs
 sl_lb     = input.int(20, "SL Lookback Bars", minval=5, maxval=50,
  tooltip="Number of bars to scan for structural SL level", group=confluence_group)
 sl_atr_m  = input.float(0.5, "SL ATR Buffer", minval=0.1, maxval=2.0, step=0.1,
@@ -55,73 +53,57 @@ min_rr    = input.float(1.5, "Min R:R", minval=1.0, maxval=5.0, step=0.1,
  tooltip="Minimum (TP1−entry)/(entry−SL) ratio (live-prod: 1.8)", group=confluence_group)
 fib_tp2   = input.float(1.618, "Fib TP2 Extension", minval=1.0, maxval=3.0, step=0.1,
  tooltip="Fibonacci extension from swing range for TP2 target", group=confluence_group)
-// Visual
-// (REVIEW B2 fix: visual_group, kullanıldığı show_sltp input'undan ÖNCE
-//  tanımlanmalı — Pine yukarıdan aşağı derler, forward-ref compile hatasıydı)
+
 visual_group = "Visual"
-show_sltp = input.bool(true, "Show SL/TP Levels",
- tooltip="Plot dashed SL/TP lines on chart", group=visual_group)
-use_cb_palette = input.bool(false, "Colorblind-Friendly Palette",
- tooltip="Alternative palette for red/green color blindness", group=visual_group)
+show_sltp = input.bool(true, "Show SL/TP Levels", group=visual_group,
+ tooltip="Plot dashed SL/TP lines + entry marker on signal bar")
+show_fvg = input.bool(true, "Show FVG Zones", group=visual_group,
+ tooltip="Fair Value Gap kutuları (engine smc.py:38-44 portu)")
+show_liquidity = input.bool(true, "Show EQH/EQL Liquidity", group=visual_group,
+ tooltip="Equal Highs/Lows likidite seviyeleri (engine smc.py pairwise)")
+show_breaker = input.bool(true, "Show Breaker Flips", group=visual_group,
+ tooltip="OB kırılınca (close zone'dan geçince) breaker (BB) işareti")
+use_cb_palette = input.bool(false, "Colorblind-Friendly Palette", group=visual_group)
+
+r1_group = "T-003 R1 — Signal Tuning"
+ob_active_window_bars = input.int(15, "OB Active Window (bars)", minval=1, maxval=50,
+ tooltip="OB-aktif penceresi (eski: hardcoded 5). 3× daha uzun hafıza — strategy SENKRON.",
+ group=r1_group)
 
 // ═══════════════════════════════════════════════
 // COLOR PALETTE — Plan §4
 // ═══════════════════════════════════════════════
-
-// Dark theme (default)
 col_long  = use_cb_palette ? color.new(#4488FF, 0) : color.new(#00FF88, 0)
 col_short = use_cb_palette ? color.new(#FF8800, 0) : color.new(#FF4455, 0)
 col_sl    = use_cb_palette ? color.new(#FF0000, 0) : color.new(#FF6644, 0)
 col_tp1   = use_cb_palette ? color.new(#00CC44, 0) : color.new(#44DD88, 0)
 col_tp2   = use_cb_palette ? color.new(#AA44FF, 0) : color.new(#4488FF, 0)
 col_ob    = color.new(#FFDD44, 80)
+col_bb    = color.new(#FF66CC, 70)
 col_swing = color.new(#CCCCCC, 0)
-col_fvg   = color.new(#AA66FF, 40)
+col_fvg   = color.new(#AA66FF, 78)
+col_liq   = color.new(#FFAA00, 30)
 col_trend = color.new(#666666, 60)
 
 // ═══════════════════════════════════════════════
-// ATR (14-period, for OB body check)
+// ATR + 1H BIAS
 // ═══════════════════════════════════════════════
-
-atr14  = ta.atr(14)
-
-// ═══════════════════════════════════════════════
-// 1H BIAS — Higher-Timeframe Trend via request.security()
-// ═══════════════════════════════════════════════
-
-// Use lookahead_off to prevent repaint from higher TF
+atr14 = ta.atr(14)
 htf_sym = syminfo.tickerid
-htf_tf  = "60"  // 1 hour
-
-// Get 1h close (confirmed bars only). OHLC'nin kalanı T-002'de (CHoCH/BOS)
-// gerektiğinde eklenir — kullanılmayan request.security çağrısı tutulmaz.
+htf_tf  = "60"
 htf_close = request.security(htf_sym, htf_tf, close, lookahead=barmerge.lookahead_off)
-
-// Simple 1h bias: 20-bar EMA slope as directional bias
-htf_ema20      = ta.ema(htf_close, 20)
-htf_bias_up    = htf_close > htf_ema20
-htf_bias_down  = htf_close < htf_ema20
+htf_high  = request.security(htf_sym, htf_tf, high,  lookahead=barmerge.lookahead_off)
+htf_low   = request.security(htf_sym, htf_tf, low,   lookahead=barmerge.lookahead_off)
+htf_ema20 = ta.ema(htf_close, 20)
+htf_bias_up   = htf_close > htf_ema20
+htf_bias_down = htf_close < htf_ema20
 
 // ═══════════════════════════════════════════════
-// SWING DETECTION — Plan §2a, Python swings() method
+// SWING DETECTION (lb=4, repaint-safe: lb-bar gecikmeli)
 // ═══════════════════════════════════════════════
-//
-// Python: for i in range(lb, n-lb):
-//   if all(h[i] > h[i-j] and h[i] > h[i+j] for j in range(1, lb+1)):
-//     → swing HIGH
-//   if all(l[i] < l[i-j] and l[i] < l[i+j] for j in range(1, lb+1)):
-//     → swing LOW
-//
-// In Pine: manual check using history reference operator [N]
-// lb=4 → check 4 bars left AND 4 bars right.
-// Only evaluate on barstate.isconfirmed to avoid repaint.
-
-lb = swing_lb_left  // 4
-
-// --- Swing High ---
+lb = 4
 is_swing_high = false
 swing_high_val = 0.0
-
 if barstate.isconfirmed and bar_index >= lb * 2
     is_swing_high := true
     for j = 1 to lb
@@ -130,13 +112,10 @@ if barstate.isconfirmed and bar_index >= lb * 2
             break
     if is_swing_high
         swing_high_val := high[lb]
-
 new_swing_high = is_swing_high
 
-// --- Swing Low ---
 is_swing_low = false
 swing_low_val = 0.0
-
 if barstate.isconfirmed and bar_index >= lb * 2
     is_swing_low := true
     for j = 1 to lb
@@ -145,16 +124,12 @@ if barstate.isconfirmed and bar_index >= lb * 2
             break
     if is_swing_low
         swing_low_val := low[lb]
-
 new_swing_low = is_swing_low
 
-// Store most recent swing high/low prices and bar indices for OB proximity check
 var float last_sh_price = na
 var int   last_sh_bar   = na
 var float last_sl_price = na
 var int   last_sl_bar   = na
-
-// Only update when confirmed
 if barstate.isconfirmed
     if new_swing_high
         last_sh_price := swing_high_val
@@ -163,33 +138,41 @@ if barstate.isconfirmed
         last_sl_price := swing_low_val
         last_sl_bar   := bar_index - lb
 
-// ═══════════════════════════════════════════════
-// ORDER BLOCK DETECTION — Plan §2a, Python order_blocks() method
-// ═══════════════════════════════════════════════
+// EQH/EQL swing history (engine smc.py pairwise) — round-6
+var array<float> sh_arr = array.new<float>()
+var array<float> sl_arr = array.new<float>()
+int SW_CAP = 30
+if barstate.isconfirmed and new_swing_high
+    array.push(sh_arr, swing_high_val)
+    if array.size(sh_arr) > SW_CAP
+        array.shift(sh_arr)
+if barstate.isconfirmed and new_swing_low
+    array.push(sl_arr, swing_low_val)
+    if array.size(sl_arr) > SW_CAP
+        array.shift(sl_arr)
 
-// Bar classification
-bar_bull  = close > open
-bar_bear  = close < open
-bar_body  = math.abs(close - open)
-
-// Breakout condition: body > ob_body_mult × ATR(14)
+// ═══════════════════════════════════════════════
+// ORDER BLOCK + BREAKER ZONE ARRAY (engine smc.py:200-256) — round-6
+// ═══════════════════════════════════════════════
+bar_bull = close > open
+bar_bear = close < open
+bar_body = math.abs(close - open)
 is_breakout_body = bar_body > ob_body_mult * atr14
 
-// --- Bullish OB ---
-// Current bar: BULLISH BREAKOUT (close > open, body > threshold)
-// Previous ob_seq bars: BEARISH (close < open), consecutive
+var array<float> ob_top = array.new<float>()
+var array<float> ob_bot = array.new<float>()
+var array<int>   ob_dir = array.new<int>()   // 1=demand(LONG), -1=supply(SHORT)
+var array<int>   ob_bar = array.new<int>()
+var array<bool>  ob_brk = array.new<bool>()
+int OB_CAP = 30
+
 bull_breakout = barstate.isconfirmed and bar_bull and is_breakout_body
-
-var int   bullish_ob_seq_count = 0
-var float bullish_ob_top       = na
-var float bullish_ob_bot       = na
-var int   bullish_ob_bar       = na
-var bool  bullish_ob_near_swing = false  // T-002: confluence skorlamasında kullanılır
-
+var int  bullish_ob_bar = na
+var bool bullish_ob_near_swing = false
 if bull_breakout
     cnt = 0
-    hi  = 0.0
-    lo  = 1e10
+    hi = 0.0
+    lo = 1e10
     for k = 1 to ob_seq_default
         if bar_index - k >= 0 and close[k] < open[k]
             ct_i = open[k]
@@ -203,42 +186,35 @@ if bull_breakout
             cnt += 1
         else if cnt > 0
             break
-    // Plan §2a fidelity: OB = TAM ob_seq (5) ardışık ters yönlü mum gerektirir
-    if cnt == ob_seq_default and hi > lo
-        // Check near swing proximity (within ~30 bars, 1.5% price)
+    if cnt >= 1 and hi > lo
         ns = false
         if not na(last_sl_price)
-            dist_pct_i = math.abs(lo - last_sl_price) / last_sl_price
-            bars_since_sl_i = bar_index - last_sl_bar
-            ns := dist_pct_i < 0.015 and bars_since_sl_i > 0 and bars_since_sl_i < 30
-        bullish_ob_seq_count := cnt
-        bullish_ob_top       := hi
-        bullish_ob_bot       := lo
-        bullish_ob_bar       := bar_index - cnt
+            dpc = math.abs(lo - last_sl_price) / last_sl_price
+            bsl = bar_index - last_sl_bar
+            ns := dpc < 0.015 and bsl > 0 and bsl < 30
+        bullish_ob_bar := bar_index - cnt
         bullish_ob_near_swing := ns
-        // Draw OB box
-        box.new(
-         bullish_ob_bar, bullish_ob_top,
-         bar_index,       bullish_ob_bot,
-         col_ob, 1, line.style_solid,
-         bgcolor=col_ob
-        )
+        array.push(ob_top, hi)
+        array.push(ob_bot, lo)
+        array.push(ob_dir, 1)
+        array.push(ob_bar, bar_index - cnt)
+        array.push(ob_brk, false)
+        if array.size(ob_top) > OB_CAP
+            array.shift(ob_top)
+            array.shift(ob_bot)
+            array.shift(ob_dir)
+            array.shift(ob_bar)
+            array.shift(ob_brk)
+        box.new(bullish_ob_bar, hi, bar_index, lo,
+         border_color=col_ob, border_width=1, border_style=line.style_solid, bgcolor=col_ob)
 
-// --- Bearish OB ---
-// Current bar: BEARISH BREAKOUT (close < open, body > threshold)
-// Previous ob_seq bars: BULLISH (close > open), consecutive
 bear_breakout = barstate.isconfirmed and bar_bear and is_breakout_body
-
-var int   bearish_ob_seq_count = 0
-var float bearish_ob_top       = na
-var float bearish_ob_bot       = na
-var int   bearish_ob_bar       = na
-var bool  bearish_ob_near_swing = false  // T-002: confluence skorlamasında kullanılır
-
+var int  bearish_ob_bar = na
+var bool bearish_ob_near_swing = false
 if bear_breakout
     cnt = 0
-    hi  = 0.0
-    lo  = 1e10
+    hi = 0.0
+    lo = 1e10
     for k = 1 to ob_seq_default
         if bar_index - k >= 0 and close[k] > open[k]
             ct_i = close[k]
@@ -252,59 +228,66 @@ if bear_breakout
             cnt += 1
         else if cnt > 0
             break
-    // Plan §2a fidelity: OB = TAM ob_seq (5) ardışık ters yönlü mum gerektirir
-    if cnt == ob_seq_default and hi > lo
+    if cnt >= 1 and hi > lo
         ns = false
         if not na(last_sh_price)
-            dist_pct_i = math.abs(hi - last_sh_price) / last_sh_price
-            bars_since_sh_i = bar_index - last_sh_bar
-            ns := dist_pct_i < 0.015 and bars_since_sh_i > 0 and bars_since_sh_i < 30
-        bearish_ob_seq_count := cnt
-        bearish_ob_top       := hi
-        bearish_ob_bot       := lo
-        bearish_ob_bar       := bar_index - cnt
+            dpc = math.abs(hi - last_sh_price) / last_sh_price
+            bsh = bar_index - last_sh_bar
+            ns := dpc < 0.015 and bsh > 0 and bsh < 30
+        bearish_ob_bar := bar_index - cnt
         bearish_ob_near_swing := ns
-        box.new(
-         bearish_ob_bar, bearish_ob_top,
-         bar_index,       bearish_ob_bot,
-         col_ob, 1, line.style_solid,
-         bgcolor=col_ob
-        )
+        array.push(ob_top, hi)
+        array.push(ob_bot, lo)
+        array.push(ob_dir, -1)
+        array.push(ob_bar, bar_index - cnt)
+        array.push(ob_brk, false)
+        if array.size(ob_top) > OB_CAP
+            array.shift(ob_top)
+            array.shift(ob_bot)
+            array.shift(ob_dir)
+            array.shift(ob_bar)
+            array.shift(ob_brk)
+        box.new(bearish_ob_bar, hi, bar_index, lo,
+         border_color=col_ob, border_width=1, border_style=line.style_solid, bgcolor=col_ob)
+
+// breaker flip: close OB içinden geçince yönü flip + breaker işaretle
+if array.size(ob_top) > 0
+    for i = 0 to array.size(ob_top) - 1
+        if not array.get(ob_brk, i) and bar_index - array.get(ob_bar, i) >= 2
+            d = array.get(ob_dir, i)
+            flipped = false
+            if d == 1 and close < array.get(ob_bot, i)
+                array.set(ob_dir, i, -1)
+                array.set(ob_brk, i, true)
+                flipped := true
+            else if d == -1 and close > array.get(ob_top, i)
+                array.set(ob_dir, i, 1)
+                array.set(ob_brk, i, true)
+                flipped := true
+            if flipped and show_breaker
+                bbe = d == 1 ? array.get(ob_bot, i) : array.get(ob_top, i)
+                bst = d == 1 ? label.style_label_up : label.style_label_down
+                label.new(bar_index, bbe, "BB", style=bst, color=col_bb,
+                 textcolor=color.white, size=size.tiny)
 
 // ═══════════════════════════════════════════════
-// T-002: CONFLUENCE SCORING — Plan §2a (min threshold: 55, live-prod: 80)
+// FVG DETECTION (engine smc.py:38-44) — round-6 (görsel-only; mitigation no-op dropped, §9e)
 // ═══════════════════════════════════════════════
-//
-// Scoring model:
-//   +30   OB detected (bullish or bearish body breakout)
-//   +15   OB near swing (±1.5% price, <30 bars)
-//   +10   Strong breakout (body > 2.0×ATR)
-//   +20   1h bias aligned with signal direction
-//   +10   Trend strength (1h EMA slope > 0.1%/bar)
-//   +5    FVG (gap between consecutive bars)
-//   +10   Recent swing break (higher high / lower low)
-//   ──────
-//   max 100
+if barstate.isconfirmed and show_fvg
+    if low > high[2]
+        box.new(bar_index - 2, low, bar_index + 3, high[2], border_color=na, bgcolor=col_fvg)
+    if high < low[2]
+        box.new(bar_index - 2, low[2], bar_index + 3, high, border_color=na, bgcolor=col_fvg)
+
 // ═══════════════════════════════════════════════
-
-// --- Recent OB detection window (last 5 bars) ---
-bullish_ob_active  = (bar_index - bullish_ob_bar) <= 5 and bullish_ob_bar > 0
-bearish_ob_active  = (bar_index - bearish_ob_bar) <= 5 and bearish_ob_bar > 0
-
-// --- 1h EMA slope (trend strength, % per bar) ---
+// CONFLUENCE SCORING (Plan §2a) — strategy SENKRON
+// ═══════════════════════════════════════════════
+bullish_ob_active = (bar_index - bullish_ob_bar) <= ob_active_window_bars and bullish_ob_bar > 0
+bearish_ob_active = (bar_index - bearish_ob_bar) <= ob_active_window_bars and bearish_ob_bar > 0
 htf_ema_slope = (htf_ema20 - htf_ema20[1]) / htf_ema20[1] * 100
-
-// --- FVG (Fair Value Gap) detection ---
-// Bullish FVG: current low > previous 2nd high → gap up
 bullish_fvg = low > high[2]
 bearish_fvg = high < low[2]
-fvg_active  = bullish_fvg or bearish_fvg
 
-// --- Recent swing break (higher high / lower low) ---
-// REVIEW N2 notu: bu değişkenler EN SON onaylanan swing'i tutar ("previous"
-// = bir önceki swing DEĞİL). Break tespiti için doğru; TP2'nin swing_range'i
-// de bu çiftten türediği için high/low farklı yapısal noktalardan gelebilir —
-// Wave-1 kapsamında kabul edilen sadeleştirme (bkz. WAVE1_SPEC §6).
 var float prev_swing_high = na
 var float prev_swing_low  = na
 if barstate.isconfirmed
@@ -312,19 +295,12 @@ if barstate.isconfirmed
         prev_swing_high := swing_high_val
     if new_swing_low
         prev_swing_low := swing_low_val
+recent_higher_high = not na(prev_swing_high) and high > prev_swing_high and (bar_index - last_sh_bar) < 50
+recent_lower_low   = not na(prev_swing_low)  and low  < prev_swing_low  and (bar_index - last_sl_bar) < 50
 
-// (G-T2 fix: '\' satır devamı Pine'da geçersizdi — "no viable alternative at
-//  character '\'". Pine satır sarması girintili devam satırıyla yapılır.)
-recent_higher_high = not na(prev_swing_high) and high > prev_swing_high and
-                      (bar_index - last_sh_bar) < 50
-recent_lower_low   = not na(prev_swing_low) and low < prev_swing_low and
-                      (bar_index - last_sl_bar) < 50
-swing_break_active = recent_higher_high or recent_lower_low
-
-// --- Score accumulation ---
-confluence_score_long  = 0
+confluence_score_long = 0
 confluence_score_long := bullish_ob_active ? confluence_score_long + 30 : confluence_score_long
-confluence_score_long := bullish_ob_near_swing ? confluence_score_long + 15 : confluence_score_long
+confluence_score_long := (bullish_ob_active and bullish_ob_near_swing) ? confluence_score_long + 15 : confluence_score_long
 confluence_score_long := bull_breakout and bar_body > 2.0 * atr14 ? confluence_score_long + 10 : confluence_score_long
 confluence_score_long := htf_bias_up ? confluence_score_long + 20 : confluence_score_long
 confluence_score_long := htf_ema_slope > 0.1 ? confluence_score_long + 10 : confluence_score_long
@@ -332,9 +308,9 @@ confluence_score_long := bullish_fvg ? confluence_score_long + 5 : confluence_sc
 confluence_score_long := recent_higher_high ? confluence_score_long + 10 : confluence_score_long
 confluence_score_long := math.min(100, confluence_score_long)
 
-confluence_score_short  = 0
+confluence_score_short = 0
 confluence_score_short := bearish_ob_active ? confluence_score_short + 30 : confluence_score_short
-confluence_score_short := bearish_ob_near_swing ? confluence_score_short + 15 : confluence_score_short
+confluence_score_short := (bearish_ob_active and bearish_ob_near_swing) ? confluence_score_short + 15 : confluence_score_short
 confluence_score_short := bear_breakout and bar_body > 2.0 * atr14 ? confluence_score_short + 10 : confluence_score_short
 confluence_score_short := htf_bias_down ? confluence_score_short + 20 : confluence_score_short
 confluence_score_short := htf_ema_slope < -0.1 ? confluence_score_short + 10 : confluence_score_short
@@ -343,25 +319,11 @@ confluence_score_short := recent_lower_low ? confluence_score_short + 10 : confl
 confluence_score_short := math.min(100, confluence_score_short)
 
 // ═══════════════════════════════════════════════
-// T-002: 1H SWING LEVELS — TP1 hedefi için HTF likidite
+// 1H SWING LEVELS — B1 repaint fix (pivot adayı [3], komşular [3±j])
 // ═══════════════════════════════════════════════
-
-// Request 1h high/low for swing level detection
-htf_high = request.security(htf_sym, htf_tf, high, lookahead=barmerge.lookahead_off)
-htf_low  = request.security(htf_sym, htf_tf, low,  lookahead=barmerge.lookahead_off)
-
-// Detect 1h swing levels (pivot-based, lookback=3 since 1h has fewer bars)
 var float last_1h_swing_high = na
 var float last_1h_swing_low  = na
-var int   last_1h_swing_high_bar = na
-var int   last_1h_swing_low_bar  = na
-
-// REVIEW B1 fix (repaint): [-j] = GELECEK bar erişimiydi — pivot ancak sağ
-// pencere kapandıktan sonra değerlendirilebilir. 15m bloğundaki kanıtlı
-// gecikmeli-pivot kalıbının aynısı: pivot adayı htf_high[3], komşular [3±j]
-// (tüm offset'ler >= 0, look-ahead yok). Onay 3 bar gecikir — repaint etmez.
 if barstate.isconfirmed
-    // 1h swing high: pivot adayı [3], solunda ve sağında 3'er bar daha düşük
     is_1h_sh = true
     for j = 1 to 3
         if htf_high[3] <= htf_high[3 + j] or htf_high[3] <= htf_high[3 - j]
@@ -369,9 +331,6 @@ if barstate.isconfirmed
             break
     if is_1h_sh
         last_1h_swing_high := htf_high[3]
-        last_1h_swing_high_bar := bar_index - 3
-
-    // 1h swing low
     is_1h_sl = true
     for j = 1 to 3
         if htf_low[3] >= htf_low[3 + j] or htf_low[3] >= htf_low[3 - j]
@@ -379,114 +338,22 @@ if barstate.isconfirmed
             break
     if is_1h_sl
         last_1h_swing_low := htf_low[3]
-        last_1h_swing_low_bar := bar_index - 3
 
 // ═══════════════════════════════════════════════
-// T-002: SL HESAPLAMA — Plan §2a
-//   LONG:  min(low[sl_lb]) − sl_atr_m×ATR(14)
-//   SHORT: max(high[sl_lb]) + sl_atr_m×ATR(14)
-//   Clamp: min 0.5×ATR(14), max 5.0×ATR(14)
+// SİNYAL + SL/TP — INLINE (user-defined function YOK; RE10045 by-pass)
+//   entry = en yakın aktif zone near-edge (OB|BB inline tarama)
+//   SL    = ta.lowest/highest ± ATR buffer (her bar hesaplanır)
+//   TP1   = en yakın 1h swing (RR sağlıyorsa) yoksa RR-projeksiyon
+//   TP2   = fib(1.618) projeksiyon
 // ═══════════════════════════════════════════════
-
-f_calc_sl(direction, entry_price) =>
-    // REVIEW N1 fix: `var` kaldırıldı — her çağrıda zaten yeniden atanıyordu;
-    // var, ileride atama silinirse taramayı sessizce bozardı.
-    low_min  = low
-    high_max = high
-    // Scan last sl_lb bars for extremes
-    for i = 1 to sl_lb - 1
-        if bar_index - i >= 0
-            low_min  := math.min(low_min, low[i])
-            high_max := math.max(high_max, high[i])
-
-    atr_buf = sl_atr_m * atr14
-    // REVIEW N3 fix: referans spec'teki minimum %0.1 fiyat-mesafe tabanı
-    // (CLAUDE.md çekirdek mantık) — düşük-ATR rejimlerinde ATR tabanını tamamlar.
-    min_dist = math.max(0.5 * atr14, 0.001 * entry_price)
-    max_dist = 5.0 * atr14
-
-    if direction == "LONG"
-        structural = low_min - atr_buf
-        stop_dist  = entry_price - structural
-        // Clamp
-        if stop_dist < min_dist
-            structural := entry_price - min_dist
-        if stop_dist > max_dist
-            structural := entry_price - max_dist
-        structural
-    else  // SHORT
-        structural = high_max + atr_buf
-        stop_dist  = structural - entry_price
-        if stop_dist < min_dist
-            structural := entry_price + min_dist
-        if stop_dist > max_dist
-            structural := entry_price + max_dist
-        structural
-
-// ═══════════════════════════════════════════════
-// T-002: TP HESAPLAMA — Plan §2a
-//   TP1: nearest 1h swing liquidity (above entry for LONG, below for SHORT)
-//   TP2: Fibonacci extension from recent swing range
-// ═══════════════════════════════════════════════
-
-f_calc_tp(direction, entry_price, sl_price) =>
-    // (G-T2 fix: `na` ile başlatma tip anahtar kelimesi gerektirir — "Value
-    //  with NA type cannot be assigned to a variable ... without type keyword")
-    float tp1 = na
-    float tp2 = na
-    
-    // TP1: nearest 1h swing level
-    if direction == "LONG"
-        if not na(last_1h_swing_high) and last_1h_swing_high > entry_price
-            tp1 := last_1h_swing_high
-        else if not na(prev_swing_high)
-            tp1 := prev_swing_high
-        // Fallback: min RR from SL
-        if na(tp1) or tp1 <= entry_price or (tp1 - entry_price) / (entry_price - sl_price) < min_rr
-            tp1 := entry_price + (entry_price - sl_price) * min_rr
-        
-        // TP2: Fibonacci extension from swing range
-        if not na(prev_swing_low) and not na(prev_swing_high)
-            swing_range = prev_swing_high - prev_swing_low
-            tp2 := entry_price + swing_range * fib_tp2
-        // Fallback
-        if na(tp2) or tp2 < tp1
-            tp2 := tp1 * 1.02  // minimal extension
-    else  // SHORT
-        if not na(last_1h_swing_low) and last_1h_swing_low < entry_price
-            tp1 := last_1h_swing_low
-        else if not na(prev_swing_low)
-            tp1 := prev_swing_low
-        if na(tp1) or tp1 >= entry_price or (entry_price - tp1) / (sl_price - entry_price) < min_rr
-            tp1 := entry_price - (sl_price - entry_price) * min_rr
-        
-        if not na(prev_swing_low) and not na(prev_swing_high)
-            swing_range = prev_swing_high - prev_swing_low
-            tp2 := entry_price - swing_range * fib_tp2
-        if na(tp2) or tp2 > tp1
-            tp2 := tp1 * 0.98
-    
-    [tp1, tp2]
-
-// ═══════════════════════════════════════════════
-// T-002: SİNYAL ÜRETİMİ
-//   LONG:  confluence_score ≥ conf_thresh AND 1h bias up
-//   SHORT: confluence_score ≥ conf_thresh AND 1h bias down
-// ═══════════════════════════════════════════════
-
-// Entry price: use close (most recent confirmed bar)
-f_entry_price(direction) =>
-    if direction == "LONG"
-        bullish_ob_bot  // OB bottom as entry zone
-    else
-        bearish_ob_top  // OB top as entry zone
+sl_lowest  = ta.lowest(low, sl_lb)
+sl_highest = ta.highest(high, sl_lb)
 
 var float sig_entry_long  = na
 var float sig_sl_long     = na
 var float sig_tp1_long    = na
 var float sig_tp2_long    = na
 var int   sig_score_long  = na
-
 var float sig_entry_short = na
 var float sig_sl_short    = na
 var float sig_tp1_short   = na
@@ -496,127 +363,145 @@ var int   sig_score_short = na
 long_signal  = false
 short_signal = false
 
-// Only generate signals on confirmed bars, when OB is active and confluence meets threshold
 if barstate.isconfirmed
-    // --- LONG signal ---
-    if bullish_ob_active and confluence_score_long >= conf_thresh and htf_bias_up
-        ln_entry = f_entry_price("LONG")
-        ln_sl    = f_calc_sl("LONG", ln_entry)
-        ln_tp    = f_calc_tp("LONG", ln_entry, ln_sl)
-        ln_tp1   = ln_tp[0]
-        ln_tp2   = ln_tp[1]
-        
-        // Validity checks
-        valid = not na(ln_sl) and not na(ln_tp1) and ln_sl < ln_entry and ln_tp1 > ln_entry
-        if valid
-            long_signal := true
-            sig_entry_long  := ln_entry
-            sig_sl_long     := ln_sl
-            sig_tp1_long    := ln_tp1
-            sig_tp2_long    := ln_tp2
-            sig_score_long  := confluence_score_long
-    
-    // --- SHORT signal ---
-    if bearish_ob_active and confluence_score_short >= conf_thresh and htf_bias_down
-        sh_entry = f_entry_price("SHORT")
-        sh_sl    = f_calc_sl("SHORT", sh_entry)
-        sh_tp    = f_calc_tp("SHORT", sh_entry, sh_sl)
-        sh_tp1   = sh_tp[0]
-        sh_tp2   = sh_tp[1]
-        
-        valid = not na(sh_sl) and not na(sh_tp1) and sh_sl > sh_entry and sh_tp1 < sh_entry
-        if valid
-            short_signal := true
-            sig_entry_short := sh_entry
-            sig_sl_short    := sh_sl
-            sig_tp1_short   := sh_tp1
-            sig_tp2_short   := sh_tp2
-            sig_score_short := confluence_score_short
+    // --- LONG ---
+    if htf_bias_up and (recent_higher_high or confluence_score_long >= conf_thresh)
+        // nearest demand zone near-edge below close (inline)
+        float ln_entry = na
+        ln_best  = 1e20
+        if array.size(ob_top) > 0
+            for i = 0 to array.size(ob_top) - 1
+                if array.get(ob_dir, i) == 1
+                    e = array.get(ob_top, i)
+                    if e < close and (close - e) < ln_best
+                        ln_best := close - e
+                        ln_entry := e
+        if not na(ln_entry)
+            sl_buf  = sl_atr_m * atr14
+            sl_min  = math.max(0.5 * atr14, 0.001 * ln_entry)
+            ln_sl   = sl_lowest - sl_buf
+            if ln_entry - ln_sl < sl_min
+                ln_sl := ln_entry - sl_min
+            risk = ln_entry - ln_sl
+            ln_tp1 = (not na(last_1h_swing_high) and last_1h_swing_high > ln_entry and (last_1h_swing_high - ln_entry) >= min_rr * risk) ? last_1h_swing_high : ln_entry + min_rr * risk
+            ln_tp2 = ln_entry + fib_tp2 * risk
+            if ln_sl < ln_entry and ln_tp1 > ln_entry
+                long_signal := true
+                sig_entry_long := ln_entry
+                sig_sl_long    := ln_sl
+                sig_tp1_long   := ln_tp1
+                sig_tp2_long   := ln_tp2
+                sig_score_long := confluence_score_long
+    // --- SHORT ---
+    if htf_bias_down and (recent_lower_low or confluence_score_short >= conf_thresh)
+        float sh_entry = na
+        sh_best  = 1e20
+        if array.size(ob_top) > 0
+            for i = 0 to array.size(ob_top) - 1
+                if array.get(ob_dir, i) == -1
+                    e = array.get(ob_bot, i)
+                    if e > close and (e - close) < sh_best
+                        sh_best := e - close
+                        sh_entry := e
+        if not na(sh_entry)
+            sl_buf = sl_atr_m * atr14
+            sl_min = math.max(0.5 * atr14, 0.001 * sh_entry)
+            sh_sl  = sl_highest + sl_buf
+            if sh_sl - sh_entry < sl_min
+                sh_sl := sh_entry + sl_min
+            risk = sh_sl - sh_entry
+            sh_tp1 = (not na(last_1h_swing_low) and last_1h_swing_low < sh_entry and (sh_entry - last_1h_swing_low) >= min_rr * risk) ? last_1h_swing_low : sh_entry - min_rr * risk
+            sh_tp2 = sh_entry - fib_tp2 * risk
+            if sh_sl > sh_entry and sh_tp1 < sh_entry
+                short_signal := true
+                sig_entry_short := sh_entry
+                sig_sl_short    := sh_sl
+                sig_tp1_short   := sh_tp1
+                sig_tp2_short   := sh_tp2
+                sig_score_short := confluence_score_short
 
 // ═══════════════════════════════════════════════
-// T-002: SL/TP GÖRSEL PLOT — Plan §4
+// SL/TP GÖRSEL (sadece sinyal barında → temiz görsel)
 // ═══════════════════════════════════════════════
+if show_sltp and long_signal
+    line.new(bar_index, sig_sl_long,  bar_index + 20, sig_sl_long,  color=col_sl,  width=2, style=line.style_dashed)
+    line.new(bar_index, sig_tp1_long, bar_index + 20, sig_tp1_long, color=col_tp1, width=1, style=line.style_dashed)
+    if sig_tp2_long > sig_tp1_long
+        line.new(bar_index, sig_tp2_long, bar_index + 20, sig_tp2_long, color=col_tp2, width=1, style=line.style_dashed)
+    line.new(bar_index, sig_entry_long, bar_index + 20, sig_entry_long, color=col_long, width=1, style=line.style_dotted)
+    label.new(bar_index, sig_entry_long, "LONG " + str.tostring(sig_score_long, "0") + "%",
+     style=label.style_label_up, color=color.new(col_long, 80), textcolor=col_long, size=size.small)
 
-// Plot SL/TP for most recent LONG signal
-if show_sltp and not na(sig_entry_long)
-    // SL line — orange-red, dashed, 2px (§4c)
-    line.new(bar_index, sig_sl_long,  bar_index + 20, sig_sl_long,
-     col_sl, 2, line.style_dashed)
-    // TP1 line — light green, dashed, 1px
-    line.new(bar_index, sig_tp1_long, bar_index + 20, sig_tp1_long,
-     col_tp1, 1, line.style_dashed)
-    // TP2 line — blue, dashed, 1px
-    if not na(sig_tp2_long) and sig_tp2_long > sig_tp1_long
-        line.new(bar_index, sig_tp2_long, bar_index + 20, sig_tp2_long,
-         col_tp2, 1, line.style_dashed)
-    // Entry marker — green triangle up (§4c)
-    label.new(bar_index, sig_entry_long,
-     "LONG " + str.tostring(sig_score_long, "0") + "%",
-     style=label.style_label_up,
-     color=color.new(col_long, 90), textcolor=col_long, size=size.small)
-    // Entry zone box
-    if bullish_ob_active
-        box.new(bullish_ob_bar, bullish_ob_top,
-         bar_index + 20, bullish_ob_bot,
-         col_long, 1, line.style_dashed,
-         bgcolor=color.new(col_long, 15))
-
-// Plot SL/TP for most recent SHORT signal
-if show_sltp and not na(sig_entry_short)
-    line.new(bar_index, sig_sl_short,  bar_index + 20, sig_sl_short,
-     col_sl, 2, line.style_dashed)
-    line.new(bar_index, sig_tp1_short, bar_index + 20, sig_tp1_short,
-     col_tp1, 1, line.style_dashed)
-    if not na(sig_tp2_short) and sig_tp2_short < sig_tp1_short
-        line.new(bar_index, sig_tp2_short, bar_index + 20, sig_tp2_short,
-         col_tp2, 1, line.style_dashed)
-    label.new(bar_index, sig_entry_short,
-     "SHORT " + str.tostring(sig_score_short, "0") + "%",
-     style=label.style_label_down,
-     color=color.new(col_short, 90), textcolor=col_short, size=size.small)
-    if bearish_ob_active
-        box.new(bearish_ob_bar, bearish_ob_top,
-         bar_index + 20, bearish_ob_bot,
-         col_short, 1, line.style_dashed,
-         bgcolor=color.new(col_short, 15))
+if show_sltp and short_signal
+    line.new(bar_index, sig_sl_short,  bar_index + 20, sig_sl_short,  color=col_sl,  width=2, style=line.style_dashed)
+    line.new(bar_index, sig_tp1_short, bar_index + 20, sig_tp1_short, color=col_tp1, width=1, style=line.style_dashed)
+    if sig_tp2_short < sig_tp1_short
+        line.new(bar_index, sig_tp2_short, bar_index + 20, sig_tp2_short, color=col_tp2, width=1, style=line.style_dashed)
+    line.new(bar_index, sig_entry_short, bar_index + 20, sig_entry_short, color=col_short, width=1, style=line.style_dotted)
+    label.new(bar_index, sig_entry_short, "SHORT " + str.tostring(sig_score_short, "0") + "%",
+     style=label.style_label_down, color=color.new(col_short, 80), textcolor=col_short, size=size.small)
 
 // ═══════════════════════════════════════════════
-// VISUAL OUTPUTS — Plan §4 (T-001: swing + bias)
+// SWING LABELS + 1H EMA + EQH/EQL LIQUIDITY + BIAS TABLE
 // ═══════════════════════════════════════════════
-
-// --- Swing labels ---
 if barstate.isconfirmed and new_swing_high
-    label.new(bar_index - lb, swing_high_val,
-     "HH", style=label.style_label_down,
+    label.new(bar_index - lb, swing_high_val, "HH", style=label.style_label_down,
      color=color.new(col_swing, 90), textcolor=col_swing, size=size.small)
-
 if barstate.isconfirmed and new_swing_low
-    label.new(bar_index - lb, swing_low_val,
-     "LL", style=label.style_label_up,
+    label.new(bar_index - lb, swing_low_val, "LL", style=label.style_label_up,
      color=color.new(col_swing, 90), textcolor=col_swing, size=size.small)
 
-// --- 1h bias trend ---
-bias_color = htf_bias_up ? col_long : htf_bias_down ? col_short : col_trend
-
-// Plot 1h EMA20 on the 15m chart (informational overlay)
-plot_htf = request.security(htf_sym, htf_tf,
- ta.ema(close, 20), lookahead=barmerge.lookahead_off)
-
+plot_htf = request.security(htf_sym, htf_tf, ta.ema(close, 20), lookahead=barmerge.lookahead_off)
 plot(plot_htf, "1H EMA20", col_trend, 2, plot.style_line)
 
-// --- Bias text in a table (non-intrusive) ---
-var table bias_table = table.new(position.top_right, 1, 1,
- border_width=0, frame_width=0)
+// EQH/EQL likidite — son onaylı bar'da INLINE pairwise (max 8'er; array.new YOK)
+if show_liquidity and barstate.islastconfirmedhistory
+    nh = array.size(sh_arr)
+    drawn_h = 0
+    if nh >= 2
+        for i = 0 to nh - 2
+            for j = i + 1 to math.min(i + 4, nh - 1)
+                if drawn_h < 8
+                    a = array.get(sh_arr, i)
+                    b = array.get(sh_arr, j)
+                    if math.abs(a - b) / math.max(a, 1e-10) <= 0.001
+                        lvl = (a + b) / 2
+                        line.new(bar_index - 30, lvl, bar_index + 10, lvl, color=col_liq, width=1, style=line.style_dotted)
+                        label.new(bar_index + 10, lvl, "EQH", style=label.style_label_left,
+                         color=color.new(col_liq, 60), textcolor=color.white, size=size.tiny)
+                        drawn_h += 1
+    nl = array.size(sl_arr)
+    drawn_l = 0
+    if nl >= 2
+        for i = 0 to nl - 2
+            for j = i + 1 to math.min(i + 4, nl - 1)
+                if drawn_l < 8
+                    a = array.get(sl_arr, i)
+                    b = array.get(sl_arr, j)
+                    if math.abs(a - b) / math.max(a, 1e-10) <= 0.001
+                        lvl = (a + b) / 2
+                        line.new(bar_index - 30, lvl, bar_index + 10, lvl, color=col_liq, width=1, style=line.style_dotted)
+                        label.new(bar_index + 10, lvl, "EQL", style=label.style_label_left,
+                         color=color.new(col_liq, 60), textcolor=color.white, size=size.tiny)
+                        drawn_l += 1
 
+var table bias_table = table.new(position.top_right, 2, 2, border_width=0, frame_width=0)
 if barstate.islastconfirmedhistory
-    h1_text = htf_bias_up ? "▲ 1H BULL" : htf_bias_down ? "▼ 1H BEAR" : "— 1H FLAT"
+    h1_text  = htf_bias_up ? "▲ 1H BULL" : htf_bias_down ? "▼ 1H BEAR" : "— 1H FLAT"
     h1_color = htf_bias_up ? col_long : htf_bias_down ? col_short : col_trend
-    table.cell(bias_table, 0, 0, h1_text, text_color=h1_color, text_size=size.small)
+    table.cell(bias_table, 0, 0, "1H BIAS", text_color=col_trend, text_size=size.small)
+    table.cell(bias_table, 1, 0, h1_text, text_color=h1_color, text_size=size.small)
     table.cell_set_bgcolor(bias_table, 0, 0, color.new(#000000, 80))
+    table.cell_set_bgcolor(bias_table, 1, 0, color.new(#000000, 80))
+    cl   = math.max(confluence_score_long, confluence_score_short)
+    cdir = confluence_score_long >= confluence_score_short ? "L" : "S"
+    table.cell(bias_table, 0, 1, "CONF", text_color=col_trend, text_size=size.small)
+    table.cell(bias_table, 1, 1, cdir + " " + str.tostring(cl, "0") + "%", text_color=color.white, text_size=size.small)
+    table.cell_set_bgcolor(bias_table, 0, 1, color.new(#000000, 80))
+    table.cell_set_bgcolor(bias_table, 1, 1, color.new(#000000, 80))
 
 // ═══════════════════════════════════════════════
-// ALERT CONDITIONS — T-002: sinyal üretimine bağlı
+// ALERTS
 // ═══════════════════════════════════════════════
-
-alertcondition(long_signal,  "Efloud LONG",  "LONG setup detected")
-alertcondition(short_signal, "Efloud SHORT", "SHORT setup detected")
+alertcondition(long_signal,  "u2algo SMC LONG",  "u2algo Wave-1 LONG setup detected")
+alertcondition(short_signal, "u2algo SMC SHORT", "u2algo Wave-1 SHORT setup detected")
