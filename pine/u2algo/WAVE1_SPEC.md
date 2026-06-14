@@ -198,16 +198,17 @@ Strategy(`calc_on_every_tick=false`) bar kapanışında hesaplanır. Limit order
 | 2026-06-11 | T-002 | Review fix'leri: B1 repaint (1h pivot `[-j]`), B2 visual_group, N1 var, N3 %0.1 SL tabanı; §1 tablo güncellendi | @claude |
 | 2026-06-11 | T-003 §7a-§7d | R1 sinyal gevşetme (ob_active_window_bars=15, allow_ob_less) + R3 fill güvenilirliği (limit_expiry_bars=40, extended_expiry_in_trend) + çoklu-sembol gate notu + F4 caveat genişletme. SENKRON kuralı 3 dosyaya | @claude (R1+R3 konsensüs, Plan v1.4) |
 | 2026-06-13 | INDICATOR §9 | v1.2.0 round-6 detektör portu (OB/Breaker zone + FVG + EQH/EQL likidite) + RE10045 runtime by-pass (tamamen inline, UDF yok) → **indicator-only ship** | @claude |
+| 2026-06-14 | INDICATOR §9e | v1.2.1 PR #198 review-fix: OB cnt>=1 engine-SENKRON, confluence near-swing window-gate (bayat +15), EQH/EQL 5-komşu penceresi, FVG mitigation no-op + dead array temizliği (507 satır) | @claude (2 reviewer APPROVE_WITH_NITS) |
 
 ## 9. INDICATOR v1.2.0 — Round-6 Detektör Portu + RE10045 By-pass (2026-06-13)
 
-**Dosya:** `pine/u2algo/wave1_signals.pine` (527 satır). **Karar:** GATE_RUN_4-prelim NO-GO sonrası
+**Dosya:** `pine/u2algo/wave1_signals.pine` (507 satır, v1.2.1 review-fix sonrası). **Karar:** GATE_RUN_4-prelim NO-GO sonrası
 (strateji shippable değil), lead-magnet **indicator-only** ship edilir. Indicator'ın değeri
 **görsel SMC tespiti** (zone/likidite/FVG/breaker + SL/TP görseli) — kompleks engine-TP değil.
 
 ### 9a. Port edilen round-6 detektörleri (strategy SENKRON)
 - **OB + Breaker zone array** (engine smc.py:200-256): OB tespiti → `ob_top/bot/dir/bar/brk` array; close zone'dan geçince yön flip + "BB" breaker etiketi. OB kutuları çizilir.
-- **FVG array + mitigation** (engine smc.py:38-44): `low>high[2]` / `high<low[2]`; mitigation takibi; FVG kutuları çizilir.
+- **FVG** (engine smc.py:38-44): `low>high[2]` / `high<low[2]`; FVG kutuları çizilir. *(v1.2.1: mitigation-takip array'i no-op olduğu için kaldırıldı — bkz §9e.)*
 - **EQH/EQL likidite** (engine smc.py pairwise): swing array'lerinden eşit-seviye (±%0.1) tespiti; son bar'da turuncu likidite çizgileri (max 8'er).
 - Swing (HH/LL), 1h EMA20 bias, confluence (7-faktör 0-100), 1h swing (B1 repaint-fix) — T-001/T-002'den korundu.
 
@@ -239,3 +240,11 @@ Strategy(`calc_on_every_tick=false`) bar kapanışında hesaplanır. Limit order
 
 ### 9d. Yayın (publish)
 TV publish = MANUEL operatör adımı (MCP publish otomasyonu kırık, bkz. [[reference_tradingview_mcp_launch]]). Pine TV cloud'a kaydedildi (`pine_save`). Repo source-of-truth: `pine/u2algo/wave1_signals.pine`.
+
+### 9e. v1.2.1 — PR #198 review-fix (2026-06-14)
+İki AI reviewer (smc-strategy-reviewer + efloud-code-reviewer) APPROVE_WITH_NITS verdi. Repaint TEMİZ doğrulandı. Engine'e (`engine/smc.py`, kaynak-doğruluk) karşı doğrulanan 3 fidelity/correctness bug'ı + dead-code düzeltildi:
+- **OB sayım fidelity (MED):** `cnt == ob_seq_default` (tam 5 ardışık) → `cnt >= 1` (engine smc.py:216/240). Eskisi OB'yi neredeyse hiç çizmiyordu; artık engine ile SENKRON.
+- **Bayat confluence (MED):** `*_ob_near_swing` `var bool`, gate'siz +15 tüketiliyordu → `bullish_ob_active and …` ile window-gate'lendi (OB penceresi dışında +15 sızmaz). smc.py confluence ile tutarlı.
+- **EQH/EQL pencere (MED):** tam O(n²) cross-product → `math.min(i+4, n-1)` ile engine'in 5-komşu penceresine (smc.py:311) hizalandı.
+- **Dead code:** `fvg_dir` (write-only) + `fvg_mit` (mitigation no-op, hiçbir render/sinyal tüketmiyordu) + mitigation döngüsü kaldırıldı; FVG bloğu sadece görsel kutu çizimine sadeleşti (507 satır). RE10045 yüzeyi de azaldı.
+- **Doğrulama:** G-T2 compile TV'de yeniden PASS (0 hata) + render-verify; sonra master'a merge.
