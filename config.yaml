@@ -246,3 +246,22 @@ kronos:
   synth_timeout_sec: 30
   prewarm_on_start: true
   show_numeric_confidence: false  # false → categorical band (no fake 0-100 next to confluence)
+
+# ── Customer notifications (T-018, P-003 W3) ──
+# SCHEMA + EXAMPLE ONLY — this block is inert by default and the live prod config
+# (configs/config.phase2_1k.yaml) is NOT changed by this PR. Flipping `enabled`
+# in production is a separate operator-gated commit AFTER a customer cohort exists
+# (depends on T-016) and risk/legal sign-off.
+#
+# The customer channel is the PUBLIC u2algo Telegram channel. It posts a once-daily
+# AGGREGATE digest of CLOSED trades only (count / win-rate / aggregate return) — no
+# per-trade entry/SL/TP, no real-time signal — to stay clear of the "signal service"
+# regulatory line. It uses SEPARATE credentials from the operator alerter
+# (EFLOUD_CUSTOMER_TG_* vs EFLOUD_TELEGRAM_*) and never touches the trading loop.
+notifications:
+  telegram:
+    enabled: false            # MASTER switch. false → fully inert (zero HTTP).
+    mode: daily_digest        # only implemented (and regulation-safe) mode
+    # Credentials live ONLY in the deploy env (never in repo):
+    #   EFLOUD_CUSTOMER_TG_TOKEN, EFLOUD_CUSTOMER_TG_CHANNEL_ID
+    #   (optional) EFLOUD_CUSTOMER_TG_THREAD_ID, EFLOUD_CUSTOMER_TG_PARSE_MODE
