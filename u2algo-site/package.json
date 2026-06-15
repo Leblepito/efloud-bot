@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "smoke": "node scripts/smoke.js",
+    "test": "node scripts/test_consent_and_webhook.js",
     "build": "npm run smoke"
   },
   "dependencies": {

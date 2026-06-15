@@ -10,8 +10,8 @@
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
-| Tamamlanan görev | 8 (T-001 ✅; T-002 ✅ G-T2; T-023 ✅ #182; T-024 ✅ #184; T-012 ✅ #185; T-022 ✅ #187; T-013 ✅ #191; T-014 ✅ #192) ~~önceki: 7~~ |
-| Claim edilmiş görev | 2 (T-003 @hermes R1+R3, T-020 @claude) ~~önceki: 1~~ |
+| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ |
+| Claim edilmiş görev | 1 (T-015 @claude [15 Jun]) ~~önceki: 2~~ |
 
 ## P-001 Görev Skoru
 
@@ -80,16 +80,16 @@
 | Görev | Dalga | Açıklama | Durum | Claim |
 |---|---|---|---|---|
 | T-010 | W0 | u2algo-site legal sayfaları + footer + sitemap | ⬜ BACKLOG | — |
-| T-011 | W0 | Waitlist consent checkbox + server.js alanı | ⬜ BACKLOG | — |
+| T-011 | W0 | Waitlist consent checkbox + server.js payload (3 fallback zincirinde) + 13/13 test | ✅ DONE (consent gate strict===true + 3-fallback persist + index.html checkbox + privacy.html; 13/13 test; PR #204) | @hermes (2026-06-15) |
 | T-012 | W1 | proof_export.py + snapshot şema + privacy testi | ✅ DONE (PR #185; baseline-referans kararı operatörden; VPS cron+baseline = runbook §5) | @claude (2026-06-11) |
 | T-013 | W1 | monthly.py + /api/reports/monthly | ✅ DONE (PR #191; journal-first, DB-less equity "n/a", operatör-only İÇ) | @claude (2026-06-11) |
 | T-014 | W1 | Uptime alanı + public CHANGELOG + site updates | ✅ DONE (PR #192; uptime schema 1.1.0, §3 ayrımı; changelog→updates.json statik) | @claude (2026-06-11) |
-| T-015 | W2 | Supabase entitlements migration + RLS | ⬜ BACKLOG | — |
-| T-016 | W2 | Lemon Squeezy webhook (HMAC) + onay e-postası | ⬜ BACKLOG | — |
-| T-017 | W2 | tv-access-grant runbook + kuyruk görünümü | ⬜ BACKLOG | — |
+| T-015 | W2 | Supabase entitlements migration + RLS | 🟡 IN_PROGRESS (DDL + supabase_mgmt.py talimatları, .env.supabase operatör PR'ı bekliyor) | @claude (2026-06-15) |
+| T-016 | W2 | Lemon Squeezy webhook (HMAC) + onay e-postası | ✅ DONE (INERT DELIVERED, 13/13 test, B.1-B.4 onayı sonrası aktive) | @claude (2026-06-15) |
+| T-017 | W2 | tv-access-grant runbook + kuyruk görünümü | ✅ DONE (runbook + list_pending script + 7 acceptance kriteri) | @hermes (2026-06-15) |
 | T-018 | W3 | telegram_notifier (default-OFF) + regression test | ⬜ BACKLOG | — |
 | T-019 | W3 | Müşteri quickstart + site FAQ/destek | ⬜ BACKLOG | — |
-| T-020 | W-R | Backup otomasyonu + restore tatbikatı (pre-UR-exempt) | 🟡 IN_PROGRESS (scriptler+runbook PR'da; VPS kurulum+drill GÖREV F sonrası) | @claude (2026-06-11) |
+| T-020 | W-R | Backup otomasyonu + restore tatbikatı (pre-UR-exempt) | ⬜ BACKLOG (kod merged, GÖREV F operatör tetiklemeli — backup provizyon + drill) | @claude (2026-06-11, parked) |
 | T-021 | W-R | Public status page + uptime monitor | ⬜ BACKLOG | — |
 | T-022 | W-R | SLA + DR + on-call dokümanları | ✅ DONE (PR #187; tabletop PASS 2. tur — breaker-reset.md bonus; G-P3-B2 paketi hazır) | @claude (2026-06-11) |
 | T-023 | W-R | CI hardening: gitleaks + frontend + lint (pre-UR-exempt) | ✅ DONE (PR #182 → master `63b9872`, CI 4/4) | @claude (2026-06-11) |

@@ -1,7 +1,7 @@
 # T-020: State Backup Otomasyonu + Restore Runbook
 
 **Epic:** P-003
-**Claimed by:** @claude (2026-06-11)
+**Claimed by:** @claude (2026-06-11, parked — GÖREV F operatör)
 **Tahmini süre:** 2-3 gün
 **Bağımlılık:** GÖREV F (backup hedefi provizyonu — Hermes); **pre-UR-exempt** (canlı bot için ticaretten bağımsız KRİTİK; UR-003 öncesi başlayabilir)
 

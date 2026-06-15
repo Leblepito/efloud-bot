@@ -1,7 +1,7 @@
 # T-015: Supabase Entitlements Tablosu + RLS
 
 **Epic:** P-003
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @claude (2026-06-15, Hermes handoff) (henüz claim edilmedi)
 **Tahmini süre:** 0.5 gün
 **Bağımlılık:** T-010 (legal pack), Hermes GÖREV A (DDL taslağı)
 
