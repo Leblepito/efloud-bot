@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { n } from "@/lib/format";
+import { terminal } from "@efloud/tokens";
 
 interface FundingRateData {
   symbol: string;
@@ -178,21 +179,21 @@ export function MarketIndicators() {
                   <AreaChart data={oiData.history} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                     <defs>
                       <linearGradient id="colorOi" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
+                        <stop offset="5%" stopColor={terminal.chart.oi} stopOpacity={0.2} />
+                        <stop offset="95%" stopColor={terminal.chart.oi} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="timestamp" tickFormatter={formatChartDate} stroke="#2A2A2A" fontSize={8} tickLine={false} />
+                    <XAxis dataKey="timestamp" tickFormatter={formatChartDate} stroke={terminal.border.strong} fontSize={8} tickLine={false} />
                     <Tooltip
                       labelFormatter={(t) => `Tarih: ${new Date(t).toLocaleTimeString()}`}
-                      contentStyle={{ background: "#0A0A0A", border: "1px solid #1F1F1F", fontSize: "9px", borderRadius: 0 }}
+                      contentStyle={{ background: terminal.chart.tooltipBg, border: `1px solid ${terminal.chart.grid}`, fontSize: "9px", borderRadius: 0 }}
                       formatter={(val: any, name: string) => {
                         if (name === "open_interest") return [n(val, 2), "Open Interest"];
                         if (name === "price") return [`$${n(val, 2)}`, "Fiyat"];
                         return [val, name];
                       }}
                     />
-                    <Area type="monotone" dataKey="open_interest" stroke="#60a5fa" strokeWidth={1.5} fillOpacity={1} fill="url(#colorOi)" />
+                    <Area type="monotone" dataKey="open_interest" stroke={terminal.chart.oi} strokeWidth={1.5} fillOpacity={1} fill="url(#colorOi)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

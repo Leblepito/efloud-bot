@@ -1,31 +1,42 @@
 import type { Config } from "tailwindcss";
+import efloudTokens from "@efloud/tokens/tailwind";
+import { terminal } from "@efloud/tokens";
 
 const config: Config = {
+  // Shared design-token preset (@efloud/tokens, PR #1). Additive/namespaced only —
+  // this file's own `theme.extend` below takes precedence on any shared key.
+  presets: [efloudTokens as Partial<Config>],
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        // Brutalist trader palette — pure black base
+        // Brutalist trader palette — sourced from @efloud/tokens `terminal` (PR #2).
+        // Same values as before, now single-sourced; no visual change.
         bg: {
-          DEFAULT: "#000000",
-          elevated: "#0A0A0A",
-          surface: "#141414",
+          DEFAULT: terminal.bg.base,
+          elevated: terminal.bg.elevated,
+          surface: terminal.bg.surface,
         },
         border: {
-          DEFAULT: "#1F1F1F",
-          strong: "#2A2A2A",
-          accent: "#00FF88",
+          DEFAULT: terminal.border.base,
+          strong: terminal.border.strong,
+          accent: terminal.border.accent,
         },
         text: {
-          primary: "#FAFAFA",
-          secondary: "#888888",
-          muted: "#444444",
-          dim: "#2A2A2A",
+          primary: terminal.text.primary,
+          secondary: terminal.text.secondary,
+          muted: terminal.text.muted,
+          dim: terminal.text.dim,
         },
         accent: {
-          green: "#00FF88",   // alive, profit, OPEN
-          amber: "#FFA500",   // warning, TRIPPED
-          red: "#FF3030",     // critical, SHORT, loss, HALTED
+          green: terminal.accent.green, // alive, profit, OPEN
+          amber: terminal.accent.amber, // warning, TRIPPED
+          red: terminal.accent.red,     // critical, SHORT, loss, HALTED
+        },
+        // lightweight-charts canvas chrome — backs InteractiveChart's bg-chrome-bg (PR #4).
+        // Only `bg` is used as a class; the other chrome tones are consumed via terminal.chrome.* in TS.
+        chrome: {
+          bg: terminal.chrome.bg,
         },
       },
       fontFamily: {

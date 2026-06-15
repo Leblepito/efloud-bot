@@ -20,6 +20,13 @@ sb_vars.json
 /test_db_conn.py
 /test_postgres_only.py
 
+# Node / monorepo (root npm workspaces — PR #0)
+node_modules/
+frontend/out/
+**/.next/
+packages/*/dist/
+*.tsbuildinfo
+
 # Runtime
 state/
 !state/ai_sentiment_registry.json

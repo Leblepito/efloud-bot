@@ -1,0 +1,13 @@
+{
+  "name": "efloud-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "EFloud monorepo root — shared packages (design tokens, types) consumed by the operator dashboard (frontend/) and, from PR #6, the marketing site (u2algo-site/web) and mobile app.",
+  "workspaces": [
+    "packages/*",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

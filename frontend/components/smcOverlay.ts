@@ -11,6 +11,8 @@
 // (attached/detached/paneViews + target.useMediaCoordinateSpace renderer).
 // ════════════════════════════════════════════════════════════════════
 
+import { terminal } from "@efloud/tokens";
+
 export type Candle = { time: number; open: number; high: number; low: number; close: number };
 
 export type SmcStructure = { time: number; price: number; kind: "BOS" | "CHOCH"; dir: "bull" | "bear" };
@@ -147,9 +149,9 @@ export function computeSMC(candles: Candle[], timeframe: string, opts: ComputeOp
 }
 
 // ── Canvas primitive ───────────────────────────────────────────────
-const BULL = "#00FF88";
-const BEAR = "#FF4D4D";
-const NEUTRAL = "#FFA500";
+const BULL = terminal.chart.bull;     // #00FF88
+const BEAR = terminal.chart.bear;     // #FF4D4D
+const NEUTRAL = terminal.chart.neutral; // #FFA500
 
 type Layers = { structure?: boolean; fvg?: boolean; ob?: boolean; zones?: boolean; pdhl?: boolean };
 
@@ -180,7 +182,7 @@ export class SmcOverlayPrimitive {
               context.globalAlpha = 0.9;
               context.fillRect(tagX, y - 7, w, 12);
               context.globalAlpha = 1;
-              context.fillStyle = "#04040c";
+              context.fillStyle = terminal.chart.tagText;
               context.textAlign = "left";
               context.textBaseline = "middle";
               context.fillText(text, tagX + 4, y);

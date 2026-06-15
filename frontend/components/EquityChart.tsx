@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { useEquity } from "@/hooks/useEquity";
 import { n, shortDate, usd } from "@/lib/format";
+import { terminal } from "@efloud/tokens";
 
 export function EquityChart() {
   const { data } = useEquity(7);
@@ -50,45 +51,45 @@ export function EquityChart() {
             <AreaChart data={points} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#00FF88" stopOpacity={0.32} />
-                  <stop offset="100%" stopColor="#00FF88" stopOpacity={0} />
+                  <stop offset="0%" stopColor={terminal.chart.bull} stopOpacity={0.32} />
+                  <stop offset="100%" stopColor={terminal.chart.bull} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#1F1F1F" strokeDasharray="0" vertical={false} />
+              <CartesianGrid stroke={terminal.chart.grid} strokeDasharray="0" vertical={false} />
               <XAxis
                 dataKey="label"
-                stroke="#444"
-                tick={{ fill: "#666", fontSize: 10 }}
+                stroke={terminal.chart.axis}
+                tick={{ fill: terminal.chart.axisText, fontSize: 10 }}
                 tickLine={false}
-                axisLine={{ stroke: "#1F1F1F" }}
+                axisLine={{ stroke: terminal.chart.grid }}
               />
               <YAxis
                 domain={["auto", "auto"]}
-                stroke="#444"
-                tick={{ fill: "#666", fontSize: 10 }}
+                stroke={terminal.chart.axis}
+                tick={{ fill: terminal.chart.axisText, fontSize: 10 }}
                 tickLine={false}
-                axisLine={{ stroke: "#1F1F1F" }}
+                axisLine={{ stroke: terminal.chart.grid }}
                 width={56}
                 tickFormatter={(v) => `$${n(Number(v), 0)}`}
               />
               <Tooltip
-                cursor={{ stroke: "#2A2A2A", strokeWidth: 1 }}
+                cursor={{ stroke: terminal.chart.cursor, strokeWidth: 1 }}
                 contentStyle={{
-                  background: "#0A0A0A",
-                  border: "1px solid #1F1F1F",
+                  background: terminal.chart.tooltipBg,
+                  border: `1px solid ${terminal.chart.grid}`,
                   fontFamily: "var(--font-geist-mono)",
                   fontSize: "11px",
                   letterSpacing: "0.04em",
                   padding: "8px 12px",
                 }}
-                labelStyle={{ color: "#888" }}
-                itemStyle={{ color: "#FAFAFA" }}
+                labelStyle={{ color: terminal.text.secondary }}
+                itemStyle={{ color: terminal.text.primary }}
                 formatter={(v) => [usd(Number(v)), "Balance"]}
               />
               <Area
                 type="monotone"
                 dataKey="balance"
-                stroke="#00FF88"
+                stroke={terminal.chart.bull}
                 strokeWidth={1.5}
                 fill="url(#equityFill)"
                 isAnimationActive={false}
