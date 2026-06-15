@@ -1,7 +1,7 @@
 # LLTODO — Epic State
 
 > Append-only. Her durum geçişi yeni satır olarak eklenir. Eski satır silinmez.
-**Son güncelleme:** 2026-06-11 @claude (R1+R3 konsensüs + Plan v1.4) (önceki: 2026-06-11 @claude)
+**Son güncelleme:** 2026-06-15 @claude (T-003 NO-GO→indicator-as-premium pivot + backend orkestrasyon) (önceki: 2026-06-11 @claude)
 
 ---
 
@@ -36,6 +36,9 @@
 2026-06-11  REVIEW_FIXES     @claude  T-002 review REQUEST_CHANGES → fix: B1 REPAINT (1h pivot [-j] GELECEK-bar erişimi — R-002'nin tam uyarısı; gecikmeli-pivot kalıbına çevrildi) + B2 visual_group compile hatası + N1 var + N3 %0.1 SL tabanı. Hermes'in lokal lint-R2 varyantı düşürüldü (PR #186 superseded). G-T2 compile-verify BEKLİYOR — TV MCP bağlı değil (launch: TV Desktop'ı --remote-debugging-port=9222 ile).
 2026-06-11  T-002 DONE ✅    @claude  G-T2 PASS: TV Pine Editor compile 0 hata 0 marker (pine_smart_compile + pine_get_errors, master eb5af4f bazlı). eb5af4f hali 2 compile hatası verdi → minimal fix (v1.1.1, mantık değişikliği yok): (1) satır 315/317 '\' satır devamı Pine'da geçersiz ("no viable alternative at character '\'") → girintili satır sarma; (2) f_calc_tp tp1/tp2 = na → float tp1/tp2 = na ("Value with NA type cannot be assigned..."). T-002 → tasks/DONE/. Sıra T-003'te (@hermes).
 2026-06-11  R1+R3_KONSENSÜS @claude  T-003 plan v1.4 notu (LLTODO/plans/P-001 §8a): G-T4 FAIL kök neden tespit edildi (5-ardışık-ters-mum × 1.5×ATR × ≤5-bar pencere × bias × conf≥55 kombinasyonu 15m'de nadir). R1 (sinyal mantığı gevşetme: ob_active_window_bars 5→15 + allow_ob_less input) + R3 (fill güvenilirliği: limit_expiry_bars 20→40 + extended_expiry_in_trend) konsensüs. Çoklu-sembol agregasyonlu gate re-run şartı (BTC+ETH+SOL+BNB+XRP perp 15m ~4.3 ay → 5×~120 trade = 600 trade). SENKRON kuralı 3 dosya (wave1_signals.pine + wave1_strategy.pine + WAVE1_SPEC.md). Python tarafı CLAUDE.md istisnasız. PR #194 draft kalır (G-T4 FAIL), merge-onayı R1+R3 patch'leri + çoklu-sembol gate re-run PASS sonrası. Operatör kararı 2026-06-11 (T-003'e R1+R3 ile başla, çoklu-sembol re-run şartlı, #194 merge gate re-run PASS'a kadar).
+2026-06-13  T-003 NO-GO ❌    @claude  GATE_RUN_2/3/4 + round-4/5/6: Wave-1 strateji yeterli trade ürettiğinde edge HEP negatif — entry mekanizması değil, SMC sinyali tradeable edge taşımıyor (kapsamlı 4+ tur bulgu). #194 BLOCKED. Korunan infra: FVG/EQH-EQL/Breaker detektörler + engine-TP + bt_date fix + OOS-split (derleniyor). Rapor: LLTODO/reports/REPORT-T-003-gate-run-{2,3}.md.
+2026-06-14  INDICATOR_SHIP ✅ @claude  Indicator-only ship: pine/u2algo/wave1_signals.pine v1.2.0 (round-6 görsel detektörler + RE10045 fix → tamamen INLINE, UDF yok). G-T2 compile PASS (0 hata), render-verified. PR #198 → master eebe42b. Indicator emir vermez; TV cloud'a kaydedildi (publish MANUEL/operatör). v1.2.1 review-fix (f179153) üzerine geldi.
+2026-06-15  PREMIUM_PIVOT 🔀  @claude  OPERATÖR KARARI: Premium ürün = INDICATOR (Wave-1 STRATEGY NO-GO sonrası). Wave-2 CHoCH/BOS engine port → düşük-öncelik R&D backlog (greenlight olursa #194 reopen). T-003 strateji backtest hattı KAPANDI. #194 kapatılacak (parked, supersede-by indicator ship). P-001 FAZ 3 indicator tarafıyla DONE; strateji premium R&D'ye ertelendi.
 ```
 
 ### Review Özeti
@@ -107,12 +110,13 @@
 2026-06-11  T-022 DONE ✅    @claude  PR #187: docs/SLA.md (müşteri taahhütleri ≠ iç hedefler — "proof ≠ ürün") + disaster-recovery.md (3 senaryo; S2=2026-05-15 emsali) + on-call-playbook.md (P1/P2/P3) + BONUS breaker-reset.md. Tabletop tatbikatı: 1. tur 2 BLOCKING → fix → 2. tur PASS (DR §5 log). G-P3-B2 operatör paketi (SLA+fiyat+refund) HAZIR.
 2026-06-11  T-013 DONE ✅    @claude  PR #191: ops/daily_report/monthly.py + /api/reports/monthly (require_auth, clamp 1..92g) + 15 test. UR-003 pini uygulandı: journal-first adapter (read_journal_history key-mapping emsali, backend import edilmeden), DB-less equity "n/a" + equity_note, operatör-only İÇ endpoint (müşteri yayını T-012/T-014 yolundan). compute_summary DEĞİŞMEDİ. Review: api-integration APPROVE + code-reviewer APPROVE_WITH_NITS → nit'ler düzeltildi (parsed-ts sort + 3 test).
 2026-06-11  T-014 DONE ✅    @claude  PR #192: proof snapshot uptime bloğu (schema 1.1.0; healthz-contract §3 pinli: service_uptime_pct=(ok+susp)/n ≠ trading_active_pct=ok/n; 0 örnek → None, sahte %100 yok; whitelist'e uptime alt-key seti) + repo-kök CHANGELOG.md (Keep-a-Changelog, müşteri dili) + u2algo-site #guncellemeler (changelog-to-updates.js → updates.json statik besleme; fetch-fail-safe). proof_export 30/30 test (8 yeni) + site smoke compliance PASS. Proof SAYFASI yayını hâlâ G-P3-B4 operatör onayında.
+2026-06-15  W2_UNBLOCKED 🔀  @claude  OPERATÖR KARARI (indicator-as-premium pivot, P-001'den): satılan ürün = INDICATOR (karar-destek aracı), strateji script DEĞİL → W2 monetizasyon hattı AÇIK (premium ürünle eşleşti). G-P3-B3 backtest gate'i moot/yeniden-tanımlı (indicator getiri vaadiyle satılmıyor; proof≠ürün disclaimer G-P3-B4 kapsıyor). G-P3-B5 gelir modeli ERTELENDİ → entitlements şeması forward-compatible (expires_at NULL). Backend orkestrasyon başlatıldı: Hermes GÖREV F(backup-kritik)/A/B/E/D, Gemini entry-slippage backtest resume. Promptlar docs/handoff/2026-06-15-{hermes-backend-tasks,gemini-entry-slippage-resume}.md.
 ```
 
 ### Aktif Durum
 
-**Durum:** `CONSENSUS_REACHED` — UR-003 tamam (4×APPROVED_WITH_NITS, 0 blocker), nits plan v1.1'e entegre (2026-06-11)
-**Sonraki adım:** Operatör PR #181 + #182 merge → FAZ 3 implementasyon (T-010..T-024, dalga sırasıyla; T-020/T-023 pre-UR-exempt — T-023 PR #182'de CI 4/4 yeşil)
+**Durum:** `IN_PROGRESS` — FAZ 3 backend orkestrasyon (W2 unblocked, indicator-as-premium) (2026-06-15)
+**Sonraki adım:** Hermes GÖREV F (backup hedefi → T-020 drill) + GÖREV A/B (W2 temeli + LS fizibilite) paralel; Gemini entry-slippage backtest (mainnet flag-flip kanıtı). Claude review + T-018 telegram_notifier (additive, bağımsız) aday. W0 legal sayfaları (T-010/T-011) + status page sayfası = ayrı frontend Claude oturumunda.
 
 ### Faz Planı
 
@@ -132,3 +136,15 @@
 > 2. T-001 claim et (`LLTODO/tasks/IN_PROGRESS/T-001-swing-detection-core.md`) ve implementasyona başla.
 > 3. Append-only kuralına uy: STATE.md'de eski satırları silme, yeni satır ekle.
 > 4. FAZ 3 bitince FAZ 4 UltraReview (UR-001) için Claude'a bildir.
+
+> **@hermes için (2026-06-15) — backend orkestrasyon:**
+> Prompt: `docs/handoff/2026-06-15-hermes-backend-tasks.md` (GÖREV F/A/B/E/D).
+> Öncelik: GÖREV F (backup hedefi — KRİTİK, T-020 drill'i açar) → A+B (W2 temeli + LS fizibilite) → E → D.
+> Karar: premium=indicator (W2 unblocked); entitlements şeması forward-compatible (expires_at NULL).
+> Transfer: format-patch + sha256 (Telegram'a içerik yapıştırma).
+
+> **@gemini için (2026-06-15) — entry-slippage backtest RESUME:**
+> Prompt: `docs/handoff/2026-06-15-gemini-entry-slippage-resume.md` (GÖREV 1 öncelik).
+> `experiment/entry-slippage-backtest`'i master'a rebase → 2 mod (require_confirmation true/false) ×
+> 6ay × 10 sembol → gate verdict (adverse slippage↓ & PF ~%5 içinde). Telemetri master'da hazır
+> (journal.py:46-51). Mainnet flip bu görevde DEĞİL — testnet shadow + operatör sign-off arkasında.

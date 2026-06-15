@@ -1,6 +1,6 @@
 # LLTODO — SCOREBOARD
 
-| **Son güncelleme:** 2026-06-11 @claude (R1+R3 konsensüs + Plan v1.4) (önceki: 2026-06-11 @claude) |
+| **Son güncelleme:** 2026-06-15 @claude (T-003 NO-GO→indicator-as-premium pivot; W2 unblocked) (önceki: 2026-06-11 @claude) |
 
 ## Genel Metrikler
 
@@ -19,7 +19,7 @@
 |---|---|---|---|
 | T-001 | Swing detection + OB core (Pine Script) | 🟢 DONE | @hermes (2026-06-10) |
 | T-002 | MTF confluence + SL/TP hesaplama | 🟢 DONE (G-T2 PASS 2026-06-11) | @hermes (2026-06-11) |
-| T-003 | Strateji backtest + görsel validasyon | 🟡 IN_PROGRESS (R1+R3 konsensüs — Plan v1.4 §8a; çoklu-sembol gate re-run şartı; PR #194 draft) | @hermes (2026-06-11) |
+| T-003 | Strateji backtest + görsel validasyon | ❌ NO-GO (4+ tur edge negatif; SMC sinyali tradeable edge yok) → 🔀 INDICATOR-ONLY SHIP (PR #198, v1.2.0). Strateji premium → R&D backlog; #194 parked/kapatıldı. | @hermes (2026-06-11) |
 
 ## Sprint Görünümü
 
