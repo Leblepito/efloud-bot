@@ -45,19 +45,24 @@ _DEFAULT_TIMEOUT_SECS = 5.0
 _DIGEST_KEYS = ("date", "closed_count", "wins", "losses", "win_rate_pct", "net_return_pct")
 
 
-def build_daily_digest(closed_trades: list, date_label: str) -> dict:
+def build_daily_digest(closed_trades: list[dict], date_label: str) -> dict:
     """Reduce a list of CLOSED-trade rows into an aggregate-only daily digest.
 
     `closed_trades`: rows with at least `pnl_usdt` and `pnl_pct`. Any per-trade
     signal fields (symbol/entry/sl/tp) are ignored — never copied into the output.
     Returns a dict with exactly `_DIGEST_KEYS` (aggregate only).
+
+    Win/loss use strict `> 0` / `< 0`, so a breakeven trade (`pnl_usdt == 0`)
+    counts toward `closed_count` but is neither a win nor a loss; `win_rate_pct`
+    denominator is the total closed count (honest for a public channel). Missing
+    or `None` pnl fields coerce to 0.
     """
     count = len(closed_trades)
     wins = sum(1 for t in closed_trades if (t.get("pnl_usdt") or 0) > 0)
     losses = sum(1 for t in closed_trades if (t.get("pnl_usdt") or 0) < 0)
     win_rate = round(wins / count * 100, 1) if count else 0.0
     net_return = round(sum((t.get("pnl_pct") or 0) for t in closed_trades), 2)
-    return {
+    values = {
         "date": date_label,
         "closed_count": count,
         "wins": wins,
@@ -65,6 +70,9 @@ def build_daily_digest(closed_trades: list, date_label: str) -> dict:
         "win_rate_pct": win_rate,
         "net_return_pct": net_return,
     }
+    # Build the result FROM the whitelist so _DIGEST_KEYS is the single source of
+    # truth — a stray per-trade field can never slip into the emitted digest.
+    return {k: values[k] for k in _DIGEST_KEYS}
 
 
 class CustomerChannelNotifier:

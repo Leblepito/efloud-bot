@@ -97,6 +97,21 @@ class TestRegulatoryGuard:
         assert d["win_rate_pct"] == 0.0
         assert d["net_return_pct"] == 0.0
 
+    def test_breakeven_and_missing_pnl_counted_safely(self):
+        """Breakeven (pnl_usdt==0) is neither win nor loss; missing pnl_pct → 0.
+        win_rate denominator is total closed count, not decided trades."""
+        rows = [
+            {"pnl_usdt": 0.0, "pnl_pct": 0.0},   # breakeven
+            {"pnl_usdt": 100.0, "pnl_pct": 1.0},  # win
+            {"pnl_usdt": -50.0},                  # loss, pnl_pct key absent → 0
+        ]
+        d = build_daily_digest(rows, "2026-06-15")
+        assert d["closed_count"] == 3
+        assert d["wins"] == 1
+        assert d["losses"] == 1
+        assert d["win_rate_pct"] == 33.3   # 1 / 3, not 1 / 2
+        assert d["net_return_pct"] == 1.0  # 0 + 1.0 + 0 (missing)
+
 
 class TestSendBehavior:
     def test_post_uses_customer_token_and_channel(self, creds):
