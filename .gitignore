@@ -3,7 +3,8 @@
 .env.local
 *.key
 *.pem
-sb_vars.json          # Supabase vars dump — secret, never commit
+# Supabase vars dump — secret, never commit (trailing-comment kuralı çalışmaz!)
+sb_vars.json
 
 # Local scratch / investigation files (untracked, machine-local)
 *.zip
