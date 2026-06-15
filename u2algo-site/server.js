@@ -367,8 +367,8 @@ async function lsUpsertEntitlement({ email, product, orderRef, status = 'pending
        on conflict (order_ref) do update set
          email = excluded.email,
          product = excluded.product,
-         status = excluded.entitlements.status,
-         granted_at = excluded.entitlements.granted_at,
+         status = excluded.status,
+         granted_at = excluded.granted_at,
          updated_at = now()`,
       [row.email, row.product, row.status, row.order_ref, row.granted_at]
     );
