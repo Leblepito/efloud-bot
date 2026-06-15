@@ -10,17 +10,23 @@ LLTODO/
 ├── README.md              ← Bu dosya
 ├── STATE.md               ← Epic durumları (P-001, P-002, ...)
 ├── SCOREBOARD.md          ← Tamamlanma metrikleri, sprint görünümü
+├── CONSENSUS.md           ← 3-ajan teyit protokolü (plan/split/test gate'leri) [v3]
 ├── PROMPT-*.md            ← Agent-spesifik prompt şablonları
-├── templates/             ← Dosya şablonları (epic-plan, review, task)
+├── templates/             ← Dosya şablonları (epic-plan, review, task, split, crosstest)
 ├── plans/                 ← Epic planları (P-001-*.md)
 ├── reviews/               ← Review dosyaları (R-001-*.md)
+├── splits/                ← Görev dağıtımı dosyaları (S-001-*.md) [v3]
 ├── tasks/                 ← Görev dosyaları
 │   ├── IN_PROGRESS/       ← Claim edilmiş, üstünde çalışılan
 │   ├── DONE/              ← Tamamlanmış
 │   └── BACKLOG/           ← Henüz başlanmamış
 ├── scripts/               ← Lint ve yardımcı araçlar
-└── tests/                 ← Lint testleri
+└── tests/                 ← Lint testleri + cross-test raporları (X-001-*.md) [v3]
 ```
+
+> **Consensus v3 (2026-06-13):** Plan review'a ek olarak **görev dağıtımı (SPLIT)** ve **test
+> (CROSS-TEST)** de 3-ajan teyidinden geçer. Tam protokol: [`CONSENSUS.md`](CONSENSUS.md).
+> Hermes'in pre-LLTODO planlama artefaktları `.hermes/plans/2026-06-09_*` + `docs/ceo-product-portfolio-2026-06-09.md` (P-002/P-003 girdileri).
 
 ## Kurallar
 
@@ -47,9 +53,12 @@ LLTODO/
 | `DRAFT` | Plan yazılıyor |
 | `REVIEW_OPEN` | Review'a açık (R-001, R-002, ...) |
 | `CHANGES_REQUESTED` | Reviewer değişiklik istedi |
-| `CONSENSUS_REACHED` | Tüm review'ler onayladı |
+| `CONSENSUS_REACHED` | Tüm review'ler onayladı (2/3 APPROVE) |
+| `SPLIT_AGREED` | Görev dağıtımı (S-XXX) 3/3 ACK aldı [v3] |
 | `IN_PROGRESS` | Implementasyon başladı |
 | `ULTRA_REVIEW` | UR-001 @claude incelemesinde |
+| `CROSS_TEST` | Çapraz test sürüyor (X-XXX, tester ≠ owner) [v3] |
+| `TEST_CONSENSUS` | Tüm görevler bağımsız CROSS-TEST PASS aldı [v3] |
 | `DONE` | Tamamlandı, master'a merge edildi |
 
 ### Claim Kuralı

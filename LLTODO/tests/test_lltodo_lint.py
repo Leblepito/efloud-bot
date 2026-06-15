@@ -212,6 +212,48 @@ def test_r8_broken_references():
             lltodo_lint.LLTODO_DIR = old
 
 
+def test_r1_v3_states_valid():
+    """R1 (v3): SPLIT_AGREED / CROSS_TEST / TEST_CONSENSUS geçerli sayılmalı."""
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        make_lltodo_structure(base, {
+            "STATE.md": "P-001: SPLIT_AGREED\nP-001: CROSS_TEST\nP-001: TEST_CONSENSUS\n",
+            "SCOREBOARD.md": "Claim edilmiş görev | 0",
+        })
+        old = lltodo_lint.LLTODO_DIR
+        lltodo_lint.LLTODO_DIR = base
+        try:
+            r1 = [x for x in lltodo_lint.violations() if x.startswith("[R1]")]
+            assert not r1, f"v3 states must be valid, got: {r1}"
+        finally:
+            lltodo_lint.LLTODO_DIR = old
+
+
+def test_r3_v3_split_and_crosstest_naming():
+    """R3 (v3): splits/ S-NNN ve tests/ X-NNN dışı .md adları flag'lenmeli."""
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        make_lltodo_structure(base, {
+            "STATE.md": "P-001: SPLIT_AGREED",
+            "SCOREBOARD.md": "Claim edilmiş görev | 0",
+            "splits/bad-split.md": "# nope",
+            "tests/bad-crosstest.md": "# nope",
+            # Doğru adlar ihlal ÜRETMEMELİ:
+            "splits/S-001-ok.md": "# ok",
+            "tests/X-001-claude.md": "# ok",
+        })
+        old = lltodo_lint.LLTODO_DIR
+        lltodo_lint.LLTODO_DIR = base
+        try:
+            r3 = [x for x in lltodo_lint.violations() if x.startswith("[R3]")]
+            assert any("bad-split.md" in x for x in r3), f"split naming not flagged: {r3}"
+            assert any("bad-crosstest.md" in x for x in r3), f"cross-test naming not flagged: {r3}"
+            assert not any("S-001-ok.md" in x or "X-001-claude.md" in x for x in r3), \
+                f"valid v3 names wrongly flagged: {r3}"
+        finally:
+            lltodo_lint.LLTODO_DIR = old
+
+
 if __name__ == "__main__":
     # Windows konsolu cp1252 — emoji status satırları crash etmesin
     # (lltodo_lint.py main()'indeki fix'in aynısı; PR #172/#177 pattern'i).
@@ -230,6 +272,8 @@ if __name__ == "__main__":
         test_r6_task_required_headers,
         test_r7_scoreboard_counts,
         test_r8_broken_references,
+        test_r1_v3_states_valid,
+        test_r3_v3_split_and_crosstest_naming,
     ]
     passed = 0
     failed = 0

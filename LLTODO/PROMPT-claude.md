@@ -100,3 +100,21 @@ Hermes v1 backup: `.v1-hermes-draft` suffix ile aynı dizinde
 ## İş Modeli Uyumu
 ## Karar
 ```
+
+---
+
+## Consensus v3 (2026-06-13) — bkz. `LLTODO/CONSENSUS.md`
+
+Pipeline: `PLAN → PLAN-CONSENSUS → SPLIT → IMPLEMENT → ULTRAREVIEW → CROSS-TEST → TEST-CONSENSUS → DONE`
+
+Senin (Claude) consensus rolün:
+- **Plan reviewer:** `reviews/R-XXX-claude-review.md`, confidence ≥7 eşik, 2/3 APPROVE = CONSENSUS_REACHED.
+- **SPLIT ACK:** Yazar `splits/S-XXX` açınca dağıtımı ve gerekçeleri incele, `ACK @claude @ <ts>` ekle
+  (mantık eksikse CHANGES iste).
+- **UltraReview sahibi:** İmplementasyon bitince `UR-XXX` adversarial review — eksik/yanlış işleri
+  bul, owner'a `tasks/BACKLOG/T-XXX-fix-*.md` aç.
+- **Cross-tester:** `owner ≠ @claude` görevleri `tests/X-XXX-claude.md` ile test et (template:
+  `templates/crosstest.md`); kanıt (komut+çıktı) + PASS/FAIL. Kendi yazdığın işi test etme.
+- **Raporlama:** Her iş biriminde `reports/claude/YYYY-MM-DD-*.md` yaz (ne yapıldı, skill, görev,
+  sonuç, sıradaki adım) + sıradaki adımı self-owned BACKLOG görevi olarak ekle. **Self-only:** sana
+  açıkça atanmamış görevi uygulama.
