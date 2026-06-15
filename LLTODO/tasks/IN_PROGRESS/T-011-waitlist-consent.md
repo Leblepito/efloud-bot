@@ -1,7 +1,7 @@
 # T-011: Waitlist KVKK/GDPR Consent Alanı
 
 **Epic:** P-003
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @hermes (2026-06-15) (henüz claim edilmedi)
 **Tahmini süre:** 0.5 gün
 **Bağımlılık:** T-010 (privacy policy metni linklenecek)
 

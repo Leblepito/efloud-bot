@@ -604,6 +604,13 @@
       <p class="muted" style="font-size:16px">E-postanı bırak; doğrulanmış raporlar, erken erişim ve lansman önceliği için ilk sen haberdar ol. Spam yok, satış baskısı yok.</p>
       <form class="wl-form" id="wlForm" novalidate>
         <input type="email" id="wlEmail" placeholder="sen@ornek.com" autocomplete="email" required aria-label="E-posta adresi" />
+        <label class="wl-consent">
+          <input type="checkbox" id="wlConsent" required aria-label="Açık rıza onayı" />
+          <span>I've read and accept the
+            <a href="/privacy.html" target="_blank" rel="noopener">privacy policy</a>
+            and consent to receive product updates.
+          </span>
+        </label>
         <button class="btn btn-primary" type="submit">Listeye katıl</button>
       </form>
       <div class="wl-msg" id="wlMsg" role="status" aria-live="polite"></div>
@@ -700,8 +707,11 @@
   window.addEventListener('load', ()=>{ setTimeout(()=>document.querySelectorAll('.reveal:not(.in)').forEach(el=>el.classList.add('in')), 1200); });
 
   // Waitlist submit: posts to same-origin Railway backend.
+  // T-011: KVKK/GDPR consent zorunlu (P-003 W0 / G-P3-1). consent:true
+  // olmadan backend 400 döner. Mevcut kayıtlar (consent=null) etkilenmez.
   const wlForm = document.getElementById('wlForm');
   const wlEmail = document.getElementById('wlEmail');
+  const wlConsent = document.getElementById('wlConsent');
   const wlMsg = document.getElementById('wlMsg');
   wlForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -711,19 +721,28 @@
       wlMsg.className = 'wl-msg err';
       return;
     }
+    // T-011: consent kontrolü (frontend + backend defense in depth)
+    if (!wlConsent || !wlConsent.checked) {
+      wlMsg.textContent = 'Devam etmek için açık rıza onayı gerekiyor (privacy policy).';
+      wlMsg.className = 'wl-msg err';
+      return;
+    }
     wlMsg.textContent = 'Kaydediliyor...';
     wlMsg.className = 'wl-msg';
     try {
       const res = await fetch('/api/waitlist', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, consent: true })
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
         wlMsg.textContent = 'Kaydın alındı. Lansman notlarında görüşürüz.';
         wlMsg.className = 'wl-msg ok';
         wlForm.reset();
+      } else if (data.error === 'consent_required') {
+        wlMsg.textContent = 'Açık rıza onayı gerekli. Lütfen kutucuğu işaretle.';
+        wlMsg.className = 'wl-msg err';
       } else if (data.error === 'waitlist_not_configured') {
         wlMsg.textContent = 'Kayıt servisi hazırlanıyor. Şimdilik hello@u2algo.com üzerinden ulaşabilirsin.';
         wlMsg.className = 'wl-msg err';

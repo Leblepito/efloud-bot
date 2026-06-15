@@ -1,7 +1,7 @@
 # T-016: Lemon Squeezy Purchase Webhook (HMAC) + Onay E-postası
 
 **Epic:** P-003
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @claude (2026-06-15, INERT DELIVERED; Hermes handoff) (henüz claim edilmedi)
 **Tahmini süre:** 1-2 gün
 **Bağımlılık:** T-015, Hermes GÖREV B (Railway env)
 

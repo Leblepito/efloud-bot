@@ -1,7 +1,7 @@
 # T-017: TradingView Erişim Grant Runbook + Kuyruk Görünümü
 
 **Epic:** P-003
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @hermes (2026-06-15) → DONE (deliverable hazır) (henüz claim edilmedi)
 **Tahmini süre:** 0.5 gün
 **Bağımlılık:** T-016
 
