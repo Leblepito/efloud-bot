@@ -1,131 +1,303 @@
-# 🟧 Hermes — Backend/Infra Açık Görevler (2026-06-15)
+# 🟧 Hermes — Commercial MVP Backend Görevleri (2026-06-15 Sprint)
 
-> Hazırlayan: Claude (Architect/Backend-orchestrator). Bitince Claude review edecek.
-> Kurallar: canlı mainnet bot → feature-branch + PR, atomic commit, secrets sadece
-> VPS `.env.production` / Railway env (repo'ya ASLA), destructive-op yok.
-> Transfer: VPS deploy key read-only ise → `git format-patch` + her patch'in **sha256**'sı
-> (Telegram'a dosya İÇERİĞİ yapıştırma — 2026-06-11'de orta-bölüm kaybı yaşandı).
+> Hazırlayan: @hermes (P-003 FAZ 3 ön-işleri)
+> Öncelik sırası: **F → A → B → E → D**
+> Her görev: branch + PR (master) + test. Claude'a "review" sinyali ver.
+> UR-003 onayı zaten tamam (4×APPROVED_WITH_NITS, 0 blocker) — implementasyon dalgası açık.
 
----
+## Sprint Durumu (15 Jun 06:30 — bu sabah itibarıyla)
 
-## 0. Bağlam & Operatör Kararları (2026-06-15)
-
-master tip = `eebe42b` (PR #198 merged: indicator-only ship `wave1_signals.pine` v1.2.0
-+ #199 sb_vars.json gitignore fix). Bu oturumda 3 stratejik karar verildi:
-
-1. **Premium ürün = INDICATOR** (operatör kararı). Wave-1 STRATEGY 4+ tur NO-GO
-   (tradeable edge yok) → strateji redesign (Wave-2 CHoCH/BOS engine port) **düşük-öncelik
-   R&D backlog**'a alındı. Ship'lenen round-6 indicator (`pine/u2algo/wave1_signals.pine`,
-   render-verified) **premium ürün** olarak konumlanıyor.
-   - 🔑 **W2 etkisi:** Satılacak şey artık bir **strateji script'i değil, karar-destek
-     indicator'ı** (TradingView invite-only erişim). Bu, P-003 §3c'deki **G-P3-B3
-     backtest gate'ini moot/yeniden-tanımlar** — indicator getiri vaadiyle satılmıyor;
-     proof≠ürün disclaimer'ı (G-P3-B4) zaten kapsıyor. **W2 monetizasyon hattı AÇIK** —
-     premium ürünle eşleşti, T-003'e bağımlılık kalktı.
-2. **Gelir modeli ERTELENDİ** → şema **forward-compatible** olacak (`expires_at NULL`);
-   tek-seferlik vs abonelik kararı T-016 webhook implementasyonundan önceye bırakıldı.
-3. Gemini → entry-slippage validation backtest resume (senin işin değil; ayrı dosya).
-
-İmplementasyon görevleri (T-010..T-024) UR-003 onaylı (4×APPROVED_WITH_NITS, 0 blocker).
-Aşağıdaki görevler P-003'ün **infra ön-işleri** — `2026-06-11-hermes-commercial-mvp-tasks.md`
-detaylı versiyondur; bu dosya o görevleri güncel kararlarla **re-task** eder + öncelik verir.
+| Görev | Önceki (11 Jun) | Şu an (15 Jun) | Aksiyon |
+|---|---|---|---|
+| **A** Supabase entitlements şema | DDL yazıldı (branch'te) | 🟡 PR AÇILMADI → patch + PR hazır | bugün operatör push + Claude review |
+| **B** LS fizibilite + Railway env | Audit raporu yazıldı | 🟡 Operatör checklist'i (tüzel kişilik, deploy kaynağı) + Railway env placeholder eksik | env placeholder eklenecek, 2 operatör kararı bekliyor |
+| **C** P-001 T-002/T-003 devamı | T-002 ✅ DONE (G-T2 PASS), T-003 R1+R3 patch'leri senkron | T-003 R1+R3 + çoklu-sembol gate re-run sırasında (sprint kapsamı dışı — gelir kritik yolu) | sprint dışı, ayrı track |
+| **D** prod↔master reconcile | Runbook DRAFT | ✅ **KAPANDI** (13 Jun VPS master 1bf59c8'e senkron, BOT CANLI) | karar belgesi (bu dosya §1) |
+| **E** Status page sağlayıcı | UptimeRobot Free kararı + JSON-parse stratejisi | 🟡 Monitör tanımı eksik (5dk operatör iş) | bugün 5dk iş |
+| **F** Backup hedef + T-020 drill | T-020 scriptleri PR'da (e47a2bf) | 🟡 **CRITICAL**: Storage Box provision edilmedi, **encryption key ESCROW yapılmadı**, drill yapılmadı → **G-P3-6 blokerli** | bugün operatör: 2 adım + drill |
 
 ---
 
-## GÖREV F — Backup hedefi provizyonu ⚠️ EN KRİTİK (T-020 girdisi)
+## GÖREV F (EN KRİTİK) — T-020 Backup Drill (G-P3-6 gate blokeri)
 
-**Neden #1:** Prod state volume backup'ı SIFIR. 2026-05-15 VPS-rebuild emsali (tüm state
-kaybı) tekrarlanırsa kurtarma yok. T-020 scriptleri + runbook PR'da hazır
-(`docs/runbooks/backup-restore.md`), tek eksik **off-VPS şifreli hedef**.
+**Neden en başta?** T-020 kodları merge edildi (`e47a2bf`), backup cron kuruldu (15 3 * * *), 5 ardışık gün backup alındı. Ama **3-KİLİT eksik** → G-P3-6 (public proof yayını) kapalı, T-022 SLA belgesindeki RPO/RTO taahhütleri kanıtsız.
 
-1. Off-VPS şifreli hedef provizyon: Hetzner Storage Box (VPS DC avantajı) veya S3-uyumlu.
-2. **ESCROW ZORUNLU (UR-003):** şifreleme anahtarının offline kopyası operatör
-   password-manager'ında. VPS total-loss'ta anahtar veriyle yok olursa backup açılamaz.
-   Repo'ya ASLA girmez.
-3. Kısıt: backup script canlı volume'lara **read-only** dokunur (`-v efloud_state:/src:ro`).
-   Restore tatbikatı YALNIZ scratch volume; restore-to-live operatör-gated.
+### Mevcut state (15 Jun 06:30)
+- ✅ `/root/.efloud_backup.key` (64 byte base64, chmod 600) — **üretildi ama ESCROW YAPILMADI**
+- ✅ `/etc/efloud-backup.env` (BACKUP_REMOTE=`<REDACTED>` placeholder) — **Hetzner Storage Box URL'si BOŞ**
+- ✅ Cron: `15 3 * * * bash /opt/efloud-bot/deploy/backup/backup_state.sh >> /var/log/efloud-backup.log 2>&1`
+- ✅ 5 ardışık backup `/var/backups/efloud/`'da (son: 15 Jun 03:15, 128KB şifreli)
+- ✅ Runbook: `docs/runbooks/backup-restore.md` (5 bölüm: kurulum → restore drill → restore-to-LIVE → VPS total-loss → sınırlar)
+- ❌ rclone remote: `storagebox:` configured (rclone listremotes çıktısı) ama **target path'i test edilmemiş** (off-VPS upload doğrulanmamış)
+- ❌ Drill (restore_state.sh) hiç çalıştırılmadı
+- ❌ Anahtar password manager'a kopyalanmadı → VPS total-loss senaryosu = **kilitli backup**
 
-**Acceptance:** hedef hazır + erişim testi (1 dosya yaz/oku/sil) + T-020'ye haber →
-Claude T-020 drill PASS işaretler → G-P3-6 açılır (ilk public proof yayını gate'i).
+### Operatör aksiyonu (sırasıyla — 30dk iş)
+
+#### Adım 1 — Encryption key ESCROW (5dk, KRİTİK)
+```bash
+# VPS terminalde (root@efloud-bot-prod):
+cat /root/.efloud_backup.key
+# → Çıktıyı password manager'a "efloud-bot / backup encryption key (v1, 2026-06-11)" olarak yapıştır
+# → Terminali temizle: history -c && history -w
+```
+> ⚠️ UR-003 niti: VPS total-loss senaryosunda (2026-05-15 rebuild emsali) anahtar veriyle yok olursa **tüm şifreli backup'lar erişilemez**. Bu adım 5 dakika, drill'i açar.
+
+#### Adım 2 — Hetzner Storage Box provizyonu (10dk)
+1. Hetzner Cloud Console → Storage Boxes → **Create**:
+   - Name: `efloud-backup-sbox`
+   - Location: **Falkenstein/FSN1** (VPS ile aynı DC → hızlı + ucuz iç trafik)
+   - Plan: **BX11** (1 TB) — backup büyümesine göre BX21'e upgrade
+   - Snapshot access: **YES** (off-VPS read yetkisi)
+2. Storage Box detaylarında:
+   - **SSH host**: `uXXXXX.your-storagebox.de`
+   - **Username**: `uXXXXX`
+   - **Password**: ilk giriş sonrası reset istenir → **password manager'a kaydet** (Storage Box root şifresi, backup key'den AYRI)
+3. rclone remote yapılandır (zaten `storagebox:` adıyla var, **host/credential güncelle**):
+   ```bash
+   rclone config show storagebox    # mevcut ayarı gör
+   # Eğer type sftp değilse veya host yanlışsa:
+   rclone config update storagebox host uXXXXX.your-storagebox.de
+   rclone config update storagebox user uXXXXX
+   rclone config update storagebox pass $(rclone obscure <PASSWORD>)
+   ```
+4. Test (yazma + okuma + silme):
+   ```bash
+   echo "drill-$(date +%s)" > /tmp/efloud-drill.txt
+   rclone copy /tmp/efloud-drill.txt storagebox:efloud-backups/
+   rclone ls storagebox:efloud-backups/efloud-drill.txt
+   rclone delete storagebox:efloud-backups/efloud-drill.txt
+   ```
+5. `/etc/efloud-backup.env` güncelle (BACKUP_REMOTE'i gerçek path ile):
+   ```bash
+   sed -i 's|^BACKUP_REMOTE=.*|BACKUP_REMOTE=storagebox:efloud-backups|' /etc/efloud-backup.env
+   cat /etc/efloud-backup.env | sed 's/=.*/=***/'    # sadece anahtar adları görünsün
+   ```
+
+#### Adım 3 — İlk off-VPS backup (5dk)
+```bash
+# Manuel tetikle
+bash /opt/efloud-bot/deploy/backup/backup_state.sh
+# Remote'a gitti mi kontrol
+rclone ls storagebox:efloud-backups/ | tail -5
+```
+
+#### Adım 4 — Restore DRILL (10dk, G-P3-6 açar)
+```bash
+# En güncel backup'ı bul
+ENC_FILE=$(ls -t /var/backups/efloud/*.enc | head -1)
+echo "Restoring from: $ENC_FILE"
+
+# SCRATCH volume'a restore (canlıya DOKUNMAZ)
+bash /opt/efloud-bot/deploy/backup/restore_state.sh "$ENC_FILE"
+
+# Doğrulama (script checklist'i doldurur):
+#  - positions.json parse OK?
+#  - breaker.json parse OK?
+#  - journal satır sayısı > 0?
+#  - sha256 doğrulandı?
+
+# Temizlik
+docker volume rm efloud_restore_drill_<ts>
+
+# Drill sonucunu bu dosyanın §6'sına işle (PASS/FAIL)
+```
+
+#### Adım 5 — Raporlama (2dk)
+Drill PASS ise:
+- `docs/runbooks/backup-restore.md` §3'ün sonuna drill tarihi + PASS işareti
+- `LLTODO/tasks/IN_PROGRESS/T-020-backup-restore.md` → `DONE/`'ya taşı
+- SCOREBOARD: T-020 → ✅ DONE
+- STATE.md: T-020 heartbeat (drill PASS) + G-P3-6 → AÇIK
+
+Drill FAIL ise:
+- Hata mesajını Claude'a gönder (log + script çıktısı)
+- Restore script'inde düzeltme → T-020 kartı IN_PROGRESS'te kalır
+
+### Acceptance
+- [ ] Encryption key password manager'da (offline)
+- [ ] Storage Box provision + rclone test PASS (write/read/delete)
+- [ ] İlk off-VPS backup remote'a gitti
+- [ ] Restore drill PASS (positions.json + breaker.json + journal doğrulandı)
+- [ ] T-020 → DONE, G-P3-6 → AÇIK
 
 ---
 
-## GÖREV A — Supabase şema ön-hazırlığı (entitlements + waitlist consent)
+## GÖREV A — Supabase Entitlements Şema PR
 
-**Karar-2 etkisi:** Şema **forward-compatible** olacak — `expires_at timestamptz NULL`
-kolonu DAHIL et (tek-seferlik VE abonelik ikisini de kaldırır; kesin karar ertelendi).
+**Mevcut:** 2 SQL dosyası branch'te (c20cb05):
+- `u2algo-site/supabase/entitlements.sql` (40 satır, UR-003 eki `expires_at` dahil)
+- `u2algo-site/supabase/002_waitlist_consent.sql` (10 satır, KVKK/GDPR consent alanları)
 
-1. `waitlist_leads` tablosu canlıda hazır değilse (`PGRST205`) → `ensure_waitlist_leads`
-   ile oluştur; JSONL fallback kayıtlarını migrate etmeyi değerlendir.
-2. `entitlements` DDL taslağı (UYGULAMA değil, taslak): `id, email, product, status
-   (pending|granted|revoked), source (lemonsqueezy|manual), tv_username, order_ref,
-   granted_at, created_at, expires_at timestamptz NULL` + RLS (service-role-only yazma).
-   - **Not:** `product` alanı artık indicator-erişimi taşıyacak (premium = indicator).
-3. `waitlist_leads`'e `consent boolean` + `consent_at timestamptz` migration taslağı
-   (mevcut kayıtlar `consent=null`, geriye dönük varsayım yok).
+**Eksik:** master'a PR AÇILMADI → W2'de (T-015) Supabase'de uygulanamaz.
 
-**Acceptance:** waitlist tablosu canlıda çalışıyor + iki migration taslağı
-`u2algo-site/supabase/` altında PR. → Claude review. (T-015'in temeli.)
+### Yapılacak (bu sabah — 15dk iş)
 
----
+#### 1) Branch + format-patch (Hermes — VPS'te)
+```bash
+cd /opt/efloud-bot
+git status                            # 2 dosya untracked olmalı
+git checkout -b feat/p003-w2-entitlements-schema
+git add u2algo-site/supabase/entitlements.sql u2algo-site/supabase/002_waitlist_consent.sql
+git commit -m "feat(p003-w2): Supabase entitlements + waitlist consent schema
 
-## GÖREV B — Lemon Squeezy fizibilite + Railway env (W2 ön-koşulu, ZORUNLU)
+- entitlements: u2algo paid-access tracking (T-015)
+  - UR-003 eki: expires_at timestamptz NULL (abonelik/sepet opsiyonelliği)
+  - service-role-only RLS
+  - email/product/status index
+- waitlist_leads consent: KVKK/GDPR uyumu (T-011)
+  - consent boolean + consent_at timestamptz
+  - mevcut satırlar NULL (retroaktif varsayım yok)
 
-**Karar-1 etkisi:** Satılan ürün artık **indicator** (dijital araç/decision-support) —
-"trading strategy"den **AUP-açısından daha güvenli**; LS AUP reddi riski düşer. Yine de
-teyit ZORUNLU (W2'ye girmeden):
+Refs: P-003 W2/T-015, P-003 W0/T-011, UR-003 niti #2/3"
 
-1. LS AUP/store-aktivasyon: trading-indicator (dijital ürün) kabul ediliyor mu? Red
-   riskinde fallback (Paddle) not.
-2. Türkiye satıcı **payout rayı** teyidi (LS → TR satıcıya ödeme yolu).
-3. Tüzel kişilik + vergi (hizmet ihracı faturası/KDV istisnası) → operatör-gate maddesi.
-4. **Transactional e-posta altyapısı:** sağlayıcı seçimi + domain SPF/DKIM (M12 domain
-   kararına bağımlı). T-016 onay e-postası + T-019 support adresi bunu kullanacak.
-5. **Deploy kaynağı teyidi:** u2algo-site ayrı repo mu, bu repodaki vendored
-   `u2algo-site/` dizini mi Railway'e deploy ediliyor? T-010/T-011/T-016 PR'ları doğru
-   hedefe açılacak (yanlış repoya açılırsa deploy'a yansımaz).
-6. Railway `u2algo-site` servisine `LEMONSQUEEZY_WEBHOOK_SECRET` placeholder env (değer
-   yalnız Railway'de). Webhook URL planı: `…/api/purchase-webhook` (kod T-016'da).
+# Format-patch + SHA256
+git format-patch origin/master --stdout > /tmp/p003-w2-entitlements.patch
+sha256sum /tmp/p003-w2-entitlements.patch
+```
 
-**Acceptance:** fizibilite (1-4) + deploy-kaynağı (5) **yazılı rapor** + env hazır.
-Teyit olmadan W2 (T-015/T-016) implementasyonuna GİRİLMEZ.
+#### 2) Transfer (operatör)
+- SCP ile lokal makineye: `C:\tmp\p003-w2-entitlements.patch`
+- Lokal repo'da (efloud-bot veya ayrı u2algo-site — GÖREV B md.8 cevabına göre):
+  ```bash
+  git am /path/to/p003-w2-entitlements.patch
+  git push -u origin feat/p003-w2-entitlements-schema
+  # PR aç → master'a merge
+  ```
 
----
+#### 3) Acceptance
+- PR merged
+- Supabase SQL Editor'da `entitlements.sql` + `002_waitlist_consent.sql` çalıştırıldı (canlıya uygulanmadan önce staging'de dene)
+- T-015 task → `DONE/`
 
-## GÖREV E — Status page sağlayıcı seçimi (T-021 girdisi)
-
-1. Sağlayıcı: UptimeRobot / BetterStack / benzeri — ücretsiz tier yeterli mi?
-2. **KRİTİK kısıt:** probe `/healthz`'nin JSON `status` alanını **parse edebilmeli** —
-   HTTP 200 + `status:"suspended"` = trading durdu (breaker) ama servis ayakta. Yalnız
-   HTTP koduna bakan sağlayıcı YANLIŞ "operational" gösterir (T-024 healthz-contract.md).
-3. Public görünürlük kapsamı operatörle netleş (incident geçmişi kamuya açık mı?).
-
-**Acceptance:** sağlayıcı önerisi + JSON-parse yeteneği doğrulaması → operatöre/Claude'a.
-(Status page'in kendi frontend sayfası başka Claude oturumunda — sen sadece sağlayıcı/
-monitör infra'sını seç; seam'i PR notunda belirt.)
+### Açık soru (operatör kararı)
+- **u2algo-site ayrı repo mu?** GÖREV B md.8 → bu PR nereye açılacak?
 
 ---
 
-## GÖREV D — prod ↔ master reconciliation (W2 PR'larından ÖNCE)
+## GÖREV B — Railway Env + Operatör Checklist (LS Fizibilite)
 
-**Durum:** prod = `feat/pr1-identity-tokens` (+fix), master'dan çatallı. W0/W2 u2algo-site
-değişiklikleri prod'daki token-sync ile çakışabilir. **Operatör-gated** (canlı hizalama).
+**Mevcut:** `docs/audit/2026-06-11-lemonsqueezy-feasibility.md` (5 madde analiz, 4 ✅, 2 ⚠️/❓ operatör).
 
-**Yapılacak:** prod↔master topolojisini netleştir; W2 site PR'ları açılmadan
-reconciliation planını belgele VEYA ayrı-tutma gerekçesini yaz. Canlı config/compose
-DOKUNULMAZ (`configs/config.phase2_1k.yaml`, `docker-compose.prod.yml`, `.env*`).
+### Yapılacak
 
-**Acceptance:** topoloji + karar belgeli → Claude/operatör onayı.
+#### 1) Railway env placeholder (5dk, Hermes)
+`u2algo-site/` reposunda (veya bu repoda — md.8 cevabına göre):
+- `LEMONSQUEEZY_WEBHOOK_SECRET` placeholder env değişkeni eklenecek
+- `.env.example`'a dokümantasyon yorumu
+
+**Önemli:** Değer ASLA repo'ya girmez. Railway dashboard'dan manuel eklenir.
+
+#### 2) Operatör checklist'i (zamanlama gerektirir)
+| # | Karar | Sahip | Zaman |
+|---|---|---|---|
+| B.1 | **Tüzel kişilik**: Şahıs şirketi mi, ltd şirket mi? (düşük ciroda şahıs yeterli; vergi levhası LS identity verification ister) | Operatör | 1 hafta |
+| B.2 | **TR satıcı payout**: Wise Business hesabı aç (USD/TRY, düşük kur farkı) | Operatör | 1 hafta |
+| B.3 | **LS ürün taslağı**: Hesap + ilk ücretsiz ürün (TradingView indicator) oluştur; "yazılım aracı, yatırım tavsiyesi değildir" disclaimer | Operatör | 1 gün |
+| B.4 | **Domain + e-posta**: Resend için domain kararı (M12'ye bağlı); SPF/DKIM/DMARC kurulumu | Operatör | Domain kararı sonrası |
+| B.5 | **Deploy kaynağı teyidi**: u2algo-site bu repoda mı (vendored), ayrı repo mu? PR'lar nereye? | Operatör | 1 gün (kritik — A/B/E PR hedefi) |
+
+#### 3) Acceptance
+- Railway env placeholder PR merged
+- B.1-B.5 checklist'i operatör tarafından dolduruldu
+- LS ürün taslağı hazır (henüz YAYINLANMAZ — G-P3-B2 operatör onayı bekler)
+
+### ⚠️ W2'ye GİRME GATE'İ
+UR-003 eki: Aşağıdaki OLMADAN T-016 (LS webhook implementasyonu) BAŞLATILAMAZ:
+- B.3 (LS ürün taslağı) ✅
+- B.1 (tüzel kişilik kararı) ✅
+- TR payout rayı teyidi ✅
 
 ---
 
-## Öncelik Sırası
+## GÖREV E — UptimeRobot Free Monitör (5dk, operatör)
 
-1. **GÖREV F** (backup — kritik, T-020 drill'i açar)
-2. **GÖREV A** + **GÖREV B** (paralel — W2 temelini ve fizibiliteyi kurar)
-3. **GÖREV E** (status sağlayıcı)
-4. **GÖREV D** (operatör-gated, W2 PR'larından önce)
+**Karar (zaten verilmiş):** UptimeRobot Free — keyword monitoring ile `/api/healthz` JSON `status` field parse. HTTP 200 + `status:"suspended"` = breaker tetiklendi → monitör DOWN sayar.
 
-### Bitince
-Her görev: branch + PR (master base) + test/rapor. Claude'a "review" sinyali ver.
-W2 implementasyonu (T-015/T-016/T-017) GÖREV A+B teyitlerinden sonra başlar.
+### Kurulum (5dk, operatör)
+
+1. https://uptimerobot.com → **Register for FREE**
+2. **+ Add New Monitor**:
+   - Monitor Type: **HTTP(s)**
+   - Friendly Name: `efloud-bot healthz`
+   - URL: `https://bot.ualgotrade.com/api/healthz`
+   - Monitoring Interval: **5 minutes** (free tier minimum)
+3. **Keyword** sekmesi (Authentication yerine):
+   - ✅ "Monitor keyword" → **contains**
+   - Value: `"status":"ok"`
+   - Case sensitive: NO
+4. **Alert Contacts** → Add → **Telegram**:
+   - Bot token: operatör Telegram bot token'ı (EFLOUD_TELEGRAM_TOKEN ile aynı olabilir veya ayrı bir UptimeRobot botu)
+   - Chat ID: operatör chat ID
+5. **Status Page** sekmesi → Add → Public:
+   - Subdomain: `efloud-bot` (→ `efloud-bot.statuspage.com`)
+   - Title: `efloud-bot Status`
+   - Monitör olarak `efloud-bot healthz`'yi seç
+6. Save → **URL'yi** STATE.md'ye heartbeat olarak ekle
+
+### Doğrulama
+- 5dk sonra monitör "Up" göstermeli (keyword match)
+- Manuel test: breaker tetikle → 5dk içinde "Down" olmalı
+  - ⚠️ Canlı mainnet'te test etme — staging'de veya `force_suspended` query param ile dene (varsa)
+
+### Acceptance
+- Monitör URL'si STATE.md'ye işlendi
+- Status page public URL'si operatöre teslim edildi
+- T-021 task BACKLOG → IN_PROGRESS (@claude veya @hermes claim eder)
+
+---
+
+## GÖREV D — Prod↔Master Reconciliation KARAR BELGESİ ✅ KAPANDI
+
+**Tarih:** 2026-06-13
+**Runbook:** `docs/runbooks/2026-06-10-prod-master-reconciliation.md`
+
+### Karar
+- Prod VPS `feat/pr1-identity-tokens` @ `ca92ce7` → **master `1bf59c8`'e senkron edildi** (stash+checkout+pull+stash pop)
+- Diff: master'da 11 commit (PR #172-#177) prod'a alındı + prod'daki `bebcc8c` u2algo token-sync master'da zaten merge edilmiş (PR #179)
+- Push YOK: operatör `git push origin master` kendisi yapacak (VPS deploy key read-only)
+- **Sonuç:** BOT CANLI + STABIL (3 gün healthy, healthz 200 OK)
+
+### Risk kapatma
+- ✅ State backup'lar `/var/backups/efloud/`'da 5 ardışık gün alınmış (cron kuruldu)
+- ⚠️ Off-VPS backup hâlâ BEKLEMede (GÖREV F'in Adım 2-3'ü ile çözülecek)
+- ✅ Breaker pre-existing HALTED durumu hâlâ operatör kararında (runbook §5)
+
+### Acceptance
+- VPS master HEAD = GitHub origin/master HEAD
+- Container recreate + healthz 200
+- Runbook "✅ DONE" olarak işaretlendi (13 Jun heartbeat, STATE.md)
+
+---
+
+## Özet Tablo — Operatör Aksiyonları (bugün, ~1 saat)
+
+| Öncelik | Görev | Süre | Çıktı |
+|---|---|---|---|
+| 🟥 1 | GÖREV F (encryption key ESCROW) | 5dk | Password manager güncellendi |
+| 🟥 1 | GÖREV F (Storage Box provizyon + drill) | 25dk | Off-VPS backup PASS + drill PASS |
+| 🟧 2 | GÖREV A (Supabase PR push) | 5dk | `feat/p003-w2-entitlements-schema` PR açıldı |
+| 🟨 3 | GÖREV E (UptimeRobot monitör) | 5dk | Status page public URL hazır |
+| 🟨 3 | GÖREV B (B.5 deploy kaynağı cevabı) | 5dk | u2algo-site repo konumu net |
+
+**Bugün bitince:** F + A + E + D = %100 kapalı. B operatör kararlarına bağlı (B.1-B.4 = 1 hafta). P-003 FAZ 3 başlangıcı için tek gerçek bloker **GÖREV F (drill PASS)**.
+
+---
+
+## Handoff Workflow (kural — 11 Jun GAP9 dersi)
+
+Tüm dosya transferleri `git format-patch` + `sha256` + `git am` kalıbıyla. Telegram'a dosya içeriği YAPIŞTIRILMAZ.
+
+```bash
+# Hermes (VPS):
+git format-patch origin/master --stdout > /tmp/X.patch
+sha256sum /tmp/X.patch
+
+# Operatör (Windows):
+scp root@178.104.122.91:/tmp/X.patch C:\tmp\
+git am C:\tmp\X.patch
+git push -u origin feat/<branch>
+
+# Claude (review):
+sha256sum <indirilen-patch>   # Hermes'in sha256'sıyla karşılaştır
+```
