@@ -8,6 +8,11 @@
 // v1.2.1 — PR #198 review-fix: OB cnt>=1 (engine SENKRON, smc.py:216 — tam-5 değil),
 //          confluence near-swing window-gate (bayat +15 fix), EQH/EQL 5-komşu
 //          penceresi (smc.py:311), FVG mitigation no-op + dead array temizliği.
+// v1.3.0 — GÖRSEL POLISH (approach A): katman toggle'ları (Görünüm) + çizim
+//          yaşam-döngüsü (handle-tracked: yalnız SON sinyalin SL/TP'si + son N
+//          zone çizilir → spaghetti/kutu-duvarı gider) + bgcolor opaklık düşür +
+//          kenarlık + net renk semantiği + zengin info-table. SADECE GÖRSEL —
+//          sinyal/SL/TP/confluence LOGIC'i byte-eşdeğer (değişmedi).
 // ═══════════════════════════════════════════════
 //
 // © u2algo — Efloud SMC Core · Pine Script v6 · INDICATOR (free, lead magnet)
@@ -35,7 +40,7 @@ indicator(
 )
 
 // ═══════════════════════════════════════════════
-// INPUTS — strategy ile SENKRON
+// INPUTS — strategy ile SENKRON (çekirdek param.)
 // ═══════════════════════════════════════════════
 ob_seq_group   = "Order Block"
 ob_seq_default = 5
@@ -54,16 +59,30 @@ min_rr    = input.float(1.5, "Min R:R", minval=1.0, maxval=5.0, step=0.1,
 fib_tp2   = input.float(1.618, "Fib TP2 Extension", minval=1.0, maxval=3.0, step=0.1,
  tooltip="Fibonacci extension from swing range for TP2 target", group=confluence_group)
 
-visual_group = "Visual"
-show_sltp = input.bool(true, "Show SL/TP Levels", group=visual_group,
- tooltip="Plot dashed SL/TP lines + entry marker on signal bar")
-show_fvg = input.bool(true, "Show FVG Zones", group=visual_group,
- tooltip="Fair Value Gap kutuları (engine smc.py:38-44 portu)")
-show_liquidity = input.bool(true, "Show EQH/EQL Liquidity", group=visual_group,
+// ═══════════════════════════════════════════════
+// GÖRÜNÜM (katman toggle'ları) — v1.3.0 polish
+//   Default: temiz + screenshot-hazır. Her çizim flag'e gate'li.
+// ═══════════════════════════════════════════════
+visual_group = "Görünüm"
+show_signals   = input.bool(true,  "Sinyal SL/TP/Entry", group=visual_group,
+ tooltip="Yalnız SON aktif setup'ın SL/TP/entry çizgileri + etiketi (geçmiş spaghetti YOK)")
+show_zones     = input.bool(true,  "Order Block Zone'ları", group=visual_group,
+ tooltip="Demand (yeşil) / Supply (kırmızı) OB kutuları — son N tanesi")
+show_fvg       = input.bool(true,  "FVG Zone'ları", group=visual_group,
+ tooltip="Fair Value Gap kutuları (engine smc.py:38-44) — son N tanesi")
+show_breaker   = input.bool(true,  "Breaker (BB) İşaretleri", group=visual_group,
+ tooltip="OB kırılınca (close zone'dan geçince) breaker işareti")
+show_liquidity = input.bool(true,  "EQH/EQL Likidite", group=visual_group,
  tooltip="Equal Highs/Lows likidite seviyeleri (engine smc.py pairwise)")
-show_breaker = input.bool(true, "Show Breaker Flips", group=visual_group,
- tooltip="OB kırılınca (close zone'dan geçince) breaker (BB) işareti")
-use_cb_palette = input.bool(false, "Colorblind-Friendly Palette", group=visual_group)
+show_labels    = input.bool(true,  "Swing HH/LL Etiketleri", group=visual_group,
+ tooltip="Onaylı swing high/low etiketleri (son birkaç tanesi)")
+show_bgcolor   = input.bool(false, "Zone Dolgusu (bgcolor)", group=visual_group,
+ tooltip="KAPALI (default): zone'lar yalnız kenarlık (temiz). AÇIK: çok-düşük-opaklık dolgu")
+show_table     = input.bool(true,  "Info Panel (table)", group=visual_group,
+ tooltip="Köşe paneli: 1H bias / confluence / setup / entry / SL / R:R")
+max_zones      = input.int(6, "Max Görünür Zone", minval=1, maxval=20, group=visual_group,
+ tooltip="Yalnız son N OB / FVG zone çizilir (kutu-duvarı önler)")
+use_cb_palette = input.bool(false, "Renk-Körü Dostu Palet", group=visual_group)
 
 r1_group = "T-003 R1 — Signal Tuning"
 ob_active_window_bars = input.int(15, "OB Active Window (bars)", minval=1, maxval=50,
@@ -71,19 +90,37 @@ ob_active_window_bars = input.int(15, "OB Active Window (bars)", minval=1, maxva
  group=r1_group)
 
 // ═══════════════════════════════════════════════
-// COLOR PALETTE — Plan §4
+// COLOR PALETTE — net semantik (Plan §4 + polish §5)
+//   bullish=yeşil · bearish=kırmızı · zone=yön-renkli düşük-opaklık · nötr=gri
 // ═══════════════════════════════════════════════
-col_long  = use_cb_palette ? color.new(#4488FF, 0) : color.new(#00FF88, 0)
-col_short = use_cb_palette ? color.new(#FF8800, 0) : color.new(#FF4455, 0)
-col_sl    = use_cb_palette ? color.new(#FF0000, 0) : color.new(#FF6644, 0)
-col_tp1   = use_cb_palette ? color.new(#00CC44, 0) : color.new(#44DD88, 0)
-col_tp2   = use_cb_palette ? color.new(#AA44FF, 0) : color.new(#4488FF, 0)
-col_ob    = color.new(#FFDD44, 80)
-col_bb    = color.new(#FF66CC, 70)
-col_swing = color.new(#CCCCCC, 0)
-col_fvg   = color.new(#AA66FF, 78)
-col_liq   = color.new(#FFAA00, 30)
-col_trend = color.new(#666666, 60)
+base_long  = use_cb_palette ? #4488FF : #00E18A
+base_short = use_cb_palette ? #FF8800 : #FF4D5E
+base_sl    = use_cb_palette ? #FF0000 : #FF5544
+base_tp1   = use_cb_palette ? #00CC44 : #3FD188
+base_tp2   = use_cb_palette ? #AA44FF : #4D9BFF
+base_fvg   = use_cb_palette ? #9C6ADE : #A06BFF
+base_liq   = use_cb_palette ? #FFC107 : #FFA000
+base_bb    = #FF66CC
+base_swing = #9AA0A6
+base_trend = #808890
+
+col_long  = color.new(base_long,  0)
+col_short = color.new(base_short, 0)
+col_sl    = color.new(base_sl,    0)
+col_tp1   = color.new(base_tp1,   0)
+col_tp2   = color.new(base_tp2,   0)
+col_bb    = color.new(base_bb,    0)
+col_swing = color.new(base_swing, 0)
+col_liq   = color.new(base_liq,   20)
+col_trend = color.new(base_trend, 25)
+
+// zone kenarlık + (opsiyonel) çok-düşük-opaklık dolgu
+dem_border = color.new(base_long,  35)
+sup_border = color.new(base_short, 35)
+fvg_border = color.new(base_fvg,   55)
+dem_fill   = show_bgcolor ? color.new(base_long,  90) : na
+sup_fill   = show_bgcolor ? color.new(base_short, 90) : na
+fvg_fill   = show_bgcolor ? color.new(base_fvg,   90) : na
 
 // ═══════════════════════════════════════════════
 // ATR + 1H BIAS
@@ -153,6 +190,7 @@ if barstate.isconfirmed and new_swing_low
 
 // ═══════════════════════════════════════════════
 // ORDER BLOCK + BREAKER ZONE ARRAY (engine smc.py:200-256) — round-6
+//   v1.3.0: çizilen kutular handle-tracked (var array<box>) → son N tanesi
 // ═══════════════════════════════════════════════
 bar_bull = close > open
 bar_bear = close < open
@@ -164,6 +202,7 @@ var array<float> ob_bot = array.new<float>()
 var array<int>   ob_dir = array.new<int>()   // 1=demand(LONG), -1=supply(SHORT)
 var array<int>   ob_bar = array.new<int>()
 var array<bool>  ob_brk = array.new<bool>()
+var array<box>   ob_boxes = array.new<box>() // çizim handle'ları (görsel cap)
 int OB_CAP = 30
 
 bull_breakout = barstate.isconfirmed and bar_bull and is_breakout_body
@@ -205,8 +244,9 @@ if bull_breakout
             array.shift(ob_dir)
             array.shift(ob_bar)
             array.shift(ob_brk)
-        box.new(bullish_ob_bar, hi, bar_index, lo,
-         border_color=col_ob, border_width=1, border_style=line.style_solid, bgcolor=col_ob)
+        if show_zones
+            array.push(ob_boxes, box.new(bullish_ob_bar, hi, bar_index, lo,
+             border_color=dem_border, border_width=1, border_style=line.style_solid, bgcolor=dem_fill))
 
 bear_breakout = barstate.isconfirmed and bar_bear and is_breakout_body
 var int  bearish_ob_bar = na
@@ -247,10 +287,16 @@ if bear_breakout
             array.shift(ob_dir)
             array.shift(ob_bar)
             array.shift(ob_brk)
-        box.new(bearish_ob_bar, hi, bar_index, lo,
-         border_color=col_ob, border_width=1, border_style=line.style_solid, bgcolor=col_ob)
+        if show_zones
+            array.push(ob_boxes, box.new(bearish_ob_bar, hi, bar_index, lo,
+             border_color=sup_border, border_width=1, border_style=line.style_solid, bgcolor=sup_fill))
+
+// görsel zone cap: yalnız son max_zones OB kutusu kalır → kutu-duvarı yok
+if array.size(ob_boxes) > max_zones
+    box.delete(array.shift(ob_boxes))
 
 // breaker flip: close OB içinden geçince yönü flip + breaker işaretle
+var array<label> bb_lbls = array.new<label>()
 if array.size(ob_top) > 0
     for i = 0 to array.size(ob_top) - 1
         if not array.get(ob_brk, i) and bar_index - array.get(ob_bar, i) >= 2
@@ -267,17 +313,23 @@ if array.size(ob_top) > 0
             if flipped and show_breaker
                 bbe = d == 1 ? array.get(ob_bot, i) : array.get(ob_top, i)
                 bst = d == 1 ? label.style_label_up : label.style_label_down
-                label.new(bar_index, bbe, "BB", style=bst, color=col_bb,
-                 textcolor=color.white, size=size.tiny)
+                array.push(bb_lbls, label.new(bar_index, bbe, "BB", style=bst, color=col_bb,
+                 textcolor=color.white, size=size.tiny))
+if array.size(bb_lbls) > 6
+    label.delete(array.shift(bb_lbls))
 
 // ═══════════════════════════════════════════════
 // FVG DETECTION (engine smc.py:38-44) — round-6 (görsel-only; mitigation no-op dropped, §9e)
+//   v1.3.0: handle-tracked → son max_zones FVG kutusu kalır
 // ═══════════════════════════════════════════════
+var array<box> fvg_boxes = array.new<box>()
 if barstate.isconfirmed and show_fvg
     if low > high[2]
-        box.new(bar_index - 2, low, bar_index + 3, high[2], border_color=na, bgcolor=col_fvg)
+        array.push(fvg_boxes, box.new(bar_index - 2, low, bar_index + 3, high[2], border_color=fvg_border, border_width=1, bgcolor=fvg_fill))
     if high < low[2]
-        box.new(bar_index - 2, low[2], bar_index + 3, high, border_color=na, bgcolor=col_fvg)
+        array.push(fvg_boxes, box.new(bar_index - 2, low[2], bar_index + 3, high, border_color=fvg_border, border_width=1, bgcolor=fvg_fill))
+if array.size(fvg_boxes) > max_zones
+    box.delete(array.shift(fvg_boxes))
 
 // ═══════════════════════════════════════════════
 // CONFLUENCE SCORING (Plan §2a) — strategy SENKRON
@@ -345,20 +397,18 @@ if barstate.isconfirmed
 //   SL    = ta.lowest/highest ± ATR buffer (her bar hesaplanır)
 //   TP1   = en yakın 1h swing (RR sağlıyorsa) yoksa RR-projeksiyon
 //   TP2   = fib(1.618) projeksiyon
+//   v1.3.0: hesaplanan setup birleşik ui_* var'lara yazılır (çizim + table paylaşır)
 // ═══════════════════════════════════════════════
 sl_lowest  = ta.lowest(low, sl_lb)
 sl_highest = ta.highest(high, sl_lb)
 
-var float sig_entry_long  = na
-var float sig_sl_long     = na
-var float sig_tp1_long    = na
-var float sig_tp2_long    = na
-var int   sig_score_long  = na
-var float sig_entry_short = na
-var float sig_sl_short    = na
-var float sig_tp1_short   = na
-var float sig_tp2_short   = na
-var int   sig_score_short = na
+var int   ui_dir   = 0      // 1=long, -1=short, 0=yok
+var float ui_entry = na
+var float ui_sl    = na
+var float ui_tp1   = na
+var float ui_tp2   = na
+var int   ui_score = na
+var int   ui_bar   = na
 
 long_signal  = false
 short_signal = false
@@ -387,11 +437,13 @@ if barstate.isconfirmed
             ln_tp2 = ln_entry + fib_tp2 * risk
             if ln_sl < ln_entry and ln_tp1 > ln_entry
                 long_signal := true
-                sig_entry_long := ln_entry
-                sig_sl_long    := ln_sl
-                sig_tp1_long   := ln_tp1
-                sig_tp2_long   := ln_tp2
-                sig_score_long := confluence_score_long
+                ui_dir   := 1
+                ui_entry := ln_entry
+                ui_sl    := ln_sl
+                ui_tp1   := ln_tp1
+                ui_tp2   := ln_tp2
+                ui_score := confluence_score_long
+                ui_bar   := bar_index
     // --- SHORT ---
     if htf_bias_down and (recent_lower_low or confluence_score_short >= conf_thresh)
         float sh_entry = na
@@ -414,91 +466,130 @@ if barstate.isconfirmed
             sh_tp2 = sh_entry - fib_tp2 * risk
             if sh_sl > sh_entry and sh_tp1 < sh_entry
                 short_signal := true
-                sig_entry_short := sh_entry
-                sig_sl_short    := sh_sl
-                sig_tp1_short   := sh_tp1
-                sig_tp2_short   := sh_tp2
-                sig_score_short := confluence_score_short
+                ui_dir   := -1
+                ui_entry := sh_entry
+                ui_sl    := sh_sl
+                ui_tp1   := sh_tp1
+                ui_tp2   := sh_tp2
+                ui_score := confluence_score_short
+                ui_bar   := bar_index
 
 // ═══════════════════════════════════════════════
-// SL/TP GÖRSEL (sadece sinyal barında → temiz görsel)
+// SL/TP GÖRSEL — yalnız SON sinyal (handle-tracked: geçmiş spaghetti YOK)
 // ═══════════════════════════════════════════════
-if show_sltp and long_signal
-    line.new(bar_index, sig_sl_long,  bar_index + 20, sig_sl_long,  color=col_sl,  width=2, style=line.style_dashed)
-    line.new(bar_index, sig_tp1_long, bar_index + 20, sig_tp1_long, color=col_tp1, width=1, style=line.style_dashed)
-    if sig_tp2_long > sig_tp1_long
-        line.new(bar_index, sig_tp2_long, bar_index + 20, sig_tp2_long, color=col_tp2, width=1, style=line.style_dashed)
-    line.new(bar_index, sig_entry_long, bar_index + 20, sig_entry_long, color=col_long, width=1, style=line.style_dotted)
-    label.new(bar_index, sig_entry_long, "LONG " + str.tostring(sig_score_long, "0") + "%",
-     style=label.style_label_up, color=color.new(col_long, 80), textcolor=col_long, size=size.small)
+var line  sig_sl_ln    = na
+var line  sig_tp1_ln   = na
+var line  sig_tp2_ln   = na
+var line  sig_entry_ln = na
+var label sig_lbl       = na
+new_signal = long_signal or short_signal
+if show_signals and new_signal
+    line.delete(sig_sl_ln)
+    line.delete(sig_tp1_ln)
+    line.delete(sig_tp2_ln)
+    line.delete(sig_entry_ln)
+    label.delete(sig_lbl)
+    c_dir = ui_dir == 1 ? col_long : col_short
+    sig_sl_ln    := line.new(bar_index, ui_sl,    bar_index + 25, ui_sl,    color=col_sl,  width=2, style=line.style_dashed)
+    sig_tp1_ln   := line.new(bar_index, ui_tp1,   bar_index + 25, ui_tp1,   color=col_tp1, width=1, style=line.style_dashed)
+    has_tp2 = ui_dir == 1 ? ui_tp2 > ui_tp1 : ui_tp2 < ui_tp1
+    if has_tp2
+        sig_tp2_ln := line.new(bar_index, ui_tp2, bar_index + 25, ui_tp2, color=col_tp2, width=1, style=line.style_dashed)
+    else
+        sig_tp2_ln := na
+    sig_entry_ln := line.new(bar_index, ui_entry, bar_index + 25, ui_entry, color=c_dir, width=1, style=line.style_dotted)
+    lstyle = ui_dir == 1 ? label.style_label_up : label.style_label_down
+    ltext  = (ui_dir == 1 ? "LONG " : "SHORT ") + str.tostring(ui_score, "0") + "%"
+    sig_lbl := label.new(bar_index, ui_entry, ltext, style=lstyle, color=color.new(c_dir, 80), textcolor=c_dir, size=size.small)
 
-if show_sltp and short_signal
-    line.new(bar_index, sig_sl_short,  bar_index + 20, sig_sl_short,  color=col_sl,  width=2, style=line.style_dashed)
-    line.new(bar_index, sig_tp1_short, bar_index + 20, sig_tp1_short, color=col_tp1, width=1, style=line.style_dashed)
-    if sig_tp2_short < sig_tp1_short
-        line.new(bar_index, sig_tp2_short, bar_index + 20, sig_tp2_short, color=col_tp2, width=1, style=line.style_dashed)
-    line.new(bar_index, sig_entry_short, bar_index + 20, sig_entry_short, color=col_short, width=1, style=line.style_dotted)
-    label.new(bar_index, sig_entry_short, "SHORT " + str.tostring(sig_score_short, "0") + "%",
-     style=label.style_label_down, color=color.new(col_short, 80), textcolor=col_short, size=size.small)
-
 // ═══════════════════════════════════════════════
-// SWING LABELS + 1H EMA + EQH/EQL LIQUIDITY + BIAS TABLE
+// SWING LABELS + 1H EMA + EQH/EQL LIQUIDITY + INFO PANEL
 // ═══════════════════════════════════════════════
-if barstate.isconfirmed and new_swing_high
-    label.new(bar_index - lb, swing_high_val, "HH", style=label.style_label_down,
-     color=color.new(col_swing, 90), textcolor=col_swing, size=size.small)
-if barstate.isconfirmed and new_swing_low
-    label.new(bar_index - lb, swing_low_val, "LL", style=label.style_label_up,
-     color=color.new(col_swing, 90), textcolor=col_swing, size=size.small)
+var array<label> swing_lbls = array.new<label>()
+if show_labels and barstate.isconfirmed and new_swing_high
+    array.push(swing_lbls, label.new(bar_index - lb, swing_high_val, "HH", style=label.style_label_down,
+     color=color.new(base_swing, 92), textcolor=col_swing, size=size.tiny))
+if show_labels and barstate.isconfirmed and new_swing_low
+    array.push(swing_lbls, label.new(bar_index - lb, swing_low_val, "LL", style=label.style_label_up,
+     color=color.new(base_swing, 92), textcolor=col_swing, size=size.tiny))
+if array.size(swing_lbls) > 8
+    label.delete(array.shift(swing_lbls))
 
 plot_htf = request.security(htf_sym, htf_tf, ta.ema(close, 20), lookahead=barmerge.lookahead_off)
-plot(plot_htf, "1H EMA20", col_trend, 2, plot.style_line)
+plot(plot_htf, "1H EMA20", col_trend, 1, plot.style_line)
 
-// EQH/EQL likidite — son onaylı bar'da INLINE pairwise (max 8'er; array.new YOK)
+// EQH/EQL likidite — son onaylı bar'da INLINE pairwise (handle-tracked, max 4'er)
+var array<line>  eq_lines = array.new<line>()
+var array<label> eq_lbls  = array.new<label>()
 if show_liquidity and barstate.islastconfirmedhistory
+    while array.size(eq_lines) > 0
+        line.delete(array.shift(eq_lines))
+    while array.size(eq_lbls) > 0
+        label.delete(array.shift(eq_lbls))
+    //  NOT: dedup nested-loop denendi → RE10045 (inline-heavy bağlamda Pine
+    //  karmaşıklık limiti). Scalar last-level dedup (tek karşılaştırma) ile
+    //  etiket yığılmasını ucuz azalt — nested loop YOK.
     nh = array.size(sh_arr)
     drawn_h = 0
+    float last_h = na
     if nh >= 2
         for i = 0 to nh - 2
             for j = i + 1 to math.min(i + 4, nh - 1)
-                if drawn_h < 8
+                if drawn_h < 4
                     a = array.get(sh_arr, i)
                     b = array.get(sh_arr, j)
                     if math.abs(a - b) / math.max(a, 1e-10) <= 0.001
                         lvl = (a + b) / 2
-                        line.new(bar_index - 30, lvl, bar_index + 10, lvl, color=col_liq, width=1, style=line.style_dotted)
-                        label.new(bar_index + 10, lvl, "EQH", style=label.style_label_left,
-                         color=color.new(col_liq, 60), textcolor=color.white, size=size.tiny)
-                        drawn_h += 1
+                        if na(last_h) or math.abs(last_h - lvl) / math.max(lvl, 1e-10) > 0.003
+                            last_h := lvl
+                            array.push(eq_lines, line.new(bar_index - 40, lvl, bar_index + 12, lvl, color=col_liq, width=1, style=line.style_dotted))
+                            array.push(eq_lbls, label.new(bar_index + 12, lvl, "EQH", style=label.style_label_left,
+                             color=color.new(base_liq, 55), textcolor=color.white, size=size.tiny))
+                            drawn_h += 1
     nl = array.size(sl_arr)
     drawn_l = 0
+    float last_l = na
     if nl >= 2
         for i = 0 to nl - 2
             for j = i + 1 to math.min(i + 4, nl - 1)
-                if drawn_l < 8
+                if drawn_l < 4
                     a = array.get(sl_arr, i)
                     b = array.get(sl_arr, j)
                     if math.abs(a - b) / math.max(a, 1e-10) <= 0.001
                         lvl = (a + b) / 2
-                        line.new(bar_index - 30, lvl, bar_index + 10, lvl, color=col_liq, width=1, style=line.style_dotted)
-                        label.new(bar_index + 10, lvl, "EQL", style=label.style_label_left,
-                         color=color.new(col_liq, 60), textcolor=color.white, size=size.tiny)
-                        drawn_l += 1
+                        if na(last_l) or math.abs(last_l - lvl) / math.max(lvl, 1e-10) > 0.003
+                            last_l := lvl
+                            array.push(eq_lines, line.new(bar_index - 40, lvl, bar_index + 12, lvl, color=col_liq, width=1, style=line.style_dotted))
+                            array.push(eq_lbls, label.new(bar_index + 12, lvl, "EQL", style=label.style_label_left,
+                             color=color.new(base_liq, 55), textcolor=color.white, size=size.tiny))
+                            drawn_l += 1
 
-var table bias_table = table.new(position.top_right, 2, 2, border_width=0, frame_width=0)
-if barstate.islastconfirmedhistory
-    h1_text  = htf_bias_up ? "▲ 1H BULL" : htf_bias_down ? "▼ 1H BEAR" : "— 1H FLAT"
+// INFO PANEL — bias / confluence / setup / entry / SL / R:R (kompakt, köşe)
+var table info_tbl = table.new(position.top_right, 2, 6, border_width=1, frame_width=1, frame_color=color.new(#000000, 60))
+if show_table and barstate.islastconfirmedhistory
+    bg = color.new(#0B0E11, 12)
+    h1_text  = htf_bias_up ? "▲ BULL" : htf_bias_down ? "▼ BEAR" : "— FLAT"
     h1_color = htf_bias_up ? col_long : htf_bias_down ? col_short : col_trend
-    table.cell(bias_table, 0, 0, "1H BIAS", text_color=col_trend, text_size=size.small)
-    table.cell(bias_table, 1, 0, h1_text, text_color=h1_color, text_size=size.small)
-    table.cell_set_bgcolor(bias_table, 0, 0, color.new(#000000, 80))
-    table.cell_set_bgcolor(bias_table, 1, 0, color.new(#000000, 80))
+    table.cell(info_tbl, 0, 0, "1H BIAS", text_color=col_trend, text_size=size.small, bgcolor=bg)
+    table.cell(info_tbl, 1, 0, h1_text, text_color=h1_color, text_size=size.small, bgcolor=bg)
     cl   = math.max(confluence_score_long, confluence_score_short)
     cdir = confluence_score_long >= confluence_score_short ? "L" : "S"
-    table.cell(bias_table, 0, 1, "CONF", text_color=col_trend, text_size=size.small)
-    table.cell(bias_table, 1, 1, cdir + " " + str.tostring(cl, "0") + "%", text_color=color.white, text_size=size.small)
-    table.cell_set_bgcolor(bias_table, 0, 1, color.new(#000000, 80))
-    table.cell_set_bgcolor(bias_table, 1, 1, color.new(#000000, 80))
+    table.cell(info_tbl, 0, 1, "CONF", text_color=col_trend, text_size=size.small, bgcolor=bg)
+    table.cell(info_tbl, 1, 1, cdir + " " + str.tostring(cl, "0") + "%", text_color=color.white, text_size=size.small, bgcolor=bg)
+    has_setup = not na(ui_entry)
+    s_txt = has_setup ? (ui_dir == 1 ? "LONG " : "SHORT ") + str.tostring(ui_score, "0") + "%" : "—"
+    s_col = has_setup ? (ui_dir == 1 ? col_long : col_short) : col_trend
+    table.cell(info_tbl, 0, 2, "SETUP", text_color=col_trend, text_size=size.small, bgcolor=bg)
+    table.cell(info_tbl, 1, 2, s_txt, text_color=s_col, text_size=size.small, bgcolor=bg)
+    table.cell(info_tbl, 0, 3, "ENTRY", text_color=col_trend, text_size=size.small, bgcolor=bg)
+    table.cell(info_tbl, 1, 3, has_setup ? str.tostring(ui_entry, format.mintick) : "—", text_color=color.white, text_size=size.small, bgcolor=bg)
+    table.cell(info_tbl, 0, 4, "SL", text_color=col_trend, text_size=size.small, bgcolor=bg)
+    table.cell(info_tbl, 1, 4, has_setup ? str.tostring(ui_sl, format.mintick) : "—", text_color=col_sl, text_size=size.small, bgcolor=bg)
+    rr = float(na)
+    if has_setup
+        rr := ui_dir == 1 ? (ui_tp1 - ui_entry) / math.max(ui_entry - ui_sl, 1e-10) : (ui_entry - ui_tp1) / math.max(ui_sl - ui_entry, 1e-10)
+    table.cell(info_tbl, 0, 5, "R:R", text_color=col_trend, text_size=size.small, bgcolor=bg)
+    table.cell(info_tbl, 1, 5, has_setup ? str.tostring(rr, "0.00") : "—", text_color=color.white, text_size=size.small, bgcolor=bg)
 
 // ═══════════════════════════════════════════════
 // ALERTS
