@@ -137,5 +137,43 @@ for (const [legalFile, spec] of Object.entries(legalPages)) {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Track-1 premium launch: premium.html ürün satış sayfası compliance gate.
+// Ürün TradingView SMC indikatörünü KARAR-DESTEK aracı olarak satar — kâr/getiri
+// vaadi YASAK. Gate, zorunlu compliance token'larının varlığını ve forbidden
+// dilin yokluğunu doğrular. (T-010 legal-gate pattern'ini takip eder.)
+const premiumPath = path.join(__dirname, '..', 'premium.html');
+if (!fs.existsSync(premiumPath)) {
+  console.error('PREMIUM_MISSING: premium.html missing');
+  process.exit(1);
+}
+const premiumRaw = fs.readFileSync(premiumPath, 'utf8');
+const premiumLower = premiumRaw.toLowerCase();
+
+const premiumRequired = [
+  'yatırım tavsiyesi değildir',
+  'getiri garantisi',
+  'geçmiş performans',
+  'founding',
+  'checkout/buy',
+  '/privacy.html',
+  '/terms.html'
+];
+for (const phrase of premiumRequired) {
+  if (!premiumLower.includes(phrase.toLowerCase())) {
+    console.error(`PREMIUM_MISSING_REQUIRED: ${phrase}`);
+    ok = false;
+  }
+}
+for (const phrase of forbidden) {
+  if (premiumLower.includes(phrase)) {
+    console.error(`PREMIUM_FORBIDDEN_PHRASE: ${phrase}`);
+    ok = false;
+  }
+}
+if (ok) {
+  console.log('[INFO] premium.html compliance gate passed');
+}
+
 if (!ok) process.exit(1);
 console.log(`smoke OK: ${html.length} bytes, compliance gate passed`);
