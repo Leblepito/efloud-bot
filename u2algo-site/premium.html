@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>u2algo Premium — SMC Karar-Destek İndikatörü</title>
+<meta name="description" content="TradingView için Smart Money Concepts (SMC) karar-destek indikatörü. Order Block, FVG, EQH-EQL, CHoCH/BOS ve confluence görselleştirmesi. Sinyal servisi veya yatırım tavsiyesi değildir." />
+<meta name="robots" content="index, follow" />
+<link rel="icon" href="./favicon.ico" />
+<link rel="canonical" href="https://u2algo.com/premium.html" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#00f0ff; --ink:#f8fafc; --muted:#94a3b8; --bg:#000;
+    --surface:rgba(255,255,255,0.03); --border:rgba(255,255,255,0.1);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    line-height:1.7; font-size:16px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:48px 22px 96px}
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .back{display:inline-block; margin-bottom:28px; font-size:14px; color:var(--muted)}
+  h1{font-family:'Outfit',sans-serif; font-weight:800; font-size:38px; line-height:1.15; margin:0 0 12px}
+  h2{font-family:'Outfit',sans-serif; font-weight:700; font-size:24px; margin:46px 0 12px; color:var(--ink)}
+  h3{font-family:'Outfit',sans-serif; font-weight:600; font-size:17px; margin:18px 0 6px; color:var(--ink)}
+  .lead{font-size:19px; color:#cbd5e1; margin:0 0 26px}
+  .meta{color:var(--muted); font-size:14px; margin:0 0 28px}
+  p,li{color:#cbd5e1}
+  ul{padding-left:22px}
+  li{margin:6px 0}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px 24px; margin:22px 0}
+  .muted{color:var(--muted); font-size:14px}
+  hr{border:none; border-top:1px solid var(--border); margin:48px 0}
+  footer{color:var(--muted); font-size:13px; margin-top:48px; line-height:1.7}
+  .cta{
+    display:inline-block; background:var(--accent); color:#001417; font-weight:700;
+    font-family:'Outfit',sans-serif; font-size:17px; padding:14px 28px; border-radius:12px;
+    margin:10px 0; box-shadow:0 0 32px rgba(0,240,255,0.25);
+  }
+  .cta:hover{text-decoration:none; filter:brightness(1.08)}
+  .price{font-family:'Outfit',sans-serif; font-weight:800; font-size:48px; color:var(--accent); line-height:1}
+  .price small{font-family:'Inter',sans-serif; font-weight:400; font-size:16px; color:var(--muted)}
+  .cols{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin:22px 0}
+  @media(max-width:640px){.cols{grid-template-columns:1fr}}
+  .yes li::marker{content:"✅ "}
+  .no li::marker{content:"❌ "}
+  .examples{display:grid; grid-template-columns:1fr; gap:18px; margin:22px 0}
+  figure{margin:0; background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden}
+  figure img{width:100%; display:block; background:#0a0f14; min-height:160px}
+  figcaption{padding:12px 16px; font-size:14px; color:var(--muted)}
+  #proofStats{font-size:15px}
+  .stat-row{display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border)}
+  .stat-row:last-child{border-bottom:none}
+  .stat-label{color:var(--muted)}
+  .stat-val{font-family:'Outfit',sans-serif; font-weight:600; color:var(--ink)}
+  .neg{color:#f87171}
+  .disclaimer{background:rgba(248,113,113,0.06); border:1px solid rgba(248,113,113,0.25); border-radius:12px; padding:16px 18px; margin:22px 0; font-size:14px; color:#fca5a5}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back" href="/">← u2algo ana sayfa</a>
+
+  <!-- 1. HERO -->
+  <section>
+    <h1>SMC'yi grafiğinde otomatik işaretleyen karar-destek indikatörü</h1>
+    <p class="lead">
+      u2algo Premium, Smart Money Concepts yapılarını (Order Block, FVG, EQH-EQL, CHoCH/BOS, confluence ve
+      SL/TP görseli) TradingView grafiğin üzerinde senin için işaretler. Karar senin — bu bir
+      karar-destek/analiz aracıdır, sinyal servisi değildir.
+    </p>
+    <a class="cta" href="https://u2algo.lemonsqueezy.com/checkout/buy/cd9f3019-0fe5-4836-a730-3b985306bd72" target="_blank" rel="noopener">Founding üye ol — $39 lifetime</a>
+  </section>
+
+  <hr/>
+
+  <!-- 2. BU NE / NE DEĞİL -->
+  <section>
+    <h2>Bu ne, ne <em>değil</em>?</h2>
+    <div class="cols">
+      <div class="card">
+        <h3 style="color:var(--accent)">Bu nedir</h3>
+        <ul class="yes">
+          <li>SMC karar-destek / analiz aracı</li>
+          <li>Order Block (OB) tespiti ve görselleştirmesi</li>
+          <li>Fair Value Gap (FVG) işaretleme</li>
+          <li>Equal Highs / Equal Lows (EQH-EQL) likidite seviyeleri</li>
+          <li>CHoCH / BOS yapı kırılımı tespiti</li>
+          <li>Confluence skoru ve SL/TP seviyelerinin görseli</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="color:#f87171">Bu ne <em>değildir</em></h3>
+        <ul class="no">
+          <li>Sinyal servisi değildir</li>
+          <li>Otomatik işlem (oto-trade) botu değildir</li>
+          <li>Yatırım tavsiyesi değildir</li>
+          <li>Bir getiri garantisi sunmaz</li>
+          <li>Senin yerine karar veren bir araç değildir</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <hr/>
+
+  <!-- 3. ANNOTATED ÖRNEKLER -->
+  <section>
+    <h2>Grafik üzerinde nasıl görünüyor?</h2>
+    <p>İndikatörün canlı grafikte işaretlediği yapılardan örnekler:</p>
+    <div class="examples">
+      <figure>
+        <img src="/assets/premium/ornek-1.png" alt="Order Block ve FVG işaretlemesi örneği" loading="lazy" />
+        <figcaption>Örnek 1 — Order Block bölgesi ve Fair Value Gap'in otomatik işaretlenmesi.</figcaption>
+      </figure>
+      <figure>
+        <img src="/assets/premium/ornek-2.png" alt="CHoCH/BOS yapı kırılımı örneği" loading="lazy" />
+        <figcaption>Örnek 2 — CHoCH/BOS yapı kırılımı ve EQH-EQL likidite seviyeleri.</figcaption>
+      </figure>
+      <figure>
+        <img src="/assets/premium/ornek-3.png" alt="Confluence skoru ve SL/TP görseli örneği" loading="lazy" />
+        <figcaption>Örnek 3 — Confluence skoru ve SL/TP seviyelerinin grafik üzerindeki görseli.</figcaption>
+      </figure>
+    </div>
+    <p class="muted">Görseller analiz amaçlıdır; herhangi bir sonuç vaadi içermez.</p>
+  </section>
+
+  <hr/>
+
+  <!-- 4. METODOLOJİ -->
+  <section>
+    <h2>Metodoloji</h2>
+    <p>
+      İndikatör, Smart Money Concepts (SMC) yaklaşımındaki temel yapıları kural-tabanlı olarak otomatikleştirir.
+      Aşağıdaki kavramlar grafik üzerinde tutarlı biçimde işaretlenir, böylece manuel tarama yükü azalır.
+    </p>
+    <h3>Order Block (OB)</h3>
+    <p>
+      Güçlü bir hareket öncesindeki son aksiyon mumlarını tespit eder ve bu arz/talep bölgelerini grafik üzerinde
+      kutu olarak işaretler.
+    </p>
+    <h3>Fair Value Gap (FVG)</h3>
+    <p>
+      Fiyatın hızlı geçtiği ve dengesizlik (imbalance) bıraktığı boşlukları belirler; fiyatın bu boşluklara
+      dönme eğilimini görselleştirir.
+    </p>
+    <h3>Equal Highs / Equal Lows (EQH-EQL)</h3>
+    <p>
+      Eşit tepe ve dip seviyelerini likidite havuzları olarak işaretler — yapısal hedef ve SL referansı olarak
+      değerlendirilebilir.
+    </p>
+    <h3>CHoCH / BOS</h3>
+    <p>
+      Change of Character (CHoCH) ve Break of Structure (BOS) ile yapısal yön değişimlerini ve devamlarını
+      tespit ederek bias okumasına yardımcı olur.
+    </p>
+    <h3>Confluence ve SL/TP görseli</h3>
+    <p>
+      Birden çok yapının üst üste geldiği bölgeleri bir confluence skoru ile özetler ve olası SL/TP seviyelerini
+      grafikte gösterir. Bu seviyeler bilgilendirme amaçlıdır; emir veya tavsiye değildir.
+    </p>
+  </section>
+
+  <hr/>
+
+  <!-- 5. ŞEFFAFLIK (BUILD-IN-PUBLIC) -->
+  <section>
+    <h2>Şeffaflık — build in public</h2>
+    <p>
+      Geçmiş performans gelecek garantisi değildir. Aşağıdaki istatistikler tek-config naif bir oto-execution
+      botuna aittir — indikatörün kendisi veya bir getiri vaadi değildir. Yatırım tavsiyesi değildir.
+    </p>
+    <div class="card">
+      <div id="proofStats">Yükleniyor…</div>
+    </div>
+    <p class="muted">
+      Rakamlar yüzde olarak normalize edilmiştir; mutlak bakiye paylaşılmaz. Negatif sonuçlar dahil olduğu gibi
+      gösterilir.
+    </p>
+  </section>
+
+  <hr/>
+
+  <!-- 6. FOUNDING TEKLİF -->
+  <section>
+    <h2>Founding üye teklifi</h2>
+    <p class="price">$39 <small>/ tek seferlik · lifetime</small></p>
+    <p>
+      Founding (kurucu) üyelik tek seferlik bir ödemedir ve ömür boyu (lifetime) erişim sağlar. Bu fiyat
+      yalnızca erken dönemde geçerlidir; track record (kanıt geçmişi) biriktikçe fiyat yükselecektir. Erken
+      katılanlar bu founding fiyatını korur.
+    </p>
+    <a class="cta" href="https://u2algo.lemonsqueezy.com/checkout/buy/cd9f3019-0fe5-4836-a730-3b985306bd72" target="_blank" rel="noopener">Founding üye ol — $39 lifetime</a>
+    <p class="muted">Ödeme Lemon Squeezy üzerinden güvenli şekilde işlenir.</p>
+  </section>
+
+  <hr/>
+
+  <!-- 7. FOOTER -->
+  <footer>
+    <div class="disclaimer">
+      u2algo Premium bir karar-destek/analiz aracıdır. Yatırım tavsiyesi değildir, getiri garantisi yoktur ve
+      geçmiş performans gelecek garantisi değildir. Tüm işlem kararları ve riskleri kullanıcıya aittir; kendi
+      araştırmanı yap (DYOR).
+    </div>
+    Sorular için <a href="mailto:hello@u2algo.com">hello@u2algo.com</a>. ·
+    <a href="/privacy.html">Gizlilik &amp; KVKK</a> ·
+    <a href="/terms.html">Kullanım Şartları</a> ·
+    <a href="/">u2algo.com</a>
+  </footer>
+</main>
+
+<script>
+  // Şeffaflık istatistiklerini fetch et ve #proofStats içine render et.
+  // Fetch başarısız olursa zarif bir mesaj göster (fail-safe).
+  (function () {
+    var el = document.getElementById('proofStats');
+    if (!el) return;
+    function fmtPct(v) {
+      var n = Number(v);
+      var s = (n > 0 ? '+' : '') + n + '%';
+      return { text: s, neg: n < 0 };
+    }
+    function row(label, valueText, neg) {
+      return '<div class="stat-row"><span class="stat-label">' + label +
+        '</span><span class="stat-val' + (neg ? ' neg' : '') + '">' + valueText + '</span></div>';
+    }
+    fetch('/premium_proof.json', { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (d) {
+        var wr = fmtPct(d.win_rate_pct);
+        var ret = fmtPct(d.return_pct);
+        var dd = fmtPct(d.max_drawdown_pct);
+        var html = '';
+        html += row('Dönem', (d.period_days != null ? d.period_days + ' gün' : '—'), false);
+        html += row('Kapanan işlem', (d.closed_trades != null ? String(d.closed_trades) : '—'), false);
+        html += row('Kazanma oranı', wr.text, wr.neg);
+        html += row('Getiri', ret.text, ret.neg);
+        html += row('Maks. düşüş (drawdown)', dd.text, dd.neg);
+        el.innerHTML = html;
+        if (d.note) {
+          var note = document.createElement('p');
+          note.className = 'muted';
+          note.style.marginTop = '14px';
+          note.textContent = d.note;
+          el.appendChild(note);
+        }
+        if (d.as_of) {
+          var asof = document.createElement('p');
+          asof.className = 'muted';
+          asof.style.margin = '6px 0 0';
+          asof.textContent = 'Güncelleme: ' + d.as_of;
+          el.appendChild(asof);
+        }
+      })
+      .catch(function () {
+        el.textContent = 'İstatistikler şu an gösterilemiyor.';
+      });
+  })();
+</script>
+</body>
+</html>
