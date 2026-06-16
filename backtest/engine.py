@@ -170,7 +170,13 @@ def run_backtest(
                 sym_data = data.get(pos.symbol)
                 if sym_data is None:
                     continue
-                bar_data = sym_data[entry_tf_name].iloc[i]
+                # Symbols can have mismatched bar counts (later listing date or
+                # missing bars), so this symbol's frame may be shorter than the
+                # master loop index i. Guard before .iloc to avoid IndexError.
+                symbol_df = sym_data[entry_tf_name]
+                if i >= len(symbol_df):
+                    continue
+                bar_data = symbol_df.iloc[i]
                 pos.update_excursion(
                     float(bar_data["high"]),
                     float(bar_data["low"]),
@@ -186,7 +192,11 @@ def run_backtest(
                     sym_data = data.get(pos.symbol)
                     if sym_data is None:
                         continue
-                    next_bar_data = sym_data[entry_tf_name].iloc[i + 1]
+                    # Same mismatched-bar-count guard as above for the i+1 lookahead.
+                    symbol_df = sym_data[entry_tf_name]
+                    if i + 1 >= len(symbol_df):
+                        continue
+                    next_bar_data = symbol_df.iloc[i + 1]
                     bar = Bar(
                         open=float(next_bar_data["open"]),
                         high=float(next_bar_data["high"]),
