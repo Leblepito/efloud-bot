@@ -10,8 +10,8 @@
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
-| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ |
-| Claim edilmiş görev | 2 (T-015 @claude [15 Jun], T-010 @hermes [16 Jun]) ~~önceki: 1~~ |
+| Tamamlanan görev | 12 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun] + T-015 ✅ entitlements+RLS applied [16 Jun]) ~~önceki: 11~~ |
+| Claim edilmiş görev | 1 (T-010 @hermes [16 Jun]) ~~önceki: 2~~ |
 
 ## P-001 Görev Skoru
 
@@ -84,7 +84,7 @@
 | T-012 | W1 | proof_export.py + snapshot şema + privacy testi | ✅ DONE (PR #185; baseline-referans kararı operatörden; VPS cron+baseline = runbook §5) | @claude (2026-06-11) |
 | T-013 | W1 | monthly.py + /api/reports/monthly | ✅ DONE (PR #191; journal-first, DB-less equity "n/a", operatör-only İÇ) | @claude (2026-06-11) |
 | T-014 | W1 | Uptime alanı + public CHANGELOG + site updates | ✅ DONE (PR #192; uptime schema 1.1.0, §3 ayrımı; changelog→updates.json statik) | @claude (2026-06-11) |
-| T-015 | W2 | Supabase entitlements migration + RLS | 🟡 IN_PROGRESS (DDL + supabase_mgmt.py talimatları, .env.supabase operatör PR'ı bekliyor) | @claude (2026-06-15) |
+| T-015 | W2 | Supabase entitlements migration + RLS | ✅ DONE (entitlements tablosu + consent kolonları CANLI Supabase'e uygulandı [16 Jun]; RLS service-role-only doğrulandı — advisor INFO-only, permissive-policy hole'u yakalandı/önlendi) | @claude (2026-06-16) |
 | T-016 | W2 | Lemon Squeezy webhook (HMAC) + onay e-postası | ✅ DONE (INERT DELIVERED, 13/13 test, B.1-B.4 onayı sonrası aktive) | @claude (2026-06-15) |
 | T-017 | W2 | tv-access-grant runbook + kuyruk görünümü | ✅ DONE (runbook + list_pending script + 7 acceptance kriteri) | @hermes (2026-06-15) |
 | T-018 | W3 | telegram_notifier (default-OFF) + regression test | ⬜ BACKLOG | — |

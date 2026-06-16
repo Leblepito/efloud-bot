@@ -30,11 +30,13 @@ create trigger entitlements_set_updated_at
   before update on public.entitlements
   for each row execute function public.set_updated_at();
 
--- RLS: service-role-only write, no public access
+-- RLS: service-role-only. Enable RLS and create NO permissive policy.
+-- The service_role key (SUPABASE_SERVICE_ROLE_KEY, backend-only) BYPASSES RLS,
+-- so it keeps full access. With RLS enabled and zero policies, anon/authenticated
+-- are default-DENIED (cannot SELECT/INSERT/UPDATE/DELETE) — matching the bot-table
+-- security pattern (trades/equity_history/breaker_state) in this project.
+-- DO NOT add a `for all using(true)` policy: with no `to <role>` clause it applies
+-- to PUBLIC (anon+authenticated) and grants them full access — a security hole that
+-- defeats service-role-only. Verified via Supabase security advisor (entitlements
+-- shows only INFO `rls_enabled_no_policy`, never WARN `rls_policy_always_true`).
 alter table public.entitlements enable row level security;
-
--- Policy: service-role can do anything (via SUPABASE_SERVICE_ROLE_KEY)
-create policy "service_role_full_access_entitlements"
-  on public.entitlements for all
-  using (true)
-  with check (true);
