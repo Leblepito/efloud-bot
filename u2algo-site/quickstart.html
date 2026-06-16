@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>u2algo Premium — Kurulum Kılavuzu &amp; SSS</title>
+<meta name="description" content="u2algo Premium (Wave-1 SMC indikatörü) için satın alma sonrası TradingView erişim kurulumu, alert yapılandırması ve sık sorulan sorular. Karar-destek aracıdır; yatırım tavsiyesi değildir." />
+<meta name="robots" content="index, follow" />
+<link rel="icon" href="./favicon.ico" />
+<link rel="canonical" href="https://u2algo.com/quickstart.html" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#00f0ff; --ink:#f8fafc; --muted:#94a3b8; --bg:#000;
+    --surface:rgba(255,255,255,0.03); --border:rgba(255,255,255,0.1);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    line-height:1.7; font-size:16px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:820px; margin:0 auto; padding:48px 22px 96px}
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .back{display:inline-block; margin-bottom:28px; font-size:14px; color:var(--muted)}
+  h1{font-family:'Outfit',sans-serif; font-weight:800; font-size:34px; line-height:1.18; margin:0 0 8px}
+  h2{font-family:'Outfit',sans-serif; font-weight:700; font-size:22px; margin:42px 0 10px; color:var(--ink)}
+  h3{font-family:'Outfit',sans-serif; font-weight:600; font-size:17px; margin:18px 0 6px; color:var(--ink)}
+  .lead{font-size:18px; color:#cbd5e1; margin:0 0 26px}
+  .meta{color:var(--muted); font-size:14px; margin:0 0 28px}
+  p,li{color:#cbd5e1}
+  ul,ol{padding-left:22px}
+  li{margin:6px 0}
+  code{background:rgba(255,255,255,0.06); padding:1px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:13px}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px 22px; margin:22px 0}
+  .step{counter-increment:step; display:flex; gap:14px; margin:14px 0; padding:14px 16px; background:var(--surface); border:1px solid var(--border); border-radius:12px}
+  .step::before{content:counter(step); flex-shrink:0; width:32px; height:32px; border-radius:50%; background:rgba(0,240,255,0.12); color:var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Outfit',sans-serif; font-weight:700; font-size:15px}
+  .steps{counter-reset:step; padding-left:0; list-style:none}
+  .muted{color:var(--muted); font-size:14px}
+  hr{border:none; border-top:1px solid var(--border); margin:42px 0}
+  .disclaimer{background:rgba(248,113,113,0.06); border:1px solid rgba(248,113,113,0.25); border-radius:12px; padding:16px 18px; margin:24px 0; font-size:14px; color:#fca5a5}
+  .qa{margin:18px 0; padding:16px 18px; background:var(--surface); border:1px solid var(--border); border-radius:12px}
+  .qa summary{cursor:pointer; font-family:'Outfit',sans-serif; font-weight:600; color:var(--ink); list-style:none}
+  .qa summary::-webkit-details-marker{display:none}
+  .qa summary::before{content:"▸"; display:inline-block; margin-right:8px; color:var(--accent); transition:transform .2s}
+  .qa[open] summary::before{transform:rotate(90deg)}
+  .qa[open] summary{margin-bottom:10px}
+  footer{color:var(--muted); font-size:13px; margin-top:48px; line-height:1.7}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back" href="/premium.html">← Premium'a dön</a>
+
+  <h1>Kurulum Kılavuzu &amp; Sık Sorulan Sorular</h1>
+  <p class="lead">
+    Satın aldığın için teşekkürler. Bu sayfa, satın alma sonrası TradingView'de u2algo
+    indikatörüne nasıl erişeceğini, nasıl kullanacağını ve sık sorulan soruların yanıtlarını
+    toplar. Birkaç dakikada başlarsın.
+  </p>
+  <p class="meta">
+    Ürün: <strong>u2algo Premium · Wave-1 SMC indikatörü</strong> · v1.x · TradingView invite-only
+  </p>
+
+  <div class="disclaimer">
+    u2algo Premium bir <strong>karar-destek / analiz aracıdır</strong>. Sinyal servisi, otomatik
+    işlem botu veya yatırım tavsiyesi değildir. Getiri garantisi yoktur; geçmiş performans
+    gelecek garantisi değildir. Tüm işlem kararları ve riskleri sana aittir; kendi araştırmanı yap (DYOR).
+  </div>
+
+  <hr/>
+
+  <!-- 1. SATIN ALMA SONRASI İLK ADIMLAR -->
+  <section>
+    <h2>1. Satın alma sonrası ilk adımlar</h2>
+    <p>
+      Ödeme onayından sonra TradingView erişimin <strong>en geç 24 saat içinde</strong> tanımlanır.
+      Bu süre, manuel grant adımı içerdiğinden (T-017 runbook) kuyruktaki yoğunluğa göre
+      değişebilir. Aşağıdaki adımları sırayla izle:
+    </p>
+
+    <h3>1.1. E-postanı kontrol et</h3>
+    <ul>
+      <li>Lemon Squeezy tarafından gönderilen <strong>fatura/ödeme onayı</strong> e-postası geldiğinde, satın alma tamamlanmış demektir.</li>
+      <li>Ardından u2algo tarafından <strong>erişim bildirimi</strong> gönderilir (kurulum kılavuzu dahil). Bu gelene kadar <code>hello@u2algo.com</code> adresinden manuel talep de açabilirsin.</li>
+    </ul>
+
+    <h3>1.2. TradingView hesabınla eşleştirme</h3>
+    <p>
+      TradingView erişimi e-posta bazlı verilir. <strong>Satın alma sırasında kullandığın e-posta</strong> ile
+      TradingView hesabının eşleşmesi gerekir (TV hesap ayarları &gt; e-posta).
+    </p>
+    <p class="muted">
+      Eşleşmiyorsa <code>hello@u2algo.com</code> adresine TV kullanıcı adını yaz; eşleştirme sonrası
+      manuel olarak davet eklenir.
+    </p>
+
+    <h3>1.3. TradingView davetini kabul et</h3>
+    <ol class="steps">
+      <li class="step">TradingView'ı aç ve sağ üstteki <strong>bildirimler (çan) ikonuna</strong> tıkla.</li>
+      <li class="step">"<strong>Invitations</strong>" bölümünde u2algo davetini bul.</li>
+      <li class="step"><strong>"Accept"</strong> butonuna tıkla — invite-only script artık Pine Editor'de görünür.</li>
+    </ol>
+  </section>
+
+  <hr/>
+
+  <!-- 2. İNDİKATÖRÜ GRAFİĞE EKLEME -->
+  <section>
+    <h2>2. İndikatörü grafiğe ekleme</h2>
+    <ol class="steps">
+      <li class="step">TradingView'da istediğin sembolü aç (örn. <code>BTCUSDT</code>, 15m zaman dilimi önerilir).</li>
+      <li class="step">Alt menüden <strong>Indicators</strong> &gt; <strong>Invite-only</strong> sekmesine tıkla.</li>
+      <li class="step">Listeden <code>u2algo Premium · Wave-1</code> indikatörünü seç ve grafiğe ekle.</li>
+      <li class="step">İndikatör ayarları (giriş/çıkış parametreleri) için önerilen varsayılanları olduğu gibi bırak; sadece <strong>zaman dilimi</strong> ve <strong>sembol</strong>'ü grafiğinle eşle.</li>
+    </ol>
+
+    <h3>Önerilen başlangıç ayarları</h3>
+    <ul>
+      <li><strong>Zaman dilimi:</strong> 15 dakika (sinyal mantığı buna göre kalibre edildi).</li>
+      <li><strong>MTF confluence (üst zaman dilimi):</strong> 1 saat (4H daha konservatif tercih).</li>
+      <li><strong>Günlük filtre:</strong> aktif — daha yüksek zaman diliminin bias'ı ile uyumlu olmayan sinyaller görsel olarak zayıflatılır.</li>
+    </ul>
+    <p class="muted">
+      Varsayılanlar, backtestlerde en iyi dengeleyici davranışı veren ayarlardır. Değiştirmek istersen
+      önce shadow/test modunda dene; canlı trade kararlarını etkileyebilir.
+    </p>
+  </section>
+
+  <hr/>
+
+  <!-- 3. ALERT KURULUMU -->
+  <section>
+    <h2>3. Alert kurulumu</h2>
+    <p>
+      İndikatörün çıkışları Pine <code>alertcondition()</code> fonksiyonları üzerinden yayınlar.
+      Sinyal geldiğinde bildirim almak için:
+    </p>
+    <ol class="steps">
+      <li class="step">Grafikteki indikatör satırına sağ tıkla &gt; <strong>"Add Alert"</strong>.</li>
+      <li class="step"><strong>Condition</strong> alanında <code>u2algo Premium</code> seç; alt-menüdeki uyarı tiplerinden istediklerini işaretle:
+        <ul>
+          <li><code>Confluence High</code> — yüksek confluence skorlu bölgeler</li>
+          <li><code>CHoCH / BOS</code> — yapı kırılımı anları</li>
+          <li><code>OB Touch</code> — Order Block'a fiyat teması</li>
+          <li><code>FVG Fill</code> — Fair Value Gap dolumu</li>
+        </ul>
+      </li>
+      <li class="step"><strong>Notifications</strong> sekmesinde: uygulama içi, ses, e-posta, webhook seçeneklerinden dilediğini aktifleştir.</li>
+      <li class="step"><strong>"Create"</strong> butonu ile alert'i kaydet.</li>
+    </ol>
+    <p class="muted">
+      <strong>Önemli:</strong> u2algo bir <em>sinyal servisi</em> değildir. Uyarılar yapısal
+      seviyeleri gösterir; işlem kararı sana aittir. Uyarı geldiğinde otomatik pozisyon açan
+      bot/bağlantı için TradingView webhook'unu kendi sistemine entegre etmen gerekir —
+      u2algo bunu otomatik yapmaz.
+    </p>
+  </section>
+
+  <hr/>
+
+  <!-- 4. SSS (FAQ) -->
+  <section>
+    <h2>4. Sık Sorulan Sorular</h2>
+
+    <details class="qa">
+      <summary>Bu bir sinyal servisi mi? Otomatik alım-satım yapar mı?</summary>
+      <p>
+        <strong>Hayır.</strong> u2algo bir <em>karar-destek / analiz aracıdır</em>. TradingView grafiğinde
+        yapıları (Order Block, FVG, CHoCH/BOS, EQH-EQL, confluence) otomatik işaretler; sana
+        al/sat sinyali <em>vermez</em>, otomatik emir <em>göndermez</em>. İşlem kararı tamamen
+        kullanıcıya aittir.
+      </p>
+    </details>
+
+    <details class="qa">
+      <summary>Yatırım tavsiyesi mi?</summary>
+      <p>
+        <strong>Hayır.</strong> u2algo yatırım, finansal, hukuki veya vergi tavsiyesi değildir.
+        İndikatörün gösterdiği seviyeler bilgilendirme amaçlıdır; ticari sonuç vaat edilmez.
+        Sermaye yönetimi ve risk kontrolü tamamen sana aittir.
+      </p>
+    </details>
+
+    <details class="qa">
+      <summary>Getiri garantisi var mı?</summary>
+      <p>
+        <strong>Hayır.</strong> Getiri garantisi yoktur. Geçmiş performans gelecek garantisi
+        değildir. <a href="/premium.html">Şeffaflık bölümündeki</a> istatistikler tek-config naif bir
+        oto-execution botuna aittir; indikatörün kendisi değil, referans amaçlı paylaşılmıştır.
+      </p>
+    </details>
+
+    <details class="qa">
+      <summary>Erişim ne kadar sürede gelir?</summary>
+      <p>
+        Ödeme onayından sonra TradingView daveti <strong>en geç 24 saat içinde</strong> eklenir
+        (T-017 runbook SLA'sı). Yoğun dönemlerde birkaç saat gecikme olabilir. 24 saati aşan
+        bekleyen e-postalar için <code>hello@u2algo.com</code> adresine order numaranla yaz.
+      </p>
+    </details>
+
+    <details class="qa">
+      <summary>Lisansımı başka birine devredebilir miyim?</summary>
+      <p>
+        <strong>Hayır.</strong> Lisans kişisel, devredilemez ve tek kullanıcılıdır
+        (bkz. <a href="/terms.html">Kullanım Koşulları §2</a>). Başka hesaplara paylaşım,
+        yeniden satış veya yeniden dağıtım yasaktır; tespit edilirse lisans iptal edilir.
+      </p>
+    </details>
+
+    <details class="qa">
+      <summary>İade var mı?</summary>
+      <p>
+        Dijital ürün/erişim verildikten sonra iade politikası, <a href="/terms.html">Kullanım
+        Koşulları</a> ve ödeme altyapısı (Lemon Squeezy) standartları çerçevesinde değerlendirilir.
+        Detaylar için <code>hello@u2algo.com</code> adresine order numaranla yaz.
+      </p>
+    </details>
+
+    <details class="qa">
+      <summary>Hangi borsalarda / sembollerde çalışır?</summary>
+      <p>
+        TradingView'ın desteklediği herhangi bir sembol ve zaman diliminde çalışır (kripto,
+        forex, hisse, emtia). SMC yapıları hacim ve volatiliteye duyarlıdır; çok düşük hacimli
+        veya aşırı manipüle piyasalarda gürültülü sinyaller üretebilir. Önerilen başlangıç:
+        majör kripto pariteleri (BTC, ETH, SOL) 15m zaman diliminde.
+      </p>
+    </details>
+
+    <details class="qa">
+      <summary>Fiyat değişir mi? Yükselir mi?</summary>
+      <p>
+        Founding (kurucu) üyelik <strong>tek seferlik $39 lifetime</strong> fiyatıyla sınırlıdır.
+        Track record (kanıt geçmişi) biriktikçe fiyat yükselecektir. Erken katılanlar founding
+        fiyatını korur — mevcut lisanslı kullanıcılardan ek ücret alınmaz.
+      </p>
+    </details>
+
+    <details class="qa">
+      <summary>Bir sorun yaşarsam / teknik destek?</summary>
+      <p>
+        <a href="mailto:hello@u2algo.com"><code>hello@u2algo.com</code></a> adresine yaz.
+        Yanıt süresi genelde 1-2 iş günü. Lütfen e-postana <strong>order numaranı</strong> ve
+        <strong>sorunun ekran görüntüsünü</strong> ekle — bu, çözüm süresini ciddi şekilde kısaltır.
+      </p>
+    </details>
+  </section>
+
+  <hr/>
+
+  <!-- 5. YASAL YÜZEY -->
+  <section>
+    <h2>5. Yasal yüzey</h2>
+    <p>
+      Kurulum ve kullanım için geçerli olan tam metinler:
+    </p>
+    <ul>
+      <li><a href="/terms.html">Kullanım Koşulları</a> — lisans, ödeme, sorumluluk reddi</li>
+      <li><a href="/privacy.html">Gizlilik Politikası (KVKK)</a> — veri işleme, çerez politikası</li>
+      <li><a href="/premium.html">Ürün sayfası</a> — şeffaflık istatistikleri ve metodoloji</li>
+    </ul>
+  </section>
+
+  <div class="disclaimer">
+    Bu sayfadaki hiçbir ifade yatırım tavsiyesi, finansal tavsiye, hukuki tavsiye veya vergi
+    tavsiyesi niteliği taşımaz. u2algo bir karar-destek/analiz aracıdır; tüm işlem kararları
+    ve riskler kullanıcıya aittir. Geçmiş performans gelecek garantisi değildir.
+  </div>
+
+  <footer>
+    Sorular için <a href="mailto:hello@u2algo.com">hello@u2algo.com</a>. ·
+    <a href="/premium.html">Premium</a> ·
+    <a href="/privacy.html">Gizlilik &amp; KVKK</a> ·
+    <a href="/terms.html">Kullanım Şartları</a> ·
+    <a href="/">u2algo.com</a>
+  </footer>
+</main>
+</body>
+</html>

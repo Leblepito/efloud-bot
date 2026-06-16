@@ -1,7 +1,7 @@
 # LLTODO — Epic State
 
 > Append-only. Her durum geçişi yeni satır olarak eklenir. Eski satır silinmez.
-**Son güncelleme:** 2026-06-15 @claude (T-003 NO-GO→indicator-as-premium pivot + backend orkestrasyon) (önceki: 2026-06-11 @claude)
+**Son güncelleme:** 2026-06-16 @hermes (T-019 quickstart + premium.html rafine; T-010 deliverable DONE; Track-1 launch CANLI) (önceki: 2026-06-15 @claude T-003 NO-GO→indicator-as-premium pivot + backend orkestrasyon)
 
 ---
 
@@ -111,6 +111,9 @@
 2026-06-11  T-013 DONE ✅    @claude  PR #191: ops/daily_report/monthly.py + /api/reports/monthly (require_auth, clamp 1..92g) + 15 test. UR-003 pini uygulandı: journal-first adapter (read_journal_history key-mapping emsali, backend import edilmeden), DB-less equity "n/a" + equity_note, operatör-only İÇ endpoint (müşteri yayını T-012/T-014 yolundan). compute_summary DEĞİŞMEDİ. Review: api-integration APPROVE + code-reviewer APPROVE_WITH_NITS → nit'ler düzeltildi (parsed-ts sort + 3 test).
 2026-06-11  T-014 DONE ✅    @claude  PR #192: proof snapshot uptime bloğu (schema 1.1.0; healthz-contract §3 pinli: service_uptime_pct=(ok+susp)/n ≠ trading_active_pct=ok/n; 0 örnek → None, sahte %100 yok; whitelist'e uptime alt-key seti) + repo-kök CHANGELOG.md (Keep-a-Changelog, müşteri dili) + u2algo-site #guncellemeler (changelog-to-updates.js → updates.json statik besleme; fetch-fail-safe). proof_export 30/30 test (8 yeni) + site smoke compliance PASS. Proof SAYFASI yayını hâlâ G-P3-B4 operatör onayında.
 2026-06-15  W2_UNBLOCKED 🔀  @claude  OPERATÖR KARARI (indicator-as-premium pivot, P-001'den): satılan ürün = INDICATOR (karar-destek aracı), strateji script DEĞİL → W2 monetizasyon hattı AÇIK (premium ürünle eşleşti). G-P3-B3 backtest gate'i moot/yeniden-tanımlı (indicator getiri vaadiyle satılmıyor; proof≠ürün disclaimer G-P3-B4 kapsıyor). G-P3-B5 gelir modeli ERTELENDİ → entitlements şeması forward-compatible (expires_at NULL). Backend orkestrasyon başlatıldı: Hermes GÖREV F(backup-kritik)/A/B/E/D, Gemini entry-slippage backtest resume. Promptlar docs/handoff/2026-06-15-{hermes-backend-tasks,gemini-entry-slippage-resume}.md.
+2026-06-16  TRACK1_LAUNCH_CNL  @claude  PR #212 (`8f9667d`): premium.html (Wave-1 indikatör, araç-konumlandırma, getiri iddiası YOK, founding $39 lifetime) + premium_proof.json şeffaflık snapshot + smoke compliance gate (zorunlu token + forbidden phrase) + index.html founding CTA + sitemap entry + LS product map (1148317→wave1-indicator). Track-1 launch CANLI — satış yüzeyi açık, legal yüzey tamam, B.1-B.4 (LS AUP/payout/legal-entity/domain) B-decisions PR #210 ile RESOLVED.
+2026-06-16  T-010 DONE ✅     @hermes  PR #208 (`c41fb15`): terms.html (Kullanım Koşulları, 9 bölüm, yatırım tavsiyesi değildir + DYOR + getiri garantisi yok) + index.html footer Yasal linkleri + sitemap.xml (privacy + terms). smoke compliance gate PASS. Deliverable DONE; operatör legal-text refinement ayrı follow-up. T-010 IN_PROGRESS→DONE (pitfall 29 fix; claim serbest).
+2026-06-16  T-019 IN_PROGRESS @hermes  feat/p003-w3-t019-customer-docs branch'inde: u2algo-site/quickstart.html yazıldı (TV invite + indicator setup + alert kurulumu + 9 SSS — "yatırım tavsiyesi değildir / karar-destek / DYOR" compliance'lı; premium.html hero+footer'dan link; sitemap 0.7 priority). smoke.js quickstart compliance gate eklendi (T-010/T-011 emsal kalıbı). smoke OK: premium+proof+quickstart gates geçti, 15/15 mevcut test yeşil, lint 8/8. Transfer: format-patch + sha256 → Claude review.
 ```
 
 ### Aktif Durum

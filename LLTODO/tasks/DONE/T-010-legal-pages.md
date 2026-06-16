@@ -1,7 +1,7 @@
 # T-010: u2algo-site Legal Sayfaları (ToS / Privacy / Risk Disclosure / Refund)
 
 **Epic:** P-003
-**Claimed by:** — (henüz claim edilmedi)
+**Claimed by:** @hermes (2026-06-16) (henüz claim edilmedi)
 **Tahmini süre:** 1 gün
 **Bağımlılık:** — (UR-003 onayı sonrası başlar)
 
@@ -29,3 +29,5 @@ u2algo-site'a 4 statik legal sayfa ekleyip footer/sitemap'e bağlamak — satı�
 | Zaman | Durum | Not |
 |---|---|---|
 | 2026-06-11 | BACKLOG | P-003 W0 — UR-003 bekleniyor |
+| 2026-06-16 | IN_PROGRESS | @hermes claim — terms.html + footer Yasal + sitemap yazıldı; smoke compliance PASS (PR #208 → master `c41fb15`) |
+| 2026-06-16 | DONE | PR #208 merge + smoke gate PASS. Deliverable tamam; operatör legal-text refinement ayrı follow-up olarak işlenir. |
