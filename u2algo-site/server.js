@@ -327,8 +327,7 @@ const LS_WEBHOOK_ENABLED = process.env.LS_WEBHOOK_ENABLED === 'true';
 const LS_WEBHOOK_SECRET = process.env.LEMONSQUEEZY_WEBHOOK_SECRET || '';
 // Product ID → internal product mapping (T-016 finalize edilecek)
 const LS_PRODUCT_MAP = {
-  // LS product_id (numeric string) → 'wave1-premium' | 'wave1-pro' | ...
-  // Operatör LS panel'den product_id alıp buraya ekleyecek (B.1 sonrası)
+  '1148317': 'wave1-indicator',   // u2Algo SMC BB — Wave-1 indicator (founding lifetime)
 };
 
 function verifyLsSignature(rawBody, signatureHeader, secret) {
