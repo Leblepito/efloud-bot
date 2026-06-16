@@ -107,13 +107,21 @@ class SetupStateStore:
         self.candidates.append(candidate)
         return True
 
+    def prune(self) -> None:
+        """Prune CONFIRMED/EXPIRED from the in-memory candidates list.
+
+        Separated from disk writing so backtests (persist=False, which skip
+        save()) can still bound the in-memory list and avoid memory growth.
+        """
+        self.candidates = [c for c in self.candidates if c.state in PERSISTED_STATES]
+
     def save(self) -> None:
         """Atomic write of active candidates only.
 
         Prunes CONFIRMED/EXPIRED from the in-memory list before serializing.
         """
         # Prune in-memory list first — CONFIRMED/EXPIRED never persisted
-        self.candidates = [c for c in self.candidates if c.state in PERSISTED_STATES]
+        self.prune()
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")

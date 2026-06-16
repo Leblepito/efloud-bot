@@ -376,7 +376,7 @@ class TestRunCycleSaveState:
         from engine.smc_v2.setup_state import SetupStateStore
         store = SetupStateStore(tmp_path / "state.json")
         orc = SafeOrchestrator(
-            minimal_config, state_dir=str(tmp_path), persist=False,
+            minimal_config, state_dir=str(tmp_path), persist=True,
             setup_state_store=store, freshness_check=False,
         )
         df = self._make_df()
@@ -390,7 +390,7 @@ class TestRunCycleSaveState:
     def test_save_not_called_when_store_none(self, minimal_config, tmp_path):
         """Inert default: no save attempt (no AttributeError, no overhead)."""
         orc = SafeOrchestrator(
-            minimal_config, state_dir=str(tmp_path), persist=False,
+            minimal_config, state_dir=str(tmp_path), persist=True,
             freshness_check=False,
         )
         df = self._make_df()
@@ -407,7 +407,7 @@ class TestRunCycleSaveState:
         store = SetupStateStore(tmp_path / "state.json")
         # No candidates added
         orc = SafeOrchestrator(
-            minimal_config, state_dir=str(tmp_path), persist=False,
+            minimal_config, state_dir=str(tmp_path), persist=True,
             setup_state_store=store, freshness_check=False,
         )
         df = self._make_df()
@@ -417,3 +417,21 @@ class TestRunCycleSaveState:
                 balance=10000.0,
             )
             assert spy.call_count == 1
+
+    def test_prune_called_and_save_not_called_when_persist_false(self, minimal_config, tmp_path):
+        """When persist=False (backtests), save() must NOT be called to avoid disk I/O,
+        but prune() MUST be called to keep in-memory list pruned."""
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        orc = SafeOrchestrator(
+            minimal_config, state_dir=str(tmp_path), persist=False,
+            setup_state_store=store, freshness_check=False,
+        )
+        df = self._make_df()
+        with patch.object(store, "save") as spy_save, patch.object(store, "prune") as spy_prune:
+            orc.run_cycle(
+                symbol="BTC/USDT", df_htf=df, df_mtf=df, df_entry=df,
+                balance=10000.0,
+            )
+            assert spy_save.call_count == 0
+            assert spy_prune.call_count == 1

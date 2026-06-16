@@ -1536,9 +1536,16 @@ class SafeOrchestrator:
         # within the same gated try/except in that branch.
         if self.setup_state_store is not None:
             try:
-                self.setup_state_store.save()
+                # Live/shadow (persist=True): prune + atomic disk write, as before.
+                # Backtest (persist=False): in-memory prune only — skips the
+                # per-cycle disk write (~172k writes over a 180d×10-symbol run)
+                # while still bounding the candidate list. Live path unchanged.
+                if self.persist:
+                    self.setup_state_store.save()
+                else:
+                    self.setup_state_store.prune()
             except Exception as e:
-                log.error(f"setup_state save failed (continuing cycle): {e}")
+                log.error(f"setup_state save/prune failed (continuing cycle): {e}")
 
         return SafeCycleResult(
             symbol=symbol, timeframe=tf["entry"],
