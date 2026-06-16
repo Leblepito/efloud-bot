@@ -11,7 +11,7 @@
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
 | Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ |
-| Claim edilmiş görev | 2 (T-011 @hermes [15 Jun], T-015 @claude [15 Jun]) — **+ T-010 @hermes [16 Jun]** |
+| Claim edilmiş görev | 2 (T-015 @claude [15 Jun], T-010 @hermes [16 Jun]) ~~önceki: 1~~ |
 
 ## P-001 Görev Skoru
 
