@@ -98,5 +98,44 @@ if (fs.existsSync(sitemapPath)) {
   }
 }
 
+// T-010: Legal sayfalar compliance gate (terms.html + privacy.html)
+// Yasal yüzeyde G-P3-B1 disclaimer'ı NET taşınmalı.
+// T-010 kapsamı: terms.html ticari ürün disclaimer'ı taşır (yatırım tavsiyesi değil + DYOR +
+//   getiri garantisi yok). privacy.html KVKK aydınlatması olduğu için bu 3 ticari cümleyi
+//   taşıması GEREKMEZ; sadece mevcut/yasal-yeterliliğini doğrularız (KVKK/GDPR referansı).
+const legalPages = {
+  'terms.html': {
+    required: ['yatırım tavsiyesi değildir', 'dyor', 'getiri garantisi yok', 'u2algo'],
+    description: 'ticari ürün (T-010)'
+  },
+  'privacy.html': {
+    required: ['kvkk', 'veri sorumlusu', 'u2algo'],
+    description: 'KVKK/GDPR aydınlatma'
+  }
+};
+for (const [legalFile, spec] of Object.entries(legalPages)) {
+  const legalPath = path.join(__dirname, '..', legalFile);
+  if (!fs.existsSync(legalPath)) {
+    console.error(`MISSING_LEGAL_PAGE: ${legalFile}`);
+    ok = false;
+    continue;
+  }
+  const legalText = fs.readFileSync(legalPath, 'utf8').toLowerCase();
+  // Yasal sayfa kendi spec'ine göre disclaimer kontrolü
+  for (const phrase of spec.required) {
+    if (!legalText.includes(phrase)) {
+      console.error(`LEGAL_DISCLAIMER_MISSING in ${legalFile} (${spec.description}): ${phrase}`);
+      ok = false;
+    }
+  }
+  // Yasal sayfa forbidden phrase kontrolü (yatırım tavsiyesi dili YOK)
+  for (const phrase of forbidden) {
+    if (legalText.includes(phrase)) {
+      console.error(`FORBIDDEN_PHRASE_IN_${legalFile}: ${phrase}`);
+      ok = false;
+    }
+  }
+}
+
 if (!ok) process.exit(1);
 console.log(`smoke OK: ${html.length} bytes, compliance gate passed`);

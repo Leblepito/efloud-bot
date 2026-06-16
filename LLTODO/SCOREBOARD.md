@@ -11,7 +11,7 @@
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
 | Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ |
-| Claim edilmiş görev | 1 (T-015 @claude [15 Jun]) ~~önceki: 2~~ |
+| Claim edilmiş görev | 2 (T-015 @claude [15 Jun], T-010 @hermes [16 Jun]) ~~önceki: 1~~ |
 
 ## P-001 Görev Skoru
 
@@ -79,7 +79,7 @@
 
 | Görev | Dalga | Açıklama | Durum | Claim |
 |---|---|---|---|---|
-| T-010 | W0 | u2algo-site legal sayfaları + footer + sitemap | ⬜ BACKLOG | — |
+| T-010 | W0 | u2algo-site legal sayfaları + footer + sitemap | 🟡 IN_PROGRESS (terms.html + footer Yasal linkleri + sitemap eklendi; smoke compliance PASS; legal text operatör onayı bekliyor) | @hermes (2026-06-16) |
 | T-011 | W0 | Waitlist consent checkbox + server.js payload (3 fallback zincirinde) + 13/13 test | ✅ DONE (consent gate strict===true + 3-fallback persist + index.html checkbox + privacy.html; 13/13 test; PR #204) | @hermes (2026-06-15) |
 | T-012 | W1 | proof_export.py + snapshot şema + privacy testi | ✅ DONE (PR #185; baseline-referans kararı operatörden; VPS cron+baseline = runbook §5) | @claude (2026-06-11) |
 | T-013 | W1 | monthly.py + /api/reports/monthly | ✅ DONE (PR #191; journal-first, DB-less equity "n/a", operatör-only İÇ) | @claude (2026-06-11) |
