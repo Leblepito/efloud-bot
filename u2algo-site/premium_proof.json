@@ -1,0 +1,9 @@
+{
+  "as_of": "2026-06-16",
+  "period_days": 9,
+  "closed_trades": 83,
+  "win_rate_pct": 24.1,
+  "return_pct": -5.3,
+  "max_drawdown_pct": 6.9,
+  "note": "Bu istatistikler tek-config naif bir oto-execution botuna aittir; indikatörün kendisini temsil etmez ve bir getiri vaadi değildir. Tüm değerler yüzde olarak normalize edilmiştir, mutlak bakiye paylaşılmaz. Negatif sonuçlar dahil olduğu gibi gösterilir. Yatırım tavsiyesi değildir."
+}

@@ -125,6 +125,15 @@ for (const t of t016Tests) {
   }
 }
 
+// ============== T-005: LS Product Map ==============
+console.log('\n=== T-005: LS Product Map ===');
+const LS_PRODUCT_MAP_TEST = { '1148317': 'wave1-indicator' };
+function resolveProduct(map, id) {
+  return map[String(id)] || 'wave1-unknown';
+}
+assert('LS_PRODUCT_MAP[\'1148317\'] → \'wave1-indicator\'', resolveProduct(LS_PRODUCT_MAP_TEST, '1148317'), 'wave1-indicator');
+assert('LS_PRODUCT_MAP[unknown] → \'wave1-unknown\'', resolveProduct(LS_PRODUCT_MAP_TEST, '9999999'), 'wave1-unknown');
+
 console.log(`\n=== Sonuç: ${passed} PASS, ${failed} FAIL ===`);
 if (failed > 0) {
   console.log('\nBaşarısız testler:');

@@ -137,5 +137,76 @@ for (const [legalFile, spec] of Object.entries(legalPages)) {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Track-1 premium launch: premium.html ürün satış sayfası compliance gate.
+// Ürün TradingView SMC indikatörünü KARAR-DESTEK aracı olarak satar — kâr/getiri
+// vaadi YASAK. Gate, zorunlu compliance token'larının varlığını ve forbidden
+// dilin yokluğunu doğrular. (T-010 legal-gate pattern'ini takip eder.)
+const premiumPath = path.join(__dirname, '..', 'premium.html');
+if (!fs.existsSync(premiumPath)) {
+  console.error('PREMIUM_MISSING: premium.html missing');
+  process.exit(1);
+}
+const premiumRaw = fs.readFileSync(premiumPath, 'utf8');
+const premiumLower = premiumRaw.toLowerCase();
+
+const premiumRequired = [
+  'yatırım tavsiyesi değildir',
+  'getiri garantisi',
+  'geçmiş performans',
+  'founding',
+  'checkout/buy',
+  '/privacy.html',
+  '/terms.html'
+];
+for (const phrase of premiumRequired) {
+  if (!premiumLower.includes(phrase.toLowerCase())) {
+    console.error(`PREMIUM_MISSING_REQUIRED: ${phrase}`);
+    ok = false;
+  }
+}
+for (const phrase of forbidden) {
+  if (premiumLower.includes(phrase)) {
+    console.error(`PREMIUM_FORBIDDEN_PHRASE: ${phrase}`);
+    ok = false;
+  }
+}
+if (ok) {
+  console.log('[INFO] premium.html compliance gate passed');
+}
+
+// Track-1 premium launch: premium_proof.json şeffaflık snapshot doğrulaması.
+// Zorunlu istatistik anahtarları bulunmalı; mutlak bakiye (balance / equity_usdt)
+// ASLA bulunmamalı — sadece yüzde-normalize edilmiş veriler paylaşılır (G-P3-1).
+const proofPath = path.join(__dirname, '..', 'premium_proof.json');
+if (!fs.existsSync(proofPath)) {
+  console.error('PREMIUM_PROOF_MISSING: premium_proof.json missing');
+  ok = false;
+} else {
+  let proof;
+  try {
+    proof = JSON.parse(fs.readFileSync(proofPath, 'utf8'));
+  } catch (err) {
+    console.error('PREMIUM_PROOF_PARSE_FAILED');
+    ok = false;
+  }
+  if (proof) {
+    const proofRequired = ['as_of', 'period_days', 'closed_trades', 'win_rate_pct', 'return_pct', 'max_drawdown_pct'];
+    for (const key of proofRequired) {
+      if (!(key in proof)) {
+        console.error(`PREMIUM_PROOF_MISSING_KEY: ${key}`);
+        ok = false;
+      }
+    }
+    if ('balance' in proof || 'equity_usdt' in proof) {
+      console.error('PREMIUM_PROOF_FORBIDDEN_KEY: proof must NOT contain absolute balance (G-P3-1)');
+      ok = false;
+    }
+    if (ok) {
+      console.log('[INFO] premium_proof.json valid');
+    }
+  }
+}
+
 if (!ok) process.exit(1);
 console.log(`smoke OK: ${html.length} bytes, compliance gate passed`);
