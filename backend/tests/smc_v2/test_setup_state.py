@@ -478,3 +478,39 @@ class TestTransientReadErrorVsCorruption:
         # No archive created
         assert not any(".corrupt." in p.name for p in tmp_path.iterdir())
         assert not any(".bak." in p.name for p in tmp_path.iterdir())
+
+
+class TestPruneMethod:
+    """The prune() method must clean up terminal candidates from the in-memory list
+    without triggering a disk write."""
+
+    def _make(self, symbol, state):
+        from engine.smc_v2.setup_state import SetupCandidate
+        return SetupCandidate(
+            symbol=symbol, direction="SHORT", trigger_bar_ts=1700000000000,
+            trigger_price=100.0, htf_bias="BEAR",
+            target_zone=ZoneSpec(low=105.0, high=110.0, source="HTF_FVG"),
+            htf_swing_anchor=115.0, bars_waited=0,
+            state=state, confluence_score=70, reasons=[],
+        )
+
+    def test_prune_filters_in_memory_list_without_disk_write(self, tmp_path):
+        from engine.smc_v2.setup_state import SetupStateStore
+        file_path = tmp_path / "state.json"
+        store = SetupStateStore(file_path)
+        
+        store.add(self._make("BTC/USDT", "AWAITING_PULLBACK"))
+        store.candidates.append(self._make("ETH/USDT", "CONFIRMED"))
+        store.candidates.append(self._make("SOL/USDT", "EXPIRED"))
+        store.add(self._make("LINK/USDT", "IN_ZONE"))
+        
+        # Call prune instead of save
+        store.prune()
+        
+        # Verify in-memory list is pruned
+        assert len(store.candidates) == 2
+        states = sorted(c.state for c in store.candidates)
+        assert states == ["AWAITING_PULLBACK", "IN_ZONE"]
+        
+        # Verify no file is written to disk
+        assert not file_path.exists()
