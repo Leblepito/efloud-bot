@@ -208,5 +208,41 @@ if (!fs.existsSync(proofPath)) {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// T-019: Quickstart (kurulum kılavuzu + SSS) compliance gate.
+// Müşteri yüzeyi — yatırım tavsiyesi dili YASAK, sadece araç kullanımı
+// anlatılır (G-P3-B1). T-019 emsal kalıbı: T-010 legal-gate pattern.
+const quickstartPath = path.join(__dirname, '..', 'quickstart.html');
+if (!fs.existsSync(quickstartPath)) {
+  console.error('QUICKSTART_MISSING: quickstart.html missing');
+  ok = false;
+} else {
+  const quickstartLower = fs.readFileSync(quickstartPath, 'utf8').toLowerCase();
+  const quickstartRequired = [
+    'yatırım tavsiyesi değildir',
+    'getiri garantisi',
+    'geçmiş performans',
+    'dyor',
+    'karar-destek',
+    '/terms.html',
+    '/privacy.html'
+  ];
+  for (const phrase of quickstartRequired) {
+    if (!quickstartLower.includes(phrase.toLowerCase())) {
+      console.error(`QUICKSTART_MISSING_REQUIRED: ${phrase}`);
+      ok = false;
+    }
+  }
+  for (const phrase of forbidden) {
+    if (quickstartLower.includes(phrase)) {
+      console.error(`QUICKSTART_FORBIDDEN_PHRASE: ${phrase}`);
+      ok = false;
+    }
+  }
+  if (ok) {
+    console.log('[INFO] quickstart.html compliance gate passed');
+  }
+}
+
 if (!ok) process.exit(1);
 console.log(`smoke OK: ${html.length} bytes, compliance gate passed`);
