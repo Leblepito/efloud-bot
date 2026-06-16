@@ -50,6 +50,27 @@ def compute_mtm_drawdown(positions, balance, current_prices, peak):
     return dd_pct, new_peak
 
 
+def stamp_sim_times(trade_dicts: list[dict], sim_open_ts: dict, sim_close_ts: dict) -> None:
+    """Surface SIM-time entry/exit onto trade records, in place (keyed by id).
+
+    The live engine sets ``opened_at``/``closed_at`` to wall-clock
+    ``datetime.utcnow()`` (``lifecycle.open_position``) — in a backtest every
+    trade is stamped within microseconds of the run, so those fields are useless
+    for any time-based analysis. The run loop separately tracks ``sim_open_ts`` /
+    ``sim_close_ts`` (the simulated bar timestamps) for S2b funding; surfacing
+    them as ``sim_opened_at`` / ``sim_closed_at`` enables walk-forward IS/OOS
+    partitioning and regime separation by simulated entry time.
+
+    Additive: no trade-logic change. Runs before the commission/funding passes,
+    whose ``dict(t)`` copies preserve the new keys. ``None`` when an id is absent.
+    """
+    for t in trade_dicts:
+        so = sim_open_ts.get(t["id"])
+        sc = sim_close_ts.get(t["id"])
+        t["sim_opened_at"] = str(so) if so is not None else None
+        t["sim_closed_at"] = str(sc) if sc is not None else None
+
+
 _DEFAULT_SMC_WINDOW = 500
 
 
@@ -240,6 +261,9 @@ def run_backtest(
             log.warning("Backtest had %d skipped cycles (see DEBUG log for details)", skipped_cycles)
         closed_positions = [p for p in orch.lifecycle.positions if not p.is_open and p.exits]
         trade_dicts = [serialize_trade(p) for p in closed_positions]
+        # Surface sim-time entry/exit (opened_at is wall-clock, see stamp_sim_times).
+        # Before commission/funding so their dict(t) copies carry the new keys.
+        stamp_sim_times(trade_dicts, sim_open_ts, sim_close_ts)
         # S2: net out round-trip taker commission. Resolution order: explicit
         # param → config["backtest"]["commission_pct"] → 0.0 (off, backward-compat
         # — existing tests/baselines unchanged unless commission is enabled).
