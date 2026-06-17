@@ -141,22 +141,11 @@ def find_violations(text: str, lang: str = "all") -> list[str]:
         for original, norm in _BANNED_EN_NORM:
             if norm in tn:
                 out.append(f"banned_phrase:{original}")
-    # Money gate: every $-amount that is NOT inside the $39 product-price
-    # whitelist span contributes a single 'absolute_money' tag (deduped).
-    has_unwhitelisted_money = False
-    for m in _MONEY.finditer(t):
-        if not _PRICE_WHITELIST.fullmatch(m.group(0)) and \
-           not _PRICE_WHITELIST.match(m.group(0).lstrip()):
-            # Cheap second check: span fully inside a whitelist match elsewhere.
-            in_whitelist = False
-            for wm in _PRICE_WHITELIST.finditer(t):
-                if wm.start() <= m.start() and m.end() <= wm.end():
-                    in_whitelist = True
-                    break
-            if not in_whitelist:
-                has_unwhitelisted_money = True
-                break
-    if has_unwhitelisted_money:
+    # Money gate: any $-amount that is not EXACTLY the whitelisted $39 product
+    # price (e.g. "$39", "$39 lifetime") is a violation. Prefix/partial matches
+    # such as "$39,000", "$39.99" or "$390" are NOT the price and stay banned
+    # (fullmatch only — a non-anchored prefix match would leak them).
+    if any(not _PRICE_WHITELIST.fullmatch(m.group(0)) for m in _MONEY.finditer(t)):
         out.append("absolute_money")
     if _has_performance_pct(t):
         out.append("performance_pct_claim")

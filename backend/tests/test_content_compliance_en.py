@@ -95,6 +95,15 @@ def test_arbitrary_dollar_amounts_still_banned():
     assert "absolute_money" in find_violations("250 USDT profit")
 
 
+def test_price_lookalikes_are_not_whitelisted():
+    # Only the EXACT $39 price is whitelisted; lookalikes that merely START with
+    # $39 must still be flagged (regression: a non-anchored prefix match leaked
+    # "$39,000" / "$39.99" through the money gate).
+    assert "absolute_money" in find_violations("You could make $39,000 profit")
+    assert "absolute_money" in find_violations("Just $39.99 today")
+    assert "absolute_money" in find_violations("up to $390 per trade")
+
+
 def test_absolute_money_emitted_once_even_if_multiple_matches():
     # Two non-whitelisted matches => still single 'absolute_money' tag
     tags = find_violations("Opened $250 and closed $260")
