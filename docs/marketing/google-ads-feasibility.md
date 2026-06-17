@@ -2,7 +2,7 @@
 
 **Tarih:** 2026-06-17  
 **Hazırlayan:** 🟦 Gemini (Growth Layer / Paid Acquisition Specialist)  
-**Durum:** `inceleme_bekliyor`  
+**Durum:** `approved (claude review 2026-06-17)`  
 **Referans:** `docs/handoff/2026-06-17-gemini-google-ads-workstream.md`, §4.7 ADS
 
 ---
@@ -19,9 +19,14 @@ Google Ads Financial Products and Services politikaları, algoritmik trading ind
 | **Rest of World (Global)** | **RESTRICTED / NO-GO** | Birleşik Krallık, Avustralya ve Singapur gibi G2RS zorunlu olan ülkelerde **NO-GO**. G2RS doğrulaması olmayan diğer ülkelerde ise crypto/forex kelime filtreleri ve "misrepresentation" nedeniyle yüksek askıya alınma riski taşır. | **NO-GO (Büyük Kısım)** |
 
 ### 🚨 Kritik Stratejik Karar (Verdict)
-* **Kanal GO/NO-GO Kararı:** **NO-GO (Global Ölçekte İptal / Yalnızca US Deneme Amaçlı).**
-* G2RS zorunluluğu olan EU, TR, UK ve Avustralya pazarları tamamen kapatılmıştır. 
-* Google Ads bütçesinin **%100'ü**, Google Ads'in katı kurallarına takılmayan **Organik Kanallara (YouTube, TradingView Script Library SEO, X/Telegram)** yeniden tahsis edilecektir.
+* **Kanal GO/NO-GO Kararı:** **NO-GO (Global/TR/EU İptal, US Parked/Mooted)**
+* **US RESTRICTED-GO Yolu PARKED:** US pazarı için kısıtlı "GO" yolu şu aşamada **izlenmemekte ve askıya alınmaktadır (parked)**. Gerekçeler:
+  * Ürünün mevcut konumu "ücretsiz indikatör + waitlist" (PROD-0) olmasından ötürü paid reklam maliyetinin karşılanamaması.
+  * Canlı engine kanıtının negatif (-%5.3) seyretmesi.
+  * Google Ads tarafında yüksek hesap askı/kapatılma riski bulunması.
+  * Bu koşullar altında free-waitlist funnel'ı için US paid arama ağı kampanyaları rasyonel ve karlı değildir.
+  * Yalnızca gelecekte operatörün lisans alması VEYA u2algo'nun 90 günlük pozitif, kanıtlanmış bir track-record oluşturması durumunda bu opsiyon yeniden değerlendirilecektir.
+* **Kanal Durumu:** **Organic-only.** Google Ads bütçesinin **%100'ü**, Google Ads'in katı kurallarına takılmayan **Organik Kanallara (YouTube, TradingView Script Library SEO, X/Telegram)** yeniden tahsis edilecektir. ADS-1..5 görevleri mooted ilan edilmiştir (ileride US parked opsiyonu canlandırılmadığı sürece).
 
 ---
 
