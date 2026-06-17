@@ -54,7 +54,7 @@ Metin yazılırken şu kurallara dikkat edilmiştir:
 // This indicator is an educational charting tool designed to assist traders in visualizing key Market Structure and Smart Money Concepts (SMC) on TradingView. It automates the detection of essential technical analysis patterns, allowing for clean chart study and structural research.
 
 ### Key Visual Features Detectable:
-* **Market Structure Mapping (Swing Levels):** Automatically plots swing highs and swing lows (HH, LH, LL, HL) based on localized price action filters to assist in trend analysis.
+* **Market Structure Mapping (Swing Levels):** Automatically plots swing highs and swing lows, labeled HH/LL based on localized price action filters to assist in trend analysis.
 * **Order Blocks & Breaker Zones:** Highlights potential historical support/resistance areas by mapping consecutive opposing candle structures. These zones automatically update when breached.
 * **Fair Value Gaps (FVG):** Visualizes inefficiencies and imbalances directly on the chart, indicating zones where liquidity was rapidly consumed.
 * **Equal Highs & Equal Lows (EQH/EQL):** Identifies potential double tops or double bottoms representing pools of resting liquidity.
@@ -62,7 +62,7 @@ Metin yazılırken şu kurallara dikkat edilmiştir:
 ### Educational Risk/Reward Projections:
 The tool features optional visualization tools for Risk-to-Reward (R:R) analysis:
 * **Reference Levels:** Displays theoretical entry, stop-loss, and target regions based on user-configured ATR parameters.
-* **Multi-Timeframe Trend Dashboard:** Shows higher timeframe bias indicators to help conceptualize internal vs. external structure.
+* **Higher-Timeframe (1H) Bias Filter:** Provides higher timeframe bias inputs to help conceptualize internal vs. external structure.
 
 ### How to Use:
 1. Use this tool for technical analysis education and market structure research.
@@ -121,9 +121,9 @@ Yayıncı (operatör hesabı) script yayınlandığı anda ilk yorumu yazar ve b
 
 Scriptin kütüphanede üst sıralara tırmanması (trending listesine girmesi) için ilk 48 saat kritik öneme sahiptir. Bu süreci optimize etmek için uygulanacak adımlar:
 
-### Adım 1: İç Etkileşim Tetikleme (İlk 6 Saat)
-* **Ekip Beğenileri:** Ekipteki tüm üyelerin TradingView hesaplarından script sayfasına girilerek "Boost" (Beğeni) butonuna basılması sağlanmalıdır (en az 5-10 doğal boost).
-* **İlk Yorumlar:** Yazarın sabitlediği yorumun altına, teknik sorular soran veya teşekkür eden en az 3-4 yapıcı kullanıcı yorumu yazılmalı ve yazar tarafından cevaplanmalıdır. Etkin yorum döngüleri TradingView algoritmasında yüksek puan alır.
+### Adım 1: Organik Topluluk Etkileşimi (İlk 6 Saat)
+* **Erken Kullanıcı Beğenileri:** Gruba ve waitlist'e erken katılmış gerçek kullanıcılar davet edilerek indikatörü incelemeleri ve geri bildirim için "Boost" (Beğeni) butonuna basmaları teşvik edilmelidir.
+* **Organik Soru-Cevap (Q&A):** Pinned comment altındaki yorum alanında, gerçek kullanıcıların teknik sorularına ve analiz taleplerine yazar tarafından hızlı ve samimi yanıtlar verilerek organik bir soru-cevap döngüsü oluşturulmalıdır. Bu, TradingView algoritmasında olumlu bir sinyal yaratır.
 
 ### Adım 2: Topluluk Dağıtımı (İlk 24 Saat)
 * **X (Twitter) Duyurusu:** X kanalı üzerinden TradingView script linki paylaşılmalı, TradingView SMC topluluğuna yönelik hashtag'ler (`#SmartMoneyConcepts`, `#TradingView`, `#OrderBlock`) eklenerek organik trafik yönlendirilmelidir.
