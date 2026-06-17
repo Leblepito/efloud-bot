@@ -27,6 +27,28 @@ BANNED_TR_PHRASES = [
     "Fonumuza para yatır",
 ]
 
+# CMP-3 — EN-first growth requires parity coverage for the same compliance
+# surface. Source: P-002.5 CMP-2 phrase matrix (12 entries, all lowercase).
+# All entries are kept lowercase + comma-free so ``_norm`` substring match
+# behaves identically to the Turkish side. Add to this list (not modify) to
+# keep the banned-phrase tag shape stable for downstream consumers.
+BANNED_EN_PHRASES = [
+    "guaranteed profit",
+    "guaranteed returns",
+    "risk-free",
+    "risk free",
+    "no loss",
+    "no-loss",
+    "can't lose",
+    "cannot lose",
+    "double your money",
+    "passive income machine",
+    "get rich",
+    "get-rich-quick",
+    "signal and earn",
+    "guaranteed win",
+]
+
 
 def _norm(s: str) -> str:
     """Lowercase, drop commas, collapse whitespace — for tolerant matching.
@@ -35,11 +57,25 @@ def _norm(s: str) -> str:
     plain ``i`` first (and strip any stray combining dot) so phrases match
     regardless of the writer's casing.
     """
-    s = (s or "").replace("İ", "i").replace(",", " ").lower().replace("̇", "")
+    s = (s or "").replace("İ", "i").replace(",", " ").lower().replace("\u0307", "")
     return re.sub(r"\s+", " ", s).strip()
 
 
-_BANNED_NORM = [(p, _norm(p)) for p in BANNED_TR_PHRASES]
+_BANNED_TR_NORM = [(p, _norm(p)) for p in BANNED_TR_PHRASES]
+_BANNED_EN_NORM = [(p, _norm(p)) for p in BANNED_EN_PHRASES]
+
+
+# CMP-3 — single product price token (the $39 founding-member / lifetime /
+# one-time offer) is the ONLY dollar amount allowed in marketing copy. All
+# other $-amounts (per-trade PnL, account balance, $250 trade, etc.) remain
+# rejected by the regular absolute_money gate. Keep this scope tight: only
+# matches the canonical price string + the cadence suffix list.
+PRODUCT_PRICE_USD = 39
+_PRICE_WHITELIST = re.compile(
+    rf"\$\s*{PRODUCT_PRICE_USD}\b"
+    rf"(?:\s*(?:lifetime|one[- ]?time|once|tek\s+seferlik|ömür\s+boyu))?",
+    re.IGNORECASE,
+)
 
 # Absolute money amount: $/₺ either side of a number, or a currency-tagged number.
 _MONEY = re.compile(
@@ -67,18 +103,67 @@ def _has_performance_pct(text: str) -> bool:
     return False
 
 
-def find_violations(text: str) -> list[str]:
-    """Return a list of compliance violation tags; empty == clean."""
+# CMP-3 — unlabeled simulation: backtest/shadow/testnet/replay/hypothetical
+# copy MUST carry an explicit [BACKTEST]/[TESTNET]/[SIMULATED]/[SIM]/[REPLAY]
+# label token; otherwise it leaks as if it were live. Single label per emit
+# (deduped at call site).
+_SIM_WORDS = re.compile(
+    r"backtest|simulated|simülasyon|simulasyon|shadow|testnet|replay|hypothetical",
+    re.IGNORECASE,
+)
+_SIM_LABEL = re.compile(
+    r"\[(BACKTEST|TESTNET|SIMULATED|SIM|REPLAY)\]",
+    re.IGNORECASE,
+)
+
+
+def find_violations(text: str, lang: str = "all") -> list[str]:
+    """Return a list of compliance violation tags; empty == clean.
+
+    CMP-3 ``lang`` parameter (additive, default ``"all"`` preserves backward
+    compat):
+      - ``"tr"``   → scan Turkish banned list only.
+      - ``"en"``   → scan English banned list only.
+      - ``"all"``  → scan both lists (default — recommended for EN-first funnel).
+    Money / performance-pct / unlabeled-simulation checks always run regardless
+    of ``lang`` (they are language-agnostic gates).
+    """
     t = text or ""
     tn = _norm(t)
     out: list[str] = []
-    for original, norm in _BANNED_NORM:
-        if norm in tn:
-            out.append(f"banned_phrase:{original}")
-    if _MONEY.search(t):
+    scan_tr = lang in ("tr", "all")
+    scan_en = lang in ("en", "all")
+    if scan_tr:
+        for original, norm in _BANNED_TR_NORM:
+            if norm in tn:
+                out.append(f"banned_phrase:{original}")
+    if scan_en:
+        for original, norm in _BANNED_EN_NORM:
+            if norm in tn:
+                out.append(f"banned_phrase:{original}")
+    # Money gate: every $-amount that is NOT inside the $39 product-price
+    # whitelist span contributes a single 'absolute_money' tag (deduped).
+    has_unwhitelisted_money = False
+    for m in _MONEY.finditer(t):
+        if not _PRICE_WHITELIST.fullmatch(m.group(0)) and \
+           not _PRICE_WHITELIST.match(m.group(0).lstrip()):
+            # Cheap second check: span fully inside a whitelist match elsewhere.
+            in_whitelist = False
+            for wm in _PRICE_WHITELIST.finditer(t):
+                if wm.start() <= m.start() and m.end() <= wm.end():
+                    in_whitelist = True
+                    break
+            if not in_whitelist:
+                has_unwhitelisted_money = True
+                break
+    if has_unwhitelisted_money:
         out.append("absolute_money")
     if _has_performance_pct(t):
         out.append("performance_pct_claim")
+    # Unlabeled simulation gate: presence of any sim-word without an explicit
+    # bracketed label token is a violation.
+    if _SIM_WORDS.search(t) and not _SIM_LABEL.search(t):
+        out.append("unlabeled_simulation")
     return out
 
 
@@ -92,5 +177,12 @@ def has_disclaimer(text: str, lang: str = "tr") -> bool:
     return COMPLIANCE_TR in t
 
 
-__all__ = ["BANNED_TR_PHRASES", "find_violations", "has_disclaimer",
-           "COMPLIANCE_TR", "COMPLIANCE_EN"]
+__all__ = [
+    "BANNED_TR_PHRASES",
+    "BANNED_EN_PHRASES",
+    "PRODUCT_PRICE_USD",
+    "find_violations",
+    "has_disclaimer",
+    "COMPLIANCE_TR",
+    "COMPLIANCE_EN",
+]
