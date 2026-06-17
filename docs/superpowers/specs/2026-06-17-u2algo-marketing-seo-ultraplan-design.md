@@ -7,7 +7,7 @@
 | Epic | P-002.5 "Manus+Higgsfield Growth Layer" |
 | Branch (suggested) | `feat/p0025-growth-layer-spec` (doc-only first PR; per-task branches after) |
 | Status | PLAN |
-| Owners | @hermes (impl/backend/content ops, VPS) · @claude (review/orchestration/Pine/risk) · @operator (decisions, secrets, DNS, payments, publish sign-off) |
+| Owners | @hermes (impl/backend/content ops, VPS) · @claude (review/orchestration/Pine/risk) · @operator (decisions, secrets, DNS, payments, publish sign-off) · @gemini (paid acquisition / Google Ads — CAC-gated, §4.7) |
 | Supersedes/concretizes | P-002 M6/M7/M10/M13/M14/M15 · P-003 T-010/T-011/T-016 |
 | Departments | 6 (SEO, Content, Social, Web, Compliance, Growth) |
 | Tasks | 58 dept tasks + 5 synthesis-added gate/blocker tasks = **63** |
@@ -207,6 +207,21 @@ Mission: measurement + decision gates. Instrument funnel, weekly KPI report, enf
 KPIs: North-Star visit→waitlist % (≥3% organic benchmark); waitlist→customer % (post-milestone); CAC computable before paid; per-channel + EN/TR split; CTR; retention/churn; time-to-90-day; A/B lift; CAC-gate status; report delivery health.
 Risks: vanity metrics (North-Star = conversion); attribution blindness (GROW-2 UTM); premature paid spend (GROW-5 machine gate); proof overreach (GROW-8 milestone); A/B false positive (pre-registered n + z-test); trade-path touch (standalone runner, no Binance — recon HIGH); Manus overlap (GROW-3 collapse + GROW-9 single join key).
 
+### 4.7 ADS — Paid Acquisition / Google Ads (NEW, owner 🟣 @gemini, CAC-GATED)
+
+Mission: stand up paid-acquisition READINESS now (policy feasibility, account, conversion tracking, campaign blueprint, policy-compliant ad copy); **ZERO live spend until GATE 2 CAC opens AND a CPA target tied to `$39` LTV is set.** Concretizes the "paid ads" deferral in P-002 M15 + GROW-5. Delegated to @gemini (separate AI session; same git-push + sha256 handoff discipline as Hermes; @claude reviews).
+
+| id | title | owner | deps | phase | reconciles | acceptance (compressed) |
+|---|---|---|---|---|---|---|
+| ADS-0 | **Google Ads policy feasibility** (crypto/financial-products) | 🟣 | — | Foundation | NEW | `docs/marketing/google-ads-feasibility.md`: can a SMC indicator / trading-bot be advertised on Google Ads per region (EU/US/TR/global)? Google restricts crypto, "trading signals", get-rich/complex-speculative-financial + may require advertiser certification. **GO / NO-GO / RESTRICTED verdict per region BEFORE any campaign build.** If NO-GO, pivot budget to the channels that allow it (YouTube organic, X, TG). |
+| ADS-1 | Account structure + conversion tracking | 🟣 | WEB-6 | QuickWins | M15 | GA4 conversion import; conversion actions = `waitlist_submit` + `purchase_complete` (WEB-6 events, single source); no spend; doc-only. |
+| ADS-2 | Search-campaign blueprint + keyword/negatives | 🟣 | SEO-1, ADS-0 | QuickWins | M15 | branded + commercial clusters → ad groups; match types; negative-kw list; **flags SMC/ICT head-term saturation + CPC reality** (governance HIGH). |
+| ADS-3 | Policy-compliant RSA ad copy (EN-first) | 🟣 | CMP-2, CMP-3, ADS-0 | QuickWins | M6 | RSA headlines/descriptions pass `content_compliance` rules (no profit-guarantee, conservative-proof, disclaimer on landing) AND Google financial-products policy; routed through the SAME compliance gate as all copy. |
+| ADS-4 | Budget/bid + **CAC-gate interlock** | 🟣 | GROW-5, ADS-1 | Scale | M15 | CPA target ≤ f(`$39` LTV); **ads go live ONLY after `cac_gate.json gate_open=true`**; daily cap; kill-switch; operator spend sign-off. |
+| ADS-5 | Landing alignment + paid UTM | 🟣 | ADS-2, SEO-5 | Scale | M15 | ad → pillar-page message-match; `utm_medium=paid` tagged (feeds GROW-2/GROW-9); conversion path verified pre-launch. |
+
+KPIs: policy-GO regions; conversion tracking accuracy; quality score; CPC vs forecast; paid CAC vs $39 LTV; paid vs organic conversion delta. Risks: **Google crypto/financial policy NO-GO (ADS-0 first — may kill the channel)**; CPC unaffordable in saturated niche (ADS-2 flags, branded-only fallback); spend before CAC proven (ADS-4 hard interlock); ad copy policy-strike (ADS-3 dual-gate).
+
 ---
 
 ## 5. SEO Appendix
@@ -267,7 +282,8 @@ SEO-4, SEO-5, SEO-6 · CON-8, CON-9 (3 videos) · SD-6, SD-9(→KPI-ROUTINE) · 
 **GATE 3 → Scale (90-DAY PROOF GATE):** `proof_milestone.json milestone_reached=true` (≥90 consecutive days closed-trade history + ≥N trades, operator-set). Unlocks dollar-PnL CLAIMS (not the product). Bound to CMP-4 proof_mode. Operator sign-off recorded in gate file. **Higgsfield top-up/Ultra upgrade gated on same CAC signal.**
 
 ### Phase 4 — Scale (repeatable engine + paid only after CAC justifies)
-CON-10 · SD-10 · GROW-7 (A/B incl. proof-block) · CMP-9 (quarterly).
+CON-10 · SD-10 · GROW-7 (A/B incl. proof-block) · CMP-9 (quarterly) · **ADS-4/ADS-5 (Gemini — Google Ads go-live, ONLY after CAC gate green + CPA ≤ $39-LTV + ADS-0 region GO + operator spend sign-off)**.
+*(ADS prep — ADS-0 feasibility / ADS-1 tracking / ADS-2 blueprint / ADS-3 copy — runs in parallel during Foundation/QuickWins; only ADS-4/5 SPEND is Scale-gated.)*
 
 **Bot-dashboard migration (WEB-1/WEB-4/WEB-8)** — standalone ops change, NOT gated by marketing phases. Requires: efloud-risk-ops-reviewer sign-off + quiet/flat-book trading window + LS test-purchase verification. Runs whenever operator schedules.
 
