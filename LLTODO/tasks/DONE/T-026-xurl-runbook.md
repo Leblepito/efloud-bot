@@ -2,6 +2,7 @@
 
 **Epic:** P-002 (Marketing & Growth)
 **Claimed by:** @hermes (2026-06-18)
+**Durum:** ✅ DONE — PR #228 (`feat/p002-m1-xurl-runbook`) master'a merge edildi (`7698eb2`). Operatör: xurl binary local machine'de kur + auth (runbook `docs/runbooks/xurl-setup.md`).
 **Tahmini süre:** 0.5 gün (küçük kapsam, doc-only + facade)
 **Kaynak:** P-002 plan §2 Faz A M1 satırı:
 > M1 | xurl CLI kurulum + auth runbook (doc-only) | `docs/runbooks/xurl-setup.md` | Runbook ile VPS'te xurl auth tamam; secrets .env-only

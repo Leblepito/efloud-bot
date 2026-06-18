@@ -9,9 +9,9 @@
 | Toplam epic | ~~1 (P-001)~~ → 3 (P-001, P-002, P-003) |
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
-| Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) → 20 (T-025 + T-026 eklendi: P-002 M3 + M1) |
-| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ → 15 (T-019 ✅ quickstart 17 Jun merged [kart 18 Jun DONE]; T-018 ✅ müşteri telegram digest 16 Jun merged [kart 18 Jun DONE]; T-021 ✅ status page 18 Jun kod + runbook; T-025 ✅ Manus REST client 18 Jun) |
-| Claim edilmiş görev | 1 (T-026 @hermes [18 Jun, P-002 M1 xurl runbook]) |
+| Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) → 22 (T-025..T-028 eklendi: P-002 M3/M1/M6) |
+| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ → 16 (T-019 ✅ quickstart 17 Jun merged [kart 18 Jun DONE]; T-018 ✅ müşteri telegram digest 16 Jun merged [kart 18 Jun DONE]; T-021 ✅ status page 18 Jun kod + runbook; T-025 ✅ Manus REST client 18 Jun; T-026 ✅ xurl facade [PR #228 merged 18 Jun]) |
+| Claim edilmiş görev | 1 (T-028 @hermes [19 Jun, M6 renderers]) |
 
 ## P-001 Görev Skoru
 
@@ -51,6 +51,20 @@
 |---|---|
 | @hermes | v1 draft, implementasyon |
 | @claude | UltraPlan rekonstrüksiyonu, security audit, UR-002 |
+
+### P-002 Görev Skoru (append-only, 2026-06-19 @hermes)
+
+> P-002 görevleri M1-M15 PR yapısına bağlı. Hermes implementasyonu başladı
+> (M1 facade + M3 Manus client patch'leri hazır, operatör push'u bekliyor).
+> T-025 placeholder DONE olarak işaretlendi (gerçek dosya `feat/p002-m3-manus-client`
+> branch'inde; push sonrası R8 cross-ref için).
+
+| Görev | Faz | Açıklama | Durum | Claim |
+|---|---|---|---|---|
+| T-025 | M3 | Manus API client + retry + key masking + 3 template + 41 test | 🟡 placeholder DONE (kod branch'te, push bekliyor; gerçek dosya feat/p002-m3-manus-client @ 53b0cc2, 3 commit, T-025 bookkeeping) | @hermes (2026-06-19) |
+| T-026 | M1 | xurl CLI facade + runbook + config schema (default OFF) | 🟡 IN_PROGRESS (kod + 23 test + runbook hazır, commit + push bekliyor; feat/p002-m1-xurl-runbook) | @hermes (2026-06-19) |
+| T-027 | M6 | Content Approval Queue skeleton (state machine + migration 009 + storage + runbook) | 🟡 IN_PROGRESS (29 test PASS, 8/8 lint PASS, commit + push bekliyor; feat/p002-m6-content-queue @ 4e6dc90; renderer PR'a merge edildi [19 Jun @hermes]) | @hermes (2026-06-19) |
+| T-028 | M6.2 | Tier-2 Content Renderers (yaml → render → pre-gate → queue enqueue) | 🟡 IN_PROGRESS (26 test PASS, 8/8 lint bekleniyor; feat/p002-m6-templates + T-027 merge @ <head>; lane topology research/publish ayrı) | @hermes (2026-06-19) |
 
 ## Review Skoru
 
