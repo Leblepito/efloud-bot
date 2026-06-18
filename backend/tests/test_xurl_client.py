@@ -325,7 +325,7 @@ def test_sanitize_for_log_redacts_credentials():
     Tek başına token (40+ char) için regex `[A-Za-z0-9_-]{40,}` ile match eder.
     """
     # Case 1: env-passing pattern
-    raw = "xurl post --X_API_KEY=abcdef1234567890XYZ_abcdef1234567890XYZ --text hello"
+    raw = "xurl post --X_API_KEY=abcdef1234567890XYZ_abcdef1234567890XYZ --text hello"  # gitleaks:allow — test dummy, not a real key
     sanitized = xc._sanitize_for_log(raw)
     assert "abcdef1234567890XYZ_abcdef1234567890XYZ" not in sanitized
     assert "REDACTED" in sanitized
