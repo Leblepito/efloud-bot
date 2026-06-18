@@ -1,6 +1,6 @@
 # LLTODO — SCOREBOARD
 
-| **Son güncelleme:** 2026-06-18 @hermes (T-025 claim — P-002 M3 Manus REST client + runbook) (önceki: 2026-06-16 @hermes T-019 quickstart + premium.html rafine; T-010 deliverable DONE) |
+| **Son güncelleme:** 2026-06-18 @hermes (T-025 DONE — P-002 M3 Manus REST client; gerçek Manus API'ya başarılı bağlantı kanıtlandı (`request_id=92657...`, task `Bnk8FCrVYgZ6Kavx3eA332`); `urllib`→`requests` WAF-bypass bugfix dahil. `MANUS_API_KEY` `.env.production`'a eklendi (chmod 600, flag kapalı). Operatör push talimatı bekleniyor.) (önceki: 2026-06-16 @hermes T-019 quickstart + premium.html rafine; T-010 deliverable DONE) |
 
 ## Genel Metrikler
 
@@ -10,8 +10,8 @@
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) → 19 (T-025 eklendi: P-002 M3) |
-| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ |
-| Claim edilmiş görev | 2 (T-019 @hermes [16 Jun] + T-025 @hermes [18 Jun, P-002 M3]) |
+| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ → 12 (T-025 ✅ Manus REST client [18 Jun, real API verified — `request_id=92657...`]) |
+| Claim edilmiş görev | 1 (T-019 @hermes [16 Jun]) |
 
 ## P-001 Görev Skoru
 
@@ -94,7 +94,7 @@
 | T-022 | W-R | SLA + DR + on-call dokümanları | ✅ DONE (PR #187; tabletop PASS 2. tur — breaker-reset.md bonus; G-P3-B2 paketi hazır) | @claude (2026-06-11) |
 | T-023 | W-R | CI hardening: gitleaks + frontend + lint (pre-UR-exempt) | ✅ DONE (PR #182 → master `63b9872`, CI 4/4) | @claude (2026-06-11) |
 | T-024 | W-R | Healthz kontrat dokümanı + uptime metriği | ✅ DONE (PR #184 — `docs/runbooks/healthz-contract.md`) | @claude (2026-06-11) |
-| T-025 | P-002-M3 | Manus REST client (fail-safe, flag OFF) + task template şemaları | 🟡 IN_PROGRESS (P-002 Faz A M3: `backend/social/manus_client.py` 410 satır — ManusClient + 3 task templates; `backend/social/templates/manus_{x_thread,youtube_short,weekly_snapshot}.json`; `docs/runbooks/manus-setup.md`; `config.yaml` notifications.manus.enabled=false şema; 41/41 unit test PASS — hermetic, network YOK, retry/backoff/max_log truncation/key maskeleme/compliance token validate. Operatör: Manus hesabı aç + API key üret + VPS `/etc/efloud-backup.env`'e MANUS_API_KEY ekle + smoke test) | @hermes (2026-06-18) |
+| T-025 | P-002-M3 | Manus REST client (fail-safe, flag OFF) + task template şemaları | ✅ DONE (P-002 Faz A M3: `backend/social/manus_client.py` 460 satır — `ManusClient` + `requests.Session` transport + 3 task templates; `backend/social/templates/manus_{x_thread,youtube_short,weekly_snapshot}.json`; `docs/runbooks/manus-setup.md`; `config.yaml` notifications.manus.enabled=false şema; 41/41 unit test PASS — hermetic, network YOK, retry/backoff/max_log truncation/key maskeleme/compliance token validate. **Bugfix:** `urllib`→`requests` WAF-bypass (Hetzner IPv6 + AWS WAF). **Real API verified:** `request_id=92657...` (`task.list` side-effectsiz). **Env wired:** `MANUS_API_KEY` `.env.production`'a eklendi (chmod 600, flag kapalı default-OFF). Operatör: `MANUS_API_ENABLED=true` + recreate) | @hermes (2026-06-18) |
 
 ### P-003 Review Skoru
 
