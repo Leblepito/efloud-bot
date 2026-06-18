@@ -9,8 +9,8 @@
 | Toplam epic | ~~1 (P-001)~~ → 3 (P-001, P-002, P-003) |
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
-| Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) → 23 (T-025..T-029 eklendi: P-002 M3/M1/M6/M2) |
-| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ → 17 (T-019 ✅ quickstart 17 Jun merged [kart 18 Jun DONE]; T-018 ✅ müşteri telegram digest 16 Jun merged [kart 18 Jun DONE]; T-021 ✅ status page 18 Jun kod + runbook; T-025 ✅ Manus REST client 18 Jun; T-026 ✅ xurl facade [PR #228 merged 18 Jun]; T-029 ✅ M2 manifest consumer [19 Jun]) |
+| Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) → 25 (T-025..T-031 eklendi: P-002 M3/M1/M6/M2) |
+| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ → 19 (T-019 ✅ quickstart 17 Jun merged [kart 18 Jun DONE]; T-018 ✅ müşteri telegram digest 16 Jun merged [kart 18 Jun DONE]; T-021 ✅ status page 18 Jun kod + runbook; T-025 ✅ Manus REST client 18 Jun; T-026 ✅ xurl facade [PR #228 merged 18 Jun]; T-029 ✅ M2 manifest consumer [19 Jun]; T-030 ✅ approval callback [19 Jun]; T-031 ✅ xurl publisher [19 Jun]) |
 | Claim edilmiş görev | 1 (T-028 @hermes [19 Jun, M6 renderers]) |
 
 ## P-001 Görev Skoru
