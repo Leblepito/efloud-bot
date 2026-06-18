@@ -77,7 +77,7 @@ def test_explicit_key_overrides_env(monkeypatch):
     monkeypatch.delenv("MANUS_API_ENABLED", raising=False)
     monkeypatch.setenv("MANUS_API_KEY", "sk-env9999")
     # Flag kapalı — explicit key bile yetmez
-    c = mc.ManusClient(api_key="sk-explicit1234")
+    c = mc.ManusClient(api_key="sk-explicit1234")  # gitleaks:allow — test dummy, not a real key
     assert c.is_active() is False
     # Flag açık + explicit key → active
     monkeypatch.setenv("MANUS_API_ENABLED", "true")
