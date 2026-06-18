@@ -179,7 +179,7 @@ def test_xurl_publisher_no_backend_social_import():
     """Publisher, research lane'e (backend/social/tier2_renderers) dokunmamalı."""
     from pathlib import Path
     src = Path(__file__).parent.parent / "publishers" / "xurl.py"
-    text = src.read_text()
+    text = src.read_text(encoding="utf-8")
     assert "tier2_renderers" not in text
     assert "tv_manifest" not in text
     assert "content_queue" not in text

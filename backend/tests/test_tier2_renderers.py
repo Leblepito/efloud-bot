@@ -534,7 +534,7 @@ def test_render_and_enqueue_full_pipeline(templates, queue_create_draft_fn):
 
 def test_module_has_no_xurl_import():
     """renderer xurl/Manus çağırmamalı (publish lane işi)."""
-    src = Path(r2.__file__).read_text()
+    src = Path(r2.__file__).read_text(encoding="utf-8")
     # Yorum/docstring dışı kontrol: import/function-call referansı var mı?
     # xurl_client import edilmemeli, ManusClient import edilmemeli.
     assert "xurl_client" not in src
@@ -546,7 +546,7 @@ def test_module_has_no_xurl_import():
 def test_module_does_not_call_publishers():
     """renderer publish lane'e (lane_e) dokunmamalı — sadece docstring'te bahsedilebilir."""
     import re
-    src = Path(r2.__file__).read_text()
+    src = Path(r2.__file__).read_text(encoding="utf-8")
     # Docstring'leri tamamen çıkar (module + tüm function/class docstring'leri).
     code_no_docstrings = re.sub(r'"""[\s\S]*?"""', '', src)
     code_no_docstrings = re.sub(r"'''[\s\S]*?'''", '', code_no_docstrings)

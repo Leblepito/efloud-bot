@@ -231,7 +231,7 @@ def test_module_no_telegram_import():
     import re
     from pathlib import Path
     src = Path(__file__).parent.parent / "social" / "approval_callback.py"
-    text = src.read_text()
+    text = src.read_text(encoding="utf-8")
     # Docstring ve yorumları çıkar
     code = re.sub(r'"""[\s\S]*?"""', '', text)
     code = re.sub(r"'''[\s\S]*?'''", '', code)
