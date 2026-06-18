@@ -1,6 +1,6 @@
 # LLTODO — SCOREBOARD
 
-| **Son güncelleme:** 2026-06-16 @hermes (T-019 quickstart + premium.html rafine; T-010 deliverable DONE) (önceki: 2026-06-15 @claude T-003 NO-GO→indicator-as-premium pivot; W2 unblocked) |
+| **Son güncelleme:** 2026-06-18 @hermes (T-021 as-code: UptimeRobot monitör+status page kod oldu, idempotent setup script + 20 test + runbook; operatör canlı-aktivasyon gated) (önceki: 2026-06-16 @hermes T-019 quickstart + premium.html rafine; T-010 deliverable DONE) |
 
 ## Genel Metrikler
 
@@ -11,7 +11,7 @@
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
 | Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ |
-| Claim edilmiş görev | 1 (T-019 @hermes [16 Jun]) |
+| Claim edilmiş görev | 1 (T-019 @hermes [16 Jun]) — T-021 as-code hazır ama BACKLOG/operatör-gated (T-020 emsali) |
 
 ## P-001 Görev Skoru
 
@@ -90,7 +90,7 @@
 | T-018 | W3 | telegram_notifier (default-OFF) + regression test | ⬜ BACKLOG | — |
 | T-019 | W3 | Müşteri quickstart + site FAQ/destek | 🟡 IN_PROGRESS (u2algo-site/quickstart.html yazıldı — TV invite + setup + alert + 9 SSS; smoke compliance gate eklendi; premium.html hero+footer'dan link; sitemap 0.7 priority) | @hermes (2026-06-16) |
 | T-020 | W-R | Backup otomasyonu + restore tatbikatı (pre-UR-exempt) | ⬜ BACKLOG (kod merged, GÖREV F operatör tetiklemeli — backup provizyon + drill) | @claude (2026-06-11, parked) |
-| T-021 | W-R | Public status page + uptime monitor | ⬜ BACKLOG | — |
+| T-021 | W-R | Public status page + uptime monitor | ⬜ BACKLOG — **as-code DONE** (`ops/uptimerobot/monitors.yaml` + idempotent `scripts/setup_uptimerobot.py` + 20 test + runbook; keyword monitör kontratı korundu). Operatör-gated (hesap+key+çalıştır → LIVE), T-020 emsali. | @hermes (2026-06-18, as-code) |
 | T-022 | W-R | SLA + DR + on-call dokümanları | ✅ DONE (PR #187; tabletop PASS 2. tur — breaker-reset.md bonus; G-P3-B2 paketi hazır) | @claude (2026-06-11) |
 | T-023 | W-R | CI hardening: gitleaks + frontend + lint (pre-UR-exempt) | ✅ DONE (PR #182 → master `63b9872`, CI 4/4) | @claude (2026-06-11) |
 | T-024 | W-R | Healthz kontrat dokümanı + uptime metriği | ✅ DONE (PR #184 — `docs/runbooks/healthz-contract.md`) | @claude (2026-06-11) |

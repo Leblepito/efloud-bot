@@ -1,0 +1,56 @@
+# UptimeRobot monitor definitions — as-code (T-021, P-003 W-R)
+#
+# Source of truth for the public uptime monitors + status page.
+# Applied idempotently by `scripts/setup_uptimerobot.py` (create-or-update,
+# matched by friendly_name). Edit here, re-run the script — never click in
+# the UptimeRobot dashboard, so the dashboard never drifts from this file.
+#
+# Provider decision: UptimeRobot Free (docs/audit/2026-06-11-status-page-provider-eval.md).
+# Healthz contract: docs/runbooks/healthz-contract.md  (why a keyword monitor,
+# not a plain HTTP monitor: 200+"suspended" must NOT read as "operational").
+#
+# Operator setup (account + API key + Telegram contact) and verification:
+#   docs/runbooks/uptimerobot-as-code.md
+
+# Defaults applied to every monitor unless the monitor overrides them.
+defaults:
+  # Free-tier minimum is 300s (5 min). Solo plan ($9/mo) allows 60s.
+  interval_seconds: 300
+  # Case-insensitive keyword match — bot may format JSON with/without spaces.
+  keyword_case_sensitive: false
+  http_method: GET
+  # Telegram / e-mail alert-contact IDs (numeric, from `getAlertContacts`).
+  # Operator fills these AFTER creating the Telegram alert contact once in the
+  # dashboard — the contact needs the bot token (a secret), so it is NOT
+  # provisioned as-code here. Empty = create monitors without alert routing
+  # (the script warns). See runbook step 3.
+  alert_contact_ids: []
+
+monitors:
+  # The one monitor that matters: is the bot UP *and* actually trading?
+  #
+  # /api/healthz returns HTTP 200 for BOTH "ok" (trading) and "suspended"
+  # (breaker halted — service up, trading stopped). A plain HTTP monitor would
+  # call both "operational" and lie to customers. A keyword monitor that goes
+  # DOWN when `"status":"ok"` is ABSENT distinguishes them:
+  #   200 + '"status":"ok"'        -> keyword present -> UP
+  #   200 + '"status":"suspended"' -> keyword absent  -> DOWN (alert)
+  #   503 (any body)               -> keyword absent  -> DOWN (alert)
+  - friendly_name: "efloud-bot healthz"
+    type: keyword
+    url: "https://bot.ualgotrade.com/api/healthz"
+    keyword: '"status":"ok"'
+    # absent => monitor is DOWN when the keyword is missing from the response.
+    keyword_alert_when: absent
+
+# Public status page aggregating the monitors above. Optional — remove this
+# block to manage the status page manually in the dashboard.
+status_pages:
+  - friendly_name: "efloud-bot Status"
+    # Monitors shown on the page, by friendly_name (resolved to IDs at apply
+    # time). Must reference names defined in `monitors:` above.
+    monitors:
+      - "efloud-bot healthz"
+    # Optional custom domain (e.g. status.ualgotrade.com). Empty = use the
+    # UptimeRobot-hosted *.statuspage.com subdomain (operator picks it in UI).
+    custom_domain: ""
