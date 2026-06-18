@@ -66,7 +66,9 @@ def race_sl_tp(rec, bars, fill_ts, horizon_ms):
                     "bars_to_resolve": n, "ts_resolved": b["ts"]}
         if hit == "tp":
             return _resolve_tp(rec, bars, b, n, risk, mfe, mae, horizon_ms, fill_ts)
-    return None
+    # no hit within horizon -> carry the accumulated excursions so the timeout
+    # mark-to-market panel is not degenerate (final-review fix)
+    return {"outcome": None, "mfe_r": mfe, "mae_r": mae}
 
 def _resolve_tp(rec, bars, tp1_bar, n, risk, mfe, mae, horizon_ms, fill_ts):
     rr1 = (rec.tp1 - rec.emitted_entry) / risk if rec.direction == "LONG" else (rec.emitted_entry - rec.tp1) / risk
@@ -93,9 +95,10 @@ def resolve_signal(rec, bars, smc_version, max_horizon_hours, fill_window_bars=8
     if fill is None:
         return {"status": "unfilled", "outcome": "unfilled", "hypo_r_gross": None}
     raced = race_sl_tp(rec, bars, fill["fill_idx_ts"], horizon_ms)
-    if raced is None:
+    if raced.get("outcome") is None:
         return {"status": "timeout", "outcome": "timeout", "fill_price": fill["fill_price"],
                 "ts_filled": fill["ts_filled"], "bars_to_fill": fill["bars_to_fill"],
+                "mfe_r": raced.get("mfe_r"), "mae_r": raced.get("mae_r"),
                 "hypo_r_gross": None, "resolved_at_granularity": "1m"}
     return {"status": "resolved", "outcome": raced["outcome"], "fill_price": fill["fill_price"],
             "ts_filled": fill["ts_filled"], "bars_to_fill": fill["bars_to_fill"],

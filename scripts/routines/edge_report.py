@@ -23,7 +23,7 @@ def build_report(metrics: dict) -> str:
         lines.append(f"NET expectancy: {o['expectancy']:.3f} R | win-rate CI: {o.get('win_rate_ci')}")
         lines.append(f"Profit factor: {o.get('profit_factor')}")
     lines.append("")
-    lines.append("Breakdowns (SECONDARY/exploratory — multiple-testing applies):")
+    lines.append("Breakdowns (SECONDARY/exploratory — UNCORRECTED, multiple-testing NOT yet applied):")
     for name, cells in metrics.get("breakdowns", {}).items():
         lines.append(f"  {name}:")
         for k, c in cells.items():

@@ -70,5 +70,5 @@ def aggregate(records, min_n_print=30, min_n_claim=100):
 
     return {"overall": overall, "breakdowns": breakdowns,
             "status_breakdown": dict(status_breakdown),
-            "fdr": "BH applied across reported cells (see report)",
+            "fdr": "BH-FDR NOT YET APPLIED — breakdown cells are exploratory/uncorrected",
             "primary_hypothesis": "pooled NET expectancy, tradeable universe"}
