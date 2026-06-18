@@ -9,9 +9,9 @@
 | Toplam epic | ~~1 (P-001)~~ → 3 (P-001, P-002, P-003) |
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
-| Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) |
-| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ |
-| Claim edilmiş görev | 1 (T-019 @hermes [16 Jun]) |
+| Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 19 (T-001..T-003, T-010..T-019, T-022..T-024, T-025..T-027) |
+| Tamamlanan görev | 12 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]; T-019 ✅ quickstart + FAQ [16 Jun, master'a merge bookkeeping]) ~~önceki: 11~~ |
+| Claim edilmiş görev | 1 (T-027 @hermes [19 Jun]) |
 
 ## P-001 Görev Skoru
 
@@ -52,6 +52,19 @@
 | @hermes | v1 draft, implementasyon |
 | @claude | UltraPlan rekonstrüksiyonu, security audit, UR-002 |
 
+### P-002 Görev Skoru (append-only, 2026-06-19 @hermes)
+
+> P-002 görevleri M1-M15 PR yapısına bağlı. Hermes implementasyonu başladı
+> (M1 facade + M3 Manus client patch'leri hazır, operatör push'u bekliyor).
+> T-025 placeholder DONE olarak işaretlendi (gerçek dosya `feat/p002-m3-manus-client`
+> branch'inde; push sonrası R8 cross-ref için).
+
+| Görev | Faz | Açıklama | Durum | Claim |
+|---|---|---|---|---|
+| T-025 | M3 | Manus API client + retry + key masking + 3 template + 41 test | 🟡 placeholder DONE (kod branch'te, push bekliyor; gerçek dosya feat/p002-m3-manus-client @ 53b0cc2, 3 commit, T-025 bookkeeping) | @hermes (2026-06-19) |
+| T-026 | M1 | xurl CLI facade + runbook + config schema (default OFF) | 🟡 IN_PROGRESS (kod + 23 test + runbook hazır, commit + push bekliyor; feat/p002-m1-xurl-runbook) | @hermes (2026-06-19) |
+| T-027 | M6 | Content Approval Queue skeleton (state machine + migration 009 + storage + runbook) | 🟡 IN_PROGRESS (29 test PASS, 8/8 lint bekleniyor, commit + push bekliyor; feat/p002-m6-content-queue) | @hermes (2026-06-19) |
+
 ## Review Skoru
 
 | Review | Epic | Reviewer | Sonuç | Conf |
@@ -88,7 +101,7 @@
 | T-016 | W2 | Lemon Squeezy webhook (HMAC) + onay e-postası | ✅ DONE (INERT DELIVERED, 13/13 test, B.1-B.4 onayı sonrası aktive) | @claude (2026-06-15) |
 | T-017 | W2 | tv-access-grant runbook + kuyruk görünümü | ✅ DONE (runbook + list_pending script + 7 acceptance kriteri) | @hermes (2026-06-15) |
 | T-018 | W3 | telegram_notifier (default-OFF) + regression test | ⬜ BACKLOG | — |
-| T-019 | W3 | Müşteri quickstart + site FAQ/destek | 🟡 IN_PROGRESS (u2algo-site/quickstart.html yazıldı — TV invite + setup + alert + 9 SSS; smoke compliance gate eklendi; premium.html hero+footer'dan link; sitemap 0.7 priority) | @hermes (2026-06-16) |
+| T-019 | W3 | Müşteri quickstart + site FAQ/destek | ✅ DONE (PR master'a merge bookkeeping 2026-06-19 @hermes; u2algo-site/quickstart.html + 9 SSS + premium.html link + sitemap + smoke compliance gate eklendi) | @hermes (2026-06-16) |
 | T-020 | W-R | Backup otomasyonu + restore tatbikatı (pre-UR-exempt) | ⬜ BACKLOG (kod merged, GÖREV F operatör tetiklemeli — backup provizyon + drill) | @claude (2026-06-11, parked) |
 | T-021 | W-R | Public status page + uptime monitor | ⬜ BACKLOG | — |
 | T-022 | W-R | SLA + DR + on-call dokümanları | ✅ DONE (PR #187; tabletop PASS 2. tur — breaker-reset.md bonus; G-P3-B2 paketi hazır) | @claude (2026-06-11) |
