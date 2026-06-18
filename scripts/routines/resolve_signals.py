@@ -166,3 +166,91 @@ def _maybe_alert(cfg, counters):
                                f"{fail_pct:.0f}% >= {cfg['fetch_fail_alert_pct']}% fetch failures this pass")
         except Exception:
             log.warning("resolver fetch-fail %.0f%% (alert router unavailable)", fail_pct)
+
+# ---------------------------------------------------------------------------
+# Task 7 — Real OHLCVFetcher adapter + CLI/@register entrypoints
+# ---------------------------------------------------------------------------
+from scripts.routines.runner import register
+
+
+class _FetcherAdapter:
+    """Wraps the real OHLCVFetcher (DataFrame API) into the resolver-facing
+    fetch_bars(list[dict]) / funding_sum(float) interface.
+
+    REAL fetcher notes (data/fetcher.py):
+      fetch_ohlcv_range → returns FetchResult(df, gaps); df has DatetimeIndex
+        named "timestamp", columns: open, high, low, close, volume.
+      fetch_funding_rates → returns DataFrame with DatetimeIndex named "ts",
+        column: funding_rate.
+    """
+    def __init__(self, fetcher):
+        self._f = fetcher
+
+    def fetch_bars(self, symbol, tf, since_ms, until_ms):
+        result = self._f.fetch_ohlcv_range(symbol, tf, since_ms, until_ms)
+        return _bars_from_df(result.df)
+
+    def funding_sum(self, symbol, since_ms, until_ms):
+        df = self._f.fetch_funding_rates(symbol, since_ms, until_ms)
+        return _sum_funding(df)
+
+
+def _bars_from_df(df):
+    """DatetimeIndex DataFrame -> [{ts(ms),open,high,low,close}].
+    Index: timestamp (pd.DatetimeIndex). Columns: open, high, low, close, volume.
+    """
+    import pandas as pd
+    if df is None or len(df) == 0:
+        return []
+    out = []
+    for idx, row in df.iterrows():
+        ts = int(pd.Timestamp(idx).value // 1_000_000) if not isinstance(idx, (int, float)) else int(idx)
+        out.append({"ts": ts, "open": float(row["open"]), "high": float(row["high"]),
+                    "low": float(row["low"]), "close": float(row["close"])})
+    return out
+
+
+def _sum_funding(df):
+    """Sum funding_rate fraction over the window.
+    Real column name confirmed: 'funding_rate' (data/fetcher.py line 111).
+    Fallback probes handle alternative naming for resilience.
+    """
+    if df is None or len(df) == 0:
+        return 0.0
+    for col in ("funding_rate", "fundingRate", "rate"):
+        if col in getattr(df, "columns", []):
+            return float(df[col].astype(float).sum())
+    return 0.0
+
+
+@register("signal_resolver")
+def _routine_run(client=None, alert=None, cfg=None):
+    """Scheduler-facing wrapper. Runs resolve_open_signals via main()."""
+    from scripts.routines._base import RoutineResult
+    result = main()
+    return RoutineResult(
+        name="signal_resolver",
+        ok=True,
+        breaches=[],
+        report_path=None,
+    )
+
+
+def main(cfg_path="configs/config.phase2_1k.yaml"):
+    import yaml
+    from pathlib import Path
+    from data.fetcher import OHLCVFetcher
+    from engine.signal_ledger import SignalLedger
+    cfg_all = yaml.safe_load(open(cfg_path, encoding="utf-8"))
+    cfg = dict(cfg_all["signal_ledger"])
+    cfg["state_dir"] = cfg_all.get("operation", {}).get("state_dir", "./state")
+    cfg["smc_version"] = cfg_all.get("engine", {}).get("smc_version", "v1")
+    if not cfg.get("enabled"):
+        return {"skipped": "signal_ledger.enabled=false"}
+    ledger = SignalLedger(Path(cfg["state_dir"]) / "signal_ledger.jsonl")
+    fetcher = _FetcherAdapter(OHLCVFetcher())
+    return resolve_open_signals(ledger, fetcher, cfg)
+
+
+if __name__ == "__main__":
+    print(main())
