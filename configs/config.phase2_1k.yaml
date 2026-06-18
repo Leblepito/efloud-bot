@@ -215,3 +215,12 @@ safety:
     max_auto_protect_per_cycle: 1
     min_distance_to_mark_pct: 0.5
     require_tp_present: false           # TP'siz çıplak pozisyon EN risklisi → koru
+
+signal_ledger:
+  enabled: false            # master flag, decoupled from kronos.*
+  fill_window_bars: 8       # bars after emission for MARKET-at-confirmation, else 'unfilled'
+  max_horizon_hours: 48     # SL/TP race expiry
+  resolution_tf: "1m"       # resolver kline granularity
+  resolver_cadence_sec: 300 # batch pass interval
+  max_symbols: 25           # per-pass open-signal cap (weight budget)
+  fetch_fail_alert_pct: 20  # AlertRouter breach threshold (% of pass)

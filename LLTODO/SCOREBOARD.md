@@ -1,6 +1,6 @@
 # LLTODO — SCOREBOARD
 
-| **Son güncelleme:** 2026-06-16 @hermes (T-019 quickstart + premium.html rafine; T-010 deliverable DONE) (önceki: 2026-06-15 @claude T-003 NO-GO→indicator-as-premium pivot; W2 unblocked) |
+| **Son güncelleme:** 2026-06-18 @hermes (T-026 claim — P-002 M1 xurl runbook; T-019 kart kapatma bookkeeping fix; T-025 Manus REST client önceki teslim patch'te hazır) |
 
 ## Genel Metrikler
 
@@ -9,9 +9,9 @@
 | Toplam epic | ~~1 (P-001)~~ → 3 (P-001, P-002, P-003) |
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
-| Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 20 (T-001..T-003, T-010..T-019, T-022..T-024, T-025..T-028) |
-| Tamamlanan görev | 12 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]; T-019 ✅ quickstart + FAQ [16 Jun, master'a merge bookkeeping]) ~~önceki: 11~~ |
-| Claim edilmiş görev | 1 (T-028 @hermes [19 Jun]) |
+| Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) → 22 (T-025..T-028 eklendi: P-002 M3/M1/M6) |
+| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ → 16 (T-019 ✅ quickstart 17 Jun merged [kart 18 Jun DONE]; T-018 ✅ müşteri telegram digest 16 Jun merged [kart 18 Jun DONE]; T-021 ✅ status page 18 Jun kod + runbook; T-025 ✅ Manus REST client 18 Jun; T-026 ✅ xurl facade [PR #228 merged 18 Jun]) |
+| Claim edilmiş görev | 1 (T-028 @hermes [19 Jun, M6 renderers]) |
 
 ## P-001 Görev Skoru
 
@@ -101,13 +101,15 @@
 | T-015 | W2 | Supabase entitlements migration + RLS | ✅ DONE (entitlements tablosu + consent kolonları CANLI Supabase'e uygulandı [16 Jun]; RLS service-role-only doğrulandı — advisor INFO-only, permissive-policy hole'u yakalandı/önlendi) | @claude (2026-06-16) |
 | T-016 | W2 | Lemon Squeezy webhook (HMAC) + onay e-postası | ✅ DONE (INERT DELIVERED, 13/13 test, B.1-B.4 onayı sonrası aktive) | @claude (2026-06-15) |
 | T-017 | W2 | tv-access-grant runbook + kuyruk görünümü | ✅ DONE (runbook + list_pending script + 7 acceptance kriteri) | @hermes (2026-06-15) |
-| T-018 | W3 | telegram_notifier (default-OFF) + regression test | ⬜ BACKLOG | — |
-| T-019 | W3 | Müşteri quickstart + site FAQ/destek | ✅ DONE (PR master'a merge bookkeeping 2026-06-19 @hermes; u2algo-site/quickstart.html + 9 SSS + premium.html link + sitemap + smoke compliance gate eklendi) | @hermes (2026-06-16) |
+| T-018 | W3 | telegram_notifier (default-OFF) + regression test | ✅ DONE (PR #201 `d4bb169` merged 16 Jun; 32/32 test; default-OFF 2-katmanlı guard; G-P3-3 sağlam. Kart 18 Jun DONE'a taşındı) | @claude (2026-06-15, kart kapatma @hermes 2026-06-18) |
+| T-019 | W3 | Müşteri quickstart + site FAQ/destek | ✅ DONE (PR #214 `2835bdb` merged 17 Jun; u2algo-site/quickstart.html — TV invite + setup + alert + 9 SSS; smoke compliance gate; premium.html hero+footer link; sitemap 0.7 priority. Kart 18 Jun DONE'a taşındı — bookkeeping fix) | @hermes (2026-06-16, kart kapatma 2026-06-18) |
 | T-020 | W-R | Backup otomasyonu + restore tatbikatı (pre-UR-exempt) | ⬜ BACKLOG (kod merged, GÖREV F operatör tetiklemeli — backup provizyon + drill) | @claude (2026-06-11, parked) |
-| T-021 | W-R | Public status page + uptime monitor | ⬜ BACKLOG | — |
+| T-021 | W-R | Public status page + uptime monitor | ✅ DONE (feat/p003-wr-t021-status-page @ 4c88c09 18 Jun; status.html + uptime_to_public.py + 8/8 test; runbook status-page-operations.md. Kart 18 Jun DONE'a taşındı) | @hermes (2026-06-18) |
 | T-022 | W-R | SLA + DR + on-call dokümanları | ✅ DONE (PR #187; tabletop PASS 2. tur — breaker-reset.md bonus; G-P3-B2 paketi hazır) | @claude (2026-06-11) |
 | T-023 | W-R | CI hardening: gitleaks + frontend + lint (pre-UR-exempt) | ✅ DONE (PR #182 → master `63b9872`, CI 4/4) | @claude (2026-06-11) |
 | T-024 | W-R | Healthz kontrat dokümanı + uptime metriği | ✅ DONE (PR #184 — `docs/runbooks/healthz-contract.md`) | @claude (2026-06-11) |
+| T-025 | P-002-M3 | Manus REST client (fail-safe, flag OFF) + task template şemaları | ✅ DONE (PR hazır branch'te — `feat/p002-m3-manus-client` push bekliyor; gerçek API verified `request_id=92657...`; bugfix `urllib`→`requests` WAF-bypass dahil) | @hermes (2026-06-18) |
+| T-026 | P-002-M1 | xurl CLI kurulum + auth runbook + facade | 🟡 IN_PROGRESS (P-002 Faz A M1: `backend/social/xurl_client.py` 580 satır — XurlClient + post/thread + dry-run + compliance gate integration; 23/23 unit test PASS — hermetic, network YOK, subprocess mock'lu. Operatör: xurl binary local machine'de kurulacak [VPS'te OAuth browser flow yapılamaz]; Twitter app + OAuth PIN flow; VPS'e SSH tunnel ile veya manuel post) | @hermes (2026-06-18) |
 
 ### P-003 Review Skoru
 
