@@ -265,3 +265,9 @@ notifications:
     # Credentials live ONLY in the deploy env (never in repo):
     #   EFLOUD_CUSTOMER_TG_TOKEN, EFLOUD_CUSTOMER_TG_CHANNEL_ID
     #   (optional) EFLOUD_CUSTOMER_TG_THREAD_ID, EFLOUD_CUSTOMER_TG_PARSE_MODE
+  manus:
+    enabled: false            # P-002 M3 — MASTER switch. false → fully inert (no HTTP).
+    api_base_url: https://api.manus.ai   # default; override only for testing
+    # Credentials live ONLY in the deploy env (never in repo):
+    #   MANUS_API_KEY
+    # Templates (backend/social/templates/manus_*.json) — declared in code, no config needed.
