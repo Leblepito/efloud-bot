@@ -25,4 +25,4 @@ xurl Go binary üzerinden X/Twitter'a yayın. Default OFF (config.xurl.enabled
 ## Out of scope
 - LaneEPublisher orchestration (multi-publisher dispatch) — sonraki sprint
 - Retry/backoff policy — operatör kararı
-- Telegram approval adapter (callback_data'yı consume eden) — T-032
+- Telegram approval adapter (callback_data'yı consume eden) — sonraki sprint
