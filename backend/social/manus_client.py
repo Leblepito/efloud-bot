@@ -32,11 +32,13 @@ import json
 import logging
 import os
 import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 log = logging.getLogger("efloud.manus")
 
@@ -45,6 +47,12 @@ log = logging.getLogger("efloud.manus")
 BASE_URL_DEFAULT = "https://api.manus.ai"
 API_VERSION = "v2"
 USER_AGENT = "efloud-manus-client/1.0 (+https://u2algo.com)"
+
+# Module-level session cache (urllib3 connection reuse + retry policy).
+# `requests` transport — Python `urllib`'in TLS fingerprint'i Hetzner IP'de
+# AWS WAF tarafından 403 dönüyordu (curl 200 alırken). urllib3 farklı JA3 →
+# bypass. Regression guard: smoke_regression_* testleri.
+_SESSION: Optional["requests.Session"] = None
 
 # Retry
 MAX_RETRIES = 3
@@ -128,6 +136,31 @@ class ManusResponse:
         return 200 <= self.status < 300 and self.body.get("ok", True)
 
 
+def _build_session() -> requests.Session:
+    """Retry/backoff'lu HTTP session. urllib3 Retry kullanır.
+
+    Neden `requests`: urllib TLS fingerprint Hetzner IP'de AWS WAF tarafından
+    403 dönüyordu (curl 200 alırken). `requests` (urllib3 transport) farklı
+    fingerprint → bypass. Regression guard: smoke_regression_* testleri.
+    """
+    session = requests.Session()
+    retry_cfg = Retry(
+        total=MAX_RETRIES,
+        backoff_factor=BACKOFF_BASE_SEC,
+        status_forcelist=RETRYABLE_STATUSES,
+        # urllib3 default: sadece idempotent methodlarda retry — biz POST'u da
+        # retry etmek istiyoruz (Manus task create idempotent-key ile). Burada
+        # method whitelist vermiyoruz; safe methods default.
+        allowed_methods=frozenset(["GET", "POST", "PUT", "DELETE"]),
+        raise_on_status=False,
+        respect_retry_after_header=True,
+    )
+    adapter = HTTPAdapter(max_retries=retry_cfg)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
 def _http_request(
     method: str,
     path: str,
@@ -136,33 +169,43 @@ def _http_request(
     json_body: Optional[dict] = None,
     timeout: float = 30.0,
 ) -> ManusResponse:
-    """Manus API'ye HTTP istek — retry/backoff ile.
+    """Manus API'ye HTTP istek — `requests` session + retry/backoff.
 
-    Retryable: 429, 500, 502, 503, 504 + urllib URLError (timeout/conn).
-    Non-retryable: 400, 401, 403, 404, 422 → raise immediately.
+    Retryable: 429, 500, 502, 503, 504 + network (ConnectionError, Timeout).
+    Non-retryable: 400, 401, 403, 404, 422 + Manus `ok:false` 4xx-equivalent.
+
+    Session pooling: her call'da yeni session yaratmıyoruz (urllib3
+    connection reuse). Caller `_SESSION` modül-level cache kullanır.
     """
     url = f"{_base_url()}{path}"
-    if params:
-        from urllib.parse import urlencode
-        url += "?" + urlencode(params)
 
-    body_bytes: Optional[bytes] = None
     headers = {
         "x-manus-api-key": api_key,
         "User-Agent": USER_AGENT,
         "Accept": "application/json",
     }
     if json_body is not None:
-        body_bytes = json.dumps(json_body, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"
+
+    # Session reuse — TLS handshake amortized
+    global _SESSION
+    if _SESSION is None:
+        _SESSION = _build_session()
+    session = _SESSION
 
     last_exc: Optional[Exception] = None
     for attempt in range(MAX_RETRIES + 1):
         try:
-            req = urllib.request.Request(url, data=body_bytes, method=method, headers=headers)
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
-                status = resp.status
+            resp = session.request(
+                method=method,
+                url=url,
+                params=params,
+                json=json_body,
+                headers=headers,
+                timeout=timeout,
+            )
+            raw = resp.text or ""
+            status = resp.status_code
             try:
                 parsed = json.loads(raw) if raw else {}
             except json.JSONDecodeError:
@@ -173,66 +216,74 @@ def _http_request(
             if mr.ok:
                 return mr
             # HTTP 2xx but body says ok=false (Manus-specific)
-            if status in (200, 201) and parsed.get("ok") is False:
-                err = parsed.get("error", {})
+            if status in (200, 201) and isinstance(parsed, dict) and parsed.get("ok") is False:
+                err = parsed.get("error", {}) if isinstance(parsed.get("error"), dict) else {}
                 msg_raw = str(err.get("message", ""))
                 msg = msg_raw[:MAX_LOG_BODY] + ("..." if len(msg_raw) > MAX_LOG_BODY else "")
                 log.warning(
                     "manus.api.ok_false status=%s code=%s msg=%s req_id=%s",
                     status, err.get("code"), msg, request_id,
                 )
-                # 4xx-equivalent error codes → non-retryable
                 code = err.get("code", "")
-                if code in ("unauthorized", "forbidden", "not_found", "invalid_argument"):
-                    if code in ("unauthorized", "forbidden"):
-                        raise ManusAuthError(f"{code}: {err.get('message')}")
+                if code in ("unauthorized", "forbidden"):
+                    raise ManusAuthError(f"{code}: {err.get('message')}")
+                if code in ("not_found", "invalid_argument"):
                     raise ManuscriptTaskError(f"{code}: {err.get('message')}")
-                # Diğer → retry
+                # Diğer 5xx-equivalent → retryable
+                if attempt < MAX_RETRIES:
+                    backoff = BACKOFF_BASE_SEC * (2 ** attempt)
+                    log.warning(
+                        "manus.api.retry code=%s attempt=%d backoff=%.1fs req_id=%s",
+                        code, attempt + 1, backoff, request_id,
+                    )
+                    time.sleep(backoff)
+                    last_exc = ManuscriptTaskError(f"manus_api_error: {code}: {err.get('message')}")
+                    continue
                 raise ManuscriptTaskError(f"manus_api_error: {code}: {err.get('message')}")
 
             # HTTP non-2xx
             if status == 401 or status == 403:
                 raise ManusAuthError(f"http_{status}: auth_failed")
-            if status == 429 or status in RETRYABLE_STATUSES:
+            if status == 429:
                 if attempt < MAX_RETRIES:
                     backoff = BACKOFF_BASE_SEC * (2 ** attempt)
                     log.warning(
-                        "manus.api.retry status=%s attempt=%d backoff=%.1fs req_id=%s",
+                        "manus.api.retry status=429 attempt=%d backoff=%.1fs req_id=%s",
+                        attempt + 1, backoff, request_id,
+                    )
+                    time.sleep(backoff)
+                    last_exc = ManusRateLimit("http_429_retry")
+                    continue
+                raise ManusRateLimit("http_429_after_retries")
+            if status in RETRYABLE_STATUSES:
+                if attempt < MAX_RETRIES:
+                    backoff = BACKOFF_BASE_SEC * (2 ** attempt)
+                    log.warning(
+                        "manus.api.retry status=%d attempt=%d backoff=%.1fs req_id=%s",
                         status, attempt + 1, backoff, request_id,
                     )
                     time.sleep(backoff)
                     last_exc = ManuscriptTaskError(f"http_{status}_retry")
                     continue
-                if status == 429:
-                    raise ManusRateLimit(f"http_429_after_retries")
                 raise ManuscriptTaskError(f"http_{status}_after_retries")
             # 4xx (400/404/422) — non-retryable
             raise ManuscriptTaskError(f"http_{status}: {parsed}")
-        except urllib.error.HTTPError as e:
-            # urllib HTTPError (4xx/5xx) — yukarıdaki response processing'e düşmediyse
-            raw = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else ""
-            try:
-                parsed = json.loads(raw) if raw else {}
-            except json.JSONDecodeError:
-                parsed = {"ok": False, "error": {"code": "invalid_json", "message": raw[:200]}}
-            if e.code in (401, 403):
-                raise ManusAuthError(f"http_{e.code}: auth_failed") from e
-            if e.code in RETRYABLE_STATUSES and attempt < MAX_RETRIES:
-                backoff = BACKOFF_BASE_SEC * (2 ** attempt)
-                log.warning("manus.api.retry status=%d attempt=%d backoff=%.1fs", e.code, attempt + 1, backoff)
-                time.sleep(backoff)
-                last_exc = ManuscriptTaskError(f"http_{e.code}_retry")
-                continue
-            raise ManuscriptTaskError(f"http_{e.code}: {parsed}") from e
-        except (urllib.error.URLError, TimeoutError, OSError) as e:
+
+        except (requests.ConnectionError, requests.Timeout) as e:
             # Network/timeout — retryable
             if attempt < MAX_RETRIES:
                 backoff = BACKOFF_BASE_SEC * (2 ** attempt)
-                log.warning("manus.api.network_retry attempt=%d backoff=%.1fs err=%s", attempt + 1, backoff, e)
+                log.warning(
+                    "manus.api.network_retry attempt=%d backoff=%.1fs err=%s",
+                    attempt + 1, backoff, type(e).__name__,
+                )
                 time.sleep(backoff)
-                last_exc = e
+                last_exc = ManuscriptTaskError(f"network_error: {type(e).__name__}")
                 continue
             raise ManuscriptTaskError(f"network_error_after_retries: {e}") from e
+        except requests.RequestException as e:
+            # Other requests errors (invalid URL, etc.) — non-retryable
+            raise ManuscriptTaskError(f"request_error: {e}") from e
 
     # Buraya gelmemeli ama defensive
     raise last_exc or ManuscriptTaskError("unknown_error")

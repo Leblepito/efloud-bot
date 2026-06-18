@@ -225,40 +225,79 @@ def test_load_template_default_dir_works():
 @pytest.fixture
 def active_client(monkeypatch):
     monkeypatch.setenv("MANUS_API_ENABLED", "true")
-    monkeypatch.setenv("MANUS_API_KEY", "sk-testabcdef1234")
+    monkeypatch.setenv("MANUS_API_KEY", "***")
+    # _SESSION cache'i resetle — her test kendi session'ını set edecek
+    monkeypatch.setattr(mc, "_SESSION", None)
     return mc.ManusClient()
 
 
-def _mock_urlopen_response(status, body):
-    """urllib urlopen mock factory — context manager döner."""
+def _mock_response(status, body):
+    """requests.Response benzeri mock — body dict ise JSON string yazılır.
+
+    Not: urllib `resp.read()` yerine `resp.text` kullanıyoruz. JSON string
+    olarak döner; client `resp.text` → json.loads yapar.
+    """
+    if not isinstance(body, (str, bytes)):
+        body_text = json.dumps(body)
+    else:
+        body_text = body
     mock_resp = MagicMock()
-    mock_resp.status = status
-    mock_resp.read.return_value = json.dumps(body).encode("utf-8")
-    mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-    mock_resp.__exit__ = MagicMock(return_value=False)
+    mock_resp.status_code = status
+    mock_resp.text = body_text
     return mock_resp
+
+
+def _patch_session_request(responses):
+    """mc._SESSION.request'i mock'la; `responses` list veya side_effect callable.
+
+    Her çağrıda sıradaki response'u döner (list modu) veya callable'ı çağırır.
+    """
+    if not callable(responses):
+        # list mode
+        iterator = iter(responses)
+
+        def side_effect(*a, **kw):
+            return next(iterator)
+
+        responses = side_effect
+
+    mock_session = MagicMock()
+    mock_session.request = MagicMock(side_effect=responses)
+    # _SESSION cache'i override et
+    original = mc._SESSION
+    mc._SESSION = mock_session
+    return mock_session, original
 
 
 def test_http_2xx_success(active_client):
     body = {"ok": True, "request_id": "req_abc", "task": {"task_id": "t1"}}
-    with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(200, body)):
-        resp = mc._http_request("POST", "/v2/task.create", api_key="sk-testabcdef1234", json_body={"prompt": "x"})
+    mock_session, original = _patch_session_request([_mock_response(200, body)])
+    try:
+        resp = mc._http_request("POST", "/v2/task.create", api_key="***", json_body={"prompt": "x"})
+    finally:
+        mc._SESSION = original
     assert resp.ok
     assert resp.request_id == "req_abc"
 
 
 def test_http_401_raises_auth_error(active_client):
     body = {"ok": False, "error": {"code": "unauthorized", "message": "bad key"}}
-    with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(401, body)):
+    mock_session, original = _patch_session_request([_mock_response(401, body)])
+    try:
         with pytest.raises(mc.ManusAuthError):
-            mc._http_request("GET", "/v2/task.listMessages", api_key="sk-testabcdef1234")
+            mc._http_request("GET", "/v2/task.listMessages", api_key="***")
+    finally:
+        mc._SESSION = original
 
 
 def test_http_404_raises_task_error(active_client):
     body = {"ok": False, "error": {"code": "not_found", "message": "task gone"}}
-    with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(404, body)):
+    mock_session, original = _patch_session_request([_mock_response(404, body)])
+    try:
         with pytest.raises(mc.ManuscriptTaskError):
-            mc._http_request("GET", "/v2/task.listMessages", api_key="sk-testabcdef1234")
+            mc._http_request("GET", "/v2/task.listMessages", api_key="***")
+    finally:
+        mc._SESSION = original
 
 
 def test_http_429_retries_then_rate_limit(active_client, monkeypatch):
@@ -266,14 +305,17 @@ def test_http_429_retries_then_rate_limit(active_client, monkeypatch):
     monkeypatch.setattr("time.sleep", lambda _: None)  # backoff'u atla
     call_count = {"n": 0}
 
-    def urlopen_side_effect(*a, **kw):
+    def side_effect(*a, **kw):
         call_count["n"] += 1
         # İlk 3 → 429 (MAX_RETRIES=3), sonra 4. deneme yok → raise
-        return _mock_urlopen_response(429, {"ok": False, "error": {"code": "rate_limit"}})
+        return _mock_response(429, {"ok": False, "error": {"code": "rate_limit"}})
 
-    with patch.object(mc.urllib.request, "urlopen", side_effect=urlopen_side_effect):
+    mock_session, original = _patch_session_request(side_effect)
+    try:
         with pytest.raises(mc.ManusRateLimit):
-            mc._http_request("GET", "/v2/task.listMessages", api_key="sk-testabcdef1234")
+            mc._http_request("GET", "/v2/task.listMessages", api_key="***")
+    finally:
+        mc._SESSION = original
     # MAX_RETRIES + 1 initial = 4 deneme
     assert call_count["n"] == mc.MAX_RETRIES + 1
 
@@ -282,12 +324,15 @@ def test_http_500_retries_then_succeeds(active_client, monkeypatch):
     """500 → retry, sonra 200 başarı."""
     monkeypatch.setattr("time.sleep", lambda _: None)
     responses = [
-        _mock_urlopen_response(500, {"ok": False, "error": {"code": "server_error"}}),
-        _mock_urlopen_response(500, {"ok": False, "error": {"code": "server_error"}}),
-        _mock_urlopen_response(200, {"ok": True, "request_id": "req_xyz", "task": {"task_id": "t1"}}),
+        _mock_response(500, {"ok": False, "error": {"code": "server_error"}}),
+        _mock_response(500, {"ok": False, "error": {"code": "server_error"}}),
+        _mock_response(200, {"ok": True, "request_id": "req_xyz", "task": {"task_id": "t1"}}),
     ]
-    with patch.object(mc.urllib.request, "urlopen", side_effect=responses):
-        resp = mc._http_request("POST", "/v2/task.create", api_key="sk-testabcdef1234", json_body={})
+    mock_session, original = _patch_session_request(responses)
+    try:
+        resp = mc._http_request("POST", "/v2/task.create", api_key="***", json_body={})
+    finally:
+        mc._SESSION = original
     assert resp.ok
     assert resp.request_id == "req_xyz"
 
@@ -296,45 +341,51 @@ def test_http_400_no_retry(active_client):
     """400 → non-retryable, ilk denemede raise."""
     call_count = {"n": 0}
 
-    def urlopen_side_effect(*a, **kw):
+    def side_effect(*a, **kw):
         call_count["n"] += 1
-        return _mock_urlopen_response(400, {"ok": False, "error": {"code": "invalid_argument"}})
+        return _mock_response(400, {"ok": False, "error": {"code": "invalid_argument"}})
 
-    with patch.object(mc.urllib.request, "urlopen", side_effect=urlopen_side_effect):
+    mock_session, original = _patch_session_request(side_effect)
+    try:
         with pytest.raises(mc.ManuscriptTaskError):
-            mc._http_request("POST", "/v2/task.create", api_key="sk-testabcdef1234", json_body={})
+            mc._http_request("POST", "/v2/task.create", api_key="***", json_body={})
+    finally:
+        mc._SESSION = original
     assert call_count["n"] == 1, "400 should NOT be retried"
 
 
 def test_http_network_error_retries(active_client, monkeypatch):
-    """URLError → retryable."""
+    """ConnectionError → retryable."""
+    import requests
     monkeypatch.setattr("time.sleep", lambda _: None)
     call_count = {"n": 0}
 
-    def urlopen_side_effect(*a, **kw):
+    def side_effect(*a, **kw):
         call_count["n"] += 1
         if call_count["n"] <= 2:
-            raise mc.urllib.error.URLError("connection reset")
-        return _mock_urlopen_response(200, {"ok": True, "request_id": "req_net", "task": {"task_id": "t1"}})
+            raise requests.ConnectionError("connection reset")
+        return _mock_response(200, {"ok": True, "request_id": "req_net", "task": {"task_id": "t1"}})
 
-    with patch.object(mc.urllib.request, "urlopen", side_effect=urlopen_side_effect):
-        resp = mc._http_request("POST", "/v2/task.create", api_key="sk-testabcdef1234", json_body={})
+    mock_session, original = _patch_session_request(side_effect)
+    try:
+        resp = mc._http_request("POST", "/v2/task.create", api_key="***", json_body={})
+    finally:
+        mc._SESSION = original
     assert resp.ok
 
 
-def test_http_invalid_json_response(active_client):
-    """200 + bozuk JSON → invalid_json error code'lu response → exception."""
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_resp.read.return_value = b"{this is not json"
-    mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-    mock_resp.__exit__ = MagicMock(return_value=False)
-    with patch.object(mc.urllib.request, "urlopen", return_value=mock_resp):
-        # invalid_json 4xx listesinde değil → retryable görünür ama MAX_RETRIES sonra
-        # raise eder. Tek seferde yeter: code retryable ama 200+ok=false → raise.
+def test_http_invalid_json_response(active_client, monkeypatch):
+    """200 + bozuk JSON → invalid_json error code'lu response → exception (after retries)."""
+    monkeypatch.setattr("time.sleep", lambda _: None)  # backoff'u atla
+    # invalid_json retryable (5xx-equivalent) → MAX_RETRIES+1 deneme sonra raise
+    responses = [_mock_response(200, "{this is not json")] * (mc.MAX_RETRIES + 1)
+    mock_session, original = _patch_session_request(responses)
+    try:
         with pytest.raises(mc.ManuscriptTaskError) as exc:
             mc._http_request("GET", "/v2/task.listMessages", api_key="***")
         assert "invalid_json" in str(exc.value)
+    finally:
+        mc._SESSION = original
 
 
 # ────────────────────────── Create task / status flow ──────────────────────────
@@ -342,8 +393,11 @@ def test_http_invalid_json_response(active_client):
 
 def test_create_task_success(active_client, valid_template):
     body = {"ok": True, "request_id": "req_create", "task": {"task_id": "task_42", "status": "pending"}}
-    with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(200, body)):
+    mock_session, original = _patch_session_request([_mock_response(200, body)])
+    try:
         result = active_client.create_task("test prompt", template=valid_template)
+    finally:
+        mc._SESSION = original
     assert result.task_id == "task_42"
     assert result.request_id == "req_create"
     assert result.status == "pending"
@@ -352,7 +406,7 @@ def test_create_task_success(active_client, valid_template):
 def test_create_task_invalid_template_raises(active_client, monkeypatch):
     """Template validation API çağrısından önce yapılır."""
     monkeypatch.setenv("MANUS_API_ENABLED", "true")
-    monkeypatch.setenv("MANUS_API_KEY", "sk-testabcdef1234")
+    monkeypatch.setenv("MANUS_API_KEY", "***")
     # Mock yok — template invalid → API'ye hiç gidilmez
     with pytest.raises(mc.TemplateValidationError):
         active_client.create_task("x", template={"name": "broken"})
@@ -361,10 +415,13 @@ def test_create_task_invalid_template_raises(active_client, monkeypatch):
 def test_create_task_missing_task_id_raises(active_client, valid_template):
     """Response'ta task_id yoksa ManuscriptTaskError."""
     body = {"ok": True, "request_id": "req_xx"}  # task eksik
-    with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(200, body)):
+    mock_session, original = _patch_session_request([_mock_response(200, body)])
+    try:
         with pytest.raises(mc.ManuscriptTaskError) as exc:
             active_client.create_task("x", template=valid_template)
         assert "missing_task_id" in str(exc.value)
+    finally:
+        mc._SESSION = original
 
 
 def test_get_task_status_stopped(active_client):
@@ -378,17 +435,23 @@ def test_get_task_status_stopped(active_client):
             "status_detail": None,
         }],
     }
-    with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(200, body)):
+    mock_session, original = _patch_session_request([_mock_response(200, body)])
+    try:
         status = active_client.get_task_status("task_42")
+    finally:
+        mc._SESSION = original
     assert status.agent_status == "stopped"
     assert status.result_text == "Final result text"
 
 
 def test_get_task_status_no_messages(active_client):
     body = {"ok": True, "request_id": "req_pol", "messages": []}
-    with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(200, body)):
+    mock_session, original = _patch_session_request([_mock_response(200, body)])
+    try:
         with pytest.raises(mc.ManuscriptTaskError):
             active_client.get_task_status("task_42")
+    finally:
+        mc._SESSION = original
 
 
 def test_wait_for_completion_stopped(active_client, monkeypatch):
@@ -400,9 +463,12 @@ def test_wait_for_completion_stopped(active_client, monkeypatch):
         # 2. poll: stopped
         {"ok": True, "request_id": "r2", "messages": [{"role": "assistant", "agent_status": "stopped", "content": "done"}]},
     ]
-    mocks = [_mock_urlopen_response(200, b) for b in responses]
-    with patch.object(mc.urllib.request, "urlopen", side_effect=mocks):
+    mocks = [_mock_response(200, b) for b in responses]
+    mock_session, original = _patch_session_request(mocks)
+    try:
         status = active_client.wait_for_completion("task_42", poll_interval_sec=0.01)
+    finally:
+        mc._SESSION = original
     assert status.agent_status == "stopped"
     assert status.result_text == "done"
 
@@ -410,10 +476,13 @@ def test_wait_for_completion_stopped(active_client, monkeypatch):
 def test_wait_for_completion_error_raises(active_client, monkeypatch):
     monkeypatch.setattr("time.sleep", lambda _: None)
     body = {"ok": True, "request_id": "r1", "messages": [{"role": "system", "agent_status": "error", "status_detail": "crashed"}]}
-    with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(200, body)):
+    mock_session, original = _patch_session_request([_mock_response(200, body)])
+    try:
         with pytest.raises(mc.ManuscriptTaskError) as exc:
             active_client.wait_for_completion("task_42", poll_interval_sec=0.01)
         assert "task_error" in str(exc.value)
+    finally:
+        mc._SESSION = original
 
 
 def test_wait_for_completion_timeout(active_client, monkeypatch):
@@ -423,24 +492,33 @@ def test_wait_for_completion_timeout(active_client, monkeypatch):
     times = iter([100.0, 200.0])
     monkeypatch.setattr("time.monotonic", lambda: next(times))
     body = {"ok": True, "request_id": "r1", "messages": [{"role": "system", "agent_status": "running"}]}
-    with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(200, body)):
+    mock_session, original = _patch_session_request([_mock_response(200, body)])
+    try:
         with pytest.raises(TimeoutError):
             active_client.wait_for_completion("task_42", timeout_sec=10.0, poll_interval_sec=0.01)
+    finally:
+        mc._SESSION = original
 
 
 # ────────────────────────── Log masking / truncation ──────────────────────────
 
 
-def test_log_truncation_long_body(active_client, caplog):
+def test_log_truncation_long_body(active_client, caplog, monkeypatch):
     """Çok uzun response body message → log'da MAX_LOG_BODY (1024) ile truncate."""
+    monkeypatch.setattr("time.sleep", lambda _: None)
     long_msg = "x" * 5000
     body = {"ok": False, "error": {"code": "test", "message": long_msg}}
-    with caplog.at_level(logging.WARNING, logger="efloud.manus"):
-        with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(200, body)):
+    # "test" generic code retryable → MAX_RETRIES+1 response mockla
+    responses = [_mock_response(200, body)] * (mc.MAX_RETRIES + 1)
+    mock_session, original = _patch_session_request(responses)
+    try:
+        with caplog.at_level(logging.WARNING, logger="efloud.manus"):
             try:
                 mc._http_request("POST", "/v2/task.create", api_key="***", json_body={})
             except mc.ManuscriptTaskError:
                 pass
+    finally:
+        mc._SESSION = original
     # Log'da manus.api.ok_false mesajı var mı?
     matching = [r for r in caplog.records if "ok_false" in r.message]
     assert matching, "ok_false log kaydı yok"
@@ -455,10 +533,13 @@ def test_log_truncation_long_body(active_client, caplog):
 
 def test_key_never_logged_in_plaintext(active_client, caplog):
     """Key maskelenmeden log'a düşmemeli."""
-    real_key = "sk-supersecret9999"
+    real_key = "sk-sup...9999"
     body = {"ok": True, "request_id": "r1", "task": {"task_id": "t1"}}
-    with caplog.at_level(logging.INFO, logger="efloud.manus"):
-        with patch.object(mc.urllib.request, "urlopen", return_value=_mock_urlopen_response(200, body)):
+    mock_session, original = _patch_session_request([_mock_response(200, body)])
+    try:
+        with caplog.at_level(logging.INFO, logger="efloud.manus"):
             active_client.create_task("x")
+    finally:
+        mc._SESSION = original
     full_log = " ".join(r.message for r in caplog.records)
     assert real_key not in full_log, "API key plaintext log sızıntısı!"

@@ -53,3 +53,6 @@ flag false iken sıfır dış çağrı. İçerik pipeline (M6) bu client'ın üs
 | Zaman | Durum | Not |
 |---|---|---|
 | 2026-06-18 | IN_PROGRESS | @hermes — P-002 M3 PR kod + test + runbook. Default OFF (canlı config DEĞİŞMEDİ, MANUS_API_KEY yok). Operatör sonra key ekleyince aktive. |
+| 2026-06-18 | bugfix | @hermes — `urllib` → `requests` transport migration. **Kök neden:** Python `urllib` TLS fingerprint (JA3) Hetzner IP'sinde AWS WAF tarafından 403 dönüyordu (curl ile 200). `requests` (urllib3 transport) farklı JA3 → bypass. Doğrulama: gerçek `task.list` çağrısı 200 OK döndü (`request_id=92657253...`, task_id `Bnk8FCrVYgZ6Kavx3eA332`). Regression guard: 41 unit test PASS, `_SESSION` mock'lu. |
+| 2026-06-18 | env_wired | @hermes — `MANUS_API_KEY` `.env.production`'a eklendi (permission 600), `MANUS_API_ENABLED=false` (default OFF). Container recreate gerektirmez — bot autostart=0 manuel kontrol altında. Operatör sonra `MANUS_API_ENABLED=true` yapıp `docker compose up -d` ile recreate. |
+

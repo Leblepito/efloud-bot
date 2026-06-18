@@ -78,11 +78,30 @@ python3 -c "from backend.social.manus_client import ManusClient; c=ManusClient()
 
 ```bash
 cd /opt/efloud-bot
-python3 -m backend.tests.test_manus_client  # veya pytest
+python3 -m pytest backend/tests/test_manus_client.py
 # → 41 passed
 ```
 
-**İlk canlı test** (gerçek Manus API'ye minimal istek):
+**Auth-only smoke** (gerçek Manus'a minimal, idempotent, side-effectsiz):
+
+```bash
+source /etc/efloud-backup.env  # veya: export $(grep MANUS_ /opt/efloud-bot/.env.production | xargs)
+python3 <<'EOF'
+import os, sys
+sys.path.insert(0, '/opt/efloud-bot')
+os.environ.setdefault("MANUS_API_ENABLED", "true")  # tek seferlik override
+from backend.social.manus_client import _http_request, _api_key, _mask_key
+print(f"key_masked={_mask_key(_api_key())}")
+resp = _http_request("GET", "/v2/task.list", api_key=_api_key(), params={"limit": 1}, timeout=15)
+print(f"http_status={resp.status} ok={resp.ok} req_id={resp.request_id}")
+EOF
+```
+
+Beklenen: `http_status=200 ok=True req_id=92657...`. Bu çağrı **side-effectsiz** (sadece
+okunmuş task'ları listeler, yeni task yaratmaz). Free tier'da 101 credit harcaması
+gösterir — operatör için "bu hesap aktif" kanıtı.
+
+**İlk canlı task** (gerçek task create + wait):
 
 ```bash
 source /etc/efloud-backup.env
@@ -105,6 +124,32 @@ EOF
 
 Beklenen: `task_id` döner, `wait_for_completion` 30-60 saniyede `stopped` döner, `result`
 alanı 200 char taslak X thread içerir.
+
+### Adım 5 — Transport notu (Hetzner AWS WAF bypass)
+
+**Sorun:** Python `urllib.request.urlopen` Hetzner VPS IPv6'sında (`2a01:4f8:c2c:...`)
+AWS WAF tarafından 403 dönüyor. Curl aynı IP'den 200 alıyor.
+
+**Kök neden:** Python `urllib`'in TLS fingerprint (JA3 hash) AWS WAF reputation
+listesinde. `requests` (urllib3 transport) farklı JA3 → bypass.
+
+**Çözüm:** Client transport'u `urllib` → `requests.Session` (`HTTPAdapter` + `urllib3.Retry`).
+Backend container'da `requests>=2.34` zaten kurulu.
+
+**Troubleshooting** — eğer hâlâ 403 alıyorsan:
+
+```bash
+# 1. curl ile dene — curl çalışıyorsa transport sorunu değil
+curl -sS -o /dev/null -w 'HTTP %{http_code}\n' \
+  -H "x-manus-api-key: $MANUS_API_KEY" \
+  https://api.manus.ai/v2/task.list
+
+# 2. DNS / IP reputation
+curl https://ifconfig.me  # public IP — coğrafi bloklu olabilir
+
+# 3. Outbound firewall — port 443 açık mı?
+sudo iptables -L OUTPUT -n | grep 443
+```
 
 ---
 
