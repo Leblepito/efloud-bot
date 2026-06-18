@@ -1,0 +1,21 @@
+{
+  "name": "youtube_short",
+  "version": "1.0.0",
+  "task_metadata": {
+    "type": "video_script",
+    "channel": "youtube_shorts",
+    "version": "1.0.0"
+  },
+  "compliance": {
+    "tr": "Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir.",
+    "en": "Not investment advice. Trade at your own risk."
+  },
+  "prompt_template": "Sen bir eğitim YouTube Shorts (<60 sn) script yazarısın. SMC tabanlı, risk-disiplinli trading projesinin teknik açıklamalarını 3-5 cümlede özetleyen voice-over metni + sahne önerisi üret.\n\nKURALLAR:\n- Süre: 30-58 saniye (60 sn Shorts limiti)\n- Yapı: hook (3sn) → problem (10sn) → çözüm/açıklama (35sn) → CTA + disclaimer (10sn)\n- Dil: Türkçe (teknik terimler İngilizce: Order Block, Fair Value Gap, Break of Structure)\n- Yasaklı: 'kesin kazanç', 'sinyal', 'şimdi al', '100%', gerçek PnL sayıları\n- Zorunlu son cümle: 'Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir. / Not investment advice. Trade at your own risk.'\n- Sahne önerisi: TradingView chart görseli referansı (ekrana yazı overlay)\n- Background music: 'lofi/chill' (öneri, zorunlu değil)\n\nÇIKTI:\nTITLE: ...\nSCENE 1 (0-3s): [görsel] + 'voice: ...'\nSCENE 2 (3-13s): ...\n...\nSCENE N (...-58s): 'voice: Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir. / Not investment advice. Trade at your own risk.'\n\nKONU:\n{{input}}\n\nDISCLAIMER (zorunlu): Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir. / Not investment advice. Trade at your own risk.",
+  "input_examples": [
+    "Order Block kavramı: son bearish mumun body'sinin %50'si kırıldığında üstünde kalan liquidity havuzu.",
+    "Circuit breaker: günlük -%2 veya haftalık -%4 drawdown limiti aşılınca bot kendini askıya alır."
+  ],
+  "max_duration_sec": 58,
+  "language": "tr",
+  "aspect_ratio": "9:16"
+}
