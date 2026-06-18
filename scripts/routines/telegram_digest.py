@@ -42,10 +42,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 # Re-export the canonical notifier so callers don't have to chase two paths.
-from engine.notifications.telegram_notifier import (
-    CustomerChannelNotifier,
-    build_daily_digest as _build_daily_digest_tr,
-)
+from engine.notifications.telegram_notifier import CustomerChannelNotifier
 from scripts.content_compliance import (
     COMPLIANCE_EN,
     find_violations,
