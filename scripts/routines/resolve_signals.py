@@ -102,3 +102,67 @@ def resolve_signal(rec, bars, smc_version, max_horizon_hours, fill_window_bars=8
             "hypo_r_gross": raced["hypo_r_raw"], "mfe_r": raced["mfe_r"], "mae_r": raced["mae_r"],
             "bars_to_resolve": raced["bars_to_resolve"], "ts_resolved": raced["ts_resolved"],
             "resolved_at_granularity": "1m"}
+
+# ---------------------------------------------------------------------------
+# Task 4 — Resolver orchestration: fetch abstraction, cost netting, heartbeat
+# ---------------------------------------------------------------------------
+import json, time, logging
+from pathlib import Path
+from engine.edge_costs import net_r
+
+log = logging.getLogger("efloud.signal_resolver")
+
+def resolve_open_signals(ledger, fetcher, cfg):
+    tf = cfg["resolution_tf"]; horizon_h = cfg["max_horizon_hours"]
+    horizon_ms = int(horizon_h * 3600 * 1000)
+    counters = {"scanned":0,"newly_filled":0,"resolved":0,"timed_out":0,
+                "still_open":0,"fetch_failed":0}
+    for rec in ledger.open_signals()[: cfg["max_symbols"]]:
+        counters["scanned"] += 1
+        until = min(int(time.time()*1000), rec.ts_emitted + horizon_ms)
+        try:
+            bars = fetcher.fetch_bars(rec.symbol, tf, rec.brk_ts, until)
+        except Exception as exc:
+            log.warning("resolver fetch failed %s: %s", rec.symbol, exc)
+            ledger.update_resolution(rec.signal_id, status="unresolved_data")
+            counters["fetch_failed"] += 1
+            continue
+        patch = resolve_signal(rec, bars, cfg["smc_version"], horizon_h, cfg["fill_window_bars"])
+        if patch.get("hypo_r_gross") is not None:
+            ts_res = patch.get("ts_resolved", until)
+            hold_h = max((ts_res - rec.ts_emitted) / 3_600_000.0, 0.0)
+            funding = fetcher.funding_sum(rec.symbol, rec.ts_emitted, ts_res)
+            patch["hypo_r_net"] = net_r(rec.direction, rec.emitted_entry, rec.sl,
+                                        patch["hypo_r_gross"], hold_h, funding)
+        ledger.update_resolution(rec.signal_id, **patch)
+        st = patch["status"]
+        if st == "resolved":
+            counters["resolved"] += 1
+        elif st == "timeout":
+            counters["timed_out"] += 1
+        else:
+            counters["still_open"] += 1
+        if patch.get("ts_filled"):
+            counters["newly_filled"] += 1
+    _write_heartbeat(cfg, counters)
+    _maybe_alert(cfg, counters)
+    return counters
+
+def _write_heartbeat(cfg, counters):
+    state_dir = Path(cfg.get("state_dir", "./state"))
+    state_dir.mkdir(parents=True, exist_ok=True)
+    payload = {**counters, "ts_ms": int(time.time()*1000)}
+    (state_dir / "signal_resolver_heartbeat.json").write_text(
+        json.dumps(payload), encoding="utf-8")
+
+def _maybe_alert(cfg, counters):
+    scanned = counters["scanned"] or 1
+    fail_pct = 100 * counters["fetch_failed"] / scanned
+    if fail_pct >= cfg["fetch_fail_alert_pct"]:
+        try:
+            from scripts.routines._alert import AlertRouter
+            AlertRouter().send("WARNING", "signal_resolver_fetchfail",
+                               "signal_resolver fetch-fail",
+                               f"{fail_pct:.0f}% >= {cfg['fetch_fail_alert_pct']}% fetch failures this pass")
+        except Exception:
+            log.warning("resolver fetch-fail %.0f%% (alert router unavailable)", fail_pct)
