@@ -23,4 +23,9 @@
     <loc>https://u2algo.com/quickstart.html</loc>
     <priority>0.7</priority>
   </url>
+  <url>
+    <loc>https://u2algo.com/risk-disclosure.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
 </urlset>

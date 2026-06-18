@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>u2algo — Risk-disiplinli algoritmik trading araştırması</title>
-<meta name="description" content="u2algo: SMC tabanlı, risk-disiplinli algoritmik trading araştırmasını build-in-public takip et. Backtest ve shadow ile doğrulanan altyapı. Yatırım tavsiyesi değildir." />
+<meta name="description" content="u2algo: SMC tabanlı, risk-disiplinli algoritmik trading araştırmasını build-in-public takip et. backtest ve shadow ile doğrulanan altyapı. Yatırım tavsiyesi değildir." />
 <meta name="robots" content="index, follow" />
 <link rel="icon" href="./favicon.ico" />
 <!-- Open Graph -->
@@ -648,7 +648,7 @@
       <details class="reveal"><summary>Scalp, mid ve long profilleri arasındaki fark ne?<span class="chev">+</span></summary>
         <p>Aynı SMC doktrini farklı zaman dilimi zincirleriyle çalışır. Scalp (5m/1h/12h) hızlı ve takip-yoğun; mid (15m/1h/4h) dengeli ve üretimde doğrulanmış varsayılan; long (1h/8h/1w) pozisyon ufkuna uygundur. Profiller strict-monoton doğrulanır.</p></details>
       <details class="reveal"><summary>Geçmiş veya backtest sonuçları gelecekteki getiriyi garanti eder mi?<span class="chev">+</span></summary>
-        <p>Hayır. Backtest ve shadow sonuçları yalnızca araştırma amaçlıdır ve geçmiş performans gelecekteki sonuçların göstergesi değildir. Kaldıraçlı işlemler yüksek risk taşır.</p></details>
+        <p>Hayır. backtest ve shadow sonuçları yalnızca araştırma amaçlıdır ve geçmiş performans gelecekteki sonuçların göstergesi değildir. Kaldıraçlı işlemler yüksek risk taşır.</p></details>
       <details class="reveal"><summary>Bu yatırım tavsiyesi mi?<span class="chev">+</span></summary>
         <p>Hayır. Bu sitedeki hiçbir içerik yatırım tavsiyesi değildir; eğitim ve araştırma amaçlıdır. Kararlarından yalnızca sen sorumlusun; gerekirse lisanslı bir danışmana başvur (DYOR).</p></details>
       <details class="reveal"><summary>Ne zaman ücretli olacak?<span class="chev">+</span></summary>
@@ -657,14 +657,21 @@
   </div>
 </section>
 
-<!-- DISCLAIMER -->
+<!-- DISCLAIMER (CMP-5 wiring — CMP-1 canonical byte-anchors + B6 jurisdiction) -->
 <section>
   <div class="wrap">
     <div class="disclaimer reveal">
       <h4><span style="width:6px;height:6px;border-radius:50%;background:var(--warn);display:inline-block"></span> Risk bildirimi</h4>
       <p>u2algo bir araştırma ve eğitim projesidir. Bu sitedeki hiçbir içerik yatırım, finansal, hukuki veya vergi tavsiyesi niteliğinde değildir ve öyle yorumlanmamalıdır. Hiçbir getiri garantisi verilmez.</p>
+      <!-- CMP-1 B1 canonical anchor (TR) — byte-match required by has_disclaimer -->
+      <p>Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir.</p>
+      <!-- CMP-1 B1 canonical anchor (EN) — for EN-first global visitors -->
+      <p><em>Not investment advice. Trade at your own risk.</em></p>
       <p>Kripto varlıklar ve kaldıraçlı futures işlemleri yüksek volatilite ve yatırdığınız tüm sermayeyi kaybetme riski içerir. Geçmiş performans veya backtest/shadow sonuçları gelecekteki sonuçların göstergesi değildir. Yalnızca kaybetmeyi göze alabileceğiniz tutarla ve kendi araştırmanızı yaparak (DYOR) hareket edin.</p>
+      <!-- CMP-1 B6 — A.Ş. jurisdiction -->
+      <p>u2algo bir Türk Anonim Şirketi (A.Ş.) tarafından işletilir. Lisanslı aracı kurum, yatırım danışmanı veya fon değiliz. Yatırıma çağrı yoktur.</p>
       <p>u2algo fon toplamaz, müşteri sermayesi yönetmez ve bireysel işlem talimatı vermez. Tüm işlem kararları ve sorumluluğu kullanıcıya aittir.</p>
+      <p style="margin-top:14px"><a href="/risk-disclosure.html" style="color:var(--accent)">Tam risk açıklaması →</a> (B1-B6 EN/TR, hukuki uyarılar, geçmiş performans notu, sim/backtest etiketi, A.Ş. jurisdiction).</p>
     </div>
   </div>
 </section>
