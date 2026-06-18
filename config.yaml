@@ -265,3 +265,14 @@ notifications:
     # Credentials live ONLY in the deploy env (never in repo):
     #   EFLOUD_CUSTOMER_TG_TOKEN, EFLOUD_CUSTOMER_TG_CHANNEL_ID
     #   (optional) EFLOUD_CUSTOMER_TG_THREAD_ID, EFLOUD_CUSTOMER_TG_PARSE_MODE
+
+  # P-002 M1 — xurl facade (T-026). Default OFF; env-gated (X_API_ENABLED=true).
+  # OAuth browser flow VPS'te yapılamaz → auth local machine'de, VPS'e SSH tunnel
+  # veya env ile credential transfer (runbook: docs/runbooks/xurl-setup.md).
+  x:
+    enabled: false            # MASTER switch. false → facade no-op (XurlDisabled).
+    char_limit: 280           # Twitter Free tier limit (Premium 25k)
+    subprocess_timeout_sec: 15
+    # Credentials live ONLY in the deploy env (never in repo):
+    #   X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET
+    # Optional: XURL_BIN_PATH (default: shutil.which("xurl") PATH search)
