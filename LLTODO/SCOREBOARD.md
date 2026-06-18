@@ -1,6 +1,6 @@
 # LLTODO — SCOREBOARD
 
-| **Son güncelleme:** 2026-06-18 @hermes (T-026 claim — P-002 M1 xurl runbook; T-019 kart kapatma bookkeeping fix; T-025 Manus REST client önceki teslim patch'te hazır) |
+| **Son güncelleme:** 2026-06-18 @hermes (T-025 DONE — P-002 M3 Manus REST client; gerçek API verified `request_id=92657...`, task `Bnk8FCrVYgZ6Kavx3eA332`; `urllib`→`requests` WAF-bypass bugfix; `MANUS_API_KEY` `.env.production` chmod 600 flag kapalı. T-026 claim — P-002 M1 xurl runbook; T-019 kart kapatma bookkeeping fix) |
 
 ## Genel Metrikler
 
@@ -94,7 +94,7 @@
 | T-022 | W-R | SLA + DR + on-call dokümanları | ✅ DONE (PR #187; tabletop PASS 2. tur — breaker-reset.md bonus; G-P3-B2 paketi hazır) | @claude (2026-06-11) |
 | T-023 | W-R | CI hardening: gitleaks + frontend + lint (pre-UR-exempt) | ✅ DONE (PR #182 → master `63b9872`, CI 4/4) | @claude (2026-06-11) |
 | T-024 | W-R | Healthz kontrat dokümanı + uptime metriği | ✅ DONE (PR #184 — `docs/runbooks/healthz-contract.md`) | @claude (2026-06-11) |
-| T-025 | P-002-M3 | Manus REST client (fail-safe, flag OFF) + task template şemaları | ✅ DONE (PR hazır branch'te — `feat/p002-m3-manus-client` push bekliyor; gerçek API verified `request_id=92657...`; bugfix `urllib`→`requests` WAF-bypass dahil) | @hermes (2026-06-18) |
+| T-025 | P-002-M3 | Manus REST client (fail-safe, flag OFF) + task template şemaları | ✅ DONE (P-002 Faz A M3: `backend/social/manus_client.py` 460 satır — `ManusClient` + `requests.Session` transport + 3 task templates; `backend/social/templates/manus_{x_thread,youtube_short,weekly_snapshot}.json`; `docs/runbooks/manus-setup.md`; `config.yaml` notifications.manus.enabled=false şema; 41/41 unit test PASS — hermetic, network YOK, retry/backoff/max_log truncation/key maskeleme/compliance token validate. **Bugfix:** `urllib`→`requests` WAF-bypass (Hetzner IPv6 + AWS WAF). **Real API verified:** `request_id=92657...` (`task.list` side-effectsiz). **Env wired:** `MANUS_API_KEY` `.env.production`'a eklendi (chmod 600, flag kapalı default-OFF). Operatör: `MANUS_API_ENABLED=true` + recreate) | @hermes (2026-06-18) |
 | T-026 | P-002-M1 | xurl CLI kurulum + auth runbook + facade | 🟡 IN_PROGRESS (P-002 Faz A M1: `backend/social/xurl_client.py` 580 satır — XurlClient + post/thread + dry-run + compliance gate integration; 23/23 unit test PASS — hermetic, network YOK, subprocess mock'lu. Operatör: xurl binary local machine'de kurulacak [VPS'te OAuth browser flow yapılamaz]; Twitter app + OAuth PIN flow; VPS'e SSH tunnel ile veya manuel post) | @hermes (2026-06-18) |
 
 ### P-003 Review Skoru
