@@ -1,0 +1,288 @@
+# source: M6 (first half) — P-002 efloud X (Twitter) content templates
+# author: Claude (Opus 4.8)
+# Machine-readable source. The M6 second-half renderer (Hermes tier2_renderers)
+# loads THIS file, picks templates[].langs[lang], and str.format(**values).
+# Every body below is designed to pass scripts.content_compliance.find_violations == []
+# (proof: run verify_compliance.py in this folder).
+
+meta:
+  version: 1
+  generated_utc: "2026-06-18"
+  channel: x                      # X / Twitter, posted via xurl (T-026)
+  gate_module: scripts.content_compliance
+  gate_fn: find_violations        # returns [] when clean
+  x_char_limit: 280               # single-tweet limit; thread = chain of <=280
+  disclaimers:                    # EXACT strings — must match engine.content_jobs
+    tr: "Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir."
+    en: "Not investment advice. Trade at your own risk."
+  sim_labels:                     # human-readable footer wording (kept for readability)
+    tr: "Simülasyon/backtest sonuçlarıdır."
+    en: "Simulated/backtest results."
+  sim_label_token: "[SIMULATED]"  # GATE-REQUIRED bracket token (CMP-3 unlabeled_simulation)
+  design_rules:
+    - "Prices are BARE numbers — never append $ / ₺ / USDT / USD / dolar / TL next to a digit (absolute_money)."
+    - "Express outcome as R (R-multiple) and risk as %, never as absolute money."
+    - "Keep any % token >30 chars away from perf words: kazanç|kazan|getiri|kâr|kar|win rate|isabet|başarı|return|profit (performance_pct_claim)."
+    - "risk-% (e.g. 'Risk ~1.4%', '%2 risk') is allowed — 'risk' is not a perf word."
+    - "Never use the 6 banned TR promise phrases (see banned_phrases below)."
+    - "'garanti değildir' / 'garanti yok' are SAFE — only the exact phrase 'Garantili getiri' is banned."
+    - "Any sim-word (backtest|simulated|simülasyon|shadow|testnet|replay|hypothetical) REQUIRES a bracket label token [BACKTEST]/[TESTNET]/[SIMULATED]/[SIM]/[REPLAY] in the SAME post (CMP-3 unlabeled_simulation). The recap template carries [SIMULATED]."
+  banned_phrases_tr:              # verbatim from gate (GO_TO_MARKET_2026-05-28.md:16-22)
+    - "Kesin kazanç"
+    - "Garantili getiri"
+    - "Her gün kâr"
+    - "Pasif gelir makinesi"
+    - "Sinyal al, kazan"
+    - "Fonumuza para yatır"
+
+# ─────────────────────────────────────────────────────────────────────────────
+templates:
+
+  # 1) SIGNAL / TRADE-IDEA — chart-export media slot + entry/SL/TP "idea" framing
+  - id: signal_idea
+    category: signal
+    placeholders: [symbol, tf, direction, structure, entry, sl, tp1, tp2, rr, risk_pct, chart_img]
+    media: ["{chart_img}"]        # M2 chart export attached as image; NOT inlined in text
+    langs:
+      en:
+        format: single
+        body: |-
+          {symbol} · {tf} · {direction} idea
+
+          Structure: {structure}
+          Entry: {entry} · Invalidation: {sl}
+          Targets: {tp1} / {tp2}
+          R:R ~{rr} · Risk ~{risk_pct}% per setup
+
+          Not investment advice. Trade at your own risk.
+        sample:
+          symbol: BTCUSDT
+          tf: 15m
+          direction: LONG
+          structure: bullish OB + FVG retest
+          entry: "64200"
+          sl: "63500"
+          tp1: "65400"
+          tp2: "66800"
+          rr: "1:2.6"
+          risk_pct: "1.1"
+      tr:
+        format: single
+        body: |-
+          {symbol} · {tf} · {direction} fikri
+
+          Yapı: {structure}
+          Giriş: {entry} · Geçersizleşme: {sl}
+          Hedefler: {tp1} / {tp2}
+          R:R ~{rr} · İşlem riski ~{risk_pct}%
+
+          Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir.
+        sample:
+          symbol: BTCUSDT
+          tf: 15m
+          direction: LONG
+          structure: bullish OB + FVG retest
+          entry: "64200"
+          sl: "63500"
+          tp1: "65400"
+          tp2: "66800"
+          rr: "1:2.6"
+          risk_pct: "1.1"
+      ru: {format: single, body: "TODO", sample: {}}   # see README → RU/KZ addition
+      kz: {format: single, body: "TODO", sample: {}}
+
+  # 1b) SIGNAL — THREAD variant (when caption + context exceeds 280)
+  - id: signal_idea_thread
+    category: signal
+    placeholders: [symbol, tf, direction, structure, entry, sl, tp1, tp2, rr, risk_pct, invalidation_note, chart_img]
+    media: ["{chart_img}"]        # attach on tweet 1
+    langs:
+      en:
+        format: thread
+        tweets:
+          - "{symbol} · {tf} · {direction} idea 🧵\n\nStructure: {structure}. Chart attached."
+          - "Levels (idea, not a call):\nEntry {entry} · Invalidation {sl}\nTargets {tp1} / {tp2}"
+          - "Risk first: ~{risk_pct}% per setup, R:R ~{rr}. Invalidation if {invalidation_note}."
+          - "Not investment advice. Trade at your own risk."
+        sample:
+          symbol: ETHUSDT
+          tf: 1h
+          direction: SHORT
+          structure: bearish breaker + EQH sweep
+          entry: "3420"
+          sl: "3505"
+          tp1: "3300"
+          tp2: "3180"
+          rr: "1:2.1"
+          risk_pct: "1.4"
+          invalidation_note: "1h close back above the breaker"
+      tr:
+        format: thread
+        tweets:
+          - "{symbol} · {tf} · {direction} fikri 🧵\n\nYapı: {structure}. Grafik ekte."
+          - "Seviyeler (fikir, çağrı değil):\nGiriş {entry} · Geçersizleşme {sl}\nHedefler {tp1} / {tp2}"
+          - "Önce risk: işlem başına ~{risk_pct}%, R:R ~{rr}. Geçersizleşme: {invalidation_note}."
+          - "Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir."
+        sample:
+          symbol: ETHUSDT
+          tf: 1h
+          direction: SHORT
+          structure: bearish breaker + EQH sweep
+          entry: "3420"
+          sl: "3505"
+          tp1: "3300"
+          tp2: "3180"
+          rr: "1:2.1"
+          risk_pct: "1.4"
+          invalidation_note: "breaker üstünde 1h kapanış"
+      ru: {format: thread, tweets: ["TODO"], sample: {}}
+      kz: {format: thread, tweets: ["TODO"], sample: {}}
+
+  # 2) EDUCATIONAL — SMC / order block / risk mgmt (authority, low compliance risk)
+  - id: educational
+    category: educational
+    placeholders: [concept, one_line_definition, how_to_spot, how_to_use, risk_pct]
+    # Thread: a single tweet can't hold definition + spot + use + disclaimer under 280.
+    langs:
+      en:
+        format: thread
+        tweets:
+          - "📚 {concept}\n\n{one_line_definition}"
+          - "How to spot it: {how_to_spot}"
+          - "How to use it: {how_to_use}\nMark invalidation first, size by ~{risk_pct}% risk."
+          - "Educational content. Not investment advice. Trade at your own risk."
+        sample:
+          concept: "Order Block (OB)"
+          one_line_definition: "The last opposing candle before a strong move — where institutions likely placed orders."
+          how_to_spot: "last down candle before an up impulse that breaks structure"
+          how_to_use: "wait for price to return to the OB, then look for confirmation"
+          risk_pct: "1"
+      tr:
+        format: thread
+        tweets:
+          - "📚 {concept}\n\n{one_line_definition}"
+          - "Nasıl bulunur: {how_to_spot}"
+          - "Nasıl kullanılır: {how_to_use}\nÖnce geçersizleşmeyi işaretle, ~%{risk_pct} risk ile boyutlandır."
+          - "Eğitim içeriğidir. Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir."
+        sample:
+          concept: "Order Block (OB)"
+          one_line_definition: "Güçlü hareketten önceki son ters mum — kurumların emir bıraktığı bölge."
+          how_to_spot: "yapıyı kıran yükseliş impulsundan önceki son düşüş mumu"
+          how_to_use: "fiyat OB'ye dönünce teyit ara"
+          risk_pct: "1"
+      ru: {format: thread, tweets: ["TODO"], sample: {}}
+      kz: {format: thread, tweets: ["TODO"], sample: {}}
+
+  # 3) PERFORMANCE / RECAP — weekly, SIM/backtest labeled, R not $, no guarantee
+  - id: performance_recap
+    category: performance
+    placeholders: [week, n_ideas, n_reached, avg_r, risk_pct]
+    langs:
+      en:
+        format: single
+        body: |-
+          📊 Weekly recap — {week} [SIMULATED]
+
+          Ideas shared: {n_ideas}
+          Reached first target: {n_reached}
+          Avg outcome: {avg_r}R · Avg risk: {risk_pct}% per setup
+
+          Simulated/backtest results. Past performance is not indicative of future results. Not investment advice.
+        sample:
+          week: "2026-W24"
+          n_ideas: "7"
+          n_reached: "4/7"
+          avg_r: "+1.8"
+          risk_pct: "1.3"
+      tr:
+        format: single
+        body: |-
+          📊 Haftalık özet — {week} [SIMULATED]
+
+          Paylaşılan fikir: {n_ideas}
+          İlk hedefe ulaşan: {n_reached}
+          Ortalama sonuç: {avg_r}R · İşlem başına risk: %{risk_pct}
+
+          Simülasyon/backtest sonuçlarıdır. Geçmiş performans gelecek için garanti değildir. Bu yatırım tavsiyesi değildir.
+        sample:
+          week: "2026-W24"
+          n_ideas: "7"
+          n_reached: "4/7"
+          avg_r: "+1.8"
+          risk_pct: "1.3"
+      ru: {format: single, body: "TODO", sample: {}}
+      kz: {format: single, body: "TODO", sample: {}}
+
+  # 4) PROMOTIONAL — product/feature + compliant CTA (free waitlist, no income promise)
+  - id: promotional
+    category: promotional
+    placeholders: [feature, cta_url]
+    langs:
+      en:
+        format: single
+        body: |-
+          Our SMC research log is public — every idea, every invalidation, labeled.
+
+          {feature}
+
+          Free waitlist 👉 {cta_url}
+
+          No income promises, no guarantees. Education only. Not investment advice.
+        sample:
+          feature: "New: 15m + 1h multi-timeframe chart exports on every idea."
+          cta_url: "https://u2algo.com/waitlist"
+      tr:
+        format: single
+        body: |-
+          SMC araştırma günlüğümüz herkese açık — her fikir, her geçersizleşme, etiketli.
+
+          {feature}
+
+          Ücretsiz bekleme listesi 👉 {cta_url}
+
+          Gelir vaadi yok, garanti yok. Eğitim amaçlıdır. Bu yatırım tavsiyesi değildir.
+        sample:
+          feature: "Yeni: her fikirde 15m + 1h çoklu-zaman grafiği."
+          cta_url: "https://u2algo.com/waitlist"
+      ru: {format: single, body: "TODO", sample: {}}
+      kz: {format: single, body: "TODO", sample: {}}
+
+  # 5) MARKET-UPDATE / COMMENTARY (optional) — context, not a signal
+  - id: market_commentary
+    category: commentary
+    placeholders: [symbol, tf, bias, levels, watch_note]
+    langs:
+      en:
+        format: single
+        body: |-
+          {symbol} {tf} map 🗺️
+
+          Bias: {bias}
+          Key levels: {levels}
+          Watching: {watch_note}
+
+          Market commentary, not a signal or investment advice.
+        sample:
+          symbol: BTCUSDT
+          tf: 4h
+          bias: "neutral → leaning long above range mid"
+          levels: "range 61800–66500, mid 64100"
+          watch_note: "reaction at range mid for a continuation read"
+      tr:
+        format: single
+        body: |-
+          {symbol} {tf} haritası 🗺️
+
+          Önyargı: {bias}
+          Kritik seviyeler: {levels}
+          İzlenen: {watch_note}
+
+          Piyasa yorumudur; sinyal ya da yatırım tavsiyesi değildir.
+        sample:
+          symbol: BTCUSDT
+          tf: 4h
+          bias: "nötr → range ortası üstünde long eğilimli"
+          levels: "range 61800–66500, orta 64100"
+          watch_note: "devam okuması için range ortasındaki tepki"
+      ru: {format: single, body: "TODO", sample: {}}
+      kz: {format: single, body: "TODO", sample: {}}
