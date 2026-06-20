@@ -104,9 +104,10 @@ def test_shadow_on_logs_and_skips_order(tmp_path, monkeypatch):
 
 
 def test_shadow_off_executes_normally(tmp_path, monkeypatch):
-    """Regression: smc_v2_shadow=false → OrderManager.open_position called."""
+    """Regression: smc_v2_shadow=false (with an EXPLICIT whitelist per H2) →
+    OrderManager.open_position called."""
     monkeypatch.chdir(tmp_path)
-    cfg = _cfg(shadow=False)
+    cfg = _cfg(shadow=False, symbols=["ETH/USDT"])
     store = SetupStateStore(tmp_path / "s.json")
     orc = SafeOrchestrator(cfg, state_dir=str(tmp_path), persist=False,
                             setup_state_store=store, order_manager=_make_om())
@@ -161,3 +162,24 @@ def test_shadow_skipped_when_safety_gate_rejects(tmp_path, monkeypatch):
         assert result is None
     log_file = Path("logs") / "smc_v2_shadow.log"
     assert not log_file.exists()
+
+
+def test_shadow_default_true_when_key_absent(tmp_path, monkeypatch):
+    """H2 fail-CLOSED: if the smc_v2_shadow KEY is dropped from config, the
+    runtime default must be True (shadow/log-only) — a missing key must NEVER
+    escalate v2 to live. Explicit whitelist present; only the shadow key is gone."""
+    monkeypatch.chdir(tmp_path)
+    cfg = _cfg(shadow=False, symbols=["ETH/USDT"])
+    del cfg["engine"]["smc_v2_shadow"]  # operator/template drops the key
+    store = SetupStateStore(tmp_path / "s.json")
+    orc = SafeOrchestrator(cfg, state_dir=str(tmp_path), persist=False,
+                            setup_state_store=store, order_manager=_make_om())
+    with patch.object(orc.order_manager, "open_position") as spy, \
+         patch("engine.smc_v2.tp_calc.calc_tp_targets") as tp_spy:
+        tp_spy.return_value = (95.0, 90.0,
+                               {"tp1_source": "LIQUIDITY", "tp2_source": "FVG_FAR"})
+        result = orc._place_v2_entry_order(_make_cand("ETH/USDT"),
+                                            current_price=105.0, entry_price=105.0)
+        assert result is None, "missing smc_v2_shadow key must default to shadow (no live order)"
+        assert spy.call_count == 0
+    assert (Path("logs") / "smc_v2_shadow.log").exists()  # logged as shadow

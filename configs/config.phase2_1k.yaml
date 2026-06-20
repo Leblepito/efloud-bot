@@ -1,23 +1,24 @@
 # ══════════════════════════════════════════════════════════════════
-# FAZ 2 — $1000 cüzdan canlı setup
+# FAZ 2 — canlı setup  (dosya adı "1k" LEGACY; cüzdan ~$2000)
 # ══════════════════════════════════════════════════════════════════
-# Kullanıcının mevcut Binance Futures bakiyesi: ~1000 USDT + biraz BNB
+# Gerçek Binance Futures bakiyesi: ~$2070 USDT (2026-06-20 canlı okuma;
+# $1000 ilk + $1000 ek transfer). safety: bloğu $2000'e kalibre (C2 audit
+# reconcile — başlık eskiden $1000 diyordu, gerçekle ÇELİŞİYORDU).
 #
-# Risk profili:
-#   Cüzdan:           $1000 (gerçek)
-#   Sembol başı max:  ~$51 notional (3x leverage = ~$17 margin)
-#   Eşzamanlı max:    10 pozisyon × $51 = $510 max notional
-#   Trade başı risk:  $1.7-5 (SL mesafesine göre, 0.5% target)
-#   Toplam max risk:  ~$50 (tüm 10 trade SL'e giderse, %5 cüzdan)
-#   Daily loss:       %5 = $50 → breaker TRIPS
-#   Weekly DD:        %8 = $80 → breaker HALTS
-#   Acil halt:        bakiye $950 altına düşünce
+# Risk profili (safety: bloğuyla SENKRON — değiştirirsen İKİSİNİ birlikte güncelle):
+#   Cüzdan:           ~$2000 (gerçek ~$2070)
+#   Kaldıraç:         5x (exchange.leverage)
+#   Sembol başı max:  ~$200 notional (max_position_notional_pct 2% × $2000)
+#   Eşzamanlı max:    10 pozisyon × $200 = $2000 max notional (max_total_exposure 1.0)
+#   Daily loss:       %10 = $200 → breaker TRIPS (daily_loss_limit_pct)
+#   Weekly DD:        %25 = $500 → breaker HALTS (weekly_drawdown_limit_pct)
+#   Acil halt:        bakiye $1800 altına düşünce (emergency_balance_threshold)
 #
 # Önkoşullar (preflight.py ile doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi)
 #   ✓ canWithdraw = false (çekim kapalı, key sızsa fon güvende)
 #   ✓ Position mode = Hedge (dualSidePosition=true; bot startup'ta zorlar — set_position_mode)
-#   ✓ Bakiye ≥ $1000 Futures cüzdanında
+#   ✓ Bakiye ≥ $2000 Futures cüzdanında (emergency_balance_threshold $1800 üstü)
 #   ✓ EFLOUD_ALLOW_MAINNET=1
 #
 # Çalıştırmak için (lokal):
@@ -42,6 +43,9 @@ exchange:
 #   → v2 signals computed and logged to logs/smc_v2_shadow.log, NO orders placed.
 # Live v2 (Hermes-only): set smc_v2_shadow=false. Per-symbol opt-in via
 # smc_v2_symbols=["ETH/USDT","BTC/USDT",...] for phased rollout.
+# H2: a literal "*" whitelist is REJECTED for LIVE placement — live v2 requires an
+# EXPLICIT per-symbol list AND smc_v2_shadow:false (two independent conditions).
+# "*" still permits shadow-mode logging across all symbols.
 #
 # IMPORTANT: This is the production-active config (.env.production
 # EFLOUD_CONFIG_PATH=configs/config.phase2_1k.yaml). Root config.yaml is the
@@ -166,6 +170,11 @@ safety:
   adx_trend_threshold: 25
   adx_range_threshold: 20
   volatile_atr_mult: 2.5
+  # C3 (default OFF): true → the ML regime model may overwrite the deterministic
+  # regime that feeds the entry gate (can_open_new_position). FALSE = ML advisory/
+  # log-only. Flip true ONLY after forward-labels training + a regime-conditioned
+  # NET-PnL backtest (the model is circular-trained on rule labels today).
+  regime_ml_can_override_gate: false
 
   # max_position_notional_pct: kod içinde "margin cap" olarak kullanılıyor (notional/leverage)
   # 2000 × 2.0% × 5 = $200 notional max → 10% of available balance per trade
@@ -176,6 +185,10 @@ safety:
   max_pyramid_adds: 0                  # Pyramid kapalı (basit tut)
   min_sl_atr: 0.5
   max_sl_atr: 5.0
+  # H3 (default OFF): true → a wide SL (sl_atr_mult > max_sl_atr) is a HARD REJECT
+  # (matches v2 SLTooFarError) instead of warn-only. Flip true only after risk-ops
+  # verifies the live rejection rate.
+  reject_wide_sl: false
 
   emergency_balance_threshold: 1800   # Bakiye $1800 altı → HALT (10% kayıp)
   reserve_balance: 0                   # Tüm bakiye kullanılabilir
@@ -194,6 +207,10 @@ safety:
   # cycles. Fixes the local-vs-exchange PnL divergence (+87 local vs +32 real).
   enable_pnl_audit: true
   pnl_audit_every_cycles: 20
+  # M4 (default OFF): true → the PnL-audit sweep re-feeds sign-flipped corrections
+  # to the breaker's consecutive-loss counter (a sign-flipped estimate can wrongly
+  # RESET it). Fail-CLOSED (can only trip earlier). Flip true after risk-ops sign-off.
+  breaker_backcorrect_consecutive: false
 
   # ── SL/TP post-placement verify (PR B, 2026-06-01) ──
   # After entry fills + SL/TP placed, re-query the exchange ~2.5s later to

@@ -90,9 +90,11 @@ def test_whitelist_specific_symbol_accepts(tmp_path):
         assert result is not None
 
 
-def test_whitelist_wildcard_accepts_all(tmp_path):
-    """smc_v2_symbols=["*"] → all symbols pass the whitelist gate."""
-    cfg = _cfg(["*"])
+def test_whitelist_wildcard_allows_shadow_logging(tmp_path, monkeypatch):
+    """H2: ["*"] passes the whitelist gate for SHADOW observation (rollout) —
+    it reaches tp_calc/shadow, but does NOT place a live order."""
+    monkeypatch.chdir(tmp_path)  # shadow log writes under cwd/logs
+    cfg = _cfg(["*"], shadow=True)
     store = SetupStateStore(tmp_path / "s.json")
     orc = SafeOrchestrator(cfg, state_dir=str(tmp_path), persist=False,
                             setup_state_store=store, order_manager=_make_om())
@@ -100,11 +102,31 @@ def test_whitelist_wildcard_accepts_all(tmp_path):
          patch("engine.smc_v2.tp_calc.calc_tp_targets") as tp_spy:
         tp_spy.return_value = (95.0, 90.0,
                                {"tp1_source": "LIQUIDITY", "tp2_source": "FVG_FAR"})
-        spy.return_value = MagicMock()
         result = orc._place_v2_entry_order(_make_cand("DOGE/USDT"),
                                             current_price=105.0, entry_price=105.0)
-        assert spy.call_count == 1
-        assert result is not None
+        assert result is None              # shadow → not placed
+        assert spy.call_count == 0
+        assert tp_spy.call_count == 1      # but it PASSED the whitelist (reached tp_calc)
+
+
+def test_whitelist_wildcard_rejected_for_live(tmp_path):
+    """H2: ["*"] + smc_v2_shadow:false must NOT place a live order — LIVE
+    execution requires an explicit per-symbol whitelist AND shadow:false as two
+    independent conditions. Rejected at the whitelist gate, before breaker /
+    tp_calc / open_position."""
+    cfg = _cfg(["*"], shadow=False)
+    store = SetupStateStore(tmp_path / "s.json")
+    orc = SafeOrchestrator(cfg, state_dir=str(tmp_path), persist=False,
+                            setup_state_store=store, order_manager=_make_om())
+    with patch.object(orc.breaker, "check") as breaker_spy, \
+         patch.object(orc.order_manager, "open_position") as spy, \
+         patch("engine.smc_v2.tp_calc.calc_tp_targets") as tp_spy:
+        result = orc._place_v2_entry_order(_make_cand("DOGE/USDT"),
+                                            current_price=105.0, entry_price=105.0)
+        assert result is None
+        assert spy.call_count == 0
+        assert breaker_spy.call_count == 0   # rejected at whitelist, before safety gates
+        assert tp_spy.call_count == 0
 
 
 def test_whitelist_other_symbol_rejected(tmp_path):
