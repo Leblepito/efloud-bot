@@ -10,6 +10,7 @@ if [ ! -f .env.production ]; then
   echo "❌ .env.production not found. Run: cp deploy/.env.production.example .env.production && nano .env.production"
   exit 1
 fi
+chmod 600 .env.production
 
 echo "==> Pulling latest code"
 git fetch origin

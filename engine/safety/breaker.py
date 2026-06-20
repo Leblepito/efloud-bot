@@ -68,7 +68,7 @@ class CircuitBreaker:
                  weekly_drawdown_pct_limit: float = 8.0,
                  consecutive_loss_limit: int = 3,
                  consecutive_loss_pause_minutes: int = 120,
-                 starting_balance: float = 10000.0,
+                 starting_balance: float = None,
                  emergency_balance_threshold: float = None,
                  reserve_balance: float = 0.0):
         """
@@ -76,6 +76,15 @@ class CircuitBreaker:
                                       (daily/weekly yüzde limitlerine ek olarak)
         reserve_balance: Her zaman dokunulmayacak rezerv (yeni pozisyon açma engelleyici)
         """
+        import os
+        is_dev = os.environ.get("ENV", "dev") == "dev"
+        if starting_balance is None:
+            if not is_dev:
+                raise ValueError("starting_balance must be explicitly configured in production mode")
+            starting_balance = 10000.0
+        elif starting_balance <= 0:
+            raise ValueError("starting_balance must be positive")
+
         self.daily_limit = daily_loss_pct_limit
         self.weekly_limit = weekly_drawdown_pct_limit
         self.consec_limit = consecutive_loss_limit

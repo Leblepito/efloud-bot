@@ -148,3 +148,24 @@ async def test_login_rate_limit(client):
         await client.post("/api/login", json={"password": "wrong"})
     r = await client.post("/api/login", json={"password": "wrong"})
     assert r.status_code == 429
+
+
+def test_session_secret_fail_closed_in_production(monkeypatch):
+    from backend.auth import _get_serializer
+    # Set to production
+    monkeypatch.setenv("ENV", "production")
+    
+    # Test unset
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    with pytest.raises(RuntimeError, match="SESSION_SECRET must be set"):
+        _get_serializer()
+        
+    # Test dev default
+    monkeypatch.setenv("SESSION_SECRET", "dev-only-secret-do-not-use-in-prod")
+    with pytest.raises(RuntimeError, match="SESSION_SECRET must be set"):
+        _get_serializer()
+
+    # Test proper secret works
+    monkeypatch.setenv("SESSION_SECRET", "a-proper-secure-secret-123456789")
+    serializer = _get_serializer()
+    assert serializer is not None
