@@ -189,3 +189,30 @@ async def test_fetch_recent_trades_filters_by_bot_id(monkeypatch):
     args = conn.fetch.call_args[0][1:]
     assert "bot_id" in sql
     assert "v2-long" in args
+
+
+@pytest.mark.asyncio
+async def test_fetch_trades_since_filters_by_bot_id(monkeypatch):
+    from datetime import datetime, timezone
+    monkeypatch.setenv("EFLOUD_BOT_ID", "v2-long")
+    db = Database()
+    pool, conn = _mock_pool(fetch_return=[])
+    db.pool = pool
+    await db.fetch_trades_since(datetime(2026, 6, 1, tzinfo=timezone.utc))
+    sql = conn.fetch.call_args[0][0]
+    args = conn.fetch.call_args[0][1:]
+    assert "bot_id" in sql
+    assert "v2-long" in args
+
+
+@pytest.mark.asyncio
+async def test_fetch_equity_history_filters_by_bot_id(monkeypatch):
+    monkeypatch.setenv("EFLOUD_BOT_ID", "v2-long")
+    db = Database()
+    pool, conn = _mock_pool(fetch_return=[])
+    db.pool = pool
+    await db.fetch_equity_history(days=7)
+    sql = conn.fetch.call_args[0][0]
+    args = conn.fetch.call_args[0][1:]
+    assert "bot_id" in sql
+    assert "v2-long" in args

@@ -34,7 +34,10 @@ ALTER TABLE breaker_state DROP CONSTRAINT IF EXISTS breaker_state_id_check;
 ALTER TABLE breaker_state DROP CONSTRAINT IF EXISTS breaker_state_pkey;
 
 -- Make the vestigial id column harmless (no longer unique; was PK DEFAULT 1).
+-- Drop the DEFAULT too, so new per-instance rows read id=NULL rather than a
+-- duplicated 1 (the column is dead; bot_id is the key).
 ALTER TABLE breaker_state ALTER COLUMN id DROP NOT NULL;
+ALTER TABLE breaker_state ALTER COLUMN id DROP DEFAULT;
 
 -- Add the new primary key on bot_id (guarded — ADD CONSTRAINT has no IF NOT EXISTS).
 DO $$
