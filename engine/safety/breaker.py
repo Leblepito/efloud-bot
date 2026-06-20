@@ -13,6 +13,7 @@ burada global trip'lenmez — tek sembolün spike'ı tüm portföyü kilitlemesi
 """
 
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -76,7 +77,6 @@ class CircuitBreaker:
                                       (daily/weekly yüzde limitlerine ek olarak)
         reserve_balance: Her zaman dokunulmayacak rezerv (yeni pozisyon açma engelleyici)
         """
-        import os
         is_dev = os.environ.get("ENV", "dev") == "dev"
         if starting_balance is None:
             if not is_dev:
