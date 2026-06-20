@@ -283,8 +283,8 @@ class Database:
     # The file-based StateStore is the PRIMARY, full-fidelity breaker
     # persistence. This is a best-effort SUMMARY mirror in Supabase so the halt
     # status survives a total loss of the state volume (VPS rebuild, incident
-    # 2026-05-15) and is queryable for observability. Single-row table keyed on
-    # a constant id=1.
+    # 2026-05-15) and is queryable for observability. Per-instance row keyed on
+    # bot_id (migration 012; was a constant id=1 singleton in migration 010).
 
     async def upsert_breaker_state(self, breaker: dict[str, Any]) -> None:
         """Mirror a CircuitBreaker.to_dict() payload into breaker_state.

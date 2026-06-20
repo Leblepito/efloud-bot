@@ -30,6 +30,11 @@ ALTER TABLE breaker_state ADD COLUMN IF NOT EXISTS bot_id TEXT NOT NULL DEFAULT 
 
 -- Drop the old singleton guard + primary key (names follow Postgres defaults;
 -- IF EXISTS keeps this safe on environments where they were never created).
+-- ⚠️ LIVE-APPLY CAVEAT: the prod breaker_state table was originally created
+-- out-of-band (see 010 header). If its PK/CHECK use NON-default names, these
+-- DROPs silently skip and the DO-block below then sees an existing PK → table
+-- stays keyed on `id`, so V2 isolation silently fails (V1 unaffected). The
+-- mandatory clone-dry-run step in the PR/handoff verifies the bot_id PK landed.
 ALTER TABLE breaker_state DROP CONSTRAINT IF EXISTS breaker_state_id_check;
 ALTER TABLE breaker_state DROP CONSTRAINT IF EXISTS breaker_state_pkey;
 
