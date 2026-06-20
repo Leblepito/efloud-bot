@@ -19,6 +19,12 @@ log = logging.getLogger("efloud.db")
 class Database:
     def __init__(self) -> None:
         self.pool: Optional[asyncpg.Pool] = None
+        # Multi-instance persistence (migration 012): every write is tagged with
+        # this instance id and every instance-scoped read/update filters by it,
+        # so two bots (V1 mid + V2 long) can share one Supabase project without
+        # cross-contaminating trades or the breaker_state row. Default 'v1' =
+        # byte-identical behavior for the existing single bot.
+        self.bot_id: str = os.environ.get("EFLOUD_BOT_ID", "v1")
 
     async def connect(self) -> None:
         url = os.environ.get("DATABASE_URL")
@@ -69,19 +75,22 @@ class Database:
         try:
             conf_json = json.dumps(confluence_details, default=str) if confluence_details is not None else None
             async with self.pool.acquire() as conn:
+                # bot_id sits at $8 (right after `size`) so BOTH positional
+                # contracts hold: tp2 stays $6 (start-relative) and the telemetry
+                # block stays the trailing params (end-relative).
                 row = await conn.fetchrow(
                     """
-                    INSERT INTO trades (symbol, direction, entry, sl, tp1, tp2, size,
+                    INSERT INTO trades (symbol, direction, entry, sl, tp1, tp2, size, bot_id,
                                         confluence, binance_order_id, trace_id, bar_ts_ms,
                                         entry_setup_source, tp1_target_type,
                                         tp2_target_type, bars_to_pullback,
                                         initial_sl, adx_value, atr_value,
                                         funding_rate, confluence_details)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                            $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+                            $13, $14, $15, $16, $17, $18, $19, $20, $21::jsonb)
                     RETURNING id::text
                     """,
-                    symbol, direction, entry, sl, tp1, tp2, size,
+                    symbol, direction, entry, sl, tp1, tp2, size, self.bot_id,
                     confluence, binance_order_id, trace_id, bar_ts_ms,
                     entry_setup_source, tp1_target_type,
                     tp2_target_type, bars_to_pullback,
@@ -113,6 +122,9 @@ class Database:
                 # trace_id is NULL (older open-side rows). A duplicate close call
                 # (reconcile double-write) then no-ops: the trace_id row is
                 # already closed, so `closed_at IS NULL` excludes it.
+                # bot_id ($9) is appended LAST so mae_pct/mfe_pct keep $6/$7.
+                # It scopes the open-row subquery to THIS instance so V1's
+                # reconcile can never close a V2 row (and vice versa).
                 await conn.execute(
                     """
                     UPDATE trades
@@ -123,12 +135,13 @@ class Database:
                     WHERE id = (
                         SELECT id FROM trades
                         WHERE closed_at IS NULL
+                          AND bot_id = $9
                           AND (($8::text IS NULL AND symbol = $1) OR trace_id = $8)
                         ORDER BY opened_at DESC LIMIT 1
                     )
                     """,
                     symbol, exit_price, pnl_usdt, pnl_pct, reason,
-                    mae_pct, mfe_pct, trace_id,
+                    mae_pct, mfe_pct, trace_id, self.bot_id,
                 )
         except Exception as e:
             log.warning(f"record_trade_close failed: {e}")
@@ -166,9 +179,10 @@ class Database:
                            funding_rate, confluence_details,
                            kronos_comment, kronos_confidence
                     FROM trades
-                    ORDER BY opened_at DESC LIMIT $1
+                    WHERE bot_id = $1
+                    ORDER BY opened_at DESC LIMIT $2
                     """,
-                    limit,
+                    self.bot_id, limit,
                 )
                 return [dict(r) for r in rows]
         except Exception as e:
@@ -198,10 +212,10 @@ class Database:
                            funding_rate, confluence_details,
                            kronos_comment, kronos_confidence
                     FROM trades
-                    WHERE closed_at IS NOT NULL AND closed_at >= $1
+                    WHERE bot_id = $1 AND closed_at IS NOT NULL AND closed_at >= $2
                     ORDER BY closed_at DESC
                     """,
-                    since_ts,
+                    self.bot_id, since_ts,
                 )
                 return [dict(r) for r in rows]
         except Exception as e:
@@ -220,8 +234,9 @@ class Database:
         try:
             async with self.pool.acquire() as conn:
                 await conn.execute(
-                    "INSERT INTO equity_history (balance, open_positions_count) VALUES ($1, $2)",
-                    balance, open_positions_count,
+                    "INSERT INTO equity_history (bot_id, balance, open_positions_count) "
+                    "VALUES ($1, $2, $3)",
+                    self.bot_id, balance, open_positions_count,
                 )
         except Exception as e:
             log.warning(f"record_equity_snapshot failed: {e}")
@@ -235,10 +250,10 @@ class Database:
                     """
                     SELECT ts, balance, open_positions_count
                     FROM equity_history
-                    WHERE ts > NOW() - ($1 || ' days')::interval
+                    WHERE bot_id = $1 AND ts > NOW() - ($2 || ' days')::interval
                     ORDER BY ts ASC
                     """,
-                    str(days),
+                    self.bot_id, str(days),
                 )
                 return [dict(r) for r in rows]
         except Exception as e:
@@ -254,9 +269,10 @@ class Database:
             return
         try:
             async with self.pool.acquire() as conn:
+                # bot_id appended LAST so payload keeps its $2::jsonb cast.
                 await conn.execute(
-                    "INSERT INTO audit_log (event, payload) VALUES ($1, $2::jsonb)",
-                    event, json.dumps(payload, default=str),
+                    "INSERT INTO audit_log (event, payload, bot_id) VALUES ($1, $2::jsonb, $3)",
+                    event, json.dumps(payload, default=str), self.bot_id,
                 )
         except Exception as e:
             log.warning(f"log_audit failed: {e}")
@@ -289,13 +305,15 @@ class Database:
             daily_loss = metrics.get("daily_pct")
             weekly_loss = metrics.get("drawdown_pct")
             async with self.pool.acquire() as conn:
+                # Keyed on bot_id (migration 012), NOT the old id=1 singleton —
+                # so V1 and V2 each own a breaker_state row and never clobber.
                 await conn.execute(
                     """
                     INSERT INTO breaker_state
-                        (id, daily_loss, weekly_loss, halted, halted_reason,
+                        (bot_id, daily_loss, weekly_loss, halted, halted_reason,
                          halted_at, reset_at, updated_at)
-                    VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
-                    ON CONFLICT (id) DO UPDATE SET
+                    VALUES ($7, $1, $2, $3, $4, $5, $6, NOW())
+                    ON CONFLICT (bot_id) DO UPDATE SET
                         daily_loss = EXCLUDED.daily_loss,
                         weekly_loss = EXCLUDED.weekly_loss,
                         halted = EXCLUDED.halted,
@@ -305,7 +323,7 @@ class Database:
                         updated_at = NOW()
                     """,
                     daily_loss, weekly_loss, halted, halted_reason,
-                    halted_at, reset_at,
+                    halted_at, reset_at, self.bot_id,
                 )
         except Exception as e:
             log.warning(f"upsert_breaker_state failed: {e}")
@@ -320,8 +338,9 @@ class Database:
                     """
                     SELECT daily_loss, weekly_loss, halted, halted_reason,
                            halted_at, reset_at, updated_at
-                    FROM breaker_state WHERE id = 1
-                    """
+                    FROM breaker_state WHERE bot_id = $1
+                    """,
+                    self.bot_id,
                 )
                 return dict(row) if row else None
         except Exception as e:
