@@ -266,6 +266,134 @@ def test_render_missing_placeholder_raises(templates):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Render: chart_img auto-resolve (M2 manifest entegrasyonu)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_render_auto_resolves_chart_img_from_resolver(templates):
+    """chart_img values'da yoksa ama resolver verildiyse → otomatik resolve."""
+
+    def resolver(symbol: str, tf: str) -> str:
+        return f"https://cdn.example.com/{symbol}-{tf}.png"
+
+    # values'da chart_img YOK → resolver çağrılmalı
+    rc = render(
+        "signal_idea", "en",
+        {
+            "symbol": "BTCUSDT", "tf": "15m", "direction": "LONG",
+            "structure": "bullish OB + FVG retest",
+            "entry": "64200", "sl": "63500", "tp1": "65400", "tp2": "66800",
+            "rr": "1:2.6", "risk_pct": "1.1",
+            # chart_img YOK
+        },
+        templates,
+        chart_img_resolver=resolver,
+    )
+    assert rc.media == ["https://cdn.example.com/BTCUSDT-15m.png"]
+
+
+def test_render_resolver_not_called_when_chart_img_provided(templates):
+    """Caller explicit chart_img verdiyse resolver'a hiç girme."""
+    called = {"count": 0}
+
+    def resolver(symbol: str, tf: str) -> str:
+        called["count"] += 1
+        return "should_not_be_called"
+
+    rc = render(
+        "signal_idea", "en",
+        {
+            "symbol": "BTCUSDT", "tf": "15m", "direction": "LONG",
+            "structure": "OB", "entry": "64200", "sl": "63500",
+            "tp1": "65400", "tp2": "66800", "rr": "1:2.6", "risk_pct": "1.1",
+            "chart_img": "https://explicit.png",   # explicit override
+        },
+        templates,
+        chart_img_resolver=resolver,
+    )
+    assert called["count"] == 0
+    assert rc.media == ["https://explicit.png"]
+
+
+def test_render_resolver_failure_falls_back_to_placeholder_check(templates):
+    """Resolver fail (snapshot bulunamadı) → template kendi MissingPlaceholderError'ını fırlatır."""
+
+    def failing_resolver(symbol: str, tf: str) -> str:
+        raise ValueError("snapshot not found")
+
+    # values'da chart_img YOK, resolver fail → MissingPlaceholderError beklenir
+    with pytest.raises(MissingPlaceholderError, match="placeholder eksik"):
+        render(
+            "signal_idea", "en",
+            {
+                "symbol": "BTCUSDT", "tf": "15m", "direction": "LONG",
+                "structure": "OB", "entry": "1", "sl": "1",
+                "tp1": "1", "tp2": "1", "rr": "1:1", "risk_pct": "1",
+            },
+            templates,
+            chart_img_resolver=failing_resolver,
+        )
+
+
+def test_render_resolver_no_op_for_non_signal_template(templates):
+    """Educational/promo template'lerde chart_img yok → resolver yine de çağrılabilir ama field yok sayılır."""
+    called = {"count": 0}
+
+    def resolver(symbol: str, tf: str) -> str:
+        called["count"] += 1
+        return f"https://cdn.example.com/{symbol}-{tf}.png"
+
+    # educational: chart_img placeholder yok, symbol/tf yok
+    rc = render(
+        "educational", "en",
+        {
+            "concept": "OB",
+            "one_line_definition": "x",
+            "how_to_spot": "x",
+            "how_to_use": "x",
+            "risk_pct": "1",
+        },
+        templates,
+        chart_img_resolver=resolver,
+    )
+    # symbol/tf yok → resolver'a girilmez
+    assert called["count"] == 0
+
+
+def test_render_with_manifest_resolver_integration(tmp_path, templates):
+    """End-to-end: build ManifestIndex + resolver closure + render."""
+    from backend.social.tv_manifest import build_index, ManifestIndex, ChartSnapshot
+
+    # tmp_path manifest dizininde latest.json yaz
+    _write_manifest = lambda name, items: (
+        tmp_path / name
+    ).write_text(  # type: ignore
+        __import__("json").dumps(items), encoding="utf-8"
+    )
+    _write_manifest("latest.json", [{
+        "symbol": "BTCUSDT", "tf": "15m", "ts": "2026-06-18T18:00:00Z",
+        "snapshot_id": "K2GRzo5K",
+        "share_url": "https://www.tradingview.com/x/K2GRzo5K/",
+        "image_url": "https://s3.tradingview.com/snapshots/k/K2GRzo5K.png",
+    }])
+
+    idx = build_index(manifest_dir=tmp_path)
+    resolver = lambda s, t: idx.resolve(s, t).image_url
+
+    rc = render(
+        "signal_idea", "en",
+        {
+            "symbol": "BTCUSDT", "tf": "15m", "direction": "LONG",
+            "structure": "OB", "entry": "1", "sl": "1",
+            "tp1": "1", "tp2": "1", "rr": "1:1", "risk_pct": "1",
+        },
+        templates,
+        chart_img_resolver=resolver,
+    )
+    assert rc.media == ["https://s3.tradingview.com/snapshots/k/K2GRzo5K.png"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Pre-gate
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -406,7 +534,7 @@ def test_render_and_enqueue_full_pipeline(templates, queue_create_draft_fn):
 
 def test_module_has_no_xurl_import():
     """renderer xurl/Manus çağırmamalı (publish lane işi)."""
-    src = Path(r2.__file__).read_text()
+    src = Path(r2.__file__).read_text(encoding="utf-8")
     # Yorum/docstring dışı kontrol: import/function-call referansı var mı?
     # xurl_client import edilmemeli, ManusClient import edilmemeli.
     assert "xurl_client" not in src
@@ -418,7 +546,7 @@ def test_module_has_no_xurl_import():
 def test_module_does_not_call_publishers():
     """renderer publish lane'e (lane_e) dokunmamalı — sadece docstring'te bahsedilebilir."""
     import re
-    src = Path(r2.__file__).read_text()
+    src = Path(r2.__file__).read_text(encoding="utf-8")
     # Docstring'leri tamamen çıkar (module + tüm function/class docstring'leri).
     code_no_docstrings = re.sub(r'"""[\s\S]*?"""', '', src)
     code_no_docstrings = re.sub(r"'''[\s\S]*?'''", '', code_no_docstrings)

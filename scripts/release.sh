@@ -157,31 +157,48 @@ wc -c "$PATCH_FILE" | awk '{printf "Patch size: %.1f KB\n", $1/1024}'
 ok "SHA256: $SHA256"
 
 # ── 7. Push helper + MANIFEST ───────────────────────────────────────────────
-step "7/7 Push helper üretimi"
-PUSH_SCRIPT="$RELEASE_DIR/branch_push.sh"
+# ÖNEMLİ: VPS deploy key read-only — push VPS'ten YAPILAMAZ.
+# Push helper operatörün LOKAL makinesinde çalışır (vps remote fetch + origin push).
+step "7/7 Push helper üretimi (operatör-lokal)"
+SAFE_BRANCH="$(echo "$BRANCH" | tr '/' '_')"
+PUSH_SCRIPT="$RELEASE_DIR/${SAFE_BRANCH}-push-from-local.sh"
+
 cat > "$PUSH_SCRIPT" <<EOF
 #!/usr/bin/env bash
-# scripts/branch_push.sh — Tek seferlik push helper
+# Operatör-lokal push helper — VPS deploy key read-only.
 # Branch: $BRANCH @ $SHORT_SHA
 # Patch SHA256: $SHA256
 # Üretildi: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 set -euo pipefail
-cd /opt/efloud-bot
 
-# Pre-flight: lint + test (son bir kez daha)
-python3 LLTODO/scripts/lltodo_lint.py >/dev/null
+# Operatör-lokal repo path'i (Windows Git Bash formatı)
+LOCAL_REPO="\${LOCAL_REPO:-/c/Users/utkuc/Downloads/efloud-bot}"
+VPS_REMOTE="\${VPS_REMOTE:-efloud-bot:/opt/efloud-bot}"
 
-# Push
-git push origin "$BRANCH"
+cd "\$LOCAL_REPO"
+
+# vps remote yoksa ekle (idempotent)
+if ! git remote get-url vps >/dev/null 2>&1; then
+    echo "→ vps remote ekleniyor: \$VPS_REMOTE"
+    git remote add vps "\$VPS_REMOTE"
+fi
+
+# Pre-flight: lint (son bir kez daha — VPS HEAD ile)
+git fetch vps "$BRANCH" --quiet
+git fetch vps "$BRANCH":refs/remotes/vps/"$BRANCH" --quiet 2>/dev/null || true
+
+echo "→ VPS'ten fetch: $BRANCH"
+git fetch vps "$BRANCH"
+
+echo "→ origin'e push: vps/$BRANCH:$BRANCH"
+git push origin "vps/$BRANCH:$BRANCH"
 
 echo ""
-echo "✅ Push başarılı: $BRANCH"
+echo "✅ Push başarılı: $BRANCH → origin"
 echo ""
-echo "Sonraki: master'a merge kararı senin (squash / merge / rebase)."
-echo "  - Squash: tek commit olarak temiz tarihçe"
-echo "  - Merge: branch tarihçesi korunur"
-echo "  - Rebase: linear tarihçe (PR ise rebase + ff merge)"
+echo "Sonraki: GitHub'da PR aç → master'a merge (squash / merge / rebase — sen karar)."
+echo "  PR link: https://github.com/Leblepito/efloud-bot/pull/new/$BRANCH"
 EOF
 chmod +x "$PUSH_SCRIPT"
 
@@ -203,14 +220,23 @@ Subject:     $(git log -1 --format='%s')
 ── Files changed ───────────────────────────────────────────────
 $(git diff-tree --no-commit-id --name-status -r HEAD)
 
-── Push komutu ────────────────────────────────────────────────
-1. SSH: ssh efloud-bot
-2. Çalıştır: bash $PUSH_SCRIPT
+── Push komutu (operatör-LOKAL, VPS read-only) ────────────────
+1. SSH'tan çık
+2. Git Bash'te (Windows):
+   LOCAL_REPO=/c/Users/utkuc/Downloads/efloud-bot bash $PUSH_SCRIPT
+   veya:
+   cd /c/Users/utkuc/Downloads/efloud-bot
+   git fetch vps $BRANCH
+   git push origin "vps/$BRANCH:$BRANCH"
+
+── NOT: VPS-side push KULLANMA ────────────────────────────────
+VPS deploy key read-only — ssh efloud-bot 'git push' PATLAR.
+Push her zaman operatörün lokal makinesinden yapılır.
 
 ── Manuel push (alternatif) ───────────────────────────────────
-ssh efloud-bot
-cd /opt/efloud-bot
-git push origin $BRANCH
+cd /c/Users/utkuc/Downloads/efloud-bot
+git fetch vps $BRANCH
+git push origin "vps/$BRANCH:$BRANCH"
 
 ── Sonraki adım ───────────────────────────────────────────────
 master'a merge kararı operatöre ait:
@@ -310,8 +336,10 @@ echo -e "SHA256:    ${BOLD}$SHA256${RESET}"
 echo -e "Manifest:  ${BOLD}$MANIFEST${RESET}"
 echo -e "Push:      ${BOLD}bash $PUSH_SCRIPT${RESET}"
 echo ""
-echo -e "${YELLOW}Push onayı sende. SSH'te şunu çalıştır:${RESET}"
-echo -e "  ${BOLD}ssh efloud-bot 'bash $PUSH_SCRIPT'${RESET}"
+echo -e "${YELLOW}Push onayı sende. Lokal makinede şunu çalıştır:${RESET}"
+echo -e "  ${BOLD}LOCAL_REPO=/c/Users/utkuc/Downloads/efloud-bot bash $PUSH_SCRIPT${RESET}"
+echo ""
+echo -e "${YELLOW}VPS-side push (ssh + git push) KULLANMA — deploy key read-only.${RESET}"
 echo ""
 if [[ $REVIEW_MODE -eq 1 ]]; then
     echo -e "${YELLOW}Review promptları:${RESET}"

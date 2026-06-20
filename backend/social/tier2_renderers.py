@@ -31,7 +31,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -196,6 +196,7 @@ def render(
     values: dict[str, Any],
     templates: dict[str, Any] | None = None,
     templates_path: str | Path | None = None,
+    chart_img_resolver: "Callable[[str, str], str] | None" = None,
 ) -> RenderedContent:
     """Bir template'i formatla + label/disclaimer kontrolü yap.
 
@@ -205,6 +206,10 @@ def render(
         values: template placeholders'ı karşılayan dict (sample.yaml'dan)
         templates: önceden load_templates() edilmiş dict (None ise load eder)
         templates_path: explicit path (None ise env/default)
+        chart_img_resolver: opsiyonel — `callable(symbol, tf) -> image_url`.
+            Verilirse ve values'da `chart_img` YOKSA, (symbol, tf) ile otomatik
+            resolve edilir (M2 chart-export consumer). Verilmezse values'daki
+            `chart_img` placeholder zorunlu kalır.
 
     Returns:
         RenderedContent (pre-gate henüz çalışmamış — caller pre_gate çağıracak)
@@ -240,6 +245,27 @@ def render(
             f"templates.yaml README §'RU/KZ addition' adımlarını tamamla"
         )
 
+    # chart_img otomatik resolve (M2 manifest entegrasyonu)
+    # Eğer values'da chart_img yok AMA resolver callable verildiyse → resolve et.
+    if chart_img_resolver is not None and "chart_img" not in values:
+        symbol = values.get("symbol")
+        tf = values.get("tf")
+        if symbol and tf:
+            try:
+                values = dict(values)  # orijinal'i mutate etmemek için kopya
+                values["chart_img"] = chart_img_resolver(symbol, tf)
+                logger.info(
+                    "chart_img auto-resolved: %s/%s → %s",
+                    symbol, tf, values["chart_img"],
+                )
+            except Exception as e:
+                # Resolver fail (örn. snapshot bulunamadı) → caller None bırakır
+                # template MissingPlaceholderError fırlatır (existing behavior).
+                logger.warning(
+                    "chart_img resolve başarısız: %s/%s — %s",
+                    symbol, tf, e,
+                )
+
     # Format dispatch
     fmt = spec.get("format")
     media_list = [
@@ -249,6 +275,7 @@ def render(
     body: str = ""
     full_text: str = ""
     tweets: list[str] = []
+
 
     if fmt == "thread":
         tweets_raw = spec.get("tweets", [])
