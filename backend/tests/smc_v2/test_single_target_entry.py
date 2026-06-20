@@ -37,7 +37,8 @@ def _cfg():
         "timeframes": {"htf": "4h", "mtf": "1h", "entry": "15m"},
         "operation": {"check_interval_sec": 30, "log_level": "INFO"},
         "exchange": {"leverage": 1},
-        "engine": {"smc_version": "v2", "smc_v2_symbols": ["*"],
+        # H2: live execution requires an explicit whitelist, not "*". Candidates here are ETH/USDT.
+        "engine": {"smc_version": "v2", "smc_v2_symbols": ["ETH/USDT"],
                    "smc_v2_shadow": False},
     }
 

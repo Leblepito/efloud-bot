@@ -64,6 +64,31 @@ def test_audit_upgrades_estimated_closed_positions():
     assert pos.pnl_usdt == -2.5
 
 
+def test_audit_collects_correction_records():
+    """M4: the sweep records (trade_id, old_pnl, new_pnl) per corrected position
+    so the orchestrator can re-feed the breaker's consecutive-loss counter."""
+    m = _audit_mgr(_AuditClient(net=-2.5))
+    pos = _recent_pos(order_id="X1", pnl_usdt=3.0, pnl_source="estimated")
+    m.closed_positions.append(pos)
+
+    corrected = m.audit_realized_pnl(window_hours=24)
+
+    assert corrected == 1
+    assert m._last_pnl_corrections == [("X1", 3.0, -2.5)]
+
+
+def test_audit_corrections_reset_per_sweep():
+    """Each sweep starts fresh — no stale accumulation across sweeps."""
+    m = _audit_mgr(_AuditClient(net=-2.5))
+    pos = _recent_pos(order_id="X1", pnl_usdt=3.0, pnl_source="estimated")
+    m.closed_positions.append(pos)
+    m.audit_realized_pnl(window_hours=24)
+    assert len(m._last_pnl_corrections) == 1
+    # pos is now pnl_source="exchange" → next sweep corrects nothing → list empties.
+    m.audit_realized_pnl(window_hours=24)
+    assert m._last_pnl_corrections == []
+
+
 def test_audit_skips_already_reconciled():
     m = _audit_mgr(_AuditClient(net=99.0))
     pos = _recent_pos(pnl_usdt=5.0, pnl_source="exchange")

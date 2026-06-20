@@ -144,13 +144,15 @@ class PositionGuard:
                  max_open_positions: int = 999,
                  reverse_min_profit_pct: float = 0.2,
                  pause_config: PauseConfig | None = None,
-                 hedge_mode: bool = False):
+                 hedge_mode: bool = False,
+                 reject_wide_sl: bool = False):
         self.max_size_pct = max_notional_pct_of_balance / 100
         self.max_exposure = max_total_exposure_multiplier
         self.max_hold = max_holding_hours
         self.max_adds = max_pyramid_adds
         self.min_sl_atr = min_sl_distance_atr
         self.max_sl_atr = max_sl_distance_atr
+        self.reject_wide_sl = reject_wide_sl
         self.reserve_balance = reserve_balance
         # Default 999 = effectively unlimited (back-compat for tests/configs that
         # don't set this). Real configs cap at 1-10.
@@ -316,6 +318,16 @@ class PositionGuard:
                     f"SL very wide: {sl_atr_mult:.2f} ATR > {self.max_sl_atr}. "
                     f"Consider smaller size."
                 )
+                # H3: when reject_wide_sl is enabled, a wide SL is a hard REJECT
+                # (matches v2 SLTooFarError) instead of warn-only. Default OFF
+                # preserves current v1 behavior until risk-ops verifies the live
+                # rejection rate.
+                if self.reject_wide_sl:
+                    return PositionCheckResult(
+                        False,
+                        f"SL too wide: {sl_atr_mult:.2f} ATR > max {self.max_sl_atr}. "
+                        f"Reject (matches v2 SLTooFar)."
+                    )
 
         # 5b. SL must fire BEFORE isolated-margin liquidation (P3-4). For
         # ISOLATED Nx the position liquidates at ~(1/leverage) adverse move

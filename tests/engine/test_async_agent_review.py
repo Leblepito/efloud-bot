@@ -217,7 +217,8 @@ def test_v2_entry_order_with_exchange_style_position_returns_pos_and_no_exceptio
             },
             "operation": {"watch_only": False},  # shadow OFF
             "engine": {
-                "smc_v2_symbols": ["*"],
+                # H2: live execution requires an explicit whitelist, not "*". Candidate is ETH/USDT.
+                "smc_v2_symbols": ["ETH/USDT"],
                 "smc_v2_shadow": False,
             },
             "exchange": {"leverage": 1},
