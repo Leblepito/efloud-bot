@@ -48,7 +48,8 @@ async def test_log_audit_passes_json_string_with_jsonb_cast():
 
     db.pool._conn.execute.assert_awaited_once()
     args, _ = db.pool._conn.execute.call_args
-    sql, event, encoded_payload = args
+    # migration 012: bot_id appended as a trailing arg; payload stays $2::jsonb.
+    sql, event, encoded_payload, _bot_id = args
 
     assert "$2::jsonb" in sql, "log_audit SQL must cast payload with ::jsonb"
     assert event == "trade_open"
