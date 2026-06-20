@@ -65,8 +65,10 @@ Tüm çıktı **additive, flag-OFF default, draft-only** (zero auto-publish), co
 
 ### 3.C Veri akışı (waitlist) — Vercel farkı
 - Next route handler `/api/waitlist` → **Supabase REST (server-side service-role key)**.
-- ⚠️ **JSONL local fallback Vercel'de ÇALIŞMAZ** (serverless ephemeral FS). MVP: Supabase primary + sağlam hata yönetimi (başarısızlıkta 200 + log/alert; lead-loss riski düşük). 3-tier fallback retire edilir.
+- ⚠️ **JSONL local fallback Vercel'de ÇALIŞMAZ** (serverless ephemeral FS, cold-start'ta sıfırlanır). 3-tier fallback retire edilir.
+- **Hata davranışı (dürüstlük):** Supabase başarısızsa **sahte 200 dönme** (lead sessizce kaybolur + kullanıcıya yalan başarı). Bunun yerine kullanıcıya açık "tekrar dene" hatası döndür. MVP: Supabase primary + honest-retry. **Durable fallback (Upstash Redis / Vercel KV) = opsiyonel ileride sertleştirme** (reviewer önerisi) — Simplicity-First gereği MVP'ye girmez; Supabase HA + düşük olasılıkla tam-anda-down senaryosu için over-engineering.
 - Supabase tablosu/datası **aynı kalır** (lead sürekliliği korunur). Consent gate (KVKK/GDPR) korunur.
+- **Session/auth:** Marketing site **sessionless** (auth yok, public + waitlist). `bot.u2algo.com` dashboard ayrı auth app'tir (kapsam dışı, §7) — **paylaşılan session/JWT YOK**; waitlist akışı cross-origin cookie gerektirmez. (Reviewer'ın cross-origin cookie endişesi bu nedenle uygulanamaz.)
 
 ### 3.D SEO baseline (Next.js native)
 - Metadata API (per-route title/desc/OG), `generateMetadata`, JSON-LD (Organization / SoftwareApplication-as-**waitlist** / FAQ / Breadcrumb), `sitemap.ts` (route + MDX'ten dinamik), `robots.ts`, canonical per-route, `next/image` opt, SSG → CWV güçlü.
@@ -104,7 +106,7 @@ Tüm çıktı **additive, flag-OFF default, draft-only** (zero auto-publish), co
 | WEB-3a/3b (LS webhook + email auth) | → LS-webhook **parked**; waitlist-confirmation email auth (SPF/DKIM) gerekirse korunur |
 
 ### 4.3 AYNEN kalan (substrate-bağımsız)
-Growth **backend**'in tamamı: SD-3 Manus client (✅ #229), SD-8 approval queue, **CMP-3 content_compliance** (BANNED_EN + price-whitelist), CMP-2 policy matrix, CON-1..10 (Higgsfield, gated), SD-4/5/6 (X/TG/YT draft), **KPI-ROUTINE + GROW-1..9**, ADS-0..5. Bunlar draft/metrik üretir; sadece UTM/link'leri yeni Next route'lara bakar.
+Growth **backend**'in tamamı: SD-3 Manus client (✅ #229), SD-8 approval queue, **CMP-3 content_compliance** (✅ merged #224 — `scripts/content_compliance.py`, BANNED_EN + `$39` price-whitelist + unlabeled_simulation; **NOT: `backend/social/` altında DEĞİL, `scripts/` altında**; testler `backend/tests/test_content_compliance{,_en}.py`), CMP-2 policy matrix, CON-1..10 (Higgsfield, gated), SD-4/5/6 (X/TG/YT draft), **KPI-ROUTINE + GROW-1..9**, ADS-0..5. Bunlar draft/metrik üretir; sadece UTM/link'leri yeni Next route'lara bakar.
 
 ---
 
@@ -115,7 +117,7 @@ Gate'ler HARD: bir fazın görevleri önceki gate geçmeden başlamaz.
 | Faz | İçerik | Gate |
 |---|---|---|
 | **0 — Site MVP** *(YENİ)* | Next.js site (IA + SEO baseline + compliance + waitlist + 1-2 research-log seed + legal). Vercel'de. Railway'den cutover (<5dk, rollback). SITE-SOT doğrulaması burada. | Site canlı + waitlist sürekliliği + Lighthouse SEO ≥95 + görsel onay |
-| **1 — Foundation** *(P-002.5, çoğu hazır)* | PROD-0 ✅, CMP-3 merge, SEO-1 keyword map, SD-1 handles, CMP-1/2, GROW-1. MANUS-CAP operatör onayı. | GATE 1: CMP-3 verified + site (Faz-0) canlı |
+| **1 — Foundation** *(P-002.5, çoğu hazır)* | PROD-0 ✅, **CMP-3 ✅ merged (#224)**, SEO-1 keyword map, SD-1 handles, CMP-1/2, GROW-1. MANUS-CAP operatör onayı. | GATE 1: CMP-3 verified (zaten merged) + site (Faz-0) canlı |
 | **2 — QuickWins** | analytics+UTM (Next), funnel events, SD-3/4/5/8 draft, **KPI-ROUTINE→GROW-5 CAC gate**, CON-4/5/6/7 brief (Higgsfield free-credit seed) | **GATE 2 (CAC):** ≥14g + ≥300 organik session + non-zero waitlist conversion |
 | **3 — ContentMachine** | SEO-4/5/6 pillar'lar, CON-8/9 (3 video), SD-6, CMP-7/8, GROW-6/8/9, WEB-10 | **GATE 3 (90-gün proof):** dolar-PnL iddialarını açar |
 | **4 — Scale** | CON-10, SD-10, GROW-7 A/B, CMP-9, **ADS-4/5 (Google Ads — CAC+bölge+operatör-spend gated)** | Operatör bütçe sign-off |
@@ -162,7 +164,8 @@ Gate'ler HARD: bir fazın görevleri önceki gate geçmeden başlamaz.
 ## 9. İlgili Referanslar
 - Seed: `docs/handoff/2026-06-20-next-session-frontend-marketing-u2algo-rebuild-plan.md`
 - P-002.5 ULTRAPLAN: `feat/p0025-growth-layer-spec` → `docs/superpowers/specs/2026-06-17-u2algo-marketing-seo-ultraplan-design.md`
-- Growth backend: `backend/social/` (manus_client, xurl_client, tv_manifest, content_queue, approval_callback, content_compliance, tier2_renderers) — M1/M2/M3/M6 (#228-#231)
+- Growth backend: `backend/social/` (manus_client, xurl_client, tv_manifest, content_queue, queue_storage, approval_callback, tier2_renderers, doctrine, feeds, hypotheses, reports, research_runs, archive) — M1/M2/M3/M6 (#228-#231)
+- Compliance gate: `scripts/content_compliance.py` (CMP-3, ✅ #224) + `backend/tests/test_content_compliance{,_en}.py` — **`scripts/` altında, `backend/social/` değil**
 - Mevcut site: `u2algo-site/` (statik HTML + server.js, Railway `considerate-intuition`)
 - Honesty fix: #221 (premium/quickstart gerçek-davranış hizalama)
 - Memory: `p002_marketing_growth`, `wave2_dropped_falsification`, `frontend_dashboard_redesign_initiative`, `algorithm_setup_audit_2026_06_20`, `reference_karpathy_skills_plugin`
