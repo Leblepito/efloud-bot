@@ -33,6 +33,10 @@ _LOCKOUT_WINDOW = 900  # 15 min
 
 def _get_serializer() -> URLSafeTimedSerializer:
     secret = os.environ.get("SESSION_SECRET")
+    is_dev = os.environ.get("ENV", "dev") == "dev"
+    if not is_dev:
+        if not secret or secret == "dev-only-secret-do-not-use-in-prod":
+            raise RuntimeError("SESSION_SECRET must be set to a secure value in production mode")
     if not secret:
         # Dev fallback — production'da env zorunlu
         secret = "dev-only-secret-do-not-use-in-prod"

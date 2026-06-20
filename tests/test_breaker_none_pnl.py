@@ -93,5 +93,21 @@ def test_old_buggy_behavior_would_crash():
         pytest.fail(f"breaker crashed on None pnl (bug-hunt #13 regression): {e}")
 
 
+def test_starting_balance_fails_closed_in_production(monkeypatch):
+    monkeypatch.setenv("ENV", "production")
+    
+    # Unset starting_balance (default None) -> should raise ValueError in production
+    with pytest.raises(ValueError, match="starting_balance must be explicitly configured"):
+        CircuitBreaker()
+
+    # Non-positive starting_balance -> should raise ValueError
+    with pytest.raises(ValueError, match="starting_balance must be positive"):
+        CircuitBreaker(starting_balance=-10.0)
+
+    # Configured positive starting_balance -> works fine
+    cb = CircuitBreaker(starting_balance=2000.0)
+    assert cb.starting_balance == 2000.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

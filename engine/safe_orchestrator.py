@@ -212,7 +212,7 @@ class SafeOrchestrator:
             weekly_drawdown_pct_limit=safety.get("weekly_drawdown_limit_pct", 8.0),
             consecutive_loss_limit=safety.get("consecutive_loss_limit", 3),
             consecutive_loss_pause_minutes=safety.get("consecutive_pause_min", 120),
-            starting_balance=safety.get("starting_balance", 10000),
+            starting_balance=safety.get("starting_balance", None),
             emergency_balance_threshold=safety.get("emergency_balance_threshold", None),
             reserve_balance=safety.get("reserve_balance", 0.0),
         )
