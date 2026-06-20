@@ -144,7 +144,7 @@ safety:
   weekly_drawdown_limit_pct: 20.0     # ~$207 (long horizon fresh book → V1'den sıkı; operatör-tunable)
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
-  starting_balance: 1035              # $1035 başlangıç (V1'den yarı transfer)
+  starting_balance: 1000              # $1000 USDT transfer (2026-06-20). multiAssetsMargin=False → BNB(~$140) margin SAYILMAZ; preflight totalMarginBalance ile kesinleştir.
 
   adx_trend_threshold: 25
   adx_range_threshold: 20
@@ -164,7 +164,7 @@ safety:
   # H3 (default OFF) — V1 ile aynı
   reject_wide_sl: false
 
-  emergency_balance_threshold: 930    # Bakiye $930 altı → HALT (~10% kayıp)
+  emergency_balance_threshold: 900    # Bakiye $900 altı → HALT (~10% kayıp, $1000 cüzdana göre)
   reserve_balance: 0
 
   min_seconds_between_symbol_fetches: 0.5

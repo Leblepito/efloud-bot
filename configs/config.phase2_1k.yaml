@@ -1,24 +1,25 @@
 # ══════════════════════════════════════════════════════════════════
-# FAZ 2 — canlı setup  (dosya adı "1k" LEGACY; cüzdan ~$2000)
+# FAZ 2 — V1 canlı setup (profile mid; dosya adı "1k" LEGACY; cüzdan ~$1065)
 # ══════════════════════════════════════════════════════════════════
-# Gerçek Binance Futures bakiyesi: ~$2070 USDT (2026-06-20 canlı okuma;
-# $1000 ilk + $1000 ek transfer). safety: bloğu $2000'e kalibre (C2 audit
-# reconcile — başlık eskiden $1000 diyordu, gerçekle ÇELİŞİYORDU).
+# 2026-06-20: $1000 USDT V2'ye (paralel long-bot) transfer edildi → V1 gerçek
+# totalMarginBalance ~$1071 (totalWallet ~$1065). safety: bloğu $1065'e RECALIBRE
+# (C2; eski $2000 baseline transfer sonrası yanlış→ breaker false TRIP/HALT veriyordu).
+# Not: multiAssetsMargin=False → BNB margin sayılmaz, sizing USDT totalMarginBalance.
 #
 # Risk profili (safety: bloğuyla SENKRON — değiştirirsen İKİSİNİ birlikte güncelle):
-#   Cüzdan:           ~$2000 (gerçek ~$2070)
+#   Cüzdan:           ~$1065 (gerçek totalMarginBalance ~$1071)
 #   Kaldıraç:         5x (exchange.leverage)
-#   Sembol başı max:  ~$200 notional (max_position_notional_pct 2% × $2000)
-#   Eşzamanlı max:    10 pozisyon × $200 = $2000 max notional (max_total_exposure 1.0)
-#   Daily loss:       %10 = $200 → breaker TRIPS (daily_loss_limit_pct)
-#   Weekly DD:        %25 = $500 → breaker HALTS (weekly_drawdown_limit_pct)
-#   Acil halt:        bakiye $1800 altına düşünce (emergency_balance_threshold)
+#   Sembol başı max:  ~$106 notional (max_position_notional_pct 2% × $1065 × 5)
+#   Eşzamanlı max:    10 pozisyon (max_total_exposure 1.0)
+#   Daily loss:       %10 ≈ $106 → breaker TRIPS (daily_loss_limit_pct)
+#   Weekly DD:        %25 ≈ $266 → breaker HALTS (weekly_drawdown_limit_pct)
+#   Acil halt:        bakiye $950 altına düşünce (emergency_balance_threshold)
 #
 # Önkoşullar (preflight.py ile doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi)
 #   ✓ canWithdraw = false (çekim kapalı, key sızsa fon güvende)
-#   ✓ Position mode = Hedge (dualSidePosition=true; bot startup'ta zorlar — set_position_mode)
-#   ✓ Bakiye ≥ $2000 Futures cüzdanında (emergency_balance_threshold $1800 üstü)
+#   ✓ Position mode = ONE-WAY (hedge_mode:false; bot startup'ta zorlar — set_position_mode)
+#   ✓ Bakiye ≥ $1065 Futures cüzdanında (emergency_balance_threshold $950 üstü)
 #   ✓ EFLOUD_ALLOW_MAINNET=1
 #
 # Çalıştırmak için (lokal):
@@ -113,7 +114,7 @@ risk:
 
   # Opt-in reverse-from-risk (legacy default, mevcut SMC sizing)
   position_size_calculation: legacy
-  max_loss_per_trade_usdt: 20
+  max_loss_per_trade_usdt: 10
   target_stop_distance_pct: 5
 
 operation:
@@ -165,7 +166,7 @@ safety:
   weekly_drawdown_limit_pct: 25.0     # 2026-06-01: 20→25 (operator) — daha geniş haftalık DD toleransı
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
-  starting_balance: 2000              # $2000 başlangıç (gerçek cüzdan, $1000 + $1000 ek transfer)
+  starting_balance: 1065              # 2026-06-20: $1000 V2'ye transfer edildi → gerçek totalMarginBalance ~$1071 (totalWallet ~$1065). C2 recalibration.
 
   adx_trend_threshold: 25
   adx_range_threshold: 20
@@ -190,7 +191,7 @@ safety:
   # verifies the live rejection rate.
   reject_wide_sl: false
 
-  emergency_balance_threshold: 1800   # Bakiye $1800 altı → HALT (10% kayıp)
+  emergency_balance_threshold: 950    # Bakiye $950 altı → HALT (~10% kayıp, $1065 cüzdana göre)
   reserve_balance: 0                   # Tüm bakiye kullanılabilir
 
   min_seconds_between_symbol_fetches: 0.5
