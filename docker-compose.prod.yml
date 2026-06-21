@@ -34,6 +34,36 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  # ── V2: paralel LONG-profil bot (1h/8h/1w, ~$1112 cüzdan) ──
+  # V1 (efloud-bot, mid) yanında AYNI VPS'te ayrı container. İzole state/log/reports
+  # volume + kendi .env.production.long'u (V2 Binance key, EFLOUD_BOT_ID=v2-long).
+  # Caddy bot.u2algo.com'da servis eder. V1 DOKUNULMAZ. AUTOSTART=0 (manuel start).
+  efloud-bot-long:
+    image: efloud-bot:latest        # V1'in build ettiği image (ayrı build yok)
+    container_name: efloud-bot-long
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    env_file:
+      - .env.production.long
+    expose:
+      - "8080"  # internal-only; Caddy bot.u2algo.com'u proxy'ler
+    volumes:
+      - efloud_state_long:/app/state_long
+      - efloud_logs_long:/app/logs
+      - efloud_reports_long:/app/reports_long
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz', timeout=5).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 600s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   caddy:
     image: caddy:2-alpine
     container_name: efloud-caddy
@@ -233,5 +263,8 @@ volumes:
   efloud_reports:
   efloud_content_jobs:    # Lane A — content_job JSONL producer (efloud-bot PR #155)
   efloud_data:            # new volume for data/market/*
+  efloud_state_long:      # V2 long-bot isolated state (breaker/positions/journal)
+  efloud_logs_long:       # V2 long-bot isolated logs
+  efloud_reports_long:    # V2 long-bot isolated reports
   caddy_data:
   caddy_config:

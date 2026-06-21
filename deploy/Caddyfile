@@ -23,3 +23,19 @@ bot.ualgotrade.com, 178-104-122-91.nip.io {
         Referrer-Policy "no-referrer-when-downgrade"
     }
 }
+
+# V2 long-bot dashboard (efloud-bot-long). DNS bot.u2algo.com → 178.104.122.91
+# olunca Caddy LE cert'i otomatik alır. V1 bloğu dokunulmaz.
+bot.u2algo.com {
+    encode gzip zstd
+    reverse_proxy efloud-bot-long:8080 {
+        header_up X-Real-IP {remote_host}
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+}
