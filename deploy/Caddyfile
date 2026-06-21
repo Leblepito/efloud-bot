@@ -24,9 +24,13 @@ bot.ualgotrade.com, 178-104-122-91.nip.io {
     }
 }
 
-# V2 long-bot dashboard (efloud-bot-long). DNS bot.u2algo.com → 178.104.122.91
-# olunca Caddy LE cert'i otomatik alır. V1 bloğu dokunulmaz.
-bot.u2algo.com {
+# V2 long-bot dashboard (efloud-bot-long).
+# - v2.178-104-122-91.nip.io: nip.io wildcard → 178.104.122.91, registrar DNS GEREKMEZ,
+#   cert hemen alınır (V1'in nip.io fallback'i gibi). Dashboard ANINDA erişilebilir.
+# - bot.u2algo.com: gerçek domain; A-record 178.104.122.91'e bakınca cert otomatik
+#   (şu an 69.46.46.105'e bakıyor → düzeltilene kadar bu isim için cert-retry, zararsız).
+# V1 bloğu dokunulmaz.
+bot.u2algo.com, v2.178-104-122-91.nip.io {
     encode gzip zstd
     reverse_proxy efloud-bot-long:8080 {
         header_up X-Real-IP {remote_host}
