@@ -44,7 +44,7 @@ exchange:
   api_key: ""              # VPS env: BINANCE_API_KEY (YENİ cüzdan key)
   api_secret: ""           # VPS env: BINANCE_API_SECRET (YENİ cüzdan secret)
   testnet: false           # MAINNET
-  leverage: 5              # 5x kaldıraç (V1 ile parite)
+  leverage: 3              # 3x — LONG konservatif (uzun tutuş + geniş SL → likidasyon riski az). V1=5x.
   margin_mode: ISOLATED    # per-symbol risk isolation (V1 ile aynı)
   hedge_mode: false        # ONE-WAY; Binance blocks long+short on one symbol
 
@@ -94,18 +94,18 @@ fibonacci:
   ote_upper: 0.786
   ext_tp2: 1.618
 
-# ── Risk: ~$10 risk per trade, $1035 cüzdana kalibre ──
+# ── Risk: LONG konservatif tuning (operatör onayı 2026-06-21), ~$1112 cüzdan ──
 risk:
-  risk_per_trade_pct: 1.0             # ~$10.35 risk budget per trade ($1035 × 1%)
-  max_open_positions: 8               # long horizon → V1'den (10) az eşzamanlı (operatör-tunable)
-  min_rr: 1.8                         # Min R:R 1:1.8 (V1 parite)
-  min_confluence: 50                  # V1 parite (operatör-tunable; long horizon için ↑ düşünülebilir)
+  risk_per_trade_pct: 1.0             # ~$11 risk budget per trade ($1112 × 1%)
+  max_open_positions: 5               # LONG: günlerce tutuş → konsantrasyon kontrolü (V1=10)
+  min_rr: 2.2                         # LONG: 1w-yapı büyük hedefler → yüksek R:R (V1=1.8)
+  min_confluence: 60                  # LONG: az ama yüksek-konviksiyon setup (V1=50)
   recency_bars: 40
   sl_atr_buffer: 0.5
   daily_filter_strict: false
 
   position_size_calculation: legacy
-  max_loss_per_trade_usdt: 10         # $1035 cüzdana scale (V1: 20 @ $2000)
+  max_loss_per_trade_usdt: 11         # $1112 × 1% (LONG konservatif; 3x'te ~$67 notional/trade)
   target_stop_distance_pct: 5
 
 operation:
@@ -138,13 +138,13 @@ kronos:
   prewarm_on_start: true
   show_numeric_confidence: false
 
-# ── Safety: $1035 cüzdana kalibre (V1 ile SENKRON mantık) ──
+# ── Safety: ~$1112 cüzdana kalibre (V1 ile SENKRON mantık) ──
 safety:
-  daily_loss_limit_pct: 10.0          # ~$103 günlük max kayıp ($1035 × 10%)
-  weekly_drawdown_limit_pct: 20.0     # ~$207 (long horizon fresh book → V1'den sıkı; operatör-tunable)
+  daily_loss_limit_pct: 10.0          # ~$111 günlük max kayıp ($1112 × 10%)
+  weekly_drawdown_limit_pct: 20.0     # ~$222 (long horizon fresh book → V1'den sıkı; operatör-tunable)
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
-  starting_balance: 1000              # $1000 USDT transfer (2026-06-20). multiAssetsMargin=False → BNB(~$140) margin SAYILMAZ; preflight totalMarginBalance ile kesinleştir.
+  starting_balance: 1112              # 2026-06-21 canlı totalMarginBalance ~$1112 (multiAssetsMargin=False → BNB margin SAYILMAZ, USDT $1112). C2 calibration.
 
   adx_trend_threshold: 25
   adx_range_threshold: 20
@@ -152,8 +152,8 @@ safety:
   # C3 (default OFF) — V1 ile aynı
   regime_ml_can_override_gate: false
 
-  # 1035 × 2.0% × 5 = ~$103 notional max → cüzdanın %10'u per trade
-  max_position_notional_pct: 2.0      # her trade max ~$103 notional
+  # 1112 × 2.0% × 5 = ~$111 notional max → cüzdanın %10'u per trade
+  max_position_notional_pct: 2.0      # her trade max ~$111 notional
   max_total_exposure: 1.0             # Toplam notional cüzdan tamamı (1x net leverage cap)
   # max_holding_hours: long horizon (1h entry / 1w htf) → 24h erken çıkışa neden olur.
   # 168h (7 gün) long-horizon trade'lerin gelişmesine izin verir (operatör-tunable).
@@ -164,7 +164,7 @@ safety:
   # H3 (default OFF) — V1 ile aynı
   reject_wide_sl: false
 
-  emergency_balance_threshold: 900    # Bakiye $900 altı → HALT (~10% kayıp, $1000 cüzdana göre)
+  emergency_balance_threshold: 1000   # Bakiye $1000 altı → HALT (~10% kayıp, $1112 cüzdana göre)
   reserve_balance: 0
 
   min_seconds_between_symbol_fetches: 0.5
