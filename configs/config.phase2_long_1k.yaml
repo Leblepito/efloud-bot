@@ -1,31 +1,32 @@
 # ══════════════════════════════════════════════════════════════════
-# BOT V2 — LONG profil paralel setup  (cüzdan ~$1035)
+# BOT V2 — LONG profil paralel setup  (cüzdan ~$1112)
 # ══════════════════════════════════════════════════════════════════
 # Bu, V1 (configs/config.phase2_1k.yaml, profile MID) yanında AYNI Hetzner
 # VPS'te paralel çalışan İKİNCİ bot'tur (container: efloud-bot-long,
 # domain: bot.u2algo.com, EFLOUD_BOT_ID=v2-long, state_dir: ./state_long).
 #
-# Gerçek Binance Futures bakiyesi: ~$1035 USDT (V1 hesabından yarı transfer;
-# her iki cüzdan da ~$1035'e kalibre — C2 audit reconcile, dosya adı/başlık
-# gerçekle ÇELİŞMEZ). safety: bloğu $1035'e SENKRON.
+# Gerçek Binance Futures bakiyesi: ~$1112 USDT (2026-06-21 canlı totalMarginBalance;
+# $1000 USDT V1'den transfer; multiAssetsMargin=False → BNB margin SAYILMAZ).
+# safety:/risk: blokları $1112'ye SENKRON (C2 calibration).
 #
-# Risk profili (safety: bloğuyla SENKRON — değiştirirsen İKİSİNİ birlikte güncelle):
-#   Cüzdan:           ~$1035
-#   Kaldıraç:         5x (exchange.leverage)
-#   Sembol başı max:  ~$103 notional (max_position_notional_pct 2% × $1035 × 5)
-#   Eşzamanlı max:    8 pozisyon (max_open_positions; long horizon → daha az eşzamanlı)
-#   Daily loss:       %10 = ~$103 → breaker TRIPS (daily_loss_limit_pct)
-#   Weekly DD:        %20 = ~$207 → breaker HALTS (weekly_drawdown_limit_pct; V1'den sıkı)
-#   Acil halt:        bakiye $930 altına düşünce (emergency_balance_threshold)
+# Risk profili — LONG KONSERVATİF (operatör onayı 2026-06-21; SENKRON tut):
+#   Cüzdan:           ~$1112
+#   Kaldıraç:         3x (exchange.leverage; V1=5x — long uzun tutuş → düşük likidasyon riski)
+#   Sembol başı max:  ~$67 notional (max_position_notional_pct 2% × $1112 × 3)
+#   Eşzamanlı max:    5 pozisyon (max_open_positions; long horizon konsantrasyon kontrolü)
+#   Seçicilik:        min_confluence 60, min_rr 2.2 (V1=50/1.8 — long daha seçici)
+#   Daily loss:       %10 ≈ $111 → breaker TRIPS (daily_loss_limit_pct)
+#   Weekly DD:        %20 ≈ $222 → breaker HALTS (weekly_drawdown_limit_pct; V1'den sıkı)
+#   Acil halt:        bakiye $1000 altına düşünce (emergency_balance_threshold)
+#   ⚠️ Long profili backtest-EDİLMEDİ; judgment-based konservatif başlangıç.
 #
 # Önkoşullar (preflight.py ile YENİ cüzdan key'iyle doğrulanmış olmalı):
-#   ✓ canTrade = true (futures yetkisi)
-#   ✓ canWithdraw = false (çekim kapalı, key sızsa fon güvende)
+#   ✓ canTrade = true (futures yetkisi) — DOĞRULANDI 2026-06-21
 #   ✓ Position mode = ONE-WAY (hedge_mode:false; bot startup'ta zorlar — set_position_mode)
 #   ✓ Hesap FLAT (pozisyon/order yok — margin/position-mode değişimi flat-book ister)
-#   ✓ Bakiye ≥ $1035 Futures cüzdanında (emergency_balance_threshold $930 üstü)
+#   ✓ Bakiye ≥ $1112 Futures cüzdanında (emergency_balance_threshold $1000 üstü)
 #   ✓ EFLOUD_ALLOW_MAINNET=1
-#   ✓ VPS IP (178.104.122.91) yeni hesabın API IP-whitelist'inde
+#   ✓ VPS IP (178.104.122.91) API IP-whitelist'inde — DOĞRULANDI
 #
 # Çalıştırmak için (lokal test):
 #   python main.py configs/config.phase2_long_1k.yaml
@@ -152,8 +153,8 @@ safety:
   # C3 (default OFF) — V1 ile aynı
   regime_ml_can_override_gate: false
 
-  # 1112 × 2.0% × 5 = ~$111 notional max → cüzdanın %10'u per trade
-  max_position_notional_pct: 2.0      # her trade max ~$111 notional
+  # 1112 × 2.0% × 3 (leverage) = ~$67 notional max → cüzdanın ~%6'sı per trade
+  max_position_notional_pct: 2.0      # her trade max ~$67 notional (3x kaldıraçta)
   max_total_exposure: 1.0             # Toplam notional cüzdan tamamı (1x net leverage cap)
   # max_holding_hours: long horizon (1h entry / 1w htf) → 24h erken çıkışa neden olur.
   # 168h (7 gün) long-horizon trade'lerin gelişmesine izin verir (operatör-tunable).
