@@ -236,5 +236,68 @@ def main():
     print(f"{'═'*70}")
 
 
+# ── H3: hard SL-width cap (reject_wide_sl) ───────────────────────────
+# Default OFF = current warn-only behavior; ON = hard reject matching v2's
+# SLTooFarError. leverage=1 isolates the max_sl_atr path (skips the
+# liquidation-distance reject).
+
+def _guard(reject_wide_sl: bool):
+    from engine.safety.position_guard import PositionGuard
+    return PositionGuard(max_sl_distance_atr=5.0, reject_wide_sl=reject_wide_sl)
+
+
+def test_reject_wide_sl_on_rejects():
+    """reject_wide_sl=True → sl_atr_mult 10.0 > max 5.0 is a hard REJECT."""
+    g = _guard(reject_wide_sl=True)
+    r = g.can_open_position(balance=10000, entry=2000, size=0.1, sl=1800, atr=20,
+                            direction="LONG", symbol="ETH/USDT",
+                            existing_positions=[], leverage=1)
+    assert r.allowed is False
+    assert "wide" in r.reason.lower() or "max" in r.reason.lower()
+
+
+def test_reject_wide_sl_off_is_warn_only():
+    """Flag OFF (default) is byte-identical to today: wide SL → allowed=True
+    with the breach only in warnings."""
+    g = _guard(reject_wide_sl=False)
+    r = g.can_open_position(balance=10000, entry=2000, size=0.1, sl=1800, atr=20,
+                            direction="LONG", symbol="ETH/USDT",
+                            existing_positions=[], leverage=1)
+    assert r.allowed is True
+    assert any("wide" in w.lower() for w in r.warnings)
+
+
+def test_reject_wide_sl_not_a_breach_allowed_under_both_flags():
+    """Cap fires ONLY on a true max_sl_atr breach — a 2.0x SL passes under both
+    flag states (min_sl_atr / liquidation rejects untouched)."""
+    for flag in (True, False):
+        g = _guard(reject_wide_sl=flag)
+        r = g.can_open_position(balance=10000, entry=2000, size=0.1, sl=1960, atr=20,
+                                direction="LONG", symbol="ETH/USDT",
+                                existing_positions=[], leverage=1)
+        assert r.allowed is True, f"flag={flag}: 2.0x SL must not be rejected"
+        assert not any("wide" in w.lower() for w in r.warnings)
+
+
+def test_orchestrator_wires_reject_wide_sl_flag(tmp_path):
+    """The orchestrator threads safety.reject_wide_sl into PositionGuard
+    (default False when the key is absent)."""
+    import yaml
+    from engine import SafeOrchestrator
+    with open("configs/config.phase2_1k.yaml", encoding="utf-8") as f:
+        cfg_on = yaml.safe_load(f)
+    cfg_on["safety"]["reject_wide_sl"] = True
+    orch_on = SafeOrchestrator(cfg_on, state_dir=str(tmp_path / "on"),
+                               freshness_check=False, persist=False)
+    assert orch_on.pos_guard.reject_wide_sl is True
+
+    with open("configs/config.phase2_1k.yaml", encoding="utf-8") as f:
+        cfg_off = yaml.safe_load(f)
+    cfg_off["safety"].pop("reject_wide_sl", None)
+    orch_off = SafeOrchestrator(cfg_off, state_dir=str(tmp_path / "off"),
+                                freshness_check=False, persist=False)
+    assert orch_off.pos_guard.reject_wide_sl is False
+
+
 if __name__ == "__main__":
     main()

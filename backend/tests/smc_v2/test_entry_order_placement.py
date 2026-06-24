@@ -47,9 +47,10 @@ def _minimal_config():
         },
         "timeframes": {"htf": "4h", "mtf": "1h", "entry": "15m"},
         "operation": {"check_interval_sec": 30, "log_level": "INFO"},
-        # PR #S6 whitelist gate: opt-in to v2 execution in tests by enabling
-        # all symbols. Production default is [] (no execution).
-        "engine": {"smc_version": "v2", "smc_v2_symbols": ["*"],
+        # PR #S6 whitelist gate: opt-in to v2 execution in tests via an EXPLICIT
+        # per-symbol whitelist (H2: LIVE execution requires explicit symbols, not
+        # "*"). All candidates here are BTC/USDT. Production default is [].
+        "engine": {"smc_version": "v2", "smc_v2_symbols": ["BTC/USDT"],
                    "smc_v2_shadow": False},
     }
 

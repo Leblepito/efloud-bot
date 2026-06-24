@@ -129,6 +129,45 @@ class CircuitBreaker:
                          f"(was {self.consecutive_losses})")
             self.consecutive_losses = 0
 
+    def record_trade_correction(self, old_pnl: float, new_pnl: float):
+        """M4: re-apply an exchange-truth PnL correction (from the audit sweep) to
+        the breaker after a trade was already recorded with an estimate.
+
+        A sign-flipped local estimate (a net-loss trade fed as a WIN) wrongly
+        RESETS the consecutive-loss counter, weakening consecutive_loss_limit.
+        Here we (1) adjust current_balance by the delta and (2) update the matching
+        most-recent today's trade and RECOMPUTE the consecutive-loss counter from
+        the tail — the canonical "trailing losses" definition record_trade itself
+        maintains. This correctly restores a count the win-reset erased (e.g.
+        loss, loss, est-win→0 then corrected to loss → 3), which a naive +1 cannot.
+
+        Fail-CLOSED: the recomputed count can only restore real trailing losses
+        (earlier trip), never fabricate a loss beyond what the corrected ledger
+        shows. Trip/halt logic is unchanged — the next check() reads the new count.
+        Default-OFF at the call site."""
+        self.current_balance += (new_pnl - old_pnl)
+        if self.current_balance > self.peak_balance:
+            self.peak_balance = self.current_balance
+        # Update the matching (most-recent, by value) today's trade in place. The
+        # same dict object is shared with trades_this_week, so both stay coherent.
+        for trade in reversed(self.trades_today):
+            if abs(trade["pnl"] - old_pnl) < 1e-9:
+                trade["pnl"] = new_pnl
+                break
+        # Recompute trailing-loss count from the corrected ledger.
+        recomputed = 0
+        for trade in reversed(self.trades_today):
+            if trade["pnl"] < 0:
+                recomputed += 1
+            else:
+                break
+        if recomputed != self.consecutive_losses:
+            log.warning(
+                f"PnL audit corrected (${old_pnl:.2f}→${new_pnl:.2f}); "
+                f"consecutive losses {self.consecutive_losses}→{recomputed}"
+            )
+        self.consecutive_losses = recomputed
+
     def check(self, now: Optional[datetime] = None) -> BreakerStatus:
         """Mevcut durumu değerlendir ve breaker state güncelle.
 

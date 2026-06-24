@@ -1,8 +1,8 @@
 {
-  "macro_sentiment": "RISK_ON",
-  "confidence_score": 0.85,
-  "fear_and_greed": 65,
-  "bitcoin_trend": "BULLISH",
-  "reasoning": "BTC bullish structure",
-  "last_updated": "2026-06-01T10:37:18.349510Z"
+  "macro_sentiment": "RISK_OFF",
+  "confidence_score": 0.7,
+  "fear_and_greed": 30,
+  "bitcoin_trend": "BEARISH",
+  "reasoning": "fallback path",
+  "last_updated": "2026-06-20T02:01:40.391432Z"
 }

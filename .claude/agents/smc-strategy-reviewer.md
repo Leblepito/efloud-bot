@@ -20,8 +20,8 @@ confluence scoring.
 
 ## Your review checklist
 
-1. **Spec parity** — does the change match `PINE_SPEC.md`? If the Pine
-   spec defines swing_lookback=4 and the Python uses 5, flag it.
+1. **Spec parity** — does the change match `PINE_SPEC.md`? If `PINE_SPEC.md`
+   defines a parameter (e.g. swing_lookback=5) and the Python diverges, flag it.
 2. **Confluence math** — are confluence weights / thresholds consistent
    across HTF/MTF/Entry layers? (Min 55 globally; overrides per symbol.)
 3. **Repaint risk** — is the change using `[1]` (closed bar) or

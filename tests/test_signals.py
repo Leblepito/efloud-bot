@@ -415,3 +415,68 @@ class TestStructuralSLBuffer:
         assert sig.direction == "SHORT"
         assert sig.sl > swing.price                  # buffer applied ABOVE structure
         assert sig.sl == pytest.approx(101.05, abs=1e-6)  # 100.3 + 0.75
+
+
+class TestHtfUndefEntryRangeFallback:
+    """D2 golden: when HTF (4h) bias is UNDEF and the 40-bar slope is neutral
+    (|Δ| ≤ 2%), the pipeline derives HTF bias from the Entry-TF (15m) range
+    discount/premium instead of skipping (signals.py:318-322). Pins the
+    documented (CLAUDE.md) fallback so a refactor can't silently drop/invert it."""
+
+    def _undef_engine(self, e_range, break_obj=None):
+        engine = MagicMock()
+        engine.analyze.return_value = {
+            "trend": "UNDEF", "active_fvgs": [], "active_obs": [],
+            "swing_highs": [], "swing_lows": [], "range": e_range,
+        }
+        engine.swings.return_value = ([], [])
+        engine.structure.side_effect = [[], [break_obj] if break_obj else []]
+        engine.order_blocks.return_value = []
+        engine.sfps.return_value = []
+        engine.range_info.return_value = e_range
+        engine.ote.return_value = None
+        return engine
+
+    def _flat_df(self):
+        # >=40 bars, neutral 40-bar slope (change == 0%).
+        return pd.DataFrame({"high": [100.5] * 45, "low": [99.0] * 45, "close": [100.0] * 45})
+
+    def test_neutral_slope_discount_derives_bull(self, caplog):
+        e_range = SimpleNamespace(discount=True, premium=False, dev_bull=False,
+                                  dev_bear=False, lo=99.0, hi=101.0)
+        brk = SimpleNamespace(direction="BULL", kind="CHoCH", idx=44,
+                              ts="2026-06-20T00:00", price=100.0)
+        engine = self._undef_engine(e_range, brk)
+        df = self._flat_df()
+        with caplog.at_level(logging.INFO, logger="efloud.signals"):
+            generate_signals(engine, df, df, df, min_confluence=20, min_rr=1.5,
+                             fib_ext=1.618, recency_bars=40, symbol="ETH/USDT")
+        assert any("HTF flat but Range active" in r.message and "(BULL)" in r.message
+                   for r in caplog.records), \
+            f"expected discount→BULL fallback log; got {[r.message for r in caplog.records]}"
+        assert not any("no active range" in r.message for r in caplog.records)
+
+    def test_neutral_slope_premium_derives_bear(self, caplog):
+        e_range = SimpleNamespace(discount=False, premium=True, dev_bull=False,
+                                  dev_bear=False, lo=99.0, hi=101.0)
+        brk = SimpleNamespace(direction="BEAR", kind="CHoCH", idx=44,
+                              ts="2026-06-20T00:00", price=100.0)
+        engine = self._undef_engine(e_range, brk)
+        df = self._flat_df()
+        with caplog.at_level(logging.INFO, logger="efloud.signals"):
+            generate_signals(engine, df, df, df, min_confluence=20, min_rr=1.5,
+                             fib_ext=1.618, recency_bars=40, symbol="ETH/USDT")
+        assert any("HTF flat but Range active" in r.message and "(BEAR)" in r.message
+                   for r in caplog.records)
+
+    def test_neutral_slope_no_range_skips(self, caplog):
+        e_range = SimpleNamespace(discount=False, premium=False, dev_bull=False,
+                                  dev_bear=False, lo=99.0, hi=101.0)
+        engine = self._undef_engine(e_range)
+        df = self._flat_df()
+        with caplog.at_level(logging.INFO, logger="efloud.signals"):
+            sigs = generate_signals(engine, df, df, df, min_confluence=20, min_rr=1.5,
+                                    fib_ext=1.618, recency_bars=40, symbol="ETH/USDT")
+        assert sigs == []
+        assert any("no active range" in r.message and "skipping" in r.message
+                   for r in caplog.records)

@@ -66,7 +66,8 @@ class RegimeDetector:
                  volatile_atr_multiplier: float = 2.5,
                  bb_period: int = 20,
                  bb_squeeze_threshold: float = 0.5,
-                 allow_volatile_entries: bool = False):
+                 allow_volatile_entries: bool = False,
+                 ml_can_override_gate: bool = False):
         self.adx_period = adx_period
         self.adx_trend = adx_trending_threshold
         self.adx_range = adx_ranging_threshold
@@ -75,6 +76,7 @@ class RegimeDetector:
         self.bb_period = bb_period
         self.bb_squeeze = bb_squeeze_threshold
         self.allow_volatile_entries = allow_volatile_entries
+        self.ml_can_override_gate = ml_can_override_gate
         self.weights_path = Path(__file__).resolve().parents[2] / "state" / "regime_model_weights.json"
         self.model = None
         self._load_ml_model()
@@ -167,11 +169,24 @@ class RegimeDetector:
                 ml_confidence = int(probs[ml_idx] * 100)
                 
                 notes.append(f"ML Model: {ml_regime} ({ml_confidence}%)")
-                
-                # Ensemble voting rule: if ML has >= 65% confidence, merge/promote
-                if ml_confidence >= 65:
-                    regime = ml_regime
-                    confidence = int((ml_confidence + confidence) / 2)
+
+                # C3: ML is ADVISORY by default — the note above is always logged,
+                # but the deterministic regime (which feeds can_open_new_position,
+                # the entry gate) is overwritten ONLY when ml_can_override_gate is
+                # on. The model is auto-trained on the rule detector's own labels
+                # (circular), so by default its output must not reach the gate.
+                if ml_confidence >= 65 and self.ml_can_override_gate:
+                    # fail-CLOSED: ML may only CONFIRM the deterministic regime or
+                    # narrow the gate; it may never promote a gate-blocked regime to
+                    # a gate-open one, nor clear should_tighten_stops.
+                    det_open = regime in ("TRENDING", "REVERSAL", "VOLATILE")
+                    ml_open = ml_regime in ("TRENDING", "REVERSAL", "VOLATILE")
+                    det_tighten = regime in ("VOLATILE", "REVERSAL")
+                    if (not ml_open or det_open) and not (det_tighten and ml_regime not in ("VOLATILE", "REVERSAL")):
+                        regime = ml_regime
+                        confidence = int((ml_confidence + confidence) / 2)
+                    else:
+                        notes.append("ML override suppressed (would widen gate / unset tighten)")
             except Exception as e:
                 notes.append(f"ML Inference skipped: {e}")
 

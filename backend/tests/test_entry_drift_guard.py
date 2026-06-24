@@ -131,3 +131,37 @@ def test_open_position_guard_inert_when_disabled():
 
     client.get_price.assert_not_called()       # guard disabled → no live fetch
     client.exchange.create_order.assert_called()  # entry was attempted
+
+
+def test_open_position_rejected_when_price_fetch_fails_with_guard_on():
+    """H4 fail-closed: with the guard ON, a price-fetch EXCEPTION (the same
+    Binance flakiness that causes drift) must REJECT the entry — not open blind.
+    Previously the except swallowed the error to live_price=0.0 and proceeded,
+    re-creating the 2026-05-31 SL-only naked-TP (-2021) incident."""
+    mgr, client = _live_order_mgr(get_price_value=0.0, max_drift_pct=0.5)
+    client.get_price.side_effect = Exception("transient ticker outage")
+
+    result = mgr.open_position(
+        symbol="SOL/USDT", direction="SHORT", size=2.6,
+        entry=82.79, sl=83.09, tp1=81.99, tp2=81.84,
+    )
+
+    assert result is None
+    client.exchange.create_order.assert_not_called()
+    assert mgr.positions == []
+
+
+def test_open_position_rejected_when_price_nonpositive_with_guard_on():
+    """H4 fail-closed: a non-positive/zero live price (guard ON) also rejects at
+    the call site. The pure helper still treats 0.0 as fail-open (its own
+    contract, unchanged) — the call site, which owns the fetch, fails CLOSED."""
+    mgr, client = _live_order_mgr(get_price_value=0.0, max_drift_pct=0.5)
+
+    result = mgr.open_position(
+        symbol="SOL/USDT", direction="SHORT", size=2.6,
+        entry=82.79, sl=83.09, tp1=81.99, tp2=81.84,
+    )
+
+    assert result is None
+    client.exchange.create_order.assert_not_called()
+    assert mgr.positions == []

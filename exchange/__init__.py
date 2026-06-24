@@ -441,6 +441,10 @@ class OrderManager:
         self.rollback_on_sl_failure = True
         self.positions: List[Position] = []
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
+        # M4: per-sweep (trade_id, old_pnl, new_pnl) tuples produced by
+        # audit_realized_pnl; drained by SafeOrchestrator STEP5 to back-correct
+        # the breaker's consecutive-loss counter (default-OFF).
+        self._last_pnl_corrections: list = []
         self.on_position_change = on_position_change  # callback (event_type, position) — WS push için
         self.orphan_protector = orphan_protector
         # Trade journal — writes a full TradeSnapshot (entry+exit atomically)
@@ -1030,14 +1034,19 @@ class OrderManager:
 
         # Entry-drift guard — reject if the live price has run too far from the
         # signal before we market-enter (would otherwise open SL-only with a TP
-        # Binance rejects as -2021). Best-effort: a price-fetch failure must NOT
-        # block trading (fail-open), so swallow and proceed on error.
+        # Binance rejects as -2021). FAIL-CLOSED (H4): the same Binance flakiness
+        # that causes drift also breaks the price fetch, so a missing/zero/NaN
+        # price must BLOCK the entry rather than open blind. It retries next cycle
+        # once price is readable. (Only active when max_entry_drift_pct > 0.)
         if self.max_entry_drift_pct > 0:
             try:
                 live_price = float(self.client.get_price(symbol))
             except Exception as e:
-                live_price = 0.0
-                log.warning(f"Entry-drift guard: live price fetch failed for {symbol}: {e} — proceeding")
+                log.warning(f"🚫 [{symbol}] Entry rejected — drift-guard price fetch failed: {e} (fail-closed; retries next cycle)")
+                return None
+            if not (live_price > 0):
+                log.warning(f"🚫 [{symbol}] Entry rejected — drift-guard live price unavailable ({live_price}); fail-closed")
+                return None
             reject_reason = self._entry_drift_rejection(
                 direction, live_price, entry, tp1, self.max_entry_drift_pct,
             )
@@ -1900,6 +1909,7 @@ class OrderManager:
         except Exception:
             return 0
         corrected = 0
+        self._last_pnl_corrections = []  # M4: fresh per sweep
         for pos in self.closed_positions:
             if pos.pnl_source == "exchange":
                 continue
@@ -1930,6 +1940,9 @@ class OrderManager:
             pos.funding_paid = res.get("funding", 0.0)
             pos.pnl_source = "exchange"
             corrected += 1
+            self._last_pnl_corrections.append(
+                (pos.order_id or f"{pos.symbol}-{pos.opened_at}", old, pos.pnl_usdt)
+            )
             log.info(
                 "pnl_audit: corrected %s %s est=%.4f → exchange=%.4f",
                 pos.symbol, pos.direction, old, pos.pnl_usdt,

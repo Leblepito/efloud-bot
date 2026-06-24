@@ -488,8 +488,13 @@ class BotRunner:
                 if not self.cfg["operation"]["dry_run"]:
                     try:
                         balance = self.client.get_balance()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        # C1: balance stays None on failure (downstream guard fail-closes,
+                        # blocks new entries). Only add observability so the silent
+                        # trading-halt is visible; do NOT substitute a fabricated value.
+                        log.warning(
+                            f"[{sym}] balance fetch failed: {e} — skipping new entries this cycle (balance=None)"
+                        )
 
                 result = self.orch.run_cycle(
                     symbol=sym,

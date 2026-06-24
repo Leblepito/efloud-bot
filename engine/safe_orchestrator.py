@@ -205,6 +205,7 @@ class SafeOrchestrator:
             adx_ranging_threshold=safety.get("adx_range_threshold", 20),
             volatile_atr_multiplier=safety.get("volatile_atr_mult", 2.5),
             allow_volatile_entries=safety.get("allow_volatile_entries", False),
+            ml_can_override_gate=safety.get("regime_ml_can_override_gate", False),
         )
         self.breaker = CircuitBreaker(
             daily_loss_pct_limit=safety.get("daily_loss_limit_pct", 3.0),
@@ -228,6 +229,7 @@ class SafeOrchestrator:
             reverse_min_profit_pct=safety.get("reverse_min_profit_pct", 0.2),
             pause_config=pause_config,
             hedge_mode=self.config.get("exchange", {}).get("hedge_mode", False),
+            reject_wide_sl=safety.get("reject_wide_sl", False),
         )
         orphan_cfg = load_orphan_protection_config(safety)
         self.orphan_protector = OrphanProtector(orphan_cfg, self.client) if self.client is not None else None
@@ -1097,6 +1099,21 @@ class SafeOrchestrator:
                 p._reported_to_breaker = True
                 actions.append(f"Recorded PnL ${p.realized_pnl:.2f} to breaker")
 
+        # M4: re-apply exchange-truth PnL corrections to the breaker's consecutive
+        # -loss counter. A sign-flipped local estimate can wrongly RESET the
+        # counter; audit_realized_pnl corrects pnl_usdt and collects the deltas.
+        # We always drain the list (no leak) but only apply sign-flipped
+        # corrections when breaker_backcorrect_consecutive is enabled (default OFF).
+        # Over-counting is fail-CLOSED (breaker trips earlier, never later).
+        corrections = getattr(self.order_manager, "_last_pnl_corrections", None) if self.order_manager else None
+        if corrections:
+            if self.config.get("safety", {}).get("breaker_backcorrect_consecutive", False):
+                for _trade_id, old_pnl, new_pnl in corrections:
+                    if (old_pnl >= 0) != (new_pnl >= 0):  # sign flip only
+                        self.breaker.record_trade_correction(old_pnl, new_pnl)
+                        actions.append(f"Breaker corrected PnL ${old_pnl:.2f}→${new_pnl:.2f}")
+            corrections.clear()
+
         # Orphan hedge cleanup
         orphans = cleanup_orphan_hedges(self.lifecycle.positions, log)
         for o in orphans:
@@ -1796,6 +1813,17 @@ class SafeOrchestrator:
                 f"got {type(whitelist_raw).__name__}={whitelist_raw!r}"
             )
             return None
+        # H2: a literal "*" wildcard may enable SHADOW logging across all symbols
+        # (rollout observation), but it must NOT place a LIVE order — live v2
+        # requires an EXPLICIT per-symbol whitelist AND shadow:false as two
+        # independent conditions. (smc_v2_shadow default True = fail-closed.)
+        shadow_on = bool(engine_cfg.get("smc_v2_shadow", True))
+        if "*" in whitelist_raw and not shadow_on:
+            log.warning(
+                f"[v2 reject] {cand.symbol}: wildcard '*' whitelist not allowed for "
+                f"LIVE execution; require explicit per-symbol smc_v2_symbols + smc_v2_shadow:false"
+            )
+            return None
         if "*" not in whitelist_raw and cand.symbol not in whitelist_raw:
             log.info(f"[v2 reject] {cand.symbol}: not in smc_v2_symbols whitelist")
             return None
@@ -1951,7 +1979,7 @@ class SafeOrchestrator:
         # signal to logs/smc_v2_shadow.log and return None instead of placing.
         # All safety gates above still execute — operator sees rejections in
         # main log; shadow log only captures ACCEPTED-but-not-executed signals.
-        if engine_cfg.get("smc_v2_shadow", False):
+        if engine_cfg.get("smc_v2_shadow", True):  # H2: fail-CLOSED default — a dropped key keeps v2 in shadow
             self._log_shadow_signal(
                 cand=cand, entry_price=entry_price, sl=sl, tp1=tp1, tp2=tp2,
                 size=size, tp_tags=tp_tags,
