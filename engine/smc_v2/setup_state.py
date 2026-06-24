@@ -31,7 +31,10 @@ log = logging.getLogger("efloud.smc_v2.setup_state")
 
 
 # Persistence config (defaults; can be overridden in constructor)
-PERSISTED_STATES = frozenset({"AWAITING_PULLBACK", "IN_ZONE"})
+# AWAITING_REENTRY added for pullback detection (PR #pullback-detection)
+PERSISTED_STATES = frozenset({"AWAITING_PULLBACK", "IN_ZONE", "AWAITING_REENTRY"})
+# Valid states for validation (includes terminal states for backward compat)
+VALID_STATES = frozenset({"AWAITING_PULLBACK", "IN_ZONE", "AWAITING_REENTRY", "CONFIRMED", "EXPIRED"})
 SCHEMA_VERSION = 1
 DEFAULT_MAX_FILE_BYTES = 1_000_000   # 1 MB sanity cap on load
 DEFAULT_MAX_PENDING_PER_SYMBOL = 3
@@ -42,8 +45,12 @@ class SetupCandidate:
     """A pending pullback setup tracked across orchestrator ticks.
 
     State machine (one-way forward, no rollback):
-        AWAITING_PULLBACK → IN_ZONE → CONFIRMED  (entry placed)
-                                  ↘ EXPIRED      (timeout / SL too far / TP too close)
+        AWAITING_PULLBACK → IN_ZONE → AWAITING_REENTRY → CONFIRMED  (entry placed)
+                           ↘ (timeout) ↘ (timeout)   ↘ EXPIRED
+
+    Pullback detection (PR #pullback-detection):
+    - has_left_zone=false: Price has NOT yet left the zone after first entry
+    - has_left_zone=true: Price left the zone, now waiting for re-entry (pullback)
 
     `bars_waited` increments each tick regardless of price in/out of zone.
     Setup expires only when bars_waited > pullback_timeout_bars.
@@ -56,9 +63,10 @@ class SetupCandidate:
     target_zone: ZoneSpec
     htf_swing_anchor: float                        # HTF swing for structural SL
     bars_waited: int                               # incremented per orchestrator tick
-    state: Literal["AWAITING_PULLBACK", "IN_ZONE", "CONFIRMED", "EXPIRED"]
+    state: Literal["AWAITING_PULLBACK", "IN_ZONE", "AWAITING_REENTRY", "CONFIRMED", "EXPIRED"]
     confluence_score: int
     reasons: List[str] = field(default_factory=list)
+    has_left_zone: bool = False                    # pullback detection flag
 
 
 class SetupStateStore:
@@ -179,7 +187,7 @@ class SetupStateStore:
         raw = payload.get("candidates", [])
         for item in raw:
             state = item.get("state")
-            if state not in PERSISTED_STATES:
+            if state not in VALID_STATES:
                 log.warning(
                     f"setup_state load: dropping candidate with state={state} "
                     f"(symbol={item.get('symbol')})"
@@ -221,6 +229,7 @@ class SetupStateStore:
                     state=item["state"],
                     confluence_score=item["confluence_score"],
                     reasons=item.get("reasons", []),
+                    has_left_zone=item.get("has_left_zone", False),  # backward compat
                 ))
             except (KeyError, TypeError, ValueError) as e:
                 log.warning(

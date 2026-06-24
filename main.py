@@ -47,6 +47,12 @@ from exchange import BinanceClient, OrderManager
 
 from typing import Optional
 
+# ── UTF-8 stdout wrapper (Windows cp1252 fix) ──
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 
 # ═══════════════════════════════════════════════
 # SMC v2 feature flag wiring (PR #S6)
@@ -61,14 +67,22 @@ def _build_setup_state_store(cfg: dict, state_dir: str):
     When v2 active: returns SetupStateStore at {state_dir}/setup_candidates.json
     with max_pending_per_symbol from smc_v2 block (default 3 per spec §9).
     """
-    if cfg.get("engine", {}).get("smc_version") != "v2":
+    print(f"[DEBUG] _build_setup_state_store called")
+    print(f"[DEBUG] cfg.get('engine') = {cfg.get('engine')}")
+    smc_version = cfg.get("engine", {}).get("smc_version")
+    print(f"[DEBUG] smc_version = {smc_version!r}")
+    if smc_version != "v2":
+        print(f"[DEBUG] smc_version != 'v2', returning None")
         return None
+    print(f"[DEBUG] Creating SetupStateStore...")
     from engine.smc_v2.setup_state import SetupStateStore
     smc_v2_cfg = cfg.get("smc_v2", {})
-    return SetupStateStore(
+    store = SetupStateStore(
         path=Path(state_dir) / "setup_candidates.json",
         max_pending_per_symbol=int(smc_v2_cfg.get("max_pending_per_symbol", 3)),
     )
+    print(f"[DEBUG] SetupStateStore created: {store}")
+    return store
 
 
 # ═══════════════════════════════════════════════
@@ -533,9 +547,11 @@ def main():
     # .env dosyasını otomatik yükle (varsa) — BINANCE_API_KEY ve _SECRET'ı set eder
     loaded = load_dotenv()
     if loaded > 0:
-        print(f"📄 Loaded {loaded} variables from .env")
+        print(f"[OK] Loaded {loaded} variables from .env")
 
-    cfg_path = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
+    # Config path resolution: EFLOUD_CONFIG_PATH env var > cmdline arg > default
+    cfg_path = os.getenv("EFLOUD_CONFIG_PATH") or (sys.argv[1] if len(sys.argv) > 1 else "config.yaml")
+    print(f"[INFO] Loading config from: {cfg_path}")
 
     try:
         cfg = load_config(cfg_path)
