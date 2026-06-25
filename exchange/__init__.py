@@ -1060,9 +1060,20 @@ class OrderManager:
         # CCXT'nin futures route'una gitmesi için symbol'i collateral notation ile sar
         ccxt_sym = self.client.to_ccxt_symbol(symbol)
 
-        # Round sizes using the exchange's amount precision to avoid stepSize/lotSize errors on Binance
+        # Round sizes and prices using the exchange's precision to avoid filter/lotSize/PRICE_FILTER errors on Binance
         if not self.dry_run:
             try:
+                # 1) Round prices
+                entry = float(self.client.exchange.price_to_precision(ccxt_sym, entry))
+                sl = float(self.client.exchange.price_to_precision(ccxt_sym, sl))
+                tp1 = float(self.client.exchange.price_to_precision(ccxt_sym, tp1))
+                if tp2 is not None:
+                    tp2 = float(self.client.exchange.price_to_precision(ccxt_sym, tp2))
+            except Exception as e:
+                log.warning(f"Failed to format entry/SL/TP prices using exchange precision for {symbol}: {e}")
+
+            try:
+                # 2) Round sizes
                 res1 = self.client.exchange.amount_to_precision(ccxt_sym, tp1_size)
                 if isinstance(res1, str):
                     tp1_size = float(res1)
