@@ -638,6 +638,17 @@ class OrderManager:
         Non-transient errors (insufficient balance, bad symbol) fail immediately
         without retry to avoid wasting attempts.
         """
+        # Round stopPrice inside params using the exchange's price precision as a safety net
+        if not self.dry_run and "stopPrice" in params:
+            try:
+                raw_price = params["stopPrice"]
+                res = self.client.exchange.price_to_precision(ccxt_sym, raw_price)
+                if isinstance(res, str):
+                    params["stopPrice"] = float(res)
+                    price_display = float(res)
+            except Exception as e:
+                log.warning(f"Failed to format stopPrice using exchange precision for {symbol} in _retry_tp_order: {e}")
+
         stop_price = params.get("stopPrice", price_display)
         for attempt in range(1, max_attempts + 1):
             try:

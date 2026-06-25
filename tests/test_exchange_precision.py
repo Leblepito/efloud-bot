@@ -89,3 +89,38 @@ def test_open_position_rounds_prices_to_precision():
     assert tp2 in passed_prices, f"TP2 {tp2} not found in {passed_prices}"
 
     print("✓ Test passed: price_to_precision called for entry, SL, TP1, TP2")
+
+
+@patch('exchange.log')
+def test_retry_tp_order_rounds_stopPrice(mock_log):
+    """Verify that stopPrice in params is rounded using exchange precision."""
+    mock_client = Mock()
+    mock_exchange = Mock()
+
+    # Simulate precision rounding (CCXT returns string)
+    mock_exchange.price_to_precision = lambda sym, price: f"{round(float(price), 3)}"
+    mock_exchange.create_order = Mock(return_value={'id': 'retry_1'})
+
+    order_mgr = OrderManager(client=mock_client, dry_run=False)
+    order_mgr.client = mock_client
+    order_mgr.client.exchange = mock_exchange
+
+    # Call _retry_tp_order with unrounded stopPrice
+    params = {'stopPrice': 0.123456789, 'reduceOnly': True}
+
+    order_mgr._retry_tp_order(
+        ccxt_sym='TRX/USDT',
+        order_type='STOP_MARKET',
+        side='SELL',
+        amount=100.0,
+        params=params,
+        label='TP1',
+        symbol='TRX/USDT',
+        direction='LONG',
+        entry_order_id='entry_1',
+        sl_order_id='sl_1',
+        price_display=0.12,
+    )
+
+    # Verify stopPrice was rounded
+    assert params['stopPrice'] == 0.123
