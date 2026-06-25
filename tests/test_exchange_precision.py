@@ -43,7 +43,7 @@ def test_open_position_rounds_prices_to_precision():
     # Mock to_ccxt_symbol
     mock_client.to_ccxt_symbol = Mock(return_value='TRX/USDT')
 
-    # Mock context manager for dry_run=False
+    # Mock OrderManager
     order_mgr = OrderManager(mock_client, dry_run=False)
     order_mgr.client = mock_client
     order_mgr.client.exchange = mock_exchange
@@ -88,7 +88,7 @@ def test_open_position_rounds_prices_to_precision():
     assert tp1 in passed_prices, f"TP1 {tp1} not found in {passed_prices}"
     assert tp2 in passed_prices, f"TP2 {tp2} not found in {passed_prices}"
 
-    print("✓ Test passed: price_to_precision called for entry, SL, TP1, TP2")
+    print("PASS: price_to_precision called for entry, SL, TP1, TP2")
 
 
 @patch('exchange.log')
