@@ -125,3 +125,43 @@ def test_order_manager_handles_amount_to_precision_exceptions_gracefully():
     call_args_list = mock_client.exchange.create_order.call_args_list
     assert call_args_list[2].args[3] == 459.5
     assert call_args_list[3].args[3] == 459.5
+
+
+def test_order_manager_rounds_tp_and_sl_prices_using_exchange_precision():
+    """Live path (dry_run=False): when placing entries, SL, or TPs, prices must be rounded
+    using the exchange's price_to_precision method to prevent Binance PRICE_FILTER errors."""
+    mock_client = MagicMock()
+    mock_client.to_ccxt_symbol.side_effect = lambda s: f"{s}:USDT"
+    mock_client.exchange = MagicMock()
+
+    # Stub create_order to return mocked order dict
+    mock_client.exchange.create_order.return_value = {"id": "ord_ok", "average": 0.230005}
+
+    # Stub price_to_precision to round to 4 decimals
+    def mock_price_to_precision(symbol, price):
+        return f"{price:.4f}"
+    mock_client.exchange.price_to_precision = MagicMock(side_effect=mock_price_to_precision)
+
+    om = OrderManager(client=mock_client, dry_run=False)
+
+    # We pass entry, sl, tp1, tp2 with 6 decimals (e.g. 0.231234)
+    pos = om.open_position(
+        symbol="ADA/USDT", direction="SHORT", size=100.0,
+        entry=0.231234, sl=0.251234, tp1=0.211234, tp2=0.201234,
+    )
+
+    assert pos is not None
+    # price_to_precision should be called for entry, sl, tp1, tp2 when opening position
+    assert mock_client.exchange.price_to_precision.call_count >= 4
+
+    # The actual stopPrice parameters sent to create_order must be float strings rounded to 4 decimals
+    calls = mock_client.exchange.create_order.call_args_list
+    
+    # Let's find STOP_MARKET call
+    sl_call = next(c for c in calls if c.args[1] == "STOP_MARKET")
+    assert sl_call.kwargs['params']['stopPrice'] == 0.2512
+
+    # Let's find TAKE_PROFIT_MARKET calls
+    tp_calls = [c for c in calls if c.args[1] == "TAKE_PROFIT_MARKET"]
+    assert tp_calls[0].kwargs['params']['stopPrice'] == 0.2112
+    assert tp_calls[1].kwargs['params']['stopPrice'] == 0.2012

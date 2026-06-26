@@ -375,7 +375,7 @@ def _cli_reconcile_sync(orch, order_mgr, cfg: dict, log) -> None:
 
 def run_cycle(orch: SafeOrchestrator, client: BinanceClient,
                 order_mgr: OrderManager, rate_limiter: RateLimiter,
-                universe: SymbolUniverse, cfg: dict):
+                universe: SymbolUniverse, cfg: dict, last_scan_ts: int) -> int:
     """Tüm symbol universe'ü analiz et."""
     log = logging.getLogger("efloud.main")
 
@@ -385,18 +385,36 @@ def run_cycle(orch: SafeOrchestrator, client: BinanceClient,
     _cli_reconcile_sync(orch, order_mgr, cfg, log)
 
     symbols = universe.resolve()
-    scan_mode = cfg["operation"].get("symbol_scan_mode", "sequential")
+    if symbols:
+        tf = cfg["timeframes"]
+        tf_entry = tf.get("entry", "15m")
+        from exchange import _timeframe_ms
+        try:
+            entry_tf_ms = _timeframe_ms(tf_entry)
+        except Exception as e:
+            log.error(f"Invalid entry timeframe format '{tf_entry}': {e}. Defaulting to 15m (900_000ms).")
+            entry_tf_ms = 900_000
 
-    log.info(f"📡 Watchlist ({len(symbols)} symbols): {', '.join(symbols)}")
+        now_ms = int(time.time() * 1000)
+        current_candle_ts = ((now_ms - 2000) // entry_tf_ms) * entry_tf_ms
 
-    if scan_mode == "parallel":
-        _scan_parallel(symbols, orch, client, order_mgr, rate_limiter, cfg)
-    else:
-        _scan_sequential(symbols, orch, client, order_mgr, rate_limiter, cfg)
+        if last_scan_ts == 0 or current_candle_ts > last_scan_ts:
+            scan_mode = cfg["operation"].get("symbol_scan_mode", "sequential")
+            log.info(f"⏳ New entry candle closed (boundary: {current_candle_ts} ms). Scanning symbol universe...")
+            log.info(f"📡 Watchlist ({len(symbols)} symbols): {', '.join(symbols)}")
+
+            if scan_mode == "parallel":
+                _scan_parallel(symbols, orch, client, order_mgr, rate_limiter, cfg)
+            else:
+                _scan_sequential(symbols, orch, client, order_mgr, rate_limiter, cfg)
+
+            last_scan_ts = current_candle_ts
 
     # Exchange-side position check
     if order_mgr.positions and not cfg["operation"]["dry_run"]:
         order_mgr.check_positions()
+
+    return last_scan_ts
 
 
 def _scan_sequential(symbols, orch, client, order_mgr, rate_limiter, cfg):
@@ -695,12 +713,13 @@ def main():
     log.info(f"🚀 Starting main loop — interval={interval}s")
 
     cycle_count = 0
+    last_scan_ts = 0
     while not shutdown.stop:
         cycle_start = time.time()
         cycle_count += 1
         try:
             log.info(f"═══ Cycle #{cycle_count} ═══")
-            run_cycle(orch, client, order_mgr, rate_limiter, universe, cfg)
+            last_scan_ts = run_cycle(orch, client, order_mgr, rate_limiter, universe, cfg, last_scan_ts)
         except KeyboardInterrupt:
             break
         except Exception as e:
