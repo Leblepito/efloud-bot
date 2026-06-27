@@ -163,6 +163,56 @@ class Database:
         except Exception as e:
             log.warning(f"update_trade_kronos_data failed: {e}")
 
+    async def update_trade_audited_pnl(
+        self, pnl_usdt: float, *, order_id: Optional[str] = None, 
+        trace_id: Optional[str] = None, symbol: Optional[str] = None
+    ) -> None:
+        """Update a trade row with exchange-realized P&L and recalculate pnl_pct.
+        
+        Attempts to match by order_id first, then trace_id, then symbol.
+        """
+        if not self.pool:
+            return
+        try:
+            async with self.pool.acquire() as conn:
+                if order_id:
+                    await conn.execute(
+                        """
+                        UPDATE trades 
+                        SET pnl_usdt = $1,
+                            pnl_pct = CASE WHEN entry > 0 AND size > 0 THEN ($1 / (entry * size)) * 100 ELSE pnl_pct END
+                        WHERE binance_order_id = $2
+                        """,
+                        pnl_usdt, order_id
+                    )
+                elif trace_id:
+                    await conn.execute(
+                        """
+                        UPDATE trades 
+                        SET pnl_usdt = $1,
+                            pnl_pct = CASE WHEN entry > 0 AND size > 0 THEN ($1 / (entry * size)) * 100 ELSE pnl_pct END
+                        WHERE trace_id = $2
+                        """,
+                        pnl_usdt, trace_id
+                    )
+                elif symbol:
+                    # fallback to the most recent closed trade for the symbol
+                    await conn.execute(
+                        """
+                        UPDATE trades 
+                        SET pnl_usdt = $1,
+                            pnl_pct = CASE WHEN entry > 0 AND size > 0 THEN ($1 / (entry * size)) * 100 ELSE pnl_pct END
+                        WHERE id = (
+                            SELECT id FROM trades 
+                            WHERE symbol = $2 AND closed_at IS NOT NULL 
+                            ORDER BY closed_at DESC LIMIT 1
+                        )
+                        """,
+                        pnl_usdt, symbol
+                    )
+        except Exception as e:
+            log.warning(f"update_trade_audited_pnl failed: {e}")
+
     async def fetch_recent_trades(self, limit: int = 50) -> list[dict[str, Any]]:
         if not self.pool:
             return []

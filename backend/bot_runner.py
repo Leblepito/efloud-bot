@@ -436,6 +436,26 @@ class BotRunner:
                     for pos in closed:
                         await self._persist_close(pos)
 
+                    # Update database for any audited P&L corrections
+                    detailed_corrections = getattr(self.order_mgr, "_detailed_pnl_corrections", None)
+                    if detailed_corrections:
+                        for corr in list(detailed_corrections):
+                            try:
+                                await db.update_trade_audited_pnl(
+                                    pnl_usdt=corr["new_pnl"],
+                                    order_id=corr.get("order_id"),
+                                    trace_id=corr.get("trace_id"),
+                                    symbol=corr.get("symbol")
+                                )
+                                log.info(
+                                    f"DB PnL corrected for {corr.get('symbol')} "
+                                    f"({corr.get('order_id') or corr.get('trace_id')}): "
+                                    f"est={corr.get('old_pnl'):.4f} → exchange={corr.get('new_pnl'):.4f}"
+                                )
+                            except Exception as db_err:
+                                log.warning(f"Failed to persist audited PnL correction: {db_err}")
+                        detailed_corrections.clear()
+
                 # Run scan cycle
                 await loop.run_in_executor(None, self._scan_universe)
 

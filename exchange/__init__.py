@@ -1935,6 +1935,7 @@ class OrderManager:
             return 0
         corrected = 0
         self._last_pnl_corrections = []  # M4: fresh per sweep
+        self._detailed_pnl_corrections = []
         for pos in self.closed_positions:
             if pos.pnl_source == "exchange":
                 continue
@@ -1968,6 +1969,13 @@ class OrderManager:
             self._last_pnl_corrections.append(
                 (pos.order_id or f"{pos.symbol}-{pos.opened_at}", old, pos.pnl_usdt)
             )
+            self._detailed_pnl_corrections.append({
+                "order_id": pos.order_id,
+                "symbol": pos.symbol,
+                "trace_id": getattr(pos, "trace_id", None),
+                "old_pnl": old,
+                "new_pnl": pos.pnl_usdt
+            })
             log.info(
                 "pnl_audit: corrected %s %s est=%.4f → exchange=%.4f",
                 pos.symbol, pos.direction, old, pos.pnl_usdt,
