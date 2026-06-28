@@ -1,284 +1,480 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>u2algo Premium — SMC Karar-Destek İndikatörü</title>
-<meta name="description" content="TradingView için Smart Money Concepts (SMC) karar-destek indikatörü. Order Block, FVG, EQH-EQL, Breaker Block ve confluence görselleştirmesi. Sinyal servisi veya yatırım tavsiyesi değildir." />
+<title>u2algo Premium — SMC + Fibonacci Indicator & Automated Bot | TradingView</title>
+<meta name="description" content="u2algo Premium: a TradingView indicator that marks SMC + Fibonacci confluence in real time, plus a fully automated trading bot. Indicator $59/mo, bot coming soon. 7-day free trial. Not investment advice." />
 <meta name="robots" content="index, follow" />
 <link rel="icon" href="./favicon.ico" />
 <link rel="canonical" href="https://u2algo.com/premium.html" />
+<meta property="og:title" content="u2algo Premium — SMC + Fibonacci Indicator & Bot" />
+<meta property="og:description" content="TradingView indicator for SMC + Fibonacci confluence, plus an automated bot. 7-day free trial. Not investment advice." />
+<meta property="og:type" content="product" />
+<meta property="og:url" content="https://u2algo.com/premium.html" />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Product","name":"u2algo Indicator","description":"SMC + Fibonacci decision-support indicator for TradingView (invite-only, protected source).","brand":{"@type":"Brand","name":"u2algo"},"offers":{"@type":"Offer","price":"59.00","priceCurrency":"USD","availability":"https://schema.org/InStock","url":"https://u2algo.lemonsqueezy.com/"}}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --accent:#00f0ff; --ink:#f8fafc; --muted:#94a3b8; --bg:#000;
-    --surface:rgba(255,255,255,0.03); --border:rgba(255,255,255,0.1);
-  }
-  *{box-sizing:border-box}
+  /* tokens injected by sync-tokens.py */
+:root {
+  /* Legacy aliases (used by index.html inline styles) */
+  --accent: #00f0ff;
+  --accent-2: #0080ff;
+  --accent-3: #a855f7;
+  --success: #00ff88;
+  --danger: #ff3366;
+  --warn: #ffaa00;
+  --ink: #f8fafc;
+  --muted: #94a3b8;
+  --muted-2: #64748b;
+  --bg: #000000;
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-2: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.05);
+  --border-2: rgba(255, 255, 255, 0.1);
+  --accent-dim: rgba(30, 41, 59, 0.4);
+
+  /* u2 namespaced canonical */
+  --u2-cyan: #00f0ff;
+  --u2-green: #00ff88;
+  --u2-red: #ff3366;
+  --u2-yellow: #ffaa00;
+  --u2-blue: #0080ff;
+  --u2-indigo: #6366f1;
+  --u2-purple: #a855f7;
+  --u2-surface-base: #000000;
+  --u2-surface-raised: rgba(15, 23, 42, 0.6);
+  --u2-surface-overlay: rgba(30, 41, 59, 0.4);
+  --u2-surface-hover: rgba(30, 41, 59, 0.6);
+  --u2-nav-bg: rgba(15, 23, 42, 0.5);
+  --u2-card-bg: rgba(255, 255, 255, 0.03);
+  --u2-card-bg-hover: rgba(255, 255, 255, 0.05);
+  --u2-card-border: rgba(255, 255, 255, 0.06);
+  --u2-card-border-hover: rgba(255, 255, 255, 0.12);
+  --u2-border-subtle: rgba(255, 255, 255, 0.05);
+  --u2-border-default: rgba(255, 255, 255, 0.1);
+  --u2-border-hover: rgba(255, 255, 255, 0.2);
+  --u2-text-primary: #f8fafc;
+  --u2-text-secondary: #94a3b8;
+  --u2-text-muted: #64748b;
+  --u2-bullish: #00ff88;
+  --u2-bearish: #ff3366;
+  --u2-neutral: #64748b;
+  --u2-landing-glow: rgba(0, 240, 255, 0.15);
+  --u2-landing-accent: #00f0ff;
+  --u2-education-surface: #1a1a2e;
+  --u2-education-accent: #7c3aed;
+  --u2-education-warm: #f59e0b;
+  --u2-education-success: #22c55e;
+  --u2-education-fun: #ec4899;
+  --u2-trading-surface: #0a0a0f;
+  --u2-trading-grid: rgba(255, 255, 255, 0.02);
+  --u2-trading-bullish: #00ff88;
+  --u2-trading-bearish: #ff3366;
+  --u2-trading-neutral: #64748b;
+  --grad: linear-gradient(135deg, var(--u2-cyan), var(--u2-blue));
+  --grad-cta: linear-gradient(90deg, var(--u2-cyan), var(--u2-blue));
+  --grad-text: linear-gradient(90deg, var(--u2-cyan), var(--u2-blue) 50%, var(--u2-purple));
+
+  /* Spacing */
+  --sp-xs: 4px;
+  --sp-sm: 8px;
+  --sp-md: 16px;
+  --sp-lg: 24px;
+  --sp-xl: 32px;
+  --sp-section: 80px;
+  --sp-hero: 96px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Font families */
+  --font-font-family-sans: var(--font-inter), Inter, system-ui, sans-serif;
+  --font-font-family-mono: var(--font-jetbrains), ;
+  --font-font-family-display: var(--font-outfit), ;
+  --font-font-size-xs: 0.75rem;
+  --font-font-size-sm: 0.875rem;
+  --font-font-size-base: 1rem;
+  --font-font-size-lg: 1.125rem;
+  --font-font-size-xl: 1.25rem;
+}
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
   body{
-    margin:0; background:var(--bg); color:var(--ink);
-    font-family:'Inter',system-ui,-apple-system,sans-serif;
-    line-height:1.7; font-size:16px;
-    -webkit-font-smoothing:antialiased;
+    background:var(--bg);color:var(--ink);font-family:var(--font-sans);
+    font-feature-settings:"ss01","cv11";-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+    line-height:1.55;overflow-x:hidden;
+    background-image:
+      radial-gradient(ellipse 70% 55% at 15% 20%, rgba(0,240,255,.10) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 45% at 85% 30%, rgba(99,102,241,.07) 0%, transparent 65%),
+      radial-gradient(ellipse 80% 60% at 50% 100%, rgba(168,85,247,.06) 0%, transparent 70%);
+    background-attachment:fixed;
   }
-  .wrap{max-width:880px; margin:0 auto; padding:48px 22px 96px}
-  a{color:var(--accent); text-decoration:none}
-  a:hover{text-decoration:underline}
-  .back{display:inline-block; margin-bottom:28px; font-size:14px; color:var(--muted)}
-  h1{font-family:'Outfit',sans-serif; font-weight:800; font-size:38px; line-height:1.15; margin:0 0 12px}
-  h2{font-family:'Outfit',sans-serif; font-weight:700; font-size:24px; margin:46px 0 12px; color:var(--ink)}
-  h3{font-family:'Outfit',sans-serif; font-weight:600; font-size:17px; margin:18px 0 6px; color:var(--ink)}
-  .lead{font-size:19px; color:#cbd5e1; margin:0 0 26px}
-  .meta{color:var(--muted); font-size:14px; margin:0 0 28px}
-  p,li{color:#cbd5e1}
-  ul{padding-left:22px}
-  li{margin:6px 0}
-  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px 24px; margin:22px 0}
-  .muted{color:var(--muted); font-size:14px}
-  hr{border:none; border-top:1px solid var(--border); margin:48px 0}
-  footer{color:var(--muted); font-size:13px; margin-top:48px; line-height:1.7}
-  .cta{
-    display:inline-block; background:var(--accent); color:#001417; font-weight:700;
-    font-family:'Outfit',sans-serif; font-size:17px; padding:14px 28px; border-radius:12px;
-    margin:10px 0; box-shadow:0 0 32px rgba(0,240,255,0.25);
-  }
-  .cta:hover{text-decoration:none; filter:brightness(1.08)}
-  .price{font-family:'Outfit',sans-serif; font-weight:800; font-size:48px; color:var(--accent); line-height:1}
-  .price small{font-family:'Inter',sans-serif; font-weight:400; font-size:16px; color:var(--muted)}
-  .cols{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin:22px 0}
-  @media(max-width:640px){.cols{grid-template-columns:1fr}}
-  .yes li::marker{content:"✅ "}
-  .no li::marker{content:"❌ "}
-  .examples{display:grid; grid-template-columns:1fr; gap:18px; margin:22px 0}
-  figure{margin:0; background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden}
-  figure img{width:100%; display:block; background:#0a0f14; min-height:160px}
-  figcaption{padding:12px 16px; font-size:14px; color:var(--muted)}
-  #proofStats{font-size:15px}
-  .stat-row{display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border)}
-  .stat-row:last-child{border-bottom:none}
-  .stat-label{color:var(--muted)}
-  .stat-val{font-family:'Outfit',sans-serif; font-weight:600; color:var(--ink)}
-  .neg{color:#f87171}
-  .disclaimer{background:rgba(248,113,113,0.06); border:1px solid rgba(248,113,113,0.25); border-radius:12px; padding:16px 18px; margin:22px 0; font-size:14px; color:#fca5a5}
+  .tnum{font-variant-numeric:tabular-nums}
+  ::selection{background:rgba(0,240,255,.22);color:var(--ink)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:var(--bg)}
+  ::-webkit-scrollbar-thumb{background:var(--border);border:2px solid var(--bg)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--border-2)}
+  *:focus:not(:focus-visible){outline:none}
+  *:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  .mono{font-family:var(--font-mono)}
+  .accent{color:var(--accent)}
+  .muted{color:var(--muted)}
+  .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);opacity:.85}
+  .pill{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:6px 12px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-mono);font-size:13px;letter-spacing:.04em;font-weight:500;padding:13px 22px;border-radius:10px;border:1px solid var(--border-2);background:transparent;color:var(--ink);cursor:pointer;transition:.18s ease;white-space:nowrap}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn-primary{background:var(--grad-cta);color:#04121a;border-color:transparent;font-weight:600}
+  .btn-primary:hover{filter:brightness(1.08);color:#04121a;box-shadow:0 0 30px rgba(0,240,255,.28)}
+  .gradtext{background:var(--grad-text);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+
+  /* ── Nav ── */
+  header{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(0,0,0,.72);border-bottom:1px solid var(--border)}
+  nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .logo{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:600;letter-spacing:-.01em;font-size:21px}
+  .logo img{height:30px;width:auto;display:block}
+  .nav-links{display:flex;align-items:center;gap:28px;font-size:14px;color:var(--muted)}
+  .nav-links a:hover{color:var(--ink)}
+  @media(max-width:760px){.nav-links{display:none}}
+
+  /* ── Section frame ── */
+  section{padding:96px 0;border-bottom:1px solid var(--border)}
+  .sec-head{max-width:680px;margin-bottom:48px}
+  .sec-head h2{font-family:var(--font-display);font-size:clamp(26px,4vw,38px);font-weight:700;letter-spacing:-.02em;line-height:1.15;margin:14px 0 16px}
+  .sec-head p{color:var(--muted);font-size:16px}
+
+  /* ── Hero ── */
+  .hero{padding:120px 0 104px;text-align:center;position:relative}
+  .hero h1{font-family:var(--font-display);font-size:clamp(34px,6.2vw,64px);font-weight:700;letter-spacing:-.03em;line-height:1.05;margin:22px auto 22px;max-width:880px}
+  .hero h1 em{font-style:normal;background:var(--grad-text);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+  .hero .sub{font-size:clamp(16px,2.2vw,20px);color:var(--muted);max-width:620px;margin:0 auto 38px}
+  .hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .hero-strip{display:flex;gap:40px;justify-content:center;flex-wrap:wrap;margin-top:64px;padding-top:36px;border-top:1px solid var(--border)}
+  .hero-strip .item{text-align:center}
+  .hero-strip .k{font-family:var(--font-mono);font-size:26px;font-weight:600;letter-spacing:-.01em}
+  .hero-strip .l{font-size:12px;color:var(--muted-2);letter-spacing:.06em;margin-top:4px;font-family:var(--font-mono);text-transform:uppercase}
+
+  /* ── Do / Don't ── */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .panel{border:1px solid var(--border);border-radius:14px;padding:30px;background:var(--surface)}
+  .panel h3{font-size:15px;font-family:var(--font-mono);letter-spacing:.04em;margin-bottom:18px;display:flex;align-items:center;gap:9px}
+  .panel.good h3{color:var(--accent)}
+  .panel.bad h3{color:var(--danger)}
+  .panel ul{list-style:none;display:flex;flex-direction:column;gap:13px}
+  .panel li{display:flex;gap:11px;font-size:15px;color:var(--ink);align-items:flex-start}
+  .panel li .ic{flex:0 0 auto;margin-top:2px;font-family:var(--font-mono);font-size:12px}
+  .panel.good li .ic{color:var(--accent)}
+  .panel.bad li{color:var(--muted)}
+  .panel.bad li .ic{color:var(--danger)}
+
+  /* ── Profiles ── */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  @media(max-width:900px){.grid3{grid-template-columns:1fr}}
+  .prof{border:1px solid var(--border);border-radius:14px;padding:28px;background:var(--surface);transition:.2s ease;position:relative;overflow:hidden}
+  .prof:hover{border-color:var(--border-2);transform:translateY(-2px)}
+  .prof .tag{font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+  .prof h3{font-size:22px;font-weight:600;margin:10px 0 6px;letter-spacing:-.01em}
+  .prof .desc{color:var(--muted);font-size:14.5px;min-height:62px}
+  .prof .tf{display:flex;gap:8px;margin:20px 0 4px;flex-wrap:wrap}
+  .prof .tf span{font-family:var(--font-mono);font-size:11.5px;color:var(--ink);background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:5px 10px}
+  .prof .tf-label{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2);margin-bottom:8px;margin-top:18px}
+
+  /* ── How / process steps ── */
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+  @media(max-width:900px){.steps{grid-template-columns:1fr 1fr}}
+  @media(max-width:520px){.steps{grid-template-columns:1fr}}
+  .step{border:1px solid var(--border);border-radius:12px;padding:24px;background:var(--surface)}
+  .step .n{font-family:var(--font-mono);color:var(--accent);font-size:13px;letter-spacing:.1em}
+  .step h4{font-size:16px;margin:12px 0 8px;font-weight:600}
+  .step p{font-size:14px;color:var(--muted)}
+
+  /* ── Proof / transparency ── */
+  .proof{display:grid;grid-template-columns:1.1fr .9fr;gap:36px;align-items:center}
+  @media(max-width:840px){.proof{grid-template-columns:1fr}}
+  .proof-card{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:26px}
+  .proof-card .row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--border);font-size:14px}
+  .proof-card .row:last-child{border-bottom:none}
+  .proof-card .row .v{font-family:var(--font-mono);color:var(--ink)}
+  .proof-card .row .v.gated{color:var(--muted-2)}
+  .proof-note{font-size:12px;color:var(--muted-2);margin-top:18px;font-family:var(--font-mono);line-height:1.6}
+
+  /* ── Access / pricing ── */
+  .access{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  @media(max-width:900px){.access{grid-template-columns:1fr}}
+  .tier{border:1px solid var(--border);border-radius:14px;padding:30px;background:var(--surface);display:flex;flex-direction:column}
+  .tier.feature{border-color:var(--accent);background:linear-gradient(180deg,rgba(0,255,136,.04),transparent 60%)}
+  .tier .name{font-family:var(--font-mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .tier.feature .name{color:var(--accent)}
+  .tier .price{font-size:30px;font-weight:600;margin:14px 0 4px;letter-spacing:-.01em}
+  .tier .price .per{font-size:14px;color:var(--muted-2);font-weight:400}
+  .tier .blurb{font-size:14px;color:var(--muted);margin-bottom:22px;min-height:40px}
+  .tier ul{list-style:none;display:flex;flex-direction:column;gap:12px;margin-bottom:26px;flex:1}
+  .tier li{font-size:14px;display:flex;gap:10px;align-items:flex-start}
+  .tier li .ic{color:var(--accent);font-family:var(--font-mono);font-size:12px;margin-top:2px;flex:0 0 auto}
+  .tier .soon{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;color:var(--warn);text-transform:uppercase}
+
+  /* ── Channels ── */
+  .channels{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+  .chan{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-family:var(--font-mono);font-size:13px;color:var(--muted);transition:.18s}
+  .chan:hover{border-color:var(--accent);color:var(--ink)}
+
+  /* ── TradingView / bot movement observer ── */
+  .observer{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:26px;align-items:stretch}
+  @media(max-width:940px){.observer{grid-template-columns:1fr}.chart-shell{min-height:430px}}
+  .chart-shell{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:18px;background:linear-gradient(180deg,rgba(6,12,28,.94),rgba(5,5,16,.98));box-shadow:0 24px 90px rgba(0,0,0,.35);min-height:520px}
+  .chart-top{height:52px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:12px;color:var(--muted);background:rgba(255,255,255,.025)}
+  .chart-top b{color:var(--ink);font-weight:500}.status-live{display:inline-flex;align-items:center;gap:7px;color:var(--accent)}
+  .symbol-rail{display:flex;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);overflow:auto;scrollbar-width:thin}
+  .coin-chip{flex:0 0 auto;font-family:var(--font-mono);font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:6px 9px;background:rgba(255,255,255,.025)}
+  .coin-chip.hot{color:#04121a;background:var(--grad-cta);border-color:transparent;font-weight:600}.coin-chip.watch{color:var(--accent);border-color:rgba(0,240,255,.35)}
+  .chart-area{position:relative;height:360px;margin:18px 16px 0;border:1px solid rgba(255,255,255,.06);border-radius:14px;background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);background-size:100% 60px,72px 100%;overflow:hidden}
+  .chart-area svg{position:absolute;inset:0;width:100%;height:100%}.zone{position:absolute;border:1px solid;border-radius:8px;font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:6px 8px;backdrop-filter:blur(8px)}
+  .zone.supply{top:42px;left:54%;right:7%;border-color:rgba(255,51,102,.38);color:#ff8aa6;background:rgba(255,51,102,.075)}
+  .zone.demand{left:11%;bottom:62px;width:34%;border-color:rgba(0,255,136,.36);color:#79ffbd;background:rgba(0,255,136,.07)}
+  .bot-marker{position:absolute;display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;color:var(--ink);background:rgba(5,5,16,.82);border:1px solid var(--border-2);border-radius:999px;padding:7px 10px;box-shadow:0 0 24px rgba(0,240,255,.12)}
+  .bot-marker::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  .m1{left:13%;top:52%}.m2{left:41%;top:33%}.m3{right:12%;top:44%}.m4{right:18%;bottom:18%;color:var(--success)}
+  .chart-note{position:absolute;left:16px;right:16px;bottom:14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-family:var(--font-mono);font-size:11px;color:var(--muted-2)}
+  .movement-panel{border:1px solid var(--border);border-radius:18px;background:var(--surface);padding:24px;display:flex;flex-direction:column;gap:18px}
+  .movement-panel h3{font-size:21px;letter-spacing:-.01em}.movement-panel p{font-size:14.5px;color:var(--muted)}
+  .timeline{display:flex;flex-direction:column;gap:12px}.event{border:1px solid var(--border);border-radius:12px;padding:14px;background:rgba(255,255,255,.025)}
+  .event .t{display:flex;justify-content:space-between;gap:12px;font-family:var(--font-mono);font-size:11px;color:var(--muted-2);margin-bottom:8px}.event b{font-size:14px;font-weight:600}.event p{font-size:13px;margin-top:5px}
+  .stack-tags{display:flex;flex-wrap:wrap;gap:8px}.stack-tags span{font-family:var(--font-mono);font-size:11px;border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--muted);background:rgba(255,255,255,.025)}
+
+  /* ── Waitlist ── */
+  .waitlist{text-align:center}
+  .wl-form{display:flex;gap:10px;max-width:480px;margin:30px auto 14px;flex-wrap:wrap;justify-content:center}
+  .wl-form input{flex:1;min-width:240px;background:var(--surface);border:1px solid var(--border-2);border-radius:10px;padding:13px 16px;color:var(--ink);font-size:15px;font-family:var(--font-sans)}
+  .wl-form input::placeholder{color:var(--muted-2)}
+  .wl-form input:focus{border-color:var(--accent)}
+  .wl-msg{font-family:var(--font-mono);font-size:13px;min-height:20px;margin-top:6px}
+  .wl-msg.ok{color:var(--accent)}
+  .wl-msg.err{color:var(--danger)}
+  .wl-fine{font-size:12px;color:var(--muted-2);margin-top:10px}
+
+  /* ── FAQ ── */
+  .faq{display:flex;flex-direction:column;gap:0;max-width:820px}
+  details{border-bottom:1px solid var(--border);padding:4px 0}
+  summary{cursor:pointer;list-style:none;padding:20px 0;font-size:16.5px;font-weight:500;display:flex;justify-content:space-between;align-items:center;gap:16px}
+  summary::-webkit-details-marker{display:none}
+  summary .chev{font-family:var(--font-mono);color:var(--accent);transition:.2s}
+  details[open] summary .chev{transform:rotate(45deg)}
+  details p{color:var(--muted);font-size:15px;padding:0 0 22px;max-width:720px}
+
+  /* ── Disclaimer / footer ── */
+  .disclaimer{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 30px}
+  .disclaimer h4{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--warn);margin-bottom:14px;display:flex;gap:9px;align-items:center}
+  .disclaimer p{font-size:13.5px;color:var(--muted);line-height:1.7;margin-bottom:10px}
+  footer{padding:54px 0 70px;border-bottom:none}
+  .foot-top{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .foot-links{display:flex;gap:40px;flex-wrap:wrap}
+  .foot-col{display:flex;flex-direction:column;gap:11px;font-size:14px}
+  .foot-col .h{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-2);margin-bottom:4px}
+  .foot-col a{color:var(--muted)}
+  .foot-col a:hover{color:var(--ink)}
+  .foot-bottom{margin-top:48px;padding-top:24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--muted-2);text-transform:uppercase}
+  /* Progressive enhancement: content visible by default; animate only when JS marks .js */
+  .reveal{opacity:1;transform:none}
+  html.js .reveal{opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease}
+  html.js .reveal.in{opacity:1;transform:none}
+  @media(prefers-reduced-motion:reduce){html.js .reveal{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+
+/* ── Animated living background (u2algo brand-safe: black base + cyan signature) ── */
+#u2-bg{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+#u2-bg .aur{position:absolute;border-radius:50%;filter:blur(72px);opacity:.5;mix-blend-mode:screen;will-change:transform}
+#u2-bg .aur.a1{width:46vw;height:46vw;left:-8vw;top:-6vw;background:radial-gradient(circle at 30% 30%,var(--u2-cyan),transparent 70%);animation:u2f1 19s ease-in-out infinite}
+#u2-bg .aur.a2{width:40vw;height:40vw;right:-10vw;top:16vh;background:radial-gradient(circle at 50% 50%,var(--u2-purple),transparent 70%);opacity:.4;animation:u2f2 23s ease-in-out infinite}
+#u2-bg .aur.a3{width:38vw;height:38vw;left:30vw;bottom:-14vh;background:radial-gradient(circle at 50% 50%,var(--u2-blue),transparent 70%);opacity:.32;animation:u2f3 27s ease-in-out infinite}
+#u2-bg .grid{position:absolute;inset:-2px;opacity:.06;background-image:linear-gradient(var(--u2-cyan) 1px,transparent 1px),linear-gradient(90deg,var(--u2-cyan) 1px,transparent 1px);background-size:64px 64px;-webkit-mask-image:radial-gradient(circle at 50% 25%,#000,transparent 75%);mask-image:radial-gradient(circle at 50% 25%,#000,transparent 75%);animation:u2grid 32s linear infinite}
+#u2-bg canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
+@keyframes u2f1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(7vw,6vh) scale(1.14)}}
+@keyframes u2f2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-6vw,8vh) scale(1.18)}}
+@keyframes u2f3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(5vw,-7vh) scale(1.1)}}
+@keyframes u2grid{from{background-position:0 0,0 0}to{background-position:64px 128px,64px 128px}}
+@media(prefers-reduced-motion:reduce){#u2-bg .aur,#u2-bg .grid{animation:none}#u2-bg canvas{display:none}}
+
+.lang-switch{display:inline-flex;gap:2px;border:1px solid var(--border-2);border-radius:999px;padding:3px;background:rgba(255,255,255,.03)}
+.lang-switch button{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:transparent;border:none;border-radius:999px;padding:5px 10px;cursor:pointer;transition:.15s}
+.lang-switch button:hover{color:var(--ink)}
+.lang-switch button.active{background:var(--grad-cta);color:#04121a;font-weight:600}
+@media(max-width:760px){.nav-links{display:none}.lang-switch{margin-left:auto}}
+.badge{display:inline-block;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:999px;margin-bottom:10px}
+.badge.live{color:#04121a;background:var(--grad-cta);font-weight:600}
+.badge.soon{color:var(--warn);border:1px solid rgba(255,170,0,.4)}
+.prod-card{display:flex;flex-direction:column;height:100%}
+.prod-card .price{font-size:34px;font-weight:700;letter-spacing:-.02em;margin:6px 0 2px}
+.prod-card .price .per{font-size:15px;color:var(--muted-2);font-weight:400}
+.prod-card ul{list-style:none;display:flex;flex-direction:column;gap:11px;margin:18px 0 22px;flex:1}
+.prod-card li{font-size:14px;display:flex;gap:10px;align-items:flex-start;color:var(--ink)}
+.prod-card li .ic{color:var(--accent);font-family:var(--font-mono);font-size:12px;margin-top:2px;flex:0 0 auto}
+.btn[disabled],.btn.disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:900px){.feat-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.feat-grid{grid-template-columns:1fr}}
+.feat-card{border:1px solid var(--border);border-radius:14px;padding:24px;background:var(--surface);transition:.2s}
+.feat-card:hover{border-color:var(--border-2);transform:translateY(-2px)}
+.feat-card h4{font-size:16px;margin-bottom:8px;font-weight:600}
+.feat-card p{font-size:14px;color:var(--muted)}
+.feat-card .ic{font-family:var(--font-mono);color:var(--accent);font-size:13px;margin-bottom:10px;display:block}
+
 </style>
 </head>
 <body>
-<main class="wrap">
-  <a class="back" href="/">← u2algo ana sayfa</a>
-
-  <!-- 1. HERO -->
-  <section>
-    <h1>SMC'yi grafiğinde otomatik işaretleyen karar-destek indikatörü</h1>
-    <p class="lead">
-      u2algo Premium, Smart Money Concepts yapılarını (Order Block, FVG, EQH-EQL, Breaker Block, confluence ve
-      SL/TP görseli) TradingView grafiğin üzerinde senin için işaretler. Karar senin — bu bir
-      karar-destek/analiz aracıdır, sinyal servisi değildir.
-    </p>
-    <a class="cta" href="https://u2algo.lemonsqueezy.com/checkout/buy/cd9f3019-0fe5-4836-a730-3b985306bd72" target="_blank" rel="noopener">Founding üye ol — $39 lifetime</a>
-    <p class="muted" style="margin-top:14px">
-      Satın alma sonrası TradingView erişimi için:
-      <a href="/quickstart.html">kurulum kılavuzu &amp; SSS</a>.
-    </p>
-  </section>
-
-  <hr/>
-
-  <!-- 2. BU NE / NE DEĞİL -->
-  <section>
-    <h2>Bu ne, ne <em>değil</em>?</h2>
-    <div class="cols">
-      <div class="card">
-        <h3 style="color:var(--accent)">Bu nedir</h3>
-        <ul class="yes">
-          <li>SMC karar-destek / analiz aracı</li>
-          <li>Order Block (OB) tespiti ve görselleştirmesi</li>
-          <li>Fair Value Gap (FVG) işaretleme</li>
-          <li>Equal Highs / Equal Lows (EQH-EQL) likidite seviyeleri</li>
-          <li>Breaker Block (BB) yapı kırılımı işaretleme</li>
-          <li>Confluence skoru ve SL/TP seviyelerinin görseli</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3 style="color:#f87171">Bu ne <em>değildir</em></h3>
-        <ul class="no">
-          <li>Sinyal servisi değildir</li>
-          <li>Otomatik işlem (oto-trade) botu değildir</li>
-          <li>Yatırım tavsiyesi değildir</li>
-          <li>Bir getiri garantisi sunmaz</li>
-          <li>Senin yerine karar veren bir araç değildir</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <hr/>
-
-  <!-- 3. ANNOTATED ÖRNEKLER -->
-  <section>
-    <h2>Grafik üzerinde nasıl görünüyor?</h2>
-    <p>İndikatörün canlı grafikte işaretlediği yapılardan örnekler:</p>
-    <div class="examples">
-      <figure>
-        <img src="/assets/premium/wave1_eth_short_15m.png" alt="u2algo Wave-1 indikatörü ETHUSDT 15m — Order Block / FVG zone'ları, breaker (BB) işaretleri ve SHORT setup'ın SL/TP/R:R görseli" loading="lazy" />
-        <figcaption>ETHUSDT · 15m — Order Block &amp; FVG zone'ları, breaker (BB) işaretleri ve aktif SHORT setup: entry / SL / TP / R:R çizgileri + köşe info-panel (1H bias · confluence · R:R).</figcaption>
-      </figure>
-      <figure>
-        <img src="/assets/premium/wave1_btc_short_15m.png" alt="u2algo Wave-1 indikatörü BTCUSDT 15m — EQH/EQL likidite seviyeleri, swing HH/LL etiketleri ve confluence skoru" loading="lazy" />
-        <figcaption>BTCUSDT · 15m — EQH/EQL likidite seviyeleri, swing HH/LL yapısı ve confluence skoruyla işaretlenmiş SHORT setup. Yalnız son/aktif setup çizilir — grafik temiz kalır.</figcaption>
-      </figure>
-    </div>
-    <p class="muted">Görseller analiz amaçlıdır; herhangi bir sonuç vaadi içermez.</p>
-  </section>
-
-  <hr/>
-
-  <!-- 4. METODOLOJİ -->
-  <section>
-    <h2>Metodoloji</h2>
-    <p>
-      İndikatör, Smart Money Concepts (SMC) yaklaşımındaki temel yapıları kural-tabanlı olarak otomatikleştirir.
-      Aşağıdaki kavramlar grafik üzerinde tutarlı biçimde işaretlenir, böylece manuel tarama yükü azalır.
-    </p>
-    <h3>Order Block (OB)</h3>
-    <p>
-      Güçlü bir hareket öncesindeki son aksiyon mumlarını tespit eder ve bu arz/talep bölgelerini grafik üzerinde
-      kutu olarak işaretler.
-    </p>
-    <h3>Fair Value Gap (FVG)</h3>
-    <p>
-      Fiyatın hızlı geçtiği ve dengesizlik (imbalance) bıraktığı boşlukları belirler; fiyatın bu boşluklara
-      dönme eğilimini görselleştirir.
-    </p>
-    <h3>Equal Highs / Equal Lows (EQH-EQL)</h3>
-    <p>
-      Eşit tepe ve dip seviyelerini likidite havuzları olarak işaretler — yapısal hedef ve SL referansı olarak
-      değerlendirilebilir.
-    </p>
-    <h3>Breaker Block (BB)</h3>
-    <p>
-      Bir Order Block kırıldığında (fiyat zone'dan kapanışla geçtiğinde) oluşan Breaker Block'u işaretleyerek
-      yapısal yön değişimini görselleştirir ve bias okumasına yardımcı olur.
-    </p>
-    <h3>Confluence ve SL/TP görseli</h3>
-    <p>
-      Birden çok yapının üst üste geldiği bölgeleri bir confluence skoru ile özetler ve olası SL/TP seviyelerini
-      grafikte gösterir. Bu seviyeler bilgilendirme amaçlıdır; emir veya tavsiye değildir.
-    </p>
-  </section>
-
-  <hr/>
-
-  <!-- 5. ŞEFFAFLIK (BUILD-IN-PUBLIC) -->
-  <section>
-    <h2>Şeffaflık — build in public</h2>
-    <p>
-      Geçmiş performans gelecek garantisi değildir. Aşağıdaki istatistikler tek-config naif bir oto-execution
-      botuna aittir — indikatörün kendisi veya bir getiri vaadi değildir. Yatırım tavsiyesi değildir.
-    </p>
-    <div class="card">
-      <div id="proofStats">Yükleniyor…</div>
-    </div>
-    <p class="muted">
-      Rakamlar yüzde olarak normalize edilmiştir; mutlak bakiye paylaşılmaz. Negatif sonuçlar dahil olduğu gibi
-      gösterilir.
-    </p>
-  </section>
-
-  <hr/>
-
-  <!-- 6. FOUNDING TEKLİF -->
-  <section>
-    <h2>Founding üye teklifi</h2>
-    <p class="price">$39 <small>/ tek seferlik · lifetime</small></p>
-    <p>
-      Founding (kurucu) üyelik tek seferlik bir ödemedir ve ömür boyu (lifetime) erişim sağlar. Bu fiyat
-      yalnızca erken dönemde geçerlidir; track record (kanıt geçmişi) biriktikçe fiyat yükselecektir. Erken
-      katılanlar bu founding fiyatını korur.
-    </p>
-    <a class="cta" href="https://u2algo.lemonsqueezy.com/checkout/buy/cd9f3019-0fe5-4836-a730-3b985306bd72" target="_blank" rel="noopener">Founding üye ol — $39 lifetime</a>
-    <p>
-      Satın alma sonrası için:
-      <a href="/quickstart.html">kurulum kılavuzu &amp; SSS</a> · erişim 24 saat içinde tanımlanır.
-    </p>
-    <p class="muted">Ödeme Lemon Squeezy üzerinden güvenli şekilde işlenir.</p>
-  </section>
-
-  <hr/>
-
-  <!-- 7. FOOTER -->
-  <footer>
-    <div class="disclaimer">
-      u2algo Premium bir karar-destek/analiz aracıdır. Yatırım tavsiyesi değildir, getiri garantisi yoktur ve
-      geçmiş performans gelecek garantisi değildir. Tüm işlem kararları ve riskleri kullanıcıya aittir; kendi
-      araştırmanı yap (DYOR).
-      <!-- CMP-1 B1 canonical anchor (TR) — byte-match required by has_disclaimer -->
-      <p style="margin-top:10px"><strong>Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir.</strong></p>
-      <!-- CMP-1 B5 — Proof ≠ Product (research-log frame) -->
-      <p style="margin-top:10px">Yayınlanan performans istatistikleri tek-config naif bir otomatik-execution botuna aittir — indikatörün kendisi veya bir getiri vaadi değildir. Değerler %'ye normalize edilmiştir; mutlak bakiye paylaşılmaz; negatif sonuçlar dahil olduğu gibi gösterilir.</p>
-      <!-- CMP-1 B6 — A.Ş. jurisdiction -->
-      <p style="margin-top:10px">u2algo bir Türk Anonim Şirketi (A.Ş.) tarafından işletilir. Lisanslı aracı kurum, yatırım danışmanı veya fon değiliz. Yatırıma çağrı yoktur.</p>
-      <p style="margin-top:10px"><a href="/risk-disclosure.html" style="color:#fca5a5;text-decoration:underline">Tam risk açıklaması →</a></p>
-    </div>
-    Sorular için <a href="mailto:hello@u2algo.com">hello@u2algo.com</a>. ·
-    <a href="/quickstart.html">Kurulum &amp; SSS</a> ·
-    <a href="/privacy.html">Gizlilik &amp; KVKK</a> ·
-    <a href="/terms.html">Kullanım Şartları</a> ·
-    <a href="/">u2algo.com</a>
-  </footer>
-</main>
-
+<div id="u2-bg" aria-hidden="true">
+<div class="aur a1"></div><div class="aur a2"></div><div class="aur a3"></div>
+<div class="grid"></div>
+<canvas id="u2-net"></canvas>
+</div>
+<header><div class="wrap"><nav>
+<a class="logo" href="/"><img src="./brand/logo-horizontal.svg" alt="u²Algo" /></a>
+<div class="nav-links"><a href="/#features" data-i18n="nav_features">Features</a><a href="#products" data-i18n="nav_products">Products</a><a href="#methodology" data-i18n="pr_meth_eyebrow">Methodology</a><a href="#faq" data-i18n="nav_faq">FAQ</a></div>
+<div class="lang-switch" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="tr">TR</button><button data-lang="ru">RU</button></div>
+<a class="btn btn-primary" href="https://u2algo.lemonsqueezy.com/" target="_blank" rel="noopener" data-i18n="pr_cta_ind">Start 7-day free trial</a>
+</nav></div></header>
+<a id="top"></a>
+<section class="hero"><div class="wrap">
+<a href="/" class="muted" style="font-family:var(--font-mono);font-size:12px" data-i18n="pr_back">.</a>
+<span class="pill" style="margin-top:18px"><span class="dot"></span> <span data-i18n="pr_eyebrow">.</span></span>
+<h1 data-i18n="pr_h1">.</h1>
+<p class="sub" data-i18n="pr_sub">.</p>
+<div class="hero-cta"><a class="btn btn-primary" href="https://u2algo.lemonsqueezy.com/" target="_blank" rel="noopener" data-i18n="pr_cta_ind">.</a><a class="btn" href="#products" data-i18n="nav_pricing">.</a></div>
+<p class="muted" style="font-size:12px;margin-top:14px;font-family:var(--font-mono)" data-i18n="pr_cta_note">.</p>
+</div></section>
+<section id="products"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="prod_eyebrow">.</span><h2 data-i18n="pr_compare_h">.</h2><p data-i18n="prod_sub">.</p></div>
+<div class="grid2">
+<div class="prof prod-card reveal"><span class="badge live" data-i18n="pi_badge">.</span><h3 data-i18n="pi_name">.</h3>
+<div class="price"><span data-i18n="pi_price">$59</span> <span class="per" data-i18n="pi_per">.</span></div>
+<p class="desc" data-i18n="pi_blurb">.</p>
+<ul><li><span class="ic">+</span> <span data-i18n="pi_f1">.</span></li><li><span class="ic">+</span> <span data-i18n="pi_f2">.</span></li><li><span class="ic">+</span> <span data-i18n="pi_f3">.</span></li><li><span class="ic">+</span> <span data-i18n="pi_f4">.</span></li><li><span class="ic">+</span> <span data-i18n="pi_f5">.</span></li></ul>
+<a class="btn btn-primary" href="https://u2algo.lemonsqueezy.com/" target="_blank" rel="noopener" data-i18n="pi_cta">.</a></div>
+<div class="prof prod-card soon reveal"><span class="badge soon" data-i18n="pb_badge">.</span><h3 data-i18n="pb_name">.</h3>
+<div class="price"><span data-i18n="pb_price">$590</span> <span class="per" data-i18n="pb_per">.</span></div>
+<p class="desc" data-i18n="pb_blurb">.</p>
+<ul><li><span class="ic">+</span> <span data-i18n="pb_f1">.</span></li><li><span class="ic">+</span> <span data-i18n="pb_f2">.</span></li><li><span class="ic">+</span> <span data-i18n="pb_f3">.</span></li><li><span class="ic">+</span> <span data-i18n="pb_f4">.</span></li><li><span class="ic">+</span> <span data-i18n="pb_f5">.</span></li></ul>
+<a class="btn disabled" aria-disabled="true" data-i18n="pb_cta">.</a></div>
+</div>
+<p class="muted" style="font-size:13px;margin-top:20px;text-align:center" data-i18n="pr_setup">.</p>
+</div></section>
+<section id="methodology"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="pr_meth_eyebrow">.</span><h2 data-i18n="pr_meth_h">.</h2><p data-i18n="pr_meth_sub">.</p></div>
+<div class="feat-grid">
+<div class="feat-card reveal"><span class="ic">OB</span><h4 data-i18n="feat1_t">.</h4><p data-i18n="feat1_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">FVG</span><h4 data-i18n="feat2_t">.</h4><p data-i18n="feat2_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">EQH/EQL</span><h4 data-i18n="feat3_t">.</h4><p data-i18n="feat3_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">BB</span><h4 data-i18n="feat4_t">.</h4><p data-i18n="feat4_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">FIB</span><h4 data-i18n="feat5_t">.</h4><p data-i18n="feat5_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">SL/TP</span><h4 data-i18n="feat6_t">.</h4><p data-i18n="feat6_d">.</p></div>
+</div>
+<p class="muted" style="font-size:13px;margin-top:22px;font-family:var(--font-mono)" data-i18n="pr_protected">.</p>
+</div></section>
+<section id="isnt"><div class="wrap">
+<div class="sec-head reveal"><h2 data-i18n="pr_isnt_h">.</h2></div>
+<div class="grid2">
+<div class="panel good reveal"><h3><span class="dot"></span> <span data-i18n="prod_eyebrow">.</span></h3>
+<ul><li><span class="ic">+</span> <span data-i18n="pr_is1">.</span></li><li><span class="ic">+</span> <span data-i18n="pr_is2">.</span></li><li><span class="ic">+</span> <span data-i18n="pr_is3">.</span></li></ul></div>
+<div class="panel bad reveal"><h3><span style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block"></span> <span data-i18n="pr_isnt_h">.</span></h3>
+<ul><li><span class="ic">×</span> <span data-i18n="pr_isnt1">.</span></li><li><span class="ic">×</span> <span data-i18n="pr_isnt2">.</span></li><li><span class="ic">×</span> <span data-i18n="pr_isnt3">.</span></li></ul></div>
+</div></div></section>
+<section id="stats"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="stats_eyebrow">.</span><h2 data-i18n="stats_h2">.</h2><p data-i18n="stats_sub">.</p></div>
+<div class="proof-card reveal" style="max-width:680px">
+<div class="row"><span class="muted" data-i18n="stats_l1">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<div class="row"><span class="muted" data-i18n="stats_l2">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<div class="row"><span class="muted" data-i18n="stats_l3">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<div class="row"><span class="muted" data-i18n="stats_l4">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<div class="row"><span class="muted" data-i18n="stats_l5">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<p class="proof-note" data-i18n="stats_note">.</p></div></div></section>
+<section id="faq"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="faq_eyebrow">.</span><h2 data-i18n="faq_h2">.</h2></div>
+<div class="faq">
+<details class="reveal"><summary><span data-i18n="faq_q1">.</span><span class="chev">+</span></summary><p data-i18n="faq_a1">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q2">.</span><span class="chev">+</span></summary><p data-i18n="faq_a2">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q3">.</span><span class="chev">+</span></summary><p data-i18n="faq_a3">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q4">.</span><span class="chev">+</span></summary><p data-i18n="faq_a4">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q5">.</span><span class="chev">+</span></summary><p data-i18n="faq_a5">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q6">.</span><span class="chev">+</span></summary><p data-i18n="faq_a6">.</p></details>
+</div></div></section>
+<section><div class="wrap"><div class="disclaimer reveal">
+<h4><span style="width:6px;height:6px;border-radius:50%;background:var(--warn);display:inline-block"></span> <span data-i18n="disc_h">.</span></h4>
+<p data-i18n="disc_p1">.</p><p data-i18n="disc_p2">.</p><p data-i18n="disc_p3">.</p><p data-i18n="disc_p4">.</p>
+<p style="margin-top:14px"><a href="/risk-disclosure.html" style="color:var(--accent)" data-i18n="disc_full">.</a></p>
+</div></div></section>
+<footer><div class="wrap"><div class="foot-bottom" style="margin-top:0;border-top:none">
+<span>© <span id="yr"></span> u2algo · <span data-i18n="foot_rights">.</span></span><span data-i18n="foot_dyor">.</span>
+</div></div></footer>
 <script>
-  // Şeffaflık istatistiklerini fetch et ve #proofStats içine render et.
-  // Fetch başarısız olursa zarif bir mesaj göster (fail-safe).
-  (function () {
-    var el = document.getElementById('proofStats');
-    if (!el) return;
-    function fmtPct(v) {
-      var n = Number(v);
-      var s = (n > 0 ? '+' : '') + n + '%';
-      return { text: s, neg: n < 0 };
+document.documentElement.classList.add('js');
+document.getElementById('yr').textContent=new Date().getFullYear();
+var I18N={"en":{"nav_what":"What it is","nav_features":"Features","nav_products":"Products","nav_how":"How it works","nav_pricing":"Pricing","nav_faq":"FAQ","nav_cta":"Start free trial","hero_eyebrow":"Algorithmic trading toolkit · TradingView","hero_h1_a":"SMC, Fibonacci & structure —","hero_h1_em":"automated","hero_h1_b":"into one TradingView tool.","hero_sub":"u2algo marks Order Blocks, FVGs, liquidity and Fibonacci confluence on your chart in real time — and powers a fully automated trading bot built on the same engine. Decision-support, transparent, risk-first.","hero_cta1":"Get the indicator — $59/mo","hero_cta2":"Bot — coming soon","hero_k1":"SMC","hero_k1l":"Smart Money Concepts","hero_k2":"Fibonacci","hero_k2l":"Confluence engine","hero_k3":"Multi-TF","hero_k3l":"Timeframe alignment","hero_k4":"7-day","hero_k4l":"Free trial","feat_eyebrow":"What the indicator marks","feat_h2":"Every key structure, marked for you — automatically","feat_sub":"One indicator replaces hours of manual chart scanning. SMC and Fibonacci logic, layered and confluence-scored on every timeframe.","feat1_t":"Order Blocks (OB)","feat1_d":"Detects the last decisive candles before strong moves and marks these supply/demand zones as boxes.","feat2_t":"Fair Value Gaps (FVG)","feat2_d":"Finds price imbalances and visualises where price is likely to rebalance.","feat3_t":"Liquidity (EQH/EQL)","feat3_d":"Marks equal highs and lows as liquidity pools — usable as structural targets and SL references.","feat4_t":"Breaker Blocks (BB)","feat4_d":"Highlights structural shifts when an Order Block breaks, helping read directional bias.","feat5_t":"Fibonacci confluence","feat5_d":"Overlays Fibonacci retracement/extension zones and scores where they align with SMC structure.","feat6_t":"SL/TP & R:R visuals","feat6_d":"Draws potential stop-loss, take-profit and risk-reward levels. Informational only — never an order.","prod_eyebrow":"Indicator & bot","prod_h2":"Two ways to use the same engine","prod_sub":"Start with the indicator and stay in full control, or let the automated bot run the same SMC + Fibonacci logic for you.","pi_badge":"Available now","pi_name":"Indicator","pi_price":"$59","pi_per":"/ month","pi_blurb":"Real-time SMC + Fibonacci decision-support on TradingView.","pi_f1":"OB, FVG, EQH/EQL, Breaker Blocks","pi_f2":"Fibonacci confluence scoring","pi_f3":"Multi-timeframe bias & SL/TP visuals","pi_f4":"You stay in control — decision-support","pi_f5":"7-day free trial · cancel anytime","pi_cta":"Start free trial","pb_badge":"Coming soon","pb_name":"Automated Bot","pb_price":"$590","pb_per":"/ month","pb_blurb":"Fully automated execution on the same SMC + Fibonacci engine.","pb_f1":"Hands-free execution, 24/7","pb_f2":"7-layer deterministic safety stack","pb_f3":"Scalp / Mid / Long profiles","pb_f4":"Risk gate, circuit breaker, position guards","pb_f5":"7-day free trial at launch","pb_cta":"Coming soon","how_eyebrow":"How it works","how_h2":"From chart scan to execution","how_sub":"The same disciplined pipeline powers both the indicator and the bot.","how1_n":"01","how1_t":"Universe scan","how1_d":"A fixed set of liquid symbols is scanned continuously with the same rules.","how2_n":"02","how2_t":"SMC + Fibonacci logic","how2_d":"Market structure, OB/FVG, liquidity and Fibonacci confluence are evaluated together.","how3_n":"03","how3_t":"Risk gate","how3_d":"Risk envelope, holding limits and circuit-breaker checks filter every setup.","how4_n":"04","how4_t":"Signal or automation","how4_d":"The indicator marks the setup on your chart; the bot can execute it automatically.","why_eyebrow":"Why u2algo","why_h2":"Many indicators. One disciplined tool.","why_sub":"Instead of stacking a dozen scripts, u2algo unifies SMC and Fibonacci into one confluence engine — the same logic that drives the automated bot.","why1_t":"All-in-one","why1_d":"SMC + Fibonacci + structure + liquidity in a single, clean overlay.","why2_t":"Multi-timeframe","why2_d":"Higher-timeframe bias confirms lower-timeframe entries automatically.","why3_t":"Risk-first","why3_d":"Every setup passes a deterministic risk gate before it ever matters.","why4_t":"Transparent","why4_d":"Clear rules, no black box, no profit promises — you always see the logic.","stats_eyebrow":"Live track record","stats_h2":"Verified performance — publishing soon","stats_sub":"We publish normalised, closed-trade results only when verified reports are ready. No absolute balances, negatives included.","stats_loading":"Loading…","stats_l1":"Period","stats_l2":"Closed trades","stats_l3":"Win rate","stats_l4":"Return","stats_l5":"Max drawdown","stats_note":"Statistics are normalised to percentages; absolute balance is never shared. Past performance is not a guarantee of future results. Not investment advice.","price_eyebrow":"Pricing","price_h2":"Simple pricing, 7-day free trial","price_sub":"Try the indicator free for 7 days. The automated bot launches soon. No profit guarantees — trade at your own risk.","price_cta":"See pricing & start trial","faq_eyebrow":"FAQ","faq_h2":"Questions, answered","faq_q1":"What exactly does the indicator do?","faq_a1":"It automatically marks Smart Money Concepts structures (Order Blocks, FVG, EQH/EQL, Breaker Blocks) plus Fibonacci confluence and SL/TP visuals on your TradingView chart. It is decision-support — you make the trades.","faq_q2":"What's the difference between the indicator and the bot?","faq_a2":"The indicator marks setups on your chart and you decide. The automated bot runs the same SMC + Fibonacci engine and executes trades for you, with a deterministic safety stack. The bot is coming soon.","faq_q3":"How does the free trial work?","faq_a3":"You get 7 days free. Billing details are collected at sign-up via Lemon Squeezy; you can cancel any time during the trial and won't be charged.","faq_q4":"Can I see the indicator's source code?","faq_a4":"No. The indicator is published as a protected, invite-only script on TradingView — you can use it on your charts, but the Pine Script source is not visible.","faq_q5":"Is this financial advice or a profit guarantee?","faq_a5":"No. u2algo is a decision-support and automation tool. Nothing here is investment advice and no returns are guaranteed. All trading decisions and risks are yours (DYOR).","faq_q6":"How do I get access after subscribing?","faq_a6":"After checkout you'll receive setup instructions; TradingView access is granted within 24 hours. See the setup guide & FAQ.","disc_h":"Risk disclosure","disc_p1":"u2algo is a decision-support and automation tool. Nothing on this site is investment, financial, legal or tax advice, and must not be interpreted as such. No returns are guaranteed.","disc_p2":"This is not investment advice. Trade at your own risk.","disc_p3":"Crypto assets and leveraged futures carry high volatility and the risk of losing all your capital. Past, backtest or shadow results do not indicate future results. Only trade with money you can afford to lose, and do your own research (DYOR).","disc_p4":"u2algo is operated by a Turkish joint-stock company (A.Ş.). We are not a licensed broker, investment advisor or fund. This is not a solicitation to invest.","disc_full":"Full risk disclosure →","foot_tagline":"An algorithmic SMC + Fibonacci trading indicator and automated bot for TradingView.","foot_product":"Product","foot_community":"Community","foot_legal":"Legal","foot_privacy":"Privacy Policy","foot_terms":"Terms of Use","foot_contact":"Contact","foot_rights":"All rights reserved","foot_dyor":"Not investment advice · DYOR · Understand the risks","lang_label":"Language","pr_back":"← u2algo home","pr_eyebrow":"Indicator & automated bot","pr_h1":"SMC + Fibonacci, marked and automated for TradingView","pr_sub":"u2algo marks Smart Money Concepts and Fibonacci confluence on your chart in real time. Use it as a decision-support indicator — or let the automated bot run the same engine for you.","pr_cta_ind":"Start 7-day free trial","pr_cta_note":"Billing via Lemon Squeezy. Cancel anytime during the trial.","pr_meth_eyebrow":"Methodology","pr_meth_h":"Rule-based, not guesswork","pr_meth_sub":"The indicator automates the core structures of the Smart Money Concepts approach and layers Fibonacci confluence on top — consistently marked so manual scanning drops.","pr_isnt_h":"What it is — and isn't","pr_is1":"SMC + Fibonacci decision-support / analysis tool","pr_is2":"Automatic OB, FVG, EQH/EQL and Breaker Block marking","pr_is3":"Fibonacci confluence scoring and SL/TP visuals","pr_isnt1":"Not a signal-selling service","pr_isnt2":"The indicator does not place trades by itself","pr_isnt3":"Not investment advice, no profit guarantee","pr_protected":"Source code is protected — the indicator is published as an invite-only TradingView script. You use it; the Pine Script source stays private.","pr_compare_h":"Indicator or full automation","pr_setup":"After checkout you'll receive setup instructions; TradingView access is granted within 24 hours."},"tr":{"nav_what":"Nedir","nav_features":"Özellikler","nav_products":"Ürünler","nav_how":"Nasıl çalışır","nav_pricing":"Fiyatlandırma","nav_faq":"SSS","nav_cta":"Ücretsiz dene","hero_eyebrow":"Algoritmik trading araç seti · TradingView","hero_h1_a":"SMC, Fibonacci ve yapı —","hero_h1_em":"otomatik","hero_h1_b":"tek TradingView aracında.","hero_sub":"u2algo; Order Block, FVG, likidite ve Fibonacci confluence yapılarını grafiğinde gerçek zamanlı işaretler — ve aynı motor üzerine kurulu tam otomatik bir trade botunu çalıştırır. Karar-destek, şeffaf, risk öncelikli.","hero_cta1":"İndikatörü al — $59/ay","hero_cta2":"Bot — yakında","hero_k1":"SMC","hero_k1l":"Smart Money Concepts","hero_k2":"Fibonacci","hero_k2l":"Confluence motoru","hero_k3":"Çoklu-ZD","hero_k3l":"Zaman dilimi uyumu","hero_k4":"7 gün","hero_k4l":"Ücretsiz deneme","feat_eyebrow":"İndikatör neyi işaretler","feat_h2":"Her önemli yapı, senin için otomatik işaretlenir","feat_sub":"Tek indikatör, saatlerce süren manuel grafik taramasının yerini alır. SMC ve Fibonacci mantığı, her zaman diliminde katmanlı ve confluence skorlu.","feat1_t":"Order Block (OB)","feat1_d":"Güçlü hareketler öncesi son belirleyici mumları tespit eder ve bu arz/talep bölgelerini kutu olarak işaretler.","feat2_t":"Fair Value Gap (FVG)","feat2_d":"Fiyat dengesizliklerini bulur ve fiyatın yeniden dengelenme ihtimalini görselleştirir.","feat3_t":"Likidite (EQH/EQL)","feat3_d":"Eşit tepe/dipleri likidite havuzu olarak işaretler — yapısal hedef ve SL referansı olarak kullanılabilir.","feat4_t":"Breaker Block (BB)","feat4_d":"Bir Order Block kırıldığında yapısal yön değişimini vurgular, bias okumasına yardımcı olur.","feat5_t":"Fibonacci confluence","feat5_d":"Fibonacci düzeltme/uzanım bölgelerini bindirir ve SMC yapısıyla örtüştüğü yerleri skorlar.","feat6_t":"SL/TP & R:R görseli","feat6_d":"Olası stop-loss, take-profit ve risk-getiri seviyelerini çizer. Yalnızca bilgilendirme — asla emir değil.","prod_eyebrow":"İndikatör & bot","prod_h2":"Aynı motoru kullanmanın iki yolu","prod_sub":"İndikatörle başla ve tam kontrolde kal, ya da otomatik botun aynı SMC + Fibonacci mantığını senin için çalıştırmasına izin ver.","pi_badge":"Şu an mevcut","pi_name":"İndikatör","pi_price":"$59","pi_per":"/ ay","pi_blurb":"TradingView'de gerçek zamanlı SMC + Fibonacci karar-desteği.","pi_f1":"OB, FVG, EQH/EQL, Breaker Block","pi_f2":"Fibonacci confluence skorlaması","pi_f3":"Çoklu zaman dilimi bias & SL/TP görseli","pi_f4":"Kontrol sende — karar-destek","pi_f5":"7 gün ücretsiz deneme · istediğin an iptal","pi_cta":"Ücretsiz dene","pb_badge":"Yakında","pb_name":"Otomatik Bot","pb_price":"$590","pb_per":"/ ay","pb_blurb":"Aynı SMC + Fibonacci motorunda tam otomatik işlem.","pb_f1":"Eli boş, 7/24 otomatik işlem","pb_f2":"7 katmanlı deterministik güvenlik yığını","pb_f3":"Scalp / Mid / Long profilleri","pb_f4":"Risk gate, devre kesici, pozisyon korumaları","pb_f5":"Lansmanda 7 gün ücretsiz deneme","pb_cta":"Yakında","how_eyebrow":"Nasıl çalışır","how_h2":"Grafik taramasından işleme","how_sub":"Aynı disiplinli süreç hem indikatörü hem botu çalıştırır.","how1_n":"01","how1_t":"Evren taraması","how1_d":"Sabit bir likit sembol seti, aynı kurallarla sürekli taranır.","how2_n":"02","how2_t":"SMC + Fibonacci mantığı","how2_d":"Piyasa yapısı, OB/FVG, likidite ve Fibonacci confluence birlikte değerlendirilir.","how3_n":"03","how3_t":"Risk kapısı","how3_d":"Risk zarfı, holding limitleri ve devre kesici kontrolleri her setup'ı filtreler.","how4_n":"04","how4_t":"Sinyal ya da otomasyon","how4_d":"İndikatör setup'ı grafiğinde işaretler; bot bunu otomatik uygulayabilir.","why_eyebrow":"Neden u2algo","why_h2":"Onlarca indikatör değil. Tek disiplinli araç.","why_sub":"Bir düzine script üst üste koymak yerine, u2algo SMC ve Fibonacci'yi tek bir confluence motorunda birleştirir — otomatik botu çalıştıran mantığın aynısı.","why1_t":"Hepsi bir arada","why1_d":"SMC + Fibonacci + yapı + likidite tek, temiz bir katmanda.","why2_t":"Çoklu zaman dilimi","why2_d":"Üst zaman dilimi bias'ı, alt zaman dilimi girişlerini otomatik teyit eder.","why3_t":"Risk öncelikli","why3_d":"Her setup, dikkate alınmadan önce deterministik bir risk kapısından geçer.","why4_t":"Şeffaf","why4_d":"Net kurallar, kara kutu yok, kâr vaadi yok — mantığı her zaman görürsün.","stats_eyebrow":"Canlı kanıt geçmişi","stats_h2":"Doğrulanmış performans — yakında yayında","stats_sub":"Normalize edilmiş, kapanmış işlem sonuçlarını yalnızca doğrulanmış raporlar hazır olduğunda yayınlarız. Mutlak bakiye yok, negatifler dahil.","stats_loading":"Yükleniyor…","stats_l1":"Dönem","stats_l2":"Kapanan işlem","stats_l3":"Kazanma oranı","stats_l4":"Getiri","stats_l5":"Maks. düşüş","stats_note":"İstatistikler yüzdeye normalize edilmiştir; mutlak bakiye paylaşılmaz. Geçmiş performans gelecek garantisi değildir. Yatırım tavsiyesi değildir.","price_eyebrow":"Fiyatlandırma","price_h2":"Basit fiyat, 7 gün ücretsiz deneme","price_sub":"İndikatörü 7 gün ücretsiz dene. Otomatik bot yakında geliyor. Kâr garantisi yok — işlem kendi riskinde.","price_cta":"Fiyatları gör & denemeyi başlat","faq_eyebrow":"SSS","faq_h2":"Merak edilenler","faq_q1":"İndikatör tam olarak ne yapar?","faq_a1":"TradingView grafiğinde Smart Money Concepts yapılarını (Order Block, FVG, EQH/EQL, Breaker Block) ve Fibonacci confluence ile SL/TP görsellerini otomatik işaretler. Bu bir karar-destek aracıdır — işlemleri sen yaparsın.","faq_q2":"İndikatör ile bot arasındaki fark ne?","faq_a2":"İndikatör grafiğinde setup'ları işaretler, kararı sen verirsin. Otomatik bot aynı SMC + Fibonacci motorunu çalıştırır ve işlemleri deterministik bir güvenlik yığınıyla senin için açar. Bot yakında geliyor.","faq_q3":"Ücretsiz deneme nasıl çalışır?","faq_a3":"7 gün ücretsiz kullanırsın. Ödeme bilgileri kayıt sırasında Lemon Squeezy üzerinden alınır; deneme süresince istediğin an iptal edebilir, ücret ödemezsin.","faq_q4":"İndikatörün kaynak kodunu görebilir miyim?","faq_a4":"Hayır. İndikatör, TradingView'de korumalı (protected), yalnızca davetli (invite-only) bir script olarak yayınlanır — grafiklerinde kullanabilirsin ama Pine Script kaynak kodu görünmez.","faq_q5":"Bu yatırım tavsiyesi veya kâr garantisi mi?","faq_a5":"Hayır. u2algo bir karar-destek ve otomasyon aracıdır. Buradaki hiçbir şey yatırım tavsiyesi değildir ve hiçbir getiri garanti edilmez. Tüm işlem kararları ve riskleri sana aittir (DYOR).","faq_q6":"Abone olduktan sonra erişimi nasıl alırım?","faq_a6":"Ödeme sonrası kurulum talimatlarını alırsın; TradingView erişimi 24 saat içinde tanımlanır. Kurulum kılavuzu & SSS'ye bak.","disc_h":"Risk bildirimi","disc_p1":"u2algo bir karar-destek ve otomasyon aracıdır. Bu sitedeki hiçbir içerik yatırım, finansal, hukuki veya vergi tavsiyesi değildir ve öyle yorumlanmamalıdır. Hiçbir getiri garanti edilmez.","disc_p2":"Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir.","disc_p3":"Kripto varlıklar ve kaldıraçlı futures yüksek volatilite ve tüm sermayeni kaybetme riski taşır. Geçmiş, backtest veya shadow sonuçları gelecek sonuçların göstergesi değildir. Yalnızca kaybetmeyi göze alabileceğin parayla ve kendi araştırmanı yaparak (DYOR) işlem yap.","disc_p4":"u2algo bir Türk Anonim Şirketi (A.Ş.) tarafından işletilir. Lisanslı aracı kurum, yatırım danışmanı veya fon değiliz. Yatırıma çağrı yoktur.","disc_full":"Tam risk açıklaması →","foot_tagline":"TradingView için algoritmik SMC + Fibonacci trading indikatörü ve otomatik botu.","foot_product":"Ürün","foot_community":"Topluluk","foot_legal":"Yasal","foot_privacy":"Gizlilik Politikası","foot_terms":"Kullanım Şartları","foot_contact":"İletişim","foot_rights":"Tüm hakları saklıdır","foot_dyor":"Yatırım tavsiyesi değildir · DYOR · Riskleri anla","lang_label":"Dil","pr_back":"← u2algo ana sayfa","pr_eyebrow":"İndikatör & otomatik bot","pr_h1":"SMC + Fibonacci, TradingView için işaretlenir ve otomatikleşir","pr_sub":"u2algo, Smart Money Concepts ve Fibonacci confluence yapılarını grafiğinde gerçek zamanlı işaretler. Karar-destek indikatörü olarak kullan — ya da otomatik botun aynı motoru senin için çalıştırmasına izin ver.","pr_cta_ind":"7 gün ücretsiz dene","pr_cta_note":"Ödeme Lemon Squeezy üzerinden. Deneme süresince istediğin an iptal et.","pr_meth_eyebrow":"Metodoloji","pr_meth_h":"Kural-tabanlı, tahmin değil","pr_meth_sub":"İndikatör, Smart Money Concepts yaklaşımının temel yapılarını otomatikleştirir ve üzerine Fibonacci confluence katmanı ekler — tutarlı işaretlenir, manuel tarama yükü düşer.","pr_isnt_h":"Bu nedir — ve ne değildir","pr_is1":"SMC + Fibonacci karar-destek / analiz aracı","pr_is2":"Otomatik OB, FVG, EQH/EQL ve Breaker Block işaretleme","pr_is3":"Fibonacci confluence skorlaması ve SL/TP görselleri","pr_isnt1":"Sinyal satış servisi değildir","pr_isnt2":"İndikatör tek başına işlem açmaz","pr_isnt3":"Yatırım tavsiyesi değildir, kâr garantisi yoktur","pr_protected":"Kaynak kodu korumalıdır — indikatör, yalnızca davetli (invite-only) bir TradingView script'i olarak yayınlanır. Sen kullanırsın; Pine Script kaynağı gizli kalır.","pr_compare_h":"İndikatör mü, tam otomasyon mu","pr_setup":"Ödeme sonrası kurulum talimatlarını alırsın; TradingView erişimi 24 saat içinde tanımlanır."},"ru":{"nav_what":"Что это","nav_features":"Возможности","nav_products":"Продукты","nav_how":"Как работает","nav_pricing":"Цены","nav_faq":"FAQ","nav_cta":"Пробный период","hero_eyebrow":"Инструментарий для алготрейдинга · TradingView","hero_h1_a":"SMC, Фибоначчи и структура —","hero_h1_em":"автоматически","hero_h1_b":"в одном инструменте TradingView.","hero_sub":"u2algo в реальном времени отмечает Order Block, FVG, ликвидность и конфлюэнс Фибоначчи на вашем графике — и управляет полностью автоматическим торговым ботом на том же движке. Поддержка решений, прозрачность, риск прежде всего.","hero_cta1":"Купить индикатор — $59/мес","hero_cta2":"Бот — скоро","hero_k1":"SMC","hero_k1l":"Smart Money Concepts","hero_k2":"Фибоначчи","hero_k2l":"Движок конфлюэнса","hero_k3":"Мульти-ТФ","hero_k3l":"Согласование таймфреймов","hero_k4":"7 дней","hero_k4l":"Бесплатно","feat_eyebrow":"Что отмечает индикатор","feat_h2":"Каждая ключевая структура — отмечена автоматически","feat_sub":"Один индикатор заменяет часы ручного анализа графика. Логика SMC и Фибоначчи, послойно и с оценкой конфлюэнса на каждом таймфрейме.","feat1_t":"Order Block (OB)","feat1_d":"Определяет последние решающие свечи перед сильными движениями и отмечает эти зоны спроса/предложения.","feat2_t":"Fair Value Gap (FVG)","feat2_d":"Находит ценовые дисбалансы и показывает, где цена вероятно вернётся к равновесию.","feat3_t":"Ликвидность (EQH/EQL)","feat3_d":"Отмечает равные максимумы и минимумы как пулы ликвидности — для целей и уровней SL.","feat4_t":"Breaker Block (BB)","feat4_d":"Подсвечивает смену структуры при пробое Order Block, помогая читать направленность.","feat5_t":"Конфлюэнс Фибоначчи","feat5_d":"Накладывает зоны коррекции/расширения Фибоначчи и оценивает совпадение со структурой SMC.","feat6_t":"Визуал SL/TP и R:R","feat6_d":"Рисует возможные уровни стоп-лосс, тейк-профит и риск/прибыль. Только информация — не приказ.","prod_eyebrow":"Индикатор и бот","prod_h2":"Два способа использовать один движок","prod_sub":"Начните с индикатора и сохраните полный контроль, либо позвольте боту выполнять ту же логику SMC + Фибоначчи за вас.","pi_badge":"Доступно сейчас","pi_name":"Индикатор","pi_price":"$59","pi_per":"/ мес","pi_blurb":"Поддержка решений SMC + Фибоначчи в реальном времени на TradingView.","pi_f1":"OB, FVG, EQH/EQL, Breaker Block","pi_f2":"Оценка конфлюэнса Фибоначчи","pi_f3":"Мульти-ТФ направленность и визуал SL/TP","pi_f4":"Контроль за вами — поддержка решений","pi_f5":"7 дней бесплатно · отмена в любой момент","pi_cta":"Пробный период","pb_badge":"Скоро","pb_name":"Автоматический бот","pb_price":"$590","pb_per":"/ мес","pb_blurb":"Полностью автоматическое исполнение на том же движке SMC + Фибоначчи.","pb_f1":"Автоматическая торговля 24/7","pb_f2":"7-уровневый детерминированный контур безопасности","pb_f3":"Профили Scalp / Mid / Long","pb_f4":"Риск-гейт, аварийный выключатель, защита позиций","pb_f5":"7 дней бесплатно на старте","pb_cta":"Скоро","how_eyebrow":"Как это работает","how_h2":"От анализа графика до исполнения","how_sub":"Один и тот же дисциплинированный процесс питает и индикатор, и бота.","how1_n":"01","how1_t":"Сканирование рынка","how1_d":"Фиксированный набор ликвидных инструментов сканируется постоянно по единым правилам.","how2_n":"02","how2_t":"Логика SMC + Фибоначчи","how2_d":"Структура рынка, OB/FVG, ликвидность и конфлюэнс Фибоначчи оцениваются вместе.","how3_n":"03","how3_t":"Риск-гейт","how3_d":"Риск-профиль, лимиты удержания и аварийный выключатель фильтруют каждый сетап.","how4_n":"04","how4_t":"Сигнал или автоматизация","how4_d":"Индикатор отмечает сетап на графике; бот может исполнить его автоматически.","why_eyebrow":"Почему u2algo","why_h2":"Не десятки индикаторов. Один дисциплинированный инструмент.","why_sub":"Вместо стопки из десятка скриптов u2algo объединяет SMC и Фибоначчи в один движок конфлюэнса — та же логика управляет и автоматическим ботом.","why1_t":"Всё в одном","why1_d":"SMC + Фибоначчи + структура + ликвидность в одном чистом слое.","why2_t":"Мульти-таймфрейм","why2_d":"Направленность старшего ТФ автоматически подтверждает входы младшего ТФ.","why3_t":"Риск прежде всего","why3_d":"Каждый сетап проходит детерминированный риск-гейт, прежде чем стать значимым.","why4_t":"Прозрачность","why4_d":"Чёткие правила, без чёрного ящика и обещаний прибыли — логика всегда видна.","stats_eyebrow":"Живая статистика","stats_h2":"Проверенные результаты — скоро публикация","stats_sub":"Мы публикуем нормализованные результаты закрытых сделок только когда готовы проверенные отчёты. Без абсолютных балансов, включая отрицательные.","stats_loading":"Загрузка…","stats_l1":"Период","stats_l2":"Закрытых сделок","stats_l3":"Винрейт","stats_l4":"Доходность","stats_l5":"Макс. просадка","stats_note":"Статистика нормализована в проценты; абсолютный баланс не раскрывается. Прошлые результаты не гарантируют будущих. Не является инвестиционным советом.","price_eyebrow":"Цены","price_h2":"Простые цены, 7 дней бесплатно","price_sub":"Попробуйте индикатор бесплатно 7 дней. Автоматический бот выйдет скоро. Без гарантий прибыли — торгуйте на свой риск.","price_cta":"Цены и пробный период","faq_eyebrow":"FAQ","faq_h2":"Ответы на вопросы","faq_q1":"Что именно делает индикатор?","faq_a1":"Он автоматически отмечает структуры Smart Money Concepts (Order Block, FVG, EQH/EQL, Breaker Block), конфлюэнс Фибоначчи и визуал SL/TP на вашем графике TradingView. Это поддержка решений — сделки совершаете вы.","faq_q2":"В чём разница между индикатором и ботом?","faq_a2":"Индикатор отмечает сетапы на графике, а решение принимаете вы. Автоматический бот использует тот же движок SMC + Фибоначчи и исполняет сделки за вас с детерминированным контуром безопасности. Бот выйдет скоро.","faq_q3":"Как работает бесплатный период?","faq_a3":"Вы получаете 7 дней бесплатно. Платёжные данные собираются при регистрации через Lemon Squeezy; вы можете отменить в любой момент в течение пробного периода и не будете списаны.","faq_q4":"Можно ли увидеть исходный код индикатора?","faq_a4":"Нет. Индикатор публикуется как защищённый (protected), доступный только по приглашению (invite-only) скрипт на TradingView — вы можете использовать его на графиках, но исходный код Pine Script не виден.","faq_q5":"Это финансовый совет или гарантия прибыли?","faq_a5":"Нет. u2algo — инструмент поддержки решений и автоматизации. Ничто здесь не является инвестиционным советом, и доходность не гарантируется. Все торговые решения и риски — ваши (DYOR).","faq_q6":"Как получить доступ после подписки?","faq_a6":"После оплаты вы получите инструкции по настройке; доступ в TradingView предоставляется в течение 24 часов. См. руководство и FAQ.","disc_h":"Раскрытие рисков","disc_p1":"u2algo — инструмент поддержки решений и автоматизации. Ничто на этом сайте не является инвестиционным, финансовым, юридическим или налоговым советом и не должно так трактоваться. Доходность не гарантируется.","disc_p2":"Это не инвестиционный совет. Торгуйте на свой риск.","disc_p3":"Криптоактивы и фьючерсы с плечом крайне волатильны и несут риск потери всего капитала. Прошлые результаты, бэктесты или shadow-результаты не указывают на будущие. Торгуйте только теми средствами, потерю которых можете позволить, и проводите собственное исследование (DYOR).","disc_p4":"u2algo управляется турецким акционерным обществом (A.Ş.). Мы не лицензированный брокер, инвестиционный советник или фонд. Это не призыв к инвестициям.","disc_full":"Полное раскрытие рисков →","foot_tagline":"Алгоритмический торговый индикатор SMC + Фибоначчи и автоматический бот для TradingView.","foot_product":"Продукт","foot_community":"Сообщество","foot_legal":"Юридическое","foot_privacy":"Политика конфиденциальности","foot_terms":"Условия использования","foot_contact":"Контакт","foot_rights":"Все права защищены","foot_dyor":"Не инвестиционный совет · DYOR · Поймите риски","lang_label":"Язык","pr_back":"← на главную u2algo","pr_eyebrow":"Индикатор и автоматический бот","pr_h1":"SMC + Фибоначчи — отмечено и автоматизировано для TradingView","pr_sub":"u2algo в реальном времени отмечает Smart Money Concepts и конфлюэнс Фибоначчи на вашем графике. Используйте как индикатор поддержки решений — или доверьте боту тот же движок.","pr_cta_ind":"7 дней бесплатно","pr_cta_note":"Оплата через Lemon Squeezy. Отмена в любой момент в течение пробного периода.","pr_meth_eyebrow":"Методология","pr_meth_h":"На правилах, без догадок","pr_meth_sub":"Индикатор автоматизирует ключевые структуры подхода Smart Money Concepts и добавляет конфлюэнс Фибоначчи — последовательная разметка снижает ручной анализ.","pr_isnt_h":"Что это — и что нет","pr_is1":"Инструмент поддержки решений SMC + Фибоначчи","pr_is2":"Автоматическая разметка OB, FVG, EQH/EQL и Breaker Block","pr_is3":"Оценка конфлюэнса Фибоначчи и визуал SL/TP","pr_isnt1":"Не сервис продажи сигналов","pr_isnt2":"Индикатор сам не открывает сделки","pr_isnt3":"Не инвестиционный совет, без гарантии прибыли","pr_protected":"Исходный код защищён — индикатор публикуется как скрипт TradingView только по приглашению. Вы используете его; исходник Pine Script остаётся закрытым.","pr_compare_h":"Индикатор или полная автоматизация","pr_setup":"После оплаты вы получите инструкции по настройке; доступ в TradingView — в течение 24 часов."}};
+var LANGS=['en','tr','ru'];
+function pickLang(){try{var s=localStorage.getItem('u2lang');if(s&&LANGS.indexOf(s)>=0)return s;}catch(e){}var n=(navigator.language||'en').slice(0,2).toLowerCase();return LANGS.indexOf(n)>=0?n:'en';}
+function applyLang(lang){if(LANGS.indexOf(lang)<0)lang='en';var d=I18N[lang]||I18N.en;document.querySelectorAll('[data-i18n]').forEach(function(el){var k=el.getAttribute('data-i18n');if(d[k]!=null)el.textContent=d[k];});document.documentElement.setAttribute('lang',lang);document.querySelectorAll('.lang-switch button').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-lang')===lang);});try{localStorage.setItem('u2lang',lang);}catch(e){}}
+document.querySelectorAll('.lang-switch button').forEach(function(b){b.addEventListener('click',function(){applyLang(b.getAttribute('data-lang'));});});
+applyLang(pickLang());
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -10% 0px'});
+document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});
+window.addEventListener('load',function(){setTimeout(function(){document.querySelectorAll('.reveal:not(.in)').forEach(function(el){el.classList.add('in');});},1200);});
+// ── Animated network nodes on #u2-net (SMC scanner motif, brand cyan) ──
+(function(){
+  var cv = document.getElementById('u2-net');
+  if(!cv) return;
+  var ctx = cv.getContext('2d'), W, H, dpr, pts = [], raf;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var n = Math.min(64, Math.floor(W * H / 24000));
+    pts = [];
+    for(var i = 0; i < n; i++){
+      pts.push({ x: Math.random()*W, y: Math.random()*H,
+        vx:(Math.random()-0.5)*0.22, vy:(Math.random()-0.5)*0.22,
+        r: Math.random()*1.5 + 0.6 });
     }
-    function row(label, valueText, neg) {
-      return '<div class="stat-row"><span class="stat-label">' + label +
-        '</span><span class="stat-val' + (neg ? ' neg' : '') + '">' + valueText + '</span></div>';
+  }
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    for(var i=0;i<pts.length;i++){
+      var p=pts[i]; p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>W)p.vx*=-1; if(p.y<0||p.y>H)p.vy*=-1;
     }
-    fetch('/premium_proof.json', { cache: 'no-store' })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function (d) {
-        var wr = fmtPct(d.win_rate_pct);
-        var ret = fmtPct(d.return_pct);
-        var dd = fmtPct(d.max_drawdown_pct);
-        var html = '';
-        html += row('Dönem', (d.period_days != null ? d.period_days + ' gün' : '—'), false);
-        html += row('Kapanan işlem', (d.closed_trades != null ? String(d.closed_trades) : '—'), false);
-        html += row('Kazanma oranı', wr.text, wr.neg);
-        html += row('Getiri', ret.text, ret.neg);
-        html += row('Maks. düşüş (drawdown)', dd.text, dd.neg);
-        el.innerHTML = html;
-        if (d.note) {
-          var note = document.createElement('p');
-          note.className = 'muted';
-          note.style.marginTop = '14px';
-          note.textContent = d.note;
-          el.appendChild(note);
+    for(var a=0;a<pts.length;a++){
+      for(var b=a+1;b<pts.length;b++){
+        var dx=pts[a].x-pts[b].x, dy=pts[a].y-pts[b].y, d=Math.sqrt(dx*dx+dy*dy);
+        if(d<128){
+          ctx.strokeStyle='rgba(0,240,255,'+((1-d/128)*0.32)+')';
+          ctx.lineWidth=0.6; ctx.beginPath();
+          ctx.moveTo(pts[a].x,pts[a].y); ctx.lineTo(pts[b].x,pts[b].y); ctx.stroke();
         }
-        if (d.as_of) {
-          var asof = document.createElement('p');
-          asof.className = 'muted';
-          asof.style.margin = '6px 0 0';
-          asof.textContent = 'Güncelleme: ' + d.as_of;
-          el.appendChild(asof);
-        }
-      })
-      .catch(function () {
-        el.textContent = 'İstatistikler şu an gösterilemiyor.';
-      });
-  })();
+      }
+    }
+    for(var k=0;k<pts.length;k++){
+      ctx.beginPath(); ctx.arc(pts[k].x,pts[k].y,pts[k].r,0,Math.PI*2);
+      ctx.fillStyle='rgba(120,245,255,0.9)'; ctx.fill();
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  if(reduce){ resize(); return; }
+  window.addEventListener('resize', resize, { passive: true });
+  resize(); frame();
+})();
 </script>
 </body>
 </html>
