@@ -293,9 +293,29 @@
   html.js .reveal{opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease}
   html.js .reveal.in{opacity:1;transform:none}
   @media(prefers-reduced-motion:reduce){html.js .reveal{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+
+/* ── Animated living background (u2algo brand-safe: black base + cyan signature) ── */
+#u2-bg{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+#u2-bg .aur{position:absolute;border-radius:50%;filter:blur(72px);opacity:.5;mix-blend-mode:screen;will-change:transform}
+#u2-bg .aur.a1{width:46vw;height:46vw;left:-8vw;top:-6vw;background:radial-gradient(circle at 30% 30%,var(--u2-cyan),transparent 70%);animation:u2f1 19s ease-in-out infinite}
+#u2-bg .aur.a2{width:40vw;height:40vw;right:-10vw;top:16vh;background:radial-gradient(circle at 50% 50%,var(--u2-purple),transparent 70%);opacity:.4;animation:u2f2 23s ease-in-out infinite}
+#u2-bg .aur.a3{width:38vw;height:38vw;left:30vw;bottom:-14vh;background:radial-gradient(circle at 50% 50%,var(--u2-blue),transparent 70%);opacity:.32;animation:u2f3 27s ease-in-out infinite}
+#u2-bg .grid{position:absolute;inset:-2px;opacity:.06;background-image:linear-gradient(var(--u2-cyan) 1px,transparent 1px),linear-gradient(90deg,var(--u2-cyan) 1px,transparent 1px);background-size:64px 64px;-webkit-mask-image:radial-gradient(circle at 50% 25%,#000,transparent 75%);mask-image:radial-gradient(circle at 50% 25%,#000,transparent 75%);animation:u2grid 32s linear infinite}
+#u2-bg canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
+@keyframes u2f1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(7vw,6vh) scale(1.14)}}
+@keyframes u2f2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-6vw,8vh) scale(1.18)}}
+@keyframes u2f3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(5vw,-7vh) scale(1.1)}}
+@keyframes u2grid{from{background-position:0 0,0 0}to{background-position:64px 128px,64px 128px}}
+@media(prefers-reduced-motion:reduce){#u2-bg .aur,#u2-bg .grid{animation:none}#u2-bg canvas{display:none}}
 </style>
 </head>
 <body>
+<!-- Animated living background (brand-safe, behind all content) -->
+<div id="u2-bg" aria-hidden="true">
+<div class="aur a1"></div><div class="aur a2"></div><div class="aur a3"></div>
+<div class="grid"></div>
+<canvas id="u2-net"></canvas>
+</div>
 
 <header>
   <div class="wrap">
@@ -437,14 +457,14 @@
         <h3>Kısa vadeli</h3>
         <p class="desc">Hızlı tempolu, düşük zaman dilimlerinde yapı kırılımı + pullback teyidi. Yoğun takip gerektirir.</p>
         <div class="tf-label">Zaman dilimi zinciri</div>
-        <div class="tf"><span>Entry 5m</span><span>MTF 1h</span><span>HTF 12h</span></div>
+        <div class="tf"><span>Entry 5m</span><span>MTF 1h</span><span>HTF 4h</span></div>
       </div>
       <div class="prof reveal">
         <span class="tag">Mid</span>
         <h3>Orta vadeli</h3>
         <p class="desc">Dengeli kurulum. Üretimde doğrulanmış varsayılan profil; gün-içi yapıya odaklı, ölçülü işlem frekansı.</p>
         <div class="tf-label">Zaman dilimi zinciri</div>
-        <div class="tf"><span>Entry 15m</span><span>MTF 1h</span><span>HTF 4h</span></div>
+        <div class="tf"><span>Entry 15m</span><span>MTF 1h</span><span>HTF 12h</span></div>
       </div>
       <div class="prof reveal">
         <span class="tag">Long</span>
@@ -646,7 +666,7 @@
       <details class="reveal"><summary>Param sizde mi duruyor, fonu siz mi yönetiyorsunuz?<span class="chev">+</span></summary>
         <p>Hayır. u2algo fon toplamaz ve paranızı yönetmez. Araştırma, ölçüm ve build-in-public içerik sunarız. Tüm işlem kararları ve sermaye sizin kontrolünüzdedir.</p></details>
       <details class="reveal"><summary>Scalp, mid ve long profilleri arasındaki fark ne?<span class="chev">+</span></summary>
-        <p>Aynı SMC doktrini farklı zaman dilimi zincirleriyle çalışır. Scalp (5m/1h/12h) hızlı ve takip-yoğun; mid (15m/1h/4h) dengeli ve üretimde doğrulanmış varsayılan; long (1h/8h/1w) pozisyon ufkuna uygundur. Profiller strict-monoton doğrulanır.</p></details>
+        <p>Aynı SMC doktrini farklı zaman dilimi zincirleriyle çalışır. Scalp (5m/1h/4h) hızlı ve takip-yoğun; mid (15m/1h/12h) dengeli ve üretimde doğrulanmış varsayılan; long (1h/8h/1w) pozisyon ufkuna uygundur. Profiller strict-monoton doğrulanır.</p></details>
       <details class="reveal"><summary>Geçmiş veya backtest sonuçları gelecekteki getiriyi garanti eder mi?<span class="chev">+</span></summary>
         <p>Hayır. backtest ve shadow sonuçları yalnızca araştırma amaçlıdır ve geçmiş performans gelecekteki sonuçların göstergesi değildir. Kaldıraçlı işlemler yüksek risk taşır.</p></details>
       <details class="reveal"><summary>Bu yatırım tavsiyesi mi?<span class="chev">+</span></summary>
@@ -776,3 +796,53 @@
       wlMsg.className = 'wl-msg err';
     }
   });
+
+
+// ── Animated network nodes on #u2-net (SMC scanner motif, brand cyan) ──
+(function(){
+  var cv = document.getElementById('u2-net');
+  if(!cv) return;
+  var ctx = cv.getContext('2d'), W, H, dpr, pts = [], raf;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var n = Math.min(64, Math.floor(W * H / 24000));
+    pts = [];
+    for(var i = 0; i < n; i++){
+      pts.push({ x: Math.random()*W, y: Math.random()*H,
+        vx:(Math.random()-0.5)*0.22, vy:(Math.random()-0.5)*0.22,
+        r: Math.random()*1.5 + 0.6 });
+    }
+  }
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    for(var i=0;i<pts.length;i++){
+      var p=pts[i]; p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>W)p.vx*=-1; if(p.y<0||p.y>H)p.vy*=-1;
+    }
+    for(var a=0;a<pts.length;a++){
+      for(var b=a+1;b<pts.length;b++){
+        var dx=pts[a].x-pts[b].x, dy=pts[a].y-pts[b].y, d=Math.sqrt(dx*dx+dy*dy);
+        if(d<128){
+          ctx.strokeStyle='rgba(0,240,255,'+((1-d/128)*0.32)+')';
+          ctx.lineWidth=0.6; ctx.beginPath();
+          ctx.moveTo(pts[a].x,pts[a].y); ctx.lineTo(pts[b].x,pts[b].y); ctx.stroke();
+        }
+      }
+    }
+    for(var k=0;k<pts.length;k++){
+      ctx.beginPath(); ctx.arc(pts[k].x,pts[k].y,pts[k].r,0,Math.PI*2);
+      ctx.fillStyle='rgba(120,245,255,0.9)'; ctx.fill();
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  if(reduce){ resize(); return; }
+  window.addEventListener('resize', resize, { passive: true });
+  resize(); frame();
+})();
+</script>
+</body>
+</html>
