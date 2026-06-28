@@ -75,7 +75,8 @@ BOT_PRICE_USD = 590             # bot — monthly subscription
 _PRICE_WHITELIST = re.compile(
     rf"\$\s*(?:{PRODUCT_PRICE_USD}|{BOT_PRICE_USD})\b"
     rf"(?:\s*(?:/\s*(?:mo|month|ay)|month|monthly|aylık|ay|"
-    rf"lifetime|one[- ]?time|once|tek\s+seferlik|ömür\s+boyu))?",
+    rf"lifetime|one[- ]?time|once|tek\s+seferlik|ömür\s+boyu))?"
+    rf"|(?:{PRODUCT_PRICE_USD}|{BOT_PRICE_USD})\s*\$",
     re.IGNORECASE,
 )
 
