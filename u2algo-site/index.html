@@ -1,21 +1,24 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>u2algo — Risk-disiplinli algoritmik trading araştırması</title>
-<meta name="description" content="u2algo: SMC tabanlı, risk-disiplinli algoritmik trading araştırmasını build-in-public takip et. backtest ve shadow ile doğrulanan altyapı. Yatırım tavsiyesi değildir." />
+<title>u2algo — Algorithmic SMC + Fibonacci Trading Indicator & Bot for TradingView</title>
+<meta name="description" content="u2algo turns Smart Money Concepts, Fibonacci and structure analysis into one TradingView decision-support indicator — plus a fully automated trading bot on the same engine. 7-day free trial. Not investment advice." />
+<meta name="keywords" content="TradingView indicator, SMC indicator, Smart Money Concepts, Fibonacci indicator, algorithmic trading bot, order block, FVG, liquidity, trading signals, Pine Script indicator" />
 <meta name="robots" content="index, follow" />
 <link rel="icon" href="./favicon.ico" />
-<!-- Open Graph -->
 <link rel="canonical" href="https://u2algo.com/" />
-<meta property="og:title" content="u2algo — Algoritmik trading araştırma platformu" />
-<meta property="og:description" content="SMC tabanlı, risk-disiplinli, şeffaf ölçümlü algoritmik trading araştırması. Build-in-public." />
+<meta property="og:title" content="u2algo — SMC + Fibonacci Indicator & Automated Bot for TradingView" />
+<meta property="og:description" content="One TradingView indicator for SMC + Fibonacci confluence, plus a fully automated trading bot. 7-day free trial. Not investment advice." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://u2algo.com/" />
+<meta property="og:site_name" content="u2algo" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:site" content="@Ualgobot" />
-<meta name="twitter:creator" content="@Ualgobot" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"u2algo Indicator","applicationCategory":"FinanceApplication","operatingSystem":"TradingView","description":"Algorithmic Smart Money Concepts and Fibonacci decision-support indicator for TradingView, with a fully automated trading bot on the same engine.","offers":{"@type":"Offer","price":"59.00","priceCurrency":"USD","url":"https://u2algo.lemonsqueezy.com/"},"publisher":{"@type":"Organization","name":"u2algo","url":"https://u2algo.com/"}}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -307,497 +310,151 @@
 @keyframes u2f3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(5vw,-7vh) scale(1.1)}}
 @keyframes u2grid{from{background-position:0 0,0 0}to{background-position:64px 128px,64px 128px}}
 @media(prefers-reduced-motion:reduce){#u2-bg .aur,#u2-bg .grid{animation:none}#u2-bg canvas{display:none}}
+
+.lang-switch{display:inline-flex;gap:2px;border:1px solid var(--border-2);border-radius:999px;padding:3px;background:rgba(255,255,255,.03)}
+.lang-switch button{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:transparent;border:none;border-radius:999px;padding:5px 10px;cursor:pointer;transition:.15s}
+.lang-switch button:hover{color:var(--ink)}
+.lang-switch button.active{background:var(--grad-cta);color:#04121a;font-weight:600}
+@media(max-width:760px){.nav-links{display:none}.lang-switch{margin-left:auto}}
+.badge{display:inline-block;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:999px;margin-bottom:10px}
+.badge.live{color:#04121a;background:var(--grad-cta);font-weight:600}
+.badge.soon{color:var(--warn);border:1px solid rgba(255,170,0,.4)}
+.prod-card{display:flex;flex-direction:column;height:100%}
+.prod-card .price{font-size:34px;font-weight:700;letter-spacing:-.02em;margin:6px 0 2px}
+.prod-card .price .per{font-size:15px;color:var(--muted-2);font-weight:400}
+.prod-card ul{list-style:none;display:flex;flex-direction:column;gap:11px;margin:18px 0 22px;flex:1}
+.prod-card li{font-size:14px;display:flex;gap:10px;align-items:flex-start;color:var(--ink)}
+.prod-card li .ic{color:var(--accent);font-family:var(--font-mono);font-size:12px;margin-top:2px;flex:0 0 auto}
+.btn[disabled],.btn.disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:900px){.feat-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.feat-grid{grid-template-columns:1fr}}
+.feat-card{border:1px solid var(--border);border-radius:14px;padding:24px;background:var(--surface);transition:.2s}
+.feat-card:hover{border-color:var(--border-2);transform:translateY(-2px)}
+.feat-card h4{font-size:16px;margin-bottom:8px;font-weight:600}
+.feat-card p{font-size:14px;color:var(--muted)}
+.feat-card .ic{font-family:var(--font-mono);color:var(--accent);font-size:13px;margin-bottom:10px;display:block}
+
 </style>
 </head>
 <body>
-<!-- Animated living background (brand-safe, behind all content) -->
 <div id="u2-bg" aria-hidden="true">
 <div class="aur a1"></div><div class="aur a2"></div><div class="aur a3"></div>
 <div class="grid"></div>
 <canvas id="u2-net"></canvas>
 </div>
-
-<header>
-  <div class="wrap">
-    <nav>
-      <a class="logo" href="#top"><img src="./brand/logo-horizontal.svg" alt="u²Algo" /></a>
-      <div class="nav-links">
-        <a href="#nedir">Nedir</a>
-        <a href="#canli-chart">Chart</a>
-        <a href="#profiller">Profiller</a>
-        <a href="#surec">Süreç</a>
-        <a href="#kanit">Şeffaflık</a>
-        <a href="#guncellemeler">Güncellemeler</a>
-        <a href="#erisim">Erişim</a>
-        <a href="#sss">SSS</a>
-      </div>
-      <a class="btn btn-primary" href="#waitlist">Waitlist'e katıl</a>
-    </nav>
-  </div>
-</header>
-
+<header><div class="wrap"><nav>
+<a class="logo" href="#top"><img src="./brand/logo-horizontal.svg" alt="u²Algo" /></a>
+<div class="nav-links">
+<a href="#what" data-i18n="nav_what">What it is</a><a href="#features" data-i18n="nav_features">Features</a><a href="#products" data-i18n="nav_products">Products</a><a href="#how" data-i18n="nav_how">How it works</a><a href="#pricing" data-i18n="nav_pricing">Pricing</a><a href="#faq" data-i18n="nav_faq">FAQ</a>
+</div>
+<div class="lang-switch" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="tr">TR</button><button data-lang="ru">RU</button></div>
+<a class="btn btn-primary" href="https://u2algo.lemonsqueezy.com/" target="_blank" rel="noopener" data-i18n="nav_cta">Start free trial</a>
+</nav></div></header>
 <a id="top"></a>
-<section class="hero">
-  <div class="wrap">
-    <span class="pill"><span class="dot"></span> Build-in-public · Canlı sistem gözlem notları</span>
-    <h1>Risk-disiplinli algoritmik trading araştırmasını <em>şeffaf</em> takip et.</h1>
-    <p class="sub">u2algo, Smart Money Concepts tabanlı bir trading altyapısını backtest, shadow ve canlı gözlemle açık biçimde geliştirir. Sinyal satışı değil — ölçülebilir, açıklanabilir bir araştırma süreci.</p>
-    <div class="hero-cta">
-      <a class="btn btn-primary" href="#waitlist">Erken erişim listesine gir</a>
-      <a class="btn" href="#canli-chart">Bot hareketlerini gör →</a>
-    </div>
-    <div class="hero-strip">
-      <div class="item"><div class="k accent tnum">3</div><div class="l">Trade profili</div></div>
-      <div class="item"><div class="k tnum">4</div><div class="l">Zaman dilimi katmanı</div></div>
-      <div class="item"><div class="k tnum">SMC</div><div class="l">Strateji doktrini</div></div>
-      <div class="item"><div class="k tnum">7-gate</div><div class="l">Promotion kontrolü</div></div>
-    </div>
-  </div>
-</section>
-
-<!-- TRADINGVIEW / BOT HAREKETLERİ -->
-<section id="canli-chart">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">TradingView + MCP gözlem katmanı</span>
-      <h2>Bot hangi coinleri analiz ediyorsa hareketlerini chart üzerinde takip et</h2>
-      <p>u2algo tarafında hedeflenen deneyim: TradingView chart ekranı, MCP bağlantılı ekran görüntüsü/yorum hattı ve botun karar izini aynı yerde göstermek. Aşağıdaki görünüm public site için örneklenmiş gözlem arayüzüdür; gerçek pozisyon verisi ve özel dashboard detayları yayınlanmaz.</p>
-    </div>
-    <div class="observer">
-      <div class="chart-shell reveal" aria-label="TradingView chart üzerinde bot analiz katmanı örneği">
-        <div class="chart-top">
-          <span><b>BINANCE:BTCUSDT</b> · SMC observer · 15m/1h/4h</span>
-          <span class="status-live"><span class="dot"></span> chart snapshot pipeline</span>
-        </div>
-        <div class="symbol-rail" aria-label="Botun sabit analiz evreni">
-          <span class="coin-chip hot">BTC</span><span class="coin-chip hot">ETH</span><span class="coin-chip watch">XRP</span><span class="coin-chip watch">BNB</span><span class="coin-chip hot">SOL</span>
-          <span class="coin-chip">TRX</span><span class="coin-chip">DOGE</span><span class="coin-chip">ADA</span><span class="coin-chip">BCH</span><span class="coin-chip">LINK</span>
-          <span class="coin-chip">ZEC</span><span class="coin-chip">LTC</span><span class="coin-chip">AVAX</span><span class="coin-chip">DOT</span><span class="coin-chip">TON</span>
-          <span class="coin-chip">NEAR</span><span class="coin-chip">ATOM</span><span class="coin-chip">APT</span><span class="coin-chip">UNI</span><span class="coin-chip">ICP</span>
-        </div>
-        <div class="chart-area">
-          <svg viewBox="0 0 900 360" role="img" aria-label="Fiyat hareketi, supply-demand bölgeleri ve bot karar markerları">
-            <defs>
-              <linearGradient id="lineGrad" x1="0" x2="1"><stop offset="0" stop-color="#00f0ff"/><stop offset=".55" stop-color="#0080ff"/><stop offset="1" stop-color="#a855f7"/></linearGradient>
-              <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-            </defs>
-            <polyline points="0,250 55,238 105,265 155,215 210,228 265,180 320,198 380,145 440,162 505,112 565,132 625,100 690,148 752,128 815,174 900,151" fill="none" stroke="url(#lineGrad)" stroke-width="4" filter="url(#glow)" stroke-linecap="round" stroke-linejoin="round"/>
-            <polyline points="0,292 70,286 145,300 230,276 310,282 405,250 505,256 600,226 705,246 810,230 900,238" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="2" stroke-dasharray="6 8"/>
-            <circle cx="144" cy="218" r="6" fill="#00f0ff"/><circle cx="382" cy="146" r="6" fill="#00f0ff"/><circle cx="690" cy="148" r="6" fill="#ffaa00"/><circle cx="815" cy="174" r="6" fill="#00ff88"/>
-          </svg>
-          <div class="zone supply">HTF supply · reject watch</div>
-          <div class="zone demand">FVG / demand zone</div>
-          <div class="bot-marker m1">structure scan</div>
-          <div class="bot-marker m2">pullback watch</div>
-          <div class="bot-marker m3">risk gate</div>
-          <div class="bot-marker m4">signal note</div>
-          <div class="chart-note"><span>TradingView screenshot → MCP yorum → sosyal taslak</span><span>Gösterim araştırma amaçlıdır; yatırım tavsiyesi değildir.</span></div>
-        </div>
-      </div>
-      <aside class="movement-panel reveal">
-        <span class="eyebrow">Bot hareket izi</span>
-        <h3>Grafikte sadece fiyatı değil, botun neye baktığını gösteriyoruz.</h3>
-        <p>Public görünüm; aktif pozisyon, bakiye veya kullanıcıya özel emir detayı paylaşmadan analiz evrenini ve karar aşamalarını anlaşılır hale getirir.</p>
-        <div class="timeline">
-          <div class="event"><div class="t"><span>01 · Universe scan</span><span>20 coin</span></div><b>Sabit analiz listesi</b><p>BTC, ETH, XRP, BNB, SOL ve diğer core semboller aynı disiplinle taranır.</p></div>
-          <div class="event"><div class="t"><span>02 · SMC logic</span><span>multi-timeframe</span></div><b>Yapı + likidite + bölge</b><p>Market structure, FVG/OB, swing ve confluence katmanları birlikte değerlendirilir.</p></div>
-          <div class="event"><div class="t"><span>03 · Risk gate</span><span>human-readable</span></div><b>Uygun değilse pas geçer</b><p>Risk zarfı, holding limiti ve circuit-breaker kontrolleri görünür notlara dönüşür.</p></div>
-          <div class="event"><div class="t"><span>04 · Content pipeline</span><span>draft-only</span></div><b>Chart yorumu sosyal taslağa döner</b><p>MCP bağlantılı screenshot ve açıklama hattı; X, Instagram, YouTube ve Telegram için önce taslak üretir.</p></div>
-        </div>
-        <div class="stack-tags"><span>TradingView</span><span>MCP</span><span>SMC</span><span>Scalp/Mid/Long</span><span>Manual approval</span></div>
-      </aside>
-    </div>
-  </div>
-</section>
-
-<!-- NE YAPIYORUZ / NE YAPMIYORUZ -->
-<section id="nedir">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Konum</span>
-      <h2>Ne yapıyoruz, ne yapmıyoruz</h2>
-      <p>Şeffaflık bir pazarlama sözü değil, çalışma biçimimiz. Beklentiyi baştan netleştiriyoruz.</p>
-    </div>
-    <div class="grid2">
-      <div class="panel good reveal">
-        <h3><span class="dot"></span> Yapıyoruz</h3>
-        <ul>
-          <li><span class="ic">+</span> SMC tabanlı, kural-disiplinli bir trading altyapısı geliştiriyoruz.</li>
-          <li><span class="ic">+</span> Her strateji değişimini backtest ve shadow ile ölçüyoruz.</li>
-          <li><span class="ic">+</span> Risk yönetimini (drawdown, R:R, pozisyon boyutu) merkeze koyuyoruz.</li>
-          <li><span class="ic">+</span> Süreci build-in-public paylaşıyoruz: ne çalıştı, ne çalışmadı.</li>
-          <li><span class="ic">+</span> Açık dashboard ve şeffaf gözlem notları sunuyoruz.</li>
-        </ul>
-      </div>
-      <div class="panel bad reveal">
-        <h3><span style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block"></span> Yapmıyoruz</h3>
-        <ul>
-          <li><span class="ic">×</span> Getiri garantisi vermiyoruz. Hiçbir kâr vaadi yok.</li>
-          <li><span class="ic">×</span> "Kesin kazanır" sinyal servisi satmıyoruz.</li>
-          <li><span class="ic">×</span> Fon toplamıyoruz, paranızı yönetmiyoruz.</li>
-          <li><span class="ic">×</span> Yatırım tavsiyesi vermiyoruz.</li>
-          <li><span class="ic">×</span> Geçmiş performansı gelecek vaadi olarak sunmuyoruz.</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 3 PROFİL -->
-<section id="profiller">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Trade-horizon profilleri</span>
-      <h2>Üç farklı zaman ufku, tek doktrin</h2>
-      <p>Aynı SMC mantığı; ufkunuza göre seçtiğiniz zaman dilimi zinciriyle çalışır. Profiller kanonik ve strict-monoton doğrulanmıştır (entry &lt; mtf &lt; htf).</p>
-    </div>
-    <div class="grid3">
-      <div class="prof reveal">
-        <span class="tag">Scalp</span>
-        <h3>Kısa vadeli</h3>
-        <p class="desc">Hızlı tempolu, düşük zaman dilimlerinde yapı kırılımı + pullback teyidi. Yoğun takip gerektirir.</p>
-        <div class="tf-label">Zaman dilimi zinciri</div>
-        <div class="tf"><span>Entry 5m</span><span>MTF 1h</span><span>HTF 4h</span></div>
-      </div>
-      <div class="prof reveal">
-        <span class="tag">Mid</span>
-        <h3>Orta vadeli</h3>
-        <p class="desc">Dengeli kurulum. Üretimde doğrulanmış varsayılan profil; gün-içi yapıya odaklı, ölçülü işlem frekansı.</p>
-        <div class="tf-label">Zaman dilimi zinciri</div>
-        <div class="tf"><span>Entry 15m</span><span>MTF 1h</span><span>HTF 12h</span></div>
-      </div>
-      <div class="prof reveal">
-        <span class="tag">Long</span>
-        <h3>Uzun vadeli</h3>
-        <p class="desc">Pozisyon ufku. Haftalık yapıya kadar bias; daha az ama daha geniş kurulumlar, düşük takip yükü.</p>
-        <div class="tf-label">Zaman dilimi zinciri</div>
-        <div class="tf"><span>Entry 1h</span><span>MTF 8h</span><span>HTF 1w</span></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- SÜREÇ -->
-<section id="surec">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Çalışma biçimi</span>
-      <h2>Bir fikir nasıl canlıya geçer</h2>
-      <p>Hiçbir strateji değişikliği test edilmeden canlıya geçmez. Süreç kapılarla (gate) korunur.</p>
-    </div>
-    <div class="steps">
-      <div class="step reveal"><div class="n">01</div><h4>Hipotez</h4><p>Piyasa yapısı veya araştırma içeriğinden test edilebilir bir hipotez çıkarılır.</p></div>
-      <div class="step reveal"><div class="n">02</div><h4>Backtest</h4><p>180 günlük gerçek veride v1 vs v2 karşılaştırması; risk zarfı kontrol edilir.</p></div>
-      <div class="step reveal"><div class="n">03</div><h4>Shadow</h4><p>Canlı veri akışında, gerçek emir vermeden en az 7 gün hayalî sinyal gözlemi.</p></div>
-      <div class="step reveal"><div class="n">04</div><h4>Kontrollü çıkış</h4><p>İnsan onayı + yarım-boyut başlangıç. Metrik bozulursa otomatik geri dönüş.</p></div>
-    </div>
-  </div>
-</section>
-
-<!-- ŞEFFAFLIK / KANIT -->
-<section id="kanit">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Şeffaflık</span>
-      <h2>Kanıt, vaat değil</h2>
-      <p>Performans iddiaları yerine ölçüm disiplini paylaşıyoruz. Aşağıdaki metrikler, doğrulanmış raporlar yayınlandıkça bu sayfada güncellenir.</p>
-    </div>
-    <div class="proof">
-      <div class="proof-card reveal">
-        <div class="row"><span class="muted">Strateji doktrini</span><span class="v">Smart Money Concepts</span></div>
-        <div class="row"><span class="muted">Aktif sürüm</span><span class="v">v1 canlı · v2 shadow</span></div>
-        <div class="row"><span class="muted">Ölçülen metrikler</span><span class="v">Win rate · R:R · Drawdown</span></div>
-        <div class="row"><span class="muted">Promotion kontrolü</span><span class="v">7-gate + insan onayı</span></div>
-        <div class="row"><span class="muted">Canlı gözlem raporu</span><span class="v gated">Yakında yayınlanacak</span></div>
-        <div class="row"><span class="muted">180g backtest karşılaştırma</span><span class="v gated">Hazırlanıyor</span></div>
-        <p class="proof-note">// Metrikler yalnızca doğrulanmış<br>// backtest/shadow raporlarından yayınlanır.<br>// Geçmiş performans gelecek getiri taahhüdü değildir.</p>
-      </div>
-      <div class="reveal">
-        <h3 style="font-size:21px;font-weight:600;margin-bottom:14px;letter-spacing:-.01em">Neden bu kadar yavaş ve dikkatli?</h3>
-        <p class="muted" style="font-size:15.5px;margin-bottom:14px">Çünkü trading'de en pahalı şey, kanıtlanmamış bir fikre erken güvenmektir. u2algo bilerek "acele yok, risk yok" disipliniyle ilerler.</p>
-        <p class="muted" style="font-size:15.5px">Build-in-public takip ederek; mimariyi, test sonuçlarını ve karar gerekçelerini açık şekilde görürsünüz. Reklam değil, kayıt tutarız.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- GÜNCELLEMELER (T-014: CHANGELOG.md -> updates.json statik beslemesi) -->
-<section id="guncellemeler" style="display:none">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Build-in-public</span>
-      <h2>Güncellemeler</h2>
-      <p>Müşteri-görünür değişikliklerin kaydı. Kaynak: proje CHANGELOG'u — iç operasyon detayları burada yer almaz.</p>
-    </div>
-    <div id="updatesList" class="reveal" style="display:grid;gap:18px;max-width:760px"></div>
-  </div>
-</section>
+<section class="hero"><div class="wrap">
+<span class="pill"><span class="dot"></span> <span data-i18n="hero_eyebrow">.</span></span>
+<h1><span data-i18n="hero_h1_a">.</span> <em data-i18n="hero_h1_em">.</em> <span data-i18n="hero_h1_b">.</span></h1>
+<p class="sub" data-i18n="hero_sub">.</p>
+<div class="hero-cta"><a class="btn btn-primary" href="https://u2algo.lemonsqueezy.com/" target="_blank" rel="noopener" data-i18n="hero_cta1">.</a><a class="btn disabled" href="#products" aria-disabled="true" data-i18n="hero_cta2">.</a></div>
+<div class="hero-strip">
+<div class="item"><div class="k accent" data-i18n="hero_k1">SMC</div><div class="l" data-i18n="hero_k1l">.</div></div>
+<div class="item"><div class="k" data-i18n="hero_k2">Fibonacci</div><div class="l" data-i18n="hero_k2l">.</div></div>
+<div class="item"><div class="k" data-i18n="hero_k3">Multi-TF</div><div class="l" data-i18n="hero_k3l">.</div></div>
+<div class="item"><div class="k" data-i18n="hero_k4">7-day</div><div class="l" data-i18n="hero_k4l">.</div></div>
+</div></div></section>
+<section id="features"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="feat_eyebrow">.</span><h2 data-i18n="feat_h2">.</h2><p data-i18n="feat_sub">.</p></div>
+<div class="feat-grid">
+<div class="feat-card reveal"><span class="ic">OB</span><h4 data-i18n="feat1_t">.</h4><p data-i18n="feat1_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">FVG</span><h4 data-i18n="feat2_t">.</h4><p data-i18n="feat2_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">EQH/EQL</span><h4 data-i18n="feat3_t">.</h4><p data-i18n="feat3_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">BB</span><h4 data-i18n="feat4_t">.</h4><p data-i18n="feat4_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">FIB</span><h4 data-i18n="feat5_t">.</h4><p data-i18n="feat5_d">.</p></div>
+<div class="feat-card reveal"><span class="ic">SL/TP</span><h4 data-i18n="feat6_t">.</h4><p data-i18n="feat6_d">.</p></div>
+</div></div></section>
+<section id="products"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="prod_eyebrow">.</span><h2 data-i18n="prod_h2">.</h2><p data-i18n="prod_sub">.</p></div>
+<div class="grid2">
+<div class="prof prod-card reveal"><span class="badge live" data-i18n="pi_badge">.</span><h3 data-i18n="pi_name">.</h3>
+<div class="price"><span data-i18n="pi_price">$59</span> <span class="per" data-i18n="pi_per">.</span></div>
+<p class="desc" data-i18n="pi_blurb">.</p>
+<ul><li><span class="ic">+</span> <span data-i18n="pi_f1">.</span></li><li><span class="ic">+</span> <span data-i18n="pi_f2">.</span></li><li><span class="ic">+</span> <span data-i18n="pi_f3">.</span></li><li><span class="ic">+</span> <span data-i18n="pi_f4">.</span></li><li><span class="ic">+</span> <span data-i18n="pi_f5">.</span></li></ul>
+<a class="btn btn-primary" href="https://u2algo.lemonsqueezy.com/" target="_blank" rel="noopener" data-i18n="pi_cta">.</a></div>
+<div class="prof prod-card soon reveal"><span class="badge soon" data-i18n="pb_badge">.</span><h3 data-i18n="pb_name">.</h3>
+<div class="price"><span data-i18n="pb_price">$590</span> <span class="per" data-i18n="pb_per">.</span></div>
+<p class="desc" data-i18n="pb_blurb">.</p>
+<ul><li><span class="ic">+</span> <span data-i18n="pb_f1">.</span></li><li><span class="ic">+</span> <span data-i18n="pb_f2">.</span></li><li><span class="ic">+</span> <span data-i18n="pb_f3">.</span></li><li><span class="ic">+</span> <span data-i18n="pb_f4">.</span></li><li><span class="ic">+</span> <span data-i18n="pb_f5">.</span></li></ul>
+<a class="btn disabled" aria-disabled="true" data-i18n="pb_cta">.</a></div>
+</div></div></section>
+<section id="how"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="how_eyebrow">.</span><h2 data-i18n="how_h2">.</h2><p data-i18n="how_sub">.</p></div>
+<div class="steps">
+<div class="step reveal"><div class="n" data-i18n="how1_n">01</div><h4 data-i18n="how1_t">.</h4><p data-i18n="how1_d">.</p></div>
+<div class="step reveal"><div class="n" data-i18n="how2_n">02</div><h4 data-i18n="how2_t">.</h4><p data-i18n="how2_d">.</p></div>
+<div class="step reveal"><div class="n" data-i18n="how3_n">03</div><h4 data-i18n="how3_t">.</h4><p data-i18n="how3_d">.</p></div>
+<div class="step reveal"><div class="n" data-i18n="how4_n">04</div><h4 data-i18n="how4_t">.</h4><p data-i18n="how4_d">.</p></div>
+</div></div></section>
+<section id="what"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="why_eyebrow">.</span><h2 data-i18n="why_h2">.</h2><p data-i18n="why_sub">.</p></div>
+<div class="feat-grid">
+<div class="feat-card reveal"><h4 data-i18n="why1_t">.</h4><p data-i18n="why1_d">.</p></div>
+<div class="feat-card reveal"><h4 data-i18n="why2_t">.</h4><p data-i18n="why2_d">.</p></div>
+<div class="feat-card reveal"><h4 data-i18n="why3_t">.</h4><p data-i18n="why3_d">.</p></div>
+<div class="feat-card reveal"><h4 data-i18n="why4_t">.</h4><p data-i18n="why4_d">.</p></div>
+</div></div></section>
+<section id="stats"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="stats_eyebrow">.</span><h2 data-i18n="stats_h2">.</h2><p data-i18n="stats_sub">.</p></div>
+<div class="proof-card reveal" style="max-width:680px">
+<div class="row"><span class="muted" data-i18n="stats_l1">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<div class="row"><span class="muted" data-i18n="stats_l2">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<div class="row"><span class="muted" data-i18n="stats_l3">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<div class="row"><span class="muted" data-i18n="stats_l4">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<div class="row"><span class="muted" data-i18n="stats_l5">.</span><span class="v gated" data-i18n="stats_loading">Loading…</span></div>
+<p class="proof-note" data-i18n="stats_note">.</p></div></div></section>
+<section id="pricing"><div class="wrap" style="text-align:center">
+<div class="reveal" style="max-width:640px;margin:0 auto">
+<span class="eyebrow" data-i18n="price_eyebrow">.</span>
+<h2 style="font-size:clamp(26px,4vw,38px);font-weight:700;letter-spacing:-.02em;margin:14px 0 14px" data-i18n="price_h2">.</h2>
+<p class="muted" style="font-size:16px" data-i18n="price_sub">.</p>
+<div style="margin-top:28px"><a class="btn btn-primary" href="/premium.html" data-i18n="price_cta">.</a></div>
+</div></div></section>
+<section id="faq"><div class="wrap">
+<div class="sec-head reveal"><span class="eyebrow" data-i18n="faq_eyebrow">.</span><h2 data-i18n="faq_h2">.</h2></div>
+<div class="faq">
+<details class="reveal"><summary><span data-i18n="faq_q1">.</span><span class="chev">+</span></summary><p data-i18n="faq_a1">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q2">.</span><span class="chev">+</span></summary><p data-i18n="faq_a2">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q3">.</span><span class="chev">+</span></summary><p data-i18n="faq_a3">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q4">.</span><span class="chev">+</span></summary><p data-i18n="faq_a4">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q5">.</span><span class="chev">+</span></summary><p data-i18n="faq_a5">.</p></details>
+<details class="reveal"><summary><span data-i18n="faq_q6">.</span><span class="chev">+</span></summary><p data-i18n="faq_a6">.</p></details>
+</div></div></section>
+<section><div class="wrap"><div class="disclaimer reveal">
+<h4><span style="width:6px;height:6px;border-radius:50%;background:var(--warn);display:inline-block"></span> <span data-i18n="disc_h">.</span></h4>
+<p data-i18n="disc_p1">.</p><p data-i18n="disc_p2">.</p><p data-i18n="disc_p3">.</p><p data-i18n="disc_p4">.</p>
+<p style="margin-top:14px"><a href="/risk-disclosure.html" style="color:var(--accent)" data-i18n="disc_full">.</a></p>
+</div></div></section>
+<footer><div class="wrap"><div class="foot-top">
+<div style="max-width:320px"><a class="logo" href="#top" style="margin-bottom:14px"><img src="./brand/logo-horizontal.svg" alt="u²Algo" /></a><p class="muted" style="font-size:14px;margin-top:14px" data-i18n="foot_tagline">.</p></div>
+<div class="foot-links">
+<div class="foot-col"><span class="h" data-i18n="foot_product">.</span><a href="#features" data-i18n="nav_features">.</a><a href="#products" data-i18n="nav_products">.</a><a href="#pricing" data-i18n="nav_pricing">.</a><a href="/premium.html" data-i18n="nav_cta">.</a></div>
+<div class="foot-col"><span class="h" data-i18n="foot_community">.</span><a href="https://x.com/Ualgobot" target="_blank" rel="noopener">X · Ualgobot</a><a href="https://t.me/Ualgo_bot" target="_blank" rel="noopener">Telegram · @Ualgo_bot</a><a href="https://instagram.com/u2algo" target="_blank" rel="noopener">Instagram</a><a href="https://youtube.com/@Leblepito" target="_blank" rel="noopener">YouTube</a></div>
+<div class="foot-col"><span class="h" data-i18n="foot_legal">.</span><a href="/privacy.html" data-i18n="foot_privacy">.</a><a href="/terms.html" data-i18n="foot_terms">.</a><a href="mailto:hello@u2algo.com" data-i18n="foot_contact">.</a></div>
+</div></div>
+<div class="foot-bottom"><span>© <span id="yr"></span> u2algo · <span data-i18n="foot_rights">.</span></span><span data-i18n="foot_dyor">.</span></div>
+</div></footer>
 <script>
-  // updates.json statik dosyadır (build'de CHANGELOG'dan üretilir). Yüklenemezse
-  // bölüm gizli kalır — site davranışı değişmez.
-  fetch('./updates.json').then(r => r.ok ? r.json() : Promise.reject())
-    .then(data => {
-      const list = document.getElementById('updatesList');
-      (data.entries || []).forEach(entry => {
-        const card = document.createElement('div');
-        card.style.cssText = 'border:1px solid rgba(148,163,184,.15);border-radius:14px;padding:18px 20px;background:rgba(15,23,42,.35)';
-        const h = document.createElement('div');
-        h.style.cssText = 'font-weight:600;margin-bottom:10px;letter-spacing:-.01em';
-        h.textContent = entry.label || entry.date || '';
-        card.appendChild(h);
-        (entry.items || []).forEach(item => {
-          const row = document.createElement('p');
-          row.className = 'muted';
-          row.style.cssText = 'font-size:14.5px;margin:6px 0 0';
-          row.textContent = (item.type ? item.type + ' · ' : '') + item.text;
-          card.appendChild(row);
-        });
-        list.appendChild(card);
-      });
-      if (list.children.length) document.getElementById('guncellemeler').style.display = '';
-    }).catch(() => {});
-</script>
-
-<!-- ERİŞİM / PRICING -->
-<section id="erisim">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Erişim</span>
-      <h2>Topluluğa erken katıl</h2>
-      <p>Ürün araştırma aşamasında. Şu an satış değil, erken erişim ve şeffaf takip sunuyoruz. Fiyatlandırma netleştiğinde önce waitlist'tekiler bilgilendirilecek.</p>
-    </div>
-    <div class="access">
-      <div class="tier reveal">
-        <span class="name">Takipçi</span>
-        <div class="price">Ücretsiz</div>
-        <p class="blurb">Build-in-public içeriği ve topluluk.</p>
-        <ul>
-          <li><span class="ic">+</span> X & Telegram topluluk erişimi</li>
-          <li><span class="ic">+</span> Haftalık gözlem notları</li>
-          <li><span class="ic">+</span> SMC eğitim içerikleri</li>
-        </ul>
-        <a class="btn" href="#waitlist">Katıl</a>
-      </div>
-      <div class="tier feature reveal">
-        <span class="name">Erken Erişim</span>
-        <div class="price">Waitlist <span class="per">/ öncelikli</span></div>
-        <p class="blurb">Alpha dashboard güncellemeleri ve raporlar.</p>
-        <ul>
-          <li><span class="ic">+</span> Doğrulanmış backtest/shadow raporları</li>
-          <li><span class="ic">+</span> TradingView göstergesine erken erişim</li>
-          <li><span class="ic">+</span> Profil (scalp/mid/long) yapılandırma rehberleri</li>
-          <li><span class="ic">+</span> Lansman fiyatında öncelik</li>
-        </ul>
-        <a class="btn btn-primary" href="#waitlist">Listeye gir</a>
-      </div>
-      <div class="tier reveal">
-        <span class="name">Pro <span class="soon">· Planlanıyor</span></span>
-        <div class="price">—</div>
-        <p class="blurb">Detaylı analiz ve araç erişimi.</p>
-        <ul>
-          <li><span class="ic">+</span> Tam dashboard & geçmiş analitiği</li>
-          <li><span class="ic">+</span> Gelişmiş gösterge + strateji şablonları</li>
-          <li><span class="ic">+</span> Öncelikli destek</li>
-        </ul>
-        <a class="btn" href="#waitlist">İlgileniyorum</a>
-      </div>
-    </div>
-    <div style="text-align:center;margin-top:36px">
-      <div class="muted" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:16px">Bizi takip et</div>
-      <div class="channels">
-        <a class="chan" href="https://x.com/Ualgobot" target="_blank" rel="noopener">𝕏 / Ualgobot</a>
-        <a class="chan" href="https://instagram.com/u2algo" target="_blank" rel="noopener">◎ Instagram</a>
-        <a class="chan" href="https://t.me/Ualgo_bot" target="_blank" rel="noopener">✈ Telegram · @Ualgo_bot</a>
-        <a class="chan" href="https://tradingview.com/u/u2algo/" target="_blank" rel="noopener">📈 TradingView</a>
-        <a class="chan" href="https://youtube.com/@Leblepito" target="_blank" rel="noopener">▶ YouTube</a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- PREMIUM İNDİKATÖR CTA -->
-<section id="premium-cta">
-  <div class="wrap" style="text-align:center">
-    <div class="reveal" style="max-width:620px;margin:0 auto">
-      <span class="eyebrow">Premium İndikatör</span>
-      <h2 style="font-size:clamp(26px,4vw,38px);font-weight:700;letter-spacing:-.02em;margin:14px 0 14px">Premium İndikatör — Founding $39 Lifetime</h2>
-      <p class="muted" style="font-size:16px;margin-bottom:10px">SMC karar-destek aracı. Yatırım tavsiyesi değildir; getiri garantisi yoktur.</p>
-      <div style="margin-top:28px">
-        <a class="btn btn-primary" href="/premium.html">İndikatörü İncele →</a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- WAITLIST -->
-<section id="waitlist">
-  <div class="wrap waitlist">
-    <div class="reveal" style="max-width:620px;margin:0 auto">
-      <span class="eyebrow">Erken erişim</span>
-      <h2 style="font-size:clamp(26px,4vw,38px);font-weight:600;letter-spacing:-.02em;margin:14px 0 14px">Alpha dashboard güncellemelerini al</h2>
-      <p class="muted" style="font-size:16px">E-postanı bırak; doğrulanmış raporlar, erken erişim ve lansman önceliği için ilk sen haberdar ol. Spam yok, satış baskısı yok.</p>
-      <form class="wl-form" id="wlForm" novalidate>
-        <input type="email" id="wlEmail" placeholder="sen@ornek.com" autocomplete="email" required aria-label="E-posta adresi" />
-        <label class="wl-consent">
-          <input type="checkbox" id="wlConsent" required aria-label="Açık rıza onayı" />
-          <span>I've read and accept the
-            <a href="/privacy.html" target="_blank" rel="noopener">privacy policy</a>
-            and consent to receive product updates.
-          </span>
-        </label>
-        <button class="btn btn-primary" type="submit">Listeye katıl</button>
-      </form>
-      <div class="wl-msg" id="wlMsg" role="status" aria-live="polite"></div>
-      <p class="wl-fine">Kaydolarak güncelleme almayı kabul edersin. İstediğin an çıkabilirsin. Bu bir yatırım daveti değildir.</p>
-    </div>
-  </div>
-</section>
-
-<!-- SSS -->
-<section id="sss">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Sıkça sorulanlar</span>
-      <h2>Merak edilenler</h2>
-    </div>
-    <div class="faq">
-      <details class="reveal"><summary>u2algo bana sinyal satıp kâr garantisi mi veriyor?<span class="chev">+</span></summary>
-        <p>Hayır. u2algo bir kâr vaadi veya garantili sinyal servisi değildir. SMC tabanlı bir trading araştırma ve otomasyon altyapısını şeffaf biçimde geliştiren bir projedir. Hiçbir getiri garantisi verilmez.</p></details>
-      <details class="reveal"><summary>Param sizde mi duruyor, fonu siz mi yönetiyorsunuz?<span class="chev">+</span></summary>
-        <p>Hayır. u2algo fon toplamaz ve paranızı yönetmez. Araştırma, ölçüm ve build-in-public içerik sunarız. Tüm işlem kararları ve sermaye sizin kontrolünüzdedir.</p></details>
-      <details class="reveal"><summary>Scalp, mid ve long profilleri arasındaki fark ne?<span class="chev">+</span></summary>
-        <p>Aynı SMC doktrini farklı zaman dilimi zincirleriyle çalışır. Scalp (5m/1h/4h) hızlı ve takip-yoğun; mid (15m/1h/12h) dengeli ve üretimde doğrulanmış varsayılan; long (1h/8h/1w) pozisyon ufkuna uygundur. Profiller strict-monoton doğrulanır.</p></details>
-      <details class="reveal"><summary>Geçmiş veya backtest sonuçları gelecekteki getiriyi garanti eder mi?<span class="chev">+</span></summary>
-        <p>Hayır. backtest ve shadow sonuçları yalnızca araştırma amaçlıdır ve geçmiş performans gelecekteki sonuçların göstergesi değildir. Kaldıraçlı işlemler yüksek risk taşır.</p></details>
-      <details class="reveal"><summary>Bu yatırım tavsiyesi mi?<span class="chev">+</span></summary>
-        <p>Hayır. Bu sitedeki hiçbir içerik yatırım tavsiyesi değildir; eğitim ve araştırma amaçlıdır. Kararlarından yalnızca sen sorumlusun; gerekirse lisanslı bir danışmana başvur (DYOR).</p></details>
-      <details class="reveal"><summary>Ne zaman ücretli olacak?<span class="chev">+</span></summary>
-        <p>Ürün araştırma aşamasında. Fiyatlandırma yeterli doğrulanmış gözlem birikince netleşecek ve önce waitlist'tekilere duyurulacak. Şu an odak: şeffaf takip ve topluluk.</p></details>
-    </div>
-  </div>
-</section>
-
-<!-- DISCLAIMER (CMP-5 wiring — CMP-1 canonical byte-anchors + B6 jurisdiction) -->
-<section>
-  <div class="wrap">
-    <div class="disclaimer reveal">
-      <h4><span style="width:6px;height:6px;border-radius:50%;background:var(--warn);display:inline-block"></span> Risk bildirimi</h4>
-      <p>u2algo bir araştırma ve eğitim projesidir. Bu sitedeki hiçbir içerik yatırım, finansal, hukuki veya vergi tavsiyesi niteliğinde değildir ve öyle yorumlanmamalıdır. Hiçbir getiri garantisi verilmez.</p>
-      <!-- CMP-1 B1 canonical anchor (TR) — byte-match required by has_disclaimer -->
-      <p>Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir.</p>
-      <!-- CMP-1 B1 canonical anchor (EN) — for EN-first global visitors -->
-      <p><em>Not investment advice. Trade at your own risk.</em></p>
-      <p>Kripto varlıklar ve kaldıraçlı futures işlemleri yüksek volatilite ve yatırdığınız tüm sermayeyi kaybetme riski içerir. Geçmiş performans veya backtest/shadow sonuçları gelecekteki sonuçların göstergesi değildir. Yalnızca kaybetmeyi göze alabileceğiniz tutarla ve kendi araştırmanızı yaparak (DYOR) hareket edin.</p>
-      <!-- CMP-1 B6 — A.Ş. jurisdiction -->
-      <p>u2algo bir Türk Anonim Şirketi (A.Ş.) tarafından işletilir. Lisanslı aracı kurum, yatırım danışmanı veya fon değiliz. Yatırıma çağrı yoktur.</p>
-      <p>u2algo fon toplamaz, müşteri sermayesi yönetmez ve bireysel işlem talimatı vermez. Tüm işlem kararları ve sorumluluğu kullanıcıya aittir.</p>
-      <p style="margin-top:14px"><a href="/risk-disclosure.html" style="color:var(--accent)">Tam risk açıklaması →</a> (B1-B6 EN/TR, hukuki uyarılar, geçmiş performans notu, sim/backtest etiketi, A.Ş. jurisdiction).</p>
-    </div>
-  </div>
-</section>
-
-<!-- FOOTER -->
-<footer>
-  <div class="wrap">
-    <div class="foot-top">
-      <div style="max-width:320px">
-        <a class="logo" href="#top" style="margin-bottom:14px"><img src="./brand/logo-horizontal.svg" alt="u²Algo" /></a>
-        <p class="muted" style="font-size:14px;margin-top:14px">SMC tabanlı, risk-disiplinli algoritmik trading araştırmasını şeffaf biçimde geliştiren bir proje.</p>
-      </div>
-      <div class="foot-links">
-        <div class="foot-col">
-          <span class="h">Ürün</span>
-          <a href="#profiller">Trade profilleri</a>
-          <a href="#surec">Çalışma biçimi</a>
-          <a href="#kanit">Şeffaflık</a>
-          <a href="#erisim">Erişim</a>
-        </div>
-        <div class="foot-col">
-          <span class="h">Topluluk</span>
-          <a href="https://x.com/Ualgobot" target="_blank" rel="noopener">X / Twitter · Ualgobot</a>
-          <a href="https://t.me/Ualgo_bot" target="_blank" rel="noopener">Telegram · @Ualgo_bot</a>
-          <a href="https://instagram.com/u2algo" target="_blank" rel="noopener">Instagram</a>
-          <a href="https://youtube.com/@Leblepito" target="_blank" rel="noopener">YouTube</a>
-        </div>
-        <div class="foot-col">
-          <span class="h">Yasal</span>
-          <a href="/privacy.html">Gizlilik Politikası</a>
-          <a href="/terms.html">Kullanım Koşulları</a>
-          <a href="mailto:hello@u2algo.com">İletişim</a>
-        </div>
-      </div>
-    </div>
-    <div class="foot-bottom">
-      <span>© <span id="yr"></span> u2algo · Tüm hakları saklıdır</span>
-      <span>Yatırım tavsiyesi değildir · DYOR · Riskleri anla</span>
-    </div>
-  </div>
-</footer>
-
-<script>
-  // Mark JS available so scroll-reveal animations engage (content stays visible if JS fails)
-  document.documentElement.classList.add('js');
-  document.getElementById('yr').textContent = new Date().getFullYear();
-
-  // Scroll reveal
-  const io = new IntersectionObserver((entries)=>{
-    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
-  },{threshold:.08, rootMargin:'0px 0px -10% 0px'});
-  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
-  // Safety net: if anything is still hidden after load, reveal it
-  window.addEventListener('load', ()=>{ setTimeout(()=>document.querySelectorAll('.reveal:not(.in)').forEach(el=>el.classList.add('in')), 1200); });
-
-  // Waitlist submit: posts to same-origin Railway backend.
-  // T-011: KVKK/GDPR consent zorunlu (P-003 W0 / G-P3-1). consent:true
-  // olmadan backend 400 döner. Mevcut kayıtlar (consent=null) etkilenmez.
-  const wlForm = document.getElementById('wlForm');
-  const wlEmail = document.getElementById('wlEmail');
-  const wlConsent = document.getElementById('wlConsent');
-  const wlMsg = document.getElementById('wlMsg');
-  wlForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const email = (wlEmail?.value || '').trim().toLowerCase();
-    if (!email || !email.includes('@')) {
-      wlMsg.textContent = 'Lütfen geçerli bir e-posta gir.';
-      wlMsg.className = 'wl-msg err';
-      return;
-    }
-    // T-011: consent kontrolü (frontend + backend defense in depth)
-    if (!wlConsent || !wlConsent.checked) {
-      wlMsg.textContent = 'Devam etmek için açık rıza onayı gerekiyor (privacy policy).';
-      wlMsg.className = 'wl-msg err';
-      return;
-    }
-    wlMsg.textContent = 'Kaydediliyor...';
-    wlMsg.className = 'wl-msg';
-    try {
-      const res = await fetch('/api/waitlist', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, consent: true })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) {
-        wlMsg.textContent = 'Kaydın alındı. Lansman notlarında görüşürüz.';
-        wlMsg.className = 'wl-msg ok';
-        wlForm.reset();
-      } else if (data.error === 'consent_required') {
-        wlMsg.textContent = 'Açık rıza onayı gerekli. Lütfen kutucuğu işaretle.';
-        wlMsg.className = 'wl-msg err';
-      } else if (data.error === 'waitlist_not_configured') {
-        wlMsg.textContent = 'Kayıt servisi hazırlanıyor. Şimdilik hello@u2algo.com üzerinden ulaşabilirsin.';
-        wlMsg.className = 'wl-msg err';
-      } else {
-        wlMsg.textContent = 'Kayıt alınamadı. Biraz sonra tekrar dene.';
-        wlMsg.className = 'wl-msg err';
-      }
-    } catch {
-      wlMsg.textContent = 'Bağlantı hatası. Biraz sonra tekrar dene.';
-      wlMsg.className = 'wl-msg err';
-    }
-  });
-
-
+document.documentElement.classList.add('js');
+document.getElementById('yr').textContent=new Date().getFullYear();
+var I18N={"en":{"nav_what":"What it is","nav_features":"Features","nav_products":"Products","nav_how":"How it works","nav_pricing":"Pricing","nav_faq":"FAQ","nav_cta":"Start free trial","hero_eyebrow":"Algorithmic trading toolkit · TradingView","hero_h1_a":"SMC, Fibonacci & structure —","hero_h1_em":"automated","hero_h1_b":"into one TradingView tool.","hero_sub":"u2algo marks Order Blocks, FVGs, liquidity and Fibonacci confluence on your chart in real time — and powers a fully automated trading bot built on the same engine. Decision-support, transparent, risk-first.","hero_cta1":"Get the indicator — $59/mo","hero_cta2":"Bot — coming soon","hero_k1":"SMC","hero_k1l":"Smart Money Concepts","hero_k2":"Fibonacci","hero_k2l":"Confluence engine","hero_k3":"Multi-TF","hero_k3l":"Timeframe alignment","hero_k4":"7-day","hero_k4l":"Free trial","feat_eyebrow":"What the indicator marks","feat_h2":"Every key structure, marked for you — automatically","feat_sub":"One indicator replaces hours of manual chart scanning. SMC and Fibonacci logic, layered and confluence-scored on every timeframe.","feat1_t":"Order Blocks (OB)","feat1_d":"Detects the last decisive candles before strong moves and marks these supply/demand zones as boxes.","feat2_t":"Fair Value Gaps (FVG)","feat2_d":"Finds price imbalances and visualises where price is likely to rebalance.","feat3_t":"Liquidity (EQH/EQL)","feat3_d":"Marks equal highs and lows as liquidity pools — usable as structural targets and SL references.","feat4_t":"Breaker Blocks (BB)","feat4_d":"Highlights structural shifts when an Order Block breaks, helping read directional bias.","feat5_t":"Fibonacci confluence","feat5_d":"Overlays Fibonacci retracement/extension zones and scores where they align with SMC structure.","feat6_t":"SL/TP & R:R visuals","feat6_d":"Draws potential stop-loss, take-profit and risk-reward levels. Informational only — never an order.","prod_eyebrow":"Indicator & bot","prod_h2":"Two ways to use the same engine","prod_sub":"Start with the indicator and stay in full control, or let the automated bot run the same SMC + Fibonacci logic for you.","pi_badge":"Available now","pi_name":"Indicator","pi_price":"$59","pi_per":"/ month","pi_blurb":"Real-time SMC + Fibonacci decision-support on TradingView.","pi_f1":"OB, FVG, EQH/EQL, Breaker Blocks","pi_f2":"Fibonacci confluence scoring","pi_f3":"Multi-timeframe bias & SL/TP visuals","pi_f4":"You stay in control — decision-support","pi_f5":"7-day free trial · cancel anytime","pi_cta":"Start free trial","pb_badge":"Coming soon","pb_name":"Automated Bot","pb_price":"$590","pb_per":"/ month","pb_blurb":"Fully automated execution on the same SMC + Fibonacci engine.","pb_f1":"Hands-free execution, 24/7","pb_f2":"7-layer deterministic safety stack","pb_f3":"Scalp / Mid / Long profiles","pb_f4":"Risk gate, circuit breaker, position guards","pb_f5":"7-day free trial at launch","pb_cta":"Coming soon","how_eyebrow":"How it works","how_h2":"From chart scan to execution","how_sub":"The same disciplined pipeline powers both the indicator and the bot.","how1_n":"01","how1_t":"Universe scan","how1_d":"A fixed set of liquid symbols is scanned continuously with the same rules.","how2_n":"02","how2_t":"SMC + Fibonacci logic","how2_d":"Market structure, OB/FVG, liquidity and Fibonacci confluence are evaluated together.","how3_n":"03","how3_t":"Risk gate","how3_d":"Risk envelope, holding limits and circuit-breaker checks filter every setup.","how4_n":"04","how4_t":"Signal or automation","how4_d":"The indicator marks the setup on your chart; the bot can execute it automatically.","why_eyebrow":"Why u2algo","why_h2":"Many indicators. One disciplined tool.","why_sub":"Instead of stacking a dozen scripts, u2algo unifies SMC and Fibonacci into one confluence engine — the same logic that drives the automated bot.","why1_t":"All-in-one","why1_d":"SMC + Fibonacci + structure + liquidity in a single, clean overlay.","why2_t":"Multi-timeframe","why2_d":"Higher-timeframe bias confirms lower-timeframe entries automatically.","why3_t":"Risk-first","why3_d":"Every setup passes a deterministic risk gate before it ever matters.","why4_t":"Transparent","why4_d":"Clear rules, no black box, no profit promises — you always see the logic.","stats_eyebrow":"Live track record","stats_h2":"Verified performance — publishing soon","stats_sub":"We publish normalised, closed-trade results only when verified reports are ready. No absolute balances, negatives included.","stats_loading":"Loading…","stats_l1":"Period","stats_l2":"Closed trades","stats_l3":"Win rate","stats_l4":"Return","stats_l5":"Max drawdown","stats_note":"Statistics are normalised to percentages; absolute balance is never shared. Past performance is not a guarantee of future results. Not investment advice.","price_eyebrow":"Pricing","price_h2":"Simple pricing, 7-day free trial","price_sub":"Try the indicator free for 7 days. The automated bot launches soon. No profit guarantees — trade at your own risk.","price_cta":"See pricing & start trial","faq_eyebrow":"FAQ","faq_h2":"Questions, answered","faq_q1":"What exactly does the indicator do?","faq_a1":"It automatically marks Smart Money Concepts structures (Order Blocks, FVG, EQH/EQL, Breaker Blocks) plus Fibonacci confluence and SL/TP visuals on your TradingView chart. It is decision-support — you make the trades.","faq_q2":"What's the difference between the indicator and the bot?","faq_a2":"The indicator marks setups on your chart and you decide. The automated bot runs the same SMC + Fibonacci engine and executes trades for you, with a deterministic safety stack. The bot is coming soon.","faq_q3":"How does the free trial work?","faq_a3":"You get 7 days free. Billing details are collected at sign-up via Lemon Squeezy; you can cancel any time during the trial and won't be charged.","faq_q4":"Can I see the indicator's source code?","faq_a4":"No. The indicator is published as a protected, invite-only script on TradingView — you can use it on your charts, but the Pine Script source is not visible.","faq_q5":"Is this financial advice or a profit guarantee?","faq_a5":"No. u2algo is a decision-support and automation tool. Nothing here is investment advice and no returns are guaranteed. All trading decisions and risks are yours (DYOR).","faq_q6":"How do I get access after subscribing?","faq_a6":"After checkout you'll receive setup instructions; TradingView access is granted within 24 hours. See the setup guide & FAQ.","disc_h":"Risk disclosure","disc_p1":"u2algo is a decision-support and automation tool. Nothing on this site is investment, financial, legal or tax advice, and must not be interpreted as such. No returns are guaranteed.","disc_p2":"This is not investment advice. Trade at your own risk.","disc_p3":"Crypto assets and leveraged futures carry high volatility and the risk of losing all your capital. Past, backtest or shadow results do not indicate future results. Only trade with money you can afford to lose, and do your own research (DYOR).","disc_p4":"u2algo is operated by a Turkish joint-stock company (A.Ş.). We are not a licensed broker, investment advisor or fund. This is not a solicitation to invest.","disc_full":"Full risk disclosure →","foot_tagline":"An algorithmic SMC + Fibonacci trading indicator and automated bot for TradingView.","foot_product":"Product","foot_community":"Community","foot_legal":"Legal","foot_privacy":"Privacy Policy","foot_terms":"Terms of Use","foot_contact":"Contact","foot_rights":"All rights reserved","foot_dyor":"Not investment advice · DYOR · Understand the risks","lang_label":"Language","pr_back":"← u2algo home","pr_eyebrow":"Indicator & automated bot","pr_h1":"SMC + Fibonacci, marked and automated for TradingView","pr_sub":"u2algo marks Smart Money Concepts and Fibonacci confluence on your chart in real time. Use it as a decision-support indicator — or let the automated bot run the same engine for you.","pr_cta_ind":"Start 7-day free trial","pr_cta_note":"Billing via Lemon Squeezy. Cancel anytime during the trial.","pr_meth_eyebrow":"Methodology","pr_meth_h":"Rule-based, not guesswork","pr_meth_sub":"The indicator automates the core structures of the Smart Money Concepts approach and layers Fibonacci confluence on top — consistently marked so manual scanning drops.","pr_isnt_h":"What it is — and isn't","pr_is1":"SMC + Fibonacci decision-support / analysis tool","pr_is2":"Automatic OB, FVG, EQH/EQL and Breaker Block marking","pr_is3":"Fibonacci confluence scoring and SL/TP visuals","pr_isnt1":"Not a signal-selling service","pr_isnt2":"The indicator does not place trades by itself","pr_isnt3":"Not investment advice, no profit guarantee","pr_protected":"Source code is protected — the indicator is published as an invite-only TradingView script. You use it; the Pine Script source stays private.","pr_compare_h":"Indicator or full automation","pr_setup":"After checkout you'll receive setup instructions; TradingView access is granted within 24 hours."},"tr":{"nav_what":"Nedir","nav_features":"Özellikler","nav_products":"Ürünler","nav_how":"Nasıl çalışır","nav_pricing":"Fiyatlandırma","nav_faq":"SSS","nav_cta":"Ücretsiz dene","hero_eyebrow":"Algoritmik trading araç seti · TradingView","hero_h1_a":"SMC, Fibonacci ve yapı —","hero_h1_em":"otomatik","hero_h1_b":"tek TradingView aracında.","hero_sub":"u2algo; Order Block, FVG, likidite ve Fibonacci confluence yapılarını grafiğinde gerçek zamanlı işaretler — ve aynı motor üzerine kurulu tam otomatik bir trade botunu çalıştırır. Karar-destek, şeffaf, risk öncelikli.","hero_cta1":"İndikatörü al — $59/ay","hero_cta2":"Bot — yakında","hero_k1":"SMC","hero_k1l":"Smart Money Concepts","hero_k2":"Fibonacci","hero_k2l":"Confluence motoru","hero_k3":"Çoklu-ZD","hero_k3l":"Zaman dilimi uyumu","hero_k4":"7 gün","hero_k4l":"Ücretsiz deneme","feat_eyebrow":"İndikatör neyi işaretler","feat_h2":"Her önemli yapı, senin için otomatik işaretlenir","feat_sub":"Tek indikatör, saatlerce süren manuel grafik taramasının yerini alır. SMC ve Fibonacci mantığı, her zaman diliminde katmanlı ve confluence skorlu.","feat1_t":"Order Block (OB)","feat1_d":"Güçlü hareketler öncesi son belirleyici mumları tespit eder ve bu arz/talep bölgelerini kutu olarak işaretler.","feat2_t":"Fair Value Gap (FVG)","feat2_d":"Fiyat dengesizliklerini bulur ve fiyatın yeniden dengelenme ihtimalini görselleştirir.","feat3_t":"Likidite (EQH/EQL)","feat3_d":"Eşit tepe/dipleri likidite havuzu olarak işaretler — yapısal hedef ve SL referansı olarak kullanılabilir.","feat4_t":"Breaker Block (BB)","feat4_d":"Bir Order Block kırıldığında yapısal yön değişimini vurgular, bias okumasına yardımcı olur.","feat5_t":"Fibonacci confluence","feat5_d":"Fibonacci düzeltme/uzanım bölgelerini bindirir ve SMC yapısıyla örtüştüğü yerleri skorlar.","feat6_t":"SL/TP & R:R görseli","feat6_d":"Olası stop-loss, take-profit ve risk-getiri seviyelerini çizer. Yalnızca bilgilendirme — asla emir değil.","prod_eyebrow":"İndikatör & bot","prod_h2":"Aynı motoru kullanmanın iki yolu","prod_sub":"İndikatörle başla ve tam kontrolde kal, ya da otomatik botun aynı SMC + Fibonacci mantığını senin için çalıştırmasına izin ver.","pi_badge":"Şu an mevcut","pi_name":"İndikatör","pi_price":"$59","pi_per":"/ ay","pi_blurb":"TradingView'de gerçek zamanlı SMC + Fibonacci karar-desteği.","pi_f1":"OB, FVG, EQH/EQL, Breaker Block","pi_f2":"Fibonacci confluence skorlaması","pi_f3":"Çoklu zaman dilimi bias & SL/TP görseli","pi_f4":"Kontrol sende — karar-destek","pi_f5":"7 gün ücretsiz deneme · istediğin an iptal","pi_cta":"Ücretsiz dene","pb_badge":"Yakında","pb_name":"Otomatik Bot","pb_price":"$590","pb_per":"/ ay","pb_blurb":"Aynı SMC + Fibonacci motorunda tam otomatik işlem.","pb_f1":"Eli boş, 7/24 otomatik işlem","pb_f2":"7 katmanlı deterministik güvenlik yığını","pb_f3":"Scalp / Mid / Long profilleri","pb_f4":"Risk gate, devre kesici, pozisyon korumaları","pb_f5":"Lansmanda 7 gün ücretsiz deneme","pb_cta":"Yakında","how_eyebrow":"Nasıl çalışır","how_h2":"Grafik taramasından işleme","how_sub":"Aynı disiplinli süreç hem indikatörü hem botu çalıştırır.","how1_n":"01","how1_t":"Evren taraması","how1_d":"Sabit bir likit sembol seti, aynı kurallarla sürekli taranır.","how2_n":"02","how2_t":"SMC + Fibonacci mantığı","how2_d":"Piyasa yapısı, OB/FVG, likidite ve Fibonacci confluence birlikte değerlendirilir.","how3_n":"03","how3_t":"Risk kapısı","how3_d":"Risk zarfı, holding limitleri ve devre kesici kontrolleri her setup'ı filtreler.","how4_n":"04","how4_t":"Sinyal ya da otomasyon","how4_d":"İndikatör setup'ı grafiğinde işaretler; bot bunu otomatik uygulayabilir.","why_eyebrow":"Neden u2algo","why_h2":"Onlarca indikatör değil. Tek disiplinli araç.","why_sub":"Bir düzine script üst üste koymak yerine, u2algo SMC ve Fibonacci'yi tek bir confluence motorunda birleştirir — otomatik botu çalıştıran mantığın aynısı.","why1_t":"Hepsi bir arada","why1_d":"SMC + Fibonacci + yapı + likidite tek, temiz bir katmanda.","why2_t":"Çoklu zaman dilimi","why2_d":"Üst zaman dilimi bias'ı, alt zaman dilimi girişlerini otomatik teyit eder.","why3_t":"Risk öncelikli","why3_d":"Her setup, dikkate alınmadan önce deterministik bir risk kapısından geçer.","why4_t":"Şeffaf","why4_d":"Net kurallar, kara kutu yok, kâr vaadi yok — mantığı her zaman görürsün.","stats_eyebrow":"Canlı kanıt geçmişi","stats_h2":"Doğrulanmış performans — yakında yayında","stats_sub":"Normalize edilmiş, kapanmış işlem sonuçlarını yalnızca doğrulanmış raporlar hazır olduğunda yayınlarız. Mutlak bakiye yok, negatifler dahil.","stats_loading":"Yükleniyor…","stats_l1":"Dönem","stats_l2":"Kapanan işlem","stats_l3":"Kazanma oranı","stats_l4":"Getiri","stats_l5":"Maks. düşüş","stats_note":"İstatistikler yüzdeye normalize edilmiştir; mutlak bakiye paylaşılmaz. Geçmiş performans gelecek garantisi değildir. Yatırım tavsiyesi değildir.","price_eyebrow":"Fiyatlandırma","price_h2":"Basit fiyat, 7 gün ücretsiz deneme","price_sub":"İndikatörü 7 gün ücretsiz dene. Otomatik bot yakında geliyor. Kâr garantisi yok — işlem kendi riskinde.","price_cta":"Fiyatları gör & denemeyi başlat","faq_eyebrow":"SSS","faq_h2":"Merak edilenler","faq_q1":"İndikatör tam olarak ne yapar?","faq_a1":"TradingView grafiğinde Smart Money Concepts yapılarını (Order Block, FVG, EQH/EQL, Breaker Block) ve Fibonacci confluence ile SL/TP görsellerini otomatik işaretler. Bu bir karar-destek aracıdır — işlemleri sen yaparsın.","faq_q2":"İndikatör ile bot arasındaki fark ne?","faq_a2":"İndikatör grafiğinde setup'ları işaretler, kararı sen verirsin. Otomatik bot aynı SMC + Fibonacci motorunu çalıştırır ve işlemleri deterministik bir güvenlik yığınıyla senin için açar. Bot yakında geliyor.","faq_q3":"Ücretsiz deneme nasıl çalışır?","faq_a3":"7 gün ücretsiz kullanırsın. Ödeme bilgileri kayıt sırasında Lemon Squeezy üzerinden alınır; deneme süresince istediğin an iptal edebilir, ücret ödemezsin.","faq_q4":"İndikatörün kaynak kodunu görebilir miyim?","faq_a4":"Hayır. İndikatör, TradingView'de korumalı (protected), yalnızca davetli (invite-only) bir script olarak yayınlanır — grafiklerinde kullanabilirsin ama Pine Script kaynak kodu görünmez.","faq_q5":"Bu yatırım tavsiyesi veya kâr garantisi mi?","faq_a5":"Hayır. u2algo bir karar-destek ve otomasyon aracıdır. Buradaki hiçbir şey yatırım tavsiyesi değildir ve hiçbir getiri garanti edilmez. Tüm işlem kararları ve riskleri sana aittir (DYOR).","faq_q6":"Abone olduktan sonra erişimi nasıl alırım?","faq_a6":"Ödeme sonrası kurulum talimatlarını alırsın; TradingView erişimi 24 saat içinde tanımlanır. Kurulum kılavuzu & SSS'ye bak.","disc_h":"Risk bildirimi","disc_p1":"u2algo bir karar-destek ve otomasyon aracıdır. Bu sitedeki hiçbir içerik yatırım, finansal, hukuki veya vergi tavsiyesi değildir ve öyle yorumlanmamalıdır. Hiçbir getiri garanti edilmez.","disc_p2":"Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir.","disc_p3":"Kripto varlıklar ve kaldıraçlı futures yüksek volatilite ve tüm sermayeni kaybetme riski taşır. Geçmiş, backtest veya shadow sonuçları gelecek sonuçların göstergesi değildir. Yalnızca kaybetmeyi göze alabileceğin parayla ve kendi araştırmanı yaparak (DYOR) işlem yap.","disc_p4":"u2algo bir Türk Anonim Şirketi (A.Ş.) tarafından işletilir. Lisanslı aracı kurum, yatırım danışmanı veya fon değiliz. Yatırıma çağrı yoktur.","disc_full":"Tam risk açıklaması →","foot_tagline":"TradingView için algoritmik SMC + Fibonacci trading indikatörü ve otomatik botu.","foot_product":"Ürün","foot_community":"Topluluk","foot_legal":"Yasal","foot_privacy":"Gizlilik Politikası","foot_terms":"Kullanım Şartları","foot_contact":"İletişim","foot_rights":"Tüm hakları saklıdır","foot_dyor":"Yatırım tavsiyesi değildir · DYOR · Riskleri anla","lang_label":"Dil","pr_back":"← u2algo ana sayfa","pr_eyebrow":"İndikatör & otomatik bot","pr_h1":"SMC + Fibonacci, TradingView için işaretlenir ve otomatikleşir","pr_sub":"u2algo, Smart Money Concepts ve Fibonacci confluence yapılarını grafiğinde gerçek zamanlı işaretler. Karar-destek indikatörü olarak kullan — ya da otomatik botun aynı motoru senin için çalıştırmasına izin ver.","pr_cta_ind":"7 gün ücretsiz dene","pr_cta_note":"Ödeme Lemon Squeezy üzerinden. Deneme süresince istediğin an iptal et.","pr_meth_eyebrow":"Metodoloji","pr_meth_h":"Kural-tabanlı, tahmin değil","pr_meth_sub":"İndikatör, Smart Money Concepts yaklaşımının temel yapılarını otomatikleştirir ve üzerine Fibonacci confluence katmanı ekler — tutarlı işaretlenir, manuel tarama yükü düşer.","pr_isnt_h":"Bu nedir — ve ne değildir","pr_is1":"SMC + Fibonacci karar-destek / analiz aracı","pr_is2":"Otomatik OB, FVG, EQH/EQL ve Breaker Block işaretleme","pr_is3":"Fibonacci confluence skorlaması ve SL/TP görselleri","pr_isnt1":"Sinyal satış servisi değildir","pr_isnt2":"İndikatör tek başına işlem açmaz","pr_isnt3":"Yatırım tavsiyesi değildir, kâr garantisi yoktur","pr_protected":"Kaynak kodu korumalıdır — indikatör, yalnızca davetli (invite-only) bir TradingView script'i olarak yayınlanır. Sen kullanırsın; Pine Script kaynağı gizli kalır.","pr_compare_h":"İndikatör mü, tam otomasyon mu","pr_setup":"Ödeme sonrası kurulum talimatlarını alırsın; TradingView erişimi 24 saat içinde tanımlanır."},"ru":{"nav_what":"Что это","nav_features":"Возможности","nav_products":"Продукты","nav_how":"Как работает","nav_pricing":"Цены","nav_faq":"FAQ","nav_cta":"Пробный период","hero_eyebrow":"Инструментарий для алготрейдинга · TradingView","hero_h1_a":"SMC, Фибоначчи и структура —","hero_h1_em":"автоматически","hero_h1_b":"в одном инструменте TradingView.","hero_sub":"u2algo в реальном времени отмечает Order Block, FVG, ликвидность и конфлюэнс Фибоначчи на вашем графике — и управляет полностью автоматическим торговым ботом на том же движке. Поддержка решений, прозрачность, риск прежде всего.","hero_cta1":"Купить индикатор — $59/мес","hero_cta2":"Бот — скоро","hero_k1":"SMC","hero_k1l":"Smart Money Concepts","hero_k2":"Фибоначчи","hero_k2l":"Движок конфлюэнса","hero_k3":"Мульти-ТФ","hero_k3l":"Согласование таймфреймов","hero_k4":"7 дней","hero_k4l":"Бесплатно","feat_eyebrow":"Что отмечает индикатор","feat_h2":"Каждая ключевая структура — отмечена автоматически","feat_sub":"Один индикатор заменяет часы ручного анализа графика. Логика SMC и Фибоначчи, послойно и с оценкой конфлюэнса на каждом таймфрейме.","feat1_t":"Order Block (OB)","feat1_d":"Определяет последние решающие свечи перед сильными движениями и отмечает эти зоны спроса/предложения.","feat2_t":"Fair Value Gap (FVG)","feat2_d":"Находит ценовые дисбалансы и показывает, где цена вероятно вернётся к равновесию.","feat3_t":"Ликвидность (EQH/EQL)","feat3_d":"Отмечает равные максимумы и минимумы как пулы ликвидности — для целей и уровней SL.","feat4_t":"Breaker Block (BB)","feat4_d":"Подсвечивает смену структуры при пробое Order Block, помогая читать направленность.","feat5_t":"Конфлюэнс Фибоначчи","feat5_d":"Накладывает зоны коррекции/расширения Фибоначчи и оценивает совпадение со структурой SMC.","feat6_t":"Визуал SL/TP и R:R","feat6_d":"Рисует возможные уровни стоп-лосс, тейк-профит и риск/прибыль. Только информация — не приказ.","prod_eyebrow":"Индикатор и бот","prod_h2":"Два способа использовать один движок","prod_sub":"Начните с индикатора и сохраните полный контроль, либо позвольте боту выполнять ту же логику SMC + Фибоначчи за вас.","pi_badge":"Доступно сейчас","pi_name":"Индикатор","pi_price":"$59","pi_per":"/ мес","pi_blurb":"Поддержка решений SMC + Фибоначчи в реальном времени на TradingView.","pi_f1":"OB, FVG, EQH/EQL, Breaker Block","pi_f2":"Оценка конфлюэнса Фибоначчи","pi_f3":"Мульти-ТФ направленность и визуал SL/TP","pi_f4":"Контроль за вами — поддержка решений","pi_f5":"7 дней бесплатно · отмена в любой момент","pi_cta":"Пробный период","pb_badge":"Скоро","pb_name":"Автоматический бот","pb_price":"$590","pb_per":"/ мес","pb_blurb":"Полностью автоматическое исполнение на том же движке SMC + Фибоначчи.","pb_f1":"Автоматическая торговля 24/7","pb_f2":"7-уровневый детерминированный контур безопасности","pb_f3":"Профили Scalp / Mid / Long","pb_f4":"Риск-гейт, аварийный выключатель, защита позиций","pb_f5":"7 дней бесплатно на старте","pb_cta":"Скоро","how_eyebrow":"Как это работает","how_h2":"От анализа графика до исполнения","how_sub":"Один и тот же дисциплинированный процесс питает и индикатор, и бота.","how1_n":"01","how1_t":"Сканирование рынка","how1_d":"Фиксированный набор ликвидных инструментов сканируется постоянно по единым правилам.","how2_n":"02","how2_t":"Логика SMC + Фибоначчи","how2_d":"Структура рынка, OB/FVG, ликвидность и конфлюэнс Фибоначчи оцениваются вместе.","how3_n":"03","how3_t":"Риск-гейт","how3_d":"Риск-профиль, лимиты удержания и аварийный выключатель фильтруют каждый сетап.","how4_n":"04","how4_t":"Сигнал или автоматизация","how4_d":"Индикатор отмечает сетап на графике; бот может исполнить его автоматически.","why_eyebrow":"Почему u2algo","why_h2":"Не десятки индикаторов. Один дисциплинированный инструмент.","why_sub":"Вместо стопки из десятка скриптов u2algo объединяет SMC и Фибоначчи в один движок конфлюэнса — та же логика управляет и автоматическим ботом.","why1_t":"Всё в одном","why1_d":"SMC + Фибоначчи + структура + ликвидность в одном чистом слое.","why2_t":"Мульти-таймфрейм","why2_d":"Направленность старшего ТФ автоматически подтверждает входы младшего ТФ.","why3_t":"Риск прежде всего","why3_d":"Каждый сетап проходит детерминированный риск-гейт, прежде чем стать значимым.","why4_t":"Прозрачность","why4_d":"Чёткие правила, без чёрного ящика и обещаний прибыли — логика всегда видна.","stats_eyebrow":"Живая статистика","stats_h2":"Проверенные результаты — скоро публикация","stats_sub":"Мы публикуем нормализованные результаты закрытых сделок только когда готовы проверенные отчёты. Без абсолютных балансов, включая отрицательные.","stats_loading":"Загрузка…","stats_l1":"Период","stats_l2":"Закрытых сделок","stats_l3":"Винрейт","stats_l4":"Доходность","stats_l5":"Макс. просадка","stats_note":"Статистика нормализована в проценты; абсолютный баланс не раскрывается. Прошлые результаты не гарантируют будущих. Не является инвестиционным советом.","price_eyebrow":"Цены","price_h2":"Простые цены, 7 дней бесплатно","price_sub":"Попробуйте индикатор бесплатно 7 дней. Автоматический бот выйдет скоро. Без гарантий прибыли — торгуйте на свой риск.","price_cta":"Цены и пробный период","faq_eyebrow":"FAQ","faq_h2":"Ответы на вопросы","faq_q1":"Что именно делает индикатор?","faq_a1":"Он автоматически отмечает структуры Smart Money Concepts (Order Block, FVG, EQH/EQL, Breaker Block), конфлюэнс Фибоначчи и визуал SL/TP на вашем графике TradingView. Это поддержка решений — сделки совершаете вы.","faq_q2":"В чём разница между индикатором и ботом?","faq_a2":"Индикатор отмечает сетапы на графике, а решение принимаете вы. Автоматический бот использует тот же движок SMC + Фибоначчи и исполняет сделки за вас с детерминированным контуром безопасности. Бот выйдет скоро.","faq_q3":"Как работает бесплатный период?","faq_a3":"Вы получаете 7 дней бесплатно. Платёжные данные собираются при регистрации через Lemon Squeezy; вы можете отменить в любой момент в течение пробного периода и не будете списаны.","faq_q4":"Можно ли увидеть исходный код индикатора?","faq_a4":"Нет. Индикатор публикуется как защищённый (protected), доступный только по приглашению (invite-only) скрипт на TradingView — вы можете использовать его на графиках, но исходный код Pine Script не виден.","faq_q5":"Это финансовый совет или гарантия прибыли?","faq_a5":"Нет. u2algo — инструмент поддержки решений и автоматизации. Ничто здесь не является инвестиционным советом, и доходность не гарантируется. Все торговые решения и риски — ваши (DYOR).","faq_q6":"Как получить доступ после подписки?","faq_a6":"После оплаты вы получите инструкции по настройке; доступ в TradingView предоставляется в течение 24 часов. См. руководство и FAQ.","disc_h":"Раскрытие рисков","disc_p1":"u2algo — инструмент поддержки решений и автоматизации. Ничто на этом сайте не является инвестиционным, финансовым, юридическим или налоговым советом и не должно так трактоваться. Доходность не гарантируется.","disc_p2":"Это не инвестиционный совет. Торгуйте на свой риск.","disc_p3":"Криптоактивы и фьючерсы с плечом крайне волатильны и несут риск потери всего капитала. Прошлые результаты, бэктесты или shadow-результаты не указывают на будущие. Торгуйте только теми средствами, потерю которых можете позволить, и проводите собственное исследование (DYOR).","disc_p4":"u2algo управляется турецким акционерным обществом (A.Ş.). Мы не лицензированный брокер, инвестиционный советник или фонд. Это не призыв к инвестициям.","disc_full":"Полное раскрытие рисков →","foot_tagline":"Алгоритмический торговый индикатор SMC + Фибоначчи и автоматический бот для TradingView.","foot_product":"Продукт","foot_community":"Сообщество","foot_legal":"Юридическое","foot_privacy":"Политика конфиденциальности","foot_terms":"Условия использования","foot_contact":"Контакт","foot_rights":"Все права защищены","foot_dyor":"Не инвестиционный совет · DYOR · Поймите риски","lang_label":"Язык","pr_back":"← на главную u2algo","pr_eyebrow":"Индикатор и автоматический бот","pr_h1":"SMC + Фибоначчи — отмечено и автоматизировано для TradingView","pr_sub":"u2algo в реальном времени отмечает Smart Money Concepts и конфлюэнс Фибоначчи на вашем графике. Используйте как индикатор поддержки решений — или доверьте боту тот же движок.","pr_cta_ind":"7 дней бесплатно","pr_cta_note":"Оплата через Lemon Squeezy. Отмена в любой момент в течение пробного периода.","pr_meth_eyebrow":"Методология","pr_meth_h":"На правилах, без догадок","pr_meth_sub":"Индикатор автоматизирует ключевые структуры подхода Smart Money Concepts и добавляет конфлюэнс Фибоначчи — последовательная разметка снижает ручной анализ.","pr_isnt_h":"Что это — и что нет","pr_is1":"Инструмент поддержки решений SMC + Фибоначчи","pr_is2":"Автоматическая разметка OB, FVG, EQH/EQL и Breaker Block","pr_is3":"Оценка конфлюэнса Фибоначчи и визуал SL/TP","pr_isnt1":"Не сервис продажи сигналов","pr_isnt2":"Индикатор сам не открывает сделки","pr_isnt3":"Не инвестиционный совет, без гарантии прибыли","pr_protected":"Исходный код защищён — индикатор публикуется как скрипт TradingView только по приглашению. Вы используете его; исходник Pine Script остаётся закрытым.","pr_compare_h":"Индикатор или полная автоматизация","pr_setup":"После оплаты вы получите инструкции по настройке; доступ в TradingView — в течение 24 часов."}};
+var LANGS=['en','tr','ru'];
+function pickLang(){try{var s=localStorage.getItem('u2lang');if(s&&LANGS.indexOf(s)>=0)return s;}catch(e){}var n=(navigator.language||'en').slice(0,2).toLowerCase();return LANGS.indexOf(n)>=0?n:'en';}
+function applyLang(lang){if(LANGS.indexOf(lang)<0)lang='en';var d=I18N[lang]||I18N.en;document.querySelectorAll('[data-i18n]').forEach(function(el){var k=el.getAttribute('data-i18n');if(d[k]!=null)el.textContent=d[k];});document.documentElement.setAttribute('lang',lang);document.querySelectorAll('.lang-switch button').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-lang')===lang);});try{localStorage.setItem('u2lang',lang);}catch(e){}}
+document.querySelectorAll('.lang-switch button').forEach(function(b){b.addEventListener('click',function(){applyLang(b.getAttribute('data-lang'));});});
+applyLang(pickLang());
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -10% 0px'});
+document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});
+window.addEventListener('load',function(){setTimeout(function(){document.querySelectorAll('.reveal:not(.in)').forEach(function(el){el.classList.add('in');});},1200);});
 // ── Animated network nodes on #u2-net (SMC scanner motif, brand cyan) ──
 (function(){
   var cv = document.getElementById('u2-net');
