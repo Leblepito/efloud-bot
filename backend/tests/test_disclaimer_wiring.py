@@ -11,7 +11,7 @@ Acceptance spec (from P-002.5 CMP-5):
   - risk-disclosure.html (NEW): TR + EN anchors + all 6 blocks (B1-B6)
   - Sitemap entries all live surfaces
   - find_violations on every page == [] (no banned-phrase / perf-% / $ leak
-    except the whitelisted $39 lifetime mentions)
+    except the whitelisted $59/mo + $590/mo subscription prices)
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ import pytest
 
 from engine.content_jobs import COMPLIANCE_EN, COMPLIANCE_TR
 from scripts.content_compliance import (
+    BOT_PRICE_USD,
     PRODUCT_PRICE_USD,
     find_violations,
     has_disclaimer,
@@ -127,7 +128,7 @@ def _strip_style(text: str) -> str:
 ])
 def test_page_passes_compliance_gate(page):
     """Every page MUST pass the PROMOTIONAL-CLAIM gates: no banned phrase
-    (TR + EN), no absolute $ (except the whitelisted $39 lifetime), no perf-%.
+    (TR + EN), no absolute $ (except the whitelisted $59/mo + $590/mo prices), no perf-%.
 
     ``unlabeled_simulation`` is intentionally NOT enforced over a full static
     page. These pages legitimately DESCRIBE and DISCLAIM the backtest/shadow
@@ -200,17 +201,19 @@ def test_page_links_to_risk_disclosure(page):
 
 # ─────────────────────────────────────────────────────────────────────
 # 8. Conservative proof — no $/per-trade on content-bearing sections
-#    (the existing $39 lifetime / one-time price is whitelist-OK)
+#    (the $59/mo indicator + $590/mo bot subscription prices are whitelist-OK)
 # ─────────────────────────────────────────────────────────────────────
 
 def test_no_dollar_amount_outside_whitelist():
-    """No page should contain $-amounts OTHER than the whitelisted $39
-    lifetime / one-time product price."""
+    """No page should contain $-amounts OTHER than the whitelisted $59/mo
+    indicator + $590/mo bot subscription prices."""
     # Match $ + digit + optional comma/dot + optional digits (NOT a digit-only match)
     money_pattern = re.compile(r"\$\s*\d[\d,.]*")
     whitelist = re.compile(
-        rf"\$\s*{PRODUCT_PRICE_USD}\b"
-        rf"(?:\s*(?:lifetime|one[- ]?time|once|tek\s+seferlik|ömür\s+boyu))?",
+        rf"\$\s*(?:{PRODUCT_PRICE_USD}|{BOT_PRICE_USD})\b"
+        rf"(?:\s*(?:/\s*(?:mo|month|ay)|month|monthly|aylık|ay|"
+        rf"lifetime|one[- ]?time|once|tek\s+seferlik|ömür\s+boyu))?"
+        rf"|(?:{PRODUCT_PRICE_USD}|{BOT_PRICE_USD})\s*\$",
         re.IGNORECASE,
     )
     for page in ("index.html", "premium.html", "quickstart.html",
@@ -218,7 +221,7 @@ def test_no_dollar_amount_outside_whitelist():
         text = _read(page)
         for m in money_pattern.finditer(text):
             # The matched amount must be whitelisted; if a longer span in the
-            # text (e.g. "$39 Lifetime") covers this match, it's whitelisted.
+            # text (e.g. "$59/mo") covers this match, it's whitelisted.
             tail = text[m.start():m.start()+60]
             assert whitelist.search(tail), (
                 f"{page} has non-whitelisted $-amount at offset {m.start()}: "
@@ -235,4 +238,5 @@ def test_canonical_anchors_match_engine_constants():
     must byte-match COMPLIANCE_TR, and the EN one must match COMPLIANCE_EN."""
     assert COMPLIANCE_TR == "Bu yatırım tavsiyesi değildir. Trade kendi riskinizdir."
     assert COMPLIANCE_EN == "Not investment advice. Trade at your own risk."
-    assert PRODUCT_PRICE_USD == 39
+    assert PRODUCT_PRICE_USD == 59
+    assert BOT_PRICE_USD == 590

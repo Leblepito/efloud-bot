@@ -75,18 +75,18 @@ def test_en_phrases_NOT_flagged_under_lang_tr():
     assert find_violations("Guaranteed profit for all", lang="tr") == []
 
 
-# --- 3) PRICE_WHITELIST — $39 lifetime OK, all other $ banned ---------------
+# --- 3) PRICE_WHITELIST — $59/mo + $590/mo subscription OK, other $ banned ---
 
-def test_product_price_39_lifetime_is_allowed():
-    assert find_violations("Founding member - $39 lifetime access") == []
-
-
-def test_product_price_39_one_time_is_allowed():
-    assert find_violations("Get it for $39 one-time today") == []
+def test_product_price_59_monthly_is_allowed():
+    assert find_violations("Indicator subscription - $59/mo access") == []
 
 
-def test_product_price_39_turkish_lifetime_is_allowed():
-    assert find_violations("Kurucu üye - $39 ömür boyu erişim") == []
+def test_product_price_590_bot_monthly_is_allowed():
+    assert find_violations("Get the bot for $590/mo today") == []
+
+
+def test_product_price_59_turkish_monthly_is_allowed():
+    assert find_violations("İndikatör aboneliği - 59$/ay erişim") == []
 
 
 def test_arbitrary_dollar_amounts_still_banned():
@@ -96,8 +96,8 @@ def test_arbitrary_dollar_amounts_still_banned():
 
 
 def test_price_lookalikes_are_not_whitelisted():
-    # Only the EXACT $39 price is whitelisted; lookalikes that merely START with
-    # $39 must still be flagged (regression: a non-anchored prefix match leaked
+    # Only the EXACT $59/$590 prices are whitelisted; lookalikes that merely START
+    # with them must still be flagged (regression: a non-anchored prefix leaked
     # "$39,000" / "$39.99" through the money gate).
     assert "absolute_money" in find_violations("You could make $39,000 profit")
     assert "absolute_money" in find_violations("Just $39.99 today")

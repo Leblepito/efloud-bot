@@ -65,15 +65,18 @@ _BANNED_TR_NORM = [(p, _norm(p)) for p in BANNED_TR_PHRASES]
 _BANNED_EN_NORM = [(p, _norm(p)) for p in BANNED_EN_PHRASES]
 
 
-# CMP-3 — single product price token (the $39 founding-member / lifetime /
-# one-time offer) is the ONLY dollar amount allowed in marketing copy. All
+# CMP-3 — product price tokens (the $59/mo indicator + $590/mo bot
+# subscription) are the ONLY dollar amounts allowed in marketing copy. All
 # other $-amounts (per-trade PnL, account balance, $250 trade, etc.) remain
 # rejected by the regular absolute_money gate. Keep this scope tight: only
-# matches the canonical price string + the cadence suffix list.
-PRODUCT_PRICE_USD = 39
+# matches the canonical price strings + the cadence suffix list.
+PRODUCT_PRICE_USD = 59          # indicator — monthly subscription
+BOT_PRICE_USD = 590             # bot — monthly subscription
 _PRICE_WHITELIST = re.compile(
-    rf"\$\s*{PRODUCT_PRICE_USD}\b"
-    rf"(?:\s*(?:lifetime|one[- ]?time|once|tek\s+seferlik|ömür\s+boyu))?",
+    rf"\$\s*(?:{PRODUCT_PRICE_USD}|{BOT_PRICE_USD})\b"
+    rf"(?:\s*(?:/\s*(?:mo|month|ay)|month|monthly|aylık|ay|"
+    rf"lifetime|one[- ]?time|once|tek\s+seferlik|ömür\s+boyu))?"
+    rf"|(?:{PRODUCT_PRICE_USD}|{BOT_PRICE_USD})\s*\$",
     re.IGNORECASE,
 )
 
