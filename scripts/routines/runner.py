@@ -41,6 +41,16 @@ try:
     from scripts.routines import proof_export
 except ImportError:
     pass
+# Edge Measurement Core (activation item A): self-registering routines must be
+# imported here or the watch-loop scheduler never sees them.
+try:
+    from scripts.routines import resolve_signals
+except ImportError:
+    pass
+try:
+    from scripts.routines import edge_report
+except ImportError:
+    pass
 
 
 def run_one(name, client=None, alert=None, cfg=None) -> int:
@@ -84,6 +94,10 @@ CADENCES = {
     "position_audit": 120,
     "config_drift": 3600,
     "market_collect": 300,
+    # Edge Measurement Core: resolver every 5min, report hourly. Both are
+    # cheap no-ops while signal_ledger is disabled (flag/env gate in main()).
+    "signal_resolver": 300,
+    "edge_report": 3600,
 }
 
 

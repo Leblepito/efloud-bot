@@ -230,6 +230,7 @@ services:
       - .env.production
     volumes:
       - efloud_state:/app/state
+      - efloud_state_1k:/app/state_1k    # V1 live state — signal_ledger.jsonl lives here
       - efloud_reports:/app/reports
       - efloud_data:/app/data            # new volume for data/market/*
       - efloud_logs:/app/logs:ro

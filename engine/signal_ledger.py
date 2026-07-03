@@ -130,3 +130,20 @@ class SignalLedger:
 
     def all_signals(self):
         return list(self._rows.values())
+
+
+def ledger_enabled(cfg_block) -> bool:
+    """Master on/off for the Edge Measurement Core.
+
+    Env EFLOUD_SIGNAL_LEDGER_ENABLED (1/true/yes/on or 0/false/no/off)
+    overrides the config block's `enabled` value, so prod can activate via
+    .env.production without editing the baked-in config (repo default stays
+    OFF per dev-contract).
+    """
+    import os
+    env = os.environ.get("EFLOUD_SIGNAL_LEDGER_ENABLED", "").strip().lower()
+    if env in ("1", "true", "yes", "on"):
+        return True
+    if env in ("0", "false", "no", "off"):
+        return False
+    return bool((cfg_block or {}).get("enabled"))

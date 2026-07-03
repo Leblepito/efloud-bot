@@ -16,6 +16,9 @@ def _status_line(o):
 def build_report(metrics: dict) -> str:
     o = metrics["overall"]
     lines = [_status_line(o), ""]
+    if not o.get("n"):
+        # activation item I: explicit empty-ledger line
+        lines.insert(1, "No signals recorded yet — the ledger is empty.")
     lines.append(f"Primary hypothesis: {metrics.get('primary_hypothesis','')}")
     lines.append(f"Status breakdown: {metrics.get('status_breakdown', {})}")
     lines.append(f"Timeout rate: {o.get('timeout_rate', 0):.1%}")
@@ -63,6 +66,9 @@ def main(cfg_path="configs/config.phase2_1k.yaml"):
     from engine.signal_ledger import SignalLedger
     from engine.edge_metrics import aggregate
     cfg_all = yaml.safe_load(open(cfg_path, encoding="utf-8"))
+    from engine.signal_ledger import ledger_enabled
+    if not ledger_enabled(cfg_all.get("signal_ledger")):
+        return "signal_ledger disabled (config/env) — edge measurement OFF, no data being recorded"
     state_dir = cfg_all.get("operation", {}).get("state_dir", "./state")
     ledger = SignalLedger(Path(state_dir) / "signal_ledger.jsonl")
     return build_report(aggregate(ledger.all_signals()))

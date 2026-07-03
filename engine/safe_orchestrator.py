@@ -165,6 +165,8 @@ class SafeOrchestrator:
         # SMC v2 SetupStateStore — None when v1 flag is active (inert default).
         # See PR #S2b + spec §4.3 for the advance/trigger/save data flow.
         self.setup_state_store = setup_state_store
+        # Edge Measurement Core (Task 8): lazy SignalLedger, flag-gated OFF
+        self.signal_ledger = None
         # Convenience reference to BinanceClient for sizing helpers (PR #24).
         # PR #24 introduced `self.client` references in _calc_size paths but
         # forgot to set the attribute in __init__, causing AttributeError on
@@ -1233,6 +1235,16 @@ class SafeOrchestrator:
                     if self.permission_mgr is not None:
                         is_tradeable = self.permission_mgr.is_tradeable(symbol)
 
+                    # Task 8 (Edge Measurement Core): first-sight ledger record —
+                    # BOTH tradeable and read-only signals, recorded right after
+                    # the dedup insert and before the is_tradeable split diverges.
+                    # Best-effort + flag-gated: never blocks the trade path.
+                    _ledger_sid = self._ledger_record_signal(
+                        symbol, latest, was_tradeable=is_tradeable,
+                        htf_bias=htf_bias,
+                        regime=getattr(regime_analysis, "regime", ""),
+                    )
+
                     if not is_tradeable:
                         # Read-only sembol → manuel trader'a bildir
                         if self.notification_mgr:
@@ -1439,6 +1451,12 @@ class SafeOrchestrator:
                                         symbol, latest.direction, latest.entry, size,
                                         latest.sl, latest.tp1, latest.tp2
                                     )
+                                    # Task 8 (Edge Core): link ledger record to live trade
+                                    if _ledger_sid is not None and self.signal_ledger is not None:
+                                        try:
+                                            self.signal_ledger.set_trade_id(_ledger_sid, trace_id)
+                                        except Exception:
+                                            pass
                                     # Canonical A7: pass the AgentTeam verdict
                                     # (attached to the signal in STEP 3.5) so
                                     # the journal row carries the team's call.
@@ -1758,6 +1776,59 @@ class SafeOrchestrator:
                         # Note: has_left_zone is already True, so next IN_ZONE cycle
                         # will allow entry on confirmation without requiring another leave
                 # Price still outside zone — keep waiting
+
+    def _ledger_record_signal(self, symbol, latest, *, was_tradeable,
+                              htf_bias="", regime=""):
+        """Task 8 (Edge Measurement Core): best-effort first-sight signal record.
+
+        Flag-gated (config signal_ledger.enabled / EFLOUD_SIGNAL_LEDGER_ENABLED).
+        Never raises — a ledger failure must not affect the trade path.
+        ts_emitted == brk_ts by construction (activation item J: resolver
+        windows key off ts_emitted while fetches start at brk_ts — equality
+        makes the seam exact). Returns the ledger signal_id or None.
+        """
+        try:
+            from engine.signal_ledger import SignalLedger, ledger_enabled
+            sl_cfg = self.config.get("signal_ledger") or {}
+            if not ledger_enabled(sl_cfg):
+                return None
+            if self.signal_ledger is None:
+                from pathlib import Path as _P
+                state_dir = self.config.get("operation", {}).get("state_dir", "./state")
+                self.signal_ledger = SignalLedger(_P(state_dir) / "signal_ledger.jsonl")
+            import time as _time
+            import pandas as _pd
+            ts_raw = getattr(latest, "timestamp", "") or ""
+            try:
+                brk_ms = int(_pd.Timestamp(ts_raw).value // 1_000_000)
+            except Exception:
+                brk_ms = int(_time.time() * 1000)
+            tp2 = getattr(latest, "tp2", None)
+            rr2 = getattr(latest, "rr2", None)
+            return self.signal_ledger.record_signal(
+                ts_emitted=brk_ms,
+                brk_ts=brk_ms,
+                symbol=symbol,
+                direction=latest.direction,
+                emitted_entry=float(latest.entry),
+                sl=float(latest.sl),
+                tp1=float(latest.tp1),
+                tp2=float(tp2) if tp2 is not None else None,
+                confluence=float(getattr(latest, "confluence", 0) or 0),
+                rr1=float(getattr(latest, "rr1", 0.0) or 0.0),
+                rr2=float(rr2) if rr2 is not None else None,
+                timeframe=str(self.config.get("timeframes", {}).get("entry", "15m")),
+                htf_bias=str(htf_bias or ""),
+                regime=str(regime or ""),
+                reasons=list(getattr(latest, "reasons", []) or []),
+                was_tradeable=bool(was_tradeable),
+                entry_is_retrace=bool(getattr(latest, "in_ote", False)
+                                      or getattr(latest, "in_ob", False)),
+                exit_model="single_target" if tp2 is None else "tp1_tp2",
+            )
+        except Exception as e:
+            log.warning(f"signal_ledger record skipped (best-effort): {e!r}")
+            return None
 
     def _emit_setup_candidates(
         self,

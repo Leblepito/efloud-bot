@@ -115,11 +115,19 @@ from engine.edge_costs import net_r
 
 log = logging.getLogger("efloud.signal_resolver")
 
+_TF_MS = {"1m": 60_000, "3m": 180_000, "5m": 300_000,
+          "15m": 900_000, "30m": 1_800_000, "1h": 3_600_000}
+
+
+def _tf_to_ms(tf: str) -> int:
+    return _TF_MS.get(tf, 60_000)
+
+
 def resolve_open_signals(ledger, fetcher, cfg):
     tf = cfg["resolution_tf"]; horizon_h = cfg["max_horizon_hours"]
     horizon_ms = int(horizon_h * 3600 * 1000)
     counters = {"scanned":0,"newly_filled":0,"resolved":0,"timed_out":0,
-                "still_open":0,"fetch_failed":0}
+                "still_open":0,"fetch_failed":0,"unfilled":0,"awaiting_fill":0}
     for rec in ledger.open_signals()[: cfg["max_symbols"]]:
         counters["scanned"] += 1
         until = min(int(time.time()*1000), rec.ts_emitted + horizon_ms)
@@ -131,6 +139,15 @@ def resolve_open_signals(ledger, fetcher, cfg):
             counters["fetch_failed"] += 1
             continue
         patch = resolve_signal(rec, bars, cfg["smc_version"], horizon_h, cfg["fill_window_bars"])
+        if patch["status"] == "unfilled":
+            # Activation item C: only FINALIZE 'unfilled' once the fill window
+            # has fully elapsed in wall-clock time. A 300s-cadence pass must not
+            # kill young signals before they had a chance to fill (survivorship
+            # bias in the sample).
+            deadline = rec.ts_emitted + cfg["fill_window_bars"] * _tf_to_ms(tf)
+            if int(time.time() * 1000) < deadline:
+                counters["awaiting_fill"] += 1
+                continue  # not finalized — retried next pass
         if patch.get("hypo_r_gross") is not None:
             ts_res = patch.get("ts_resolved", until)
             hold_h = max((ts_res - rec.ts_emitted) / 3_600_000.0, 0.0)
@@ -143,13 +160,17 @@ def resolve_open_signals(ledger, fetcher, cfg):
             counters["resolved"] += 1
         elif st == "timeout":
             counters["timed_out"] += 1
+        elif st == "unfilled":
+            # item C: explicit counter — was mislabeled still_open before
+            counters["unfilled"] += 1
         else:
             counters["still_open"] += 1
         if patch.get("ts_filled"):
             counters["newly_filled"] += 1
     _write_heartbeat(cfg, counters)
     _maybe_alert(cfg, counters)
-    return counters
+    # threshold echoed so the scheduler wrapper can derive ok (item D)
+    return {**counters, "fetch_fail_alert_pct": cfg["fetch_fail_alert_pct"]}
 
 def _write_heartbeat(cfg, counters):
     state_dir = Path(cfg.get("state_dir", "./state"))
@@ -228,12 +249,19 @@ def _sum_funding(df):
 
 @register("signal_resolver")
 def _routine_run(client=None, alert=None, cfg=None):
-    """Scheduler-facing wrapper. Runs resolve_open_signals via main()."""
+    """Scheduler-facing wrapper. ok derived from main()'s counters
+    (activation item D) instead of hardcoding ok=True. Breaches stay empty:
+    _maybe_alert already routes the fetch-fail alert (no double alerting)."""
     from scripts.routines._base import RoutineResult
     result = main()
+    ok = True
+    if isinstance(result, dict) and "scanned" in result:
+        scanned = result["scanned"] or 1
+        fail_pct = 100.0 * result.get("fetch_failed", 0) / scanned
+        ok = fail_pct < result.get("fetch_fail_alert_pct", 20)
     return RoutineResult(
         name="signal_resolver",
-        ok=True,
+        ok=ok,
         breaches=[],
         report_path=None,
     )
@@ -248,8 +276,9 @@ def main(cfg_path="configs/config.phase2_1k.yaml"):
     cfg = dict(cfg_all["signal_ledger"])
     cfg["state_dir"] = cfg_all.get("operation", {}).get("state_dir", "./state")
     cfg["smc_version"] = cfg_all.get("engine", {}).get("smc_version", "v1")
-    if not cfg.get("enabled"):
-        return {"skipped": "signal_ledger.enabled=false"}
+    from engine.signal_ledger import ledger_enabled
+    if not ledger_enabled(cfg):
+        return {"skipped": "signal_ledger disabled (config/env)"}
     ledger = SignalLedger(Path(cfg["state_dir"]) / "signal_ledger.jsonl")
     fetcher = _FetcherAdapter(OHLCVFetcher())
     return resolve_open_signals(ledger, fetcher, cfg)
