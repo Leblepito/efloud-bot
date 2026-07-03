@@ -225,7 +225,7 @@ class TestLLMExceptionSafety:
             team.regime = RegimeAgent(bad_client)
             team.overseer = OverseerAgent(bad_client)
             review = team.review_trade(_make_ctx())
-            assert review["team_verdict"] in ("NEUTRAL", "REJECT")
+            assert review["team_verdict"] == "ERROR"
             assert "agents" in review
 
 

@@ -1196,11 +1196,14 @@ class SafeOrchestrator:
                     review = self.agent_team.review_trade(ctx)
                     latest.meta["agent_review"] = review
                     latest.meta["risk_review_was_notional_blind"] = review.get("risk_review_was_notional_blind", False)
-                    if review.get("team_verdict") == "REJECT":
+                    verdict = review.get("team_verdict")
+                    if verdict in ("REJECT", "ERROR"):
                         _agent_veto = True
-                        log.warning(f"🚫 [AgentTeam] Signal vetoed by agent team verdict REJECT")
+                        log.warning(f"🚫 [AgentTeam] Signal vetoed by agent team verdict {verdict}")
                 except Exception as e:
                     log.warning(f"Error in synchronous AgentTeam gating review: {e!r}")
+                    _agent_veto = True
+                    log.warning(f"🚫 [AgentTeam] Signal vetoed due to exception in gating review")
 
             if _agent_veto:
                 actions.append(f"[{symbol}] Vetoed by agent team")

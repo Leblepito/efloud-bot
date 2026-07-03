@@ -643,7 +643,7 @@ class OrderManager:
             try:
                 raw_price = params["stopPrice"]
                 res = self.client.exchange.price_to_precision(ccxt_sym, raw_price)
-                if isinstance(res, str):
+                if res is not None:
                     params["stopPrice"] = float(res)
                     price_display = float(res)
             except Exception as e:
@@ -752,11 +752,11 @@ class OrderManager:
             if not self.dry_run:
                 try:
                     res1 = self.client.exchange.amount_to_precision(ccxt_sym, tp1_size)
-                    if isinstance(res1, str):
+                    if res1 is not None:
                         tp1_size = float(res1)
                     if not is_single_target:
                         res2 = self.client.exchange.amount_to_precision(ccxt_sym, tp2_size)
-                        if isinstance(res2, str):
+                        if res2 is not None:
                             tp2_size = float(res2)
                 except Exception as e:
                     log.warning(f"Failed to format TP sizes using exchange precision for {pos.symbol}: {e}")
@@ -799,7 +799,7 @@ class OrderManager:
                 if not self.dry_run:
                     try:
                         res_sl = self.client.exchange.amount_to_precision(ccxt_sym, sl_amount)
-                        if isinstance(res_sl, str):
+                        if res_sl is not None:
                             sl_amount = float(res_sl)
                     except Exception as e:
                         log.warning(
@@ -863,7 +863,7 @@ class OrderManager:
                     pos.tp1_order_id = new_tp1_oid
 
             # Repair TP2 if missing (only for dual-target)
-            if not is_single_target and not pos.tp2_order_id and not pos.tp1_hit:
+            if not is_single_target and not pos.tp2_order_id:
                 log.critical(
                     "order_manager.repair_missing_tp: %s %s tp_leg=TP2 "
                     "— re-sending protection order",
@@ -1429,16 +1429,54 @@ class OrderManager:
             # bn_order_ids (from a failed fetch) would falsely declare TP1 filled.
             if orders_fetch_ok and self._is_real_oid(pos.tp1_order_id) and not pos.tp1_hit:
                 if pos.tp1_order_id not in bn_order_ids:
-                    # TP1 order'ı kaybolmuş = filled
-                    pos.tp1_hit = True
-                    log.info(f"RECONCILE: TP1 hit {pos.symbol} → SL → break-even @ {pos.entry}")
-                    self._move_sl_to_breakeven(pos)
-                    # The BE move placed a NEW SL this cycle; its algoId is not in
-                    # the cycle-start bn_order_ids snapshot. Register it so the
-                    # set-but-absent repair below does not double-place it.
-                    if self._is_real_oid(pos.sl_order_id):
-                        bn_order_ids.add(pos.sl_order_id)
-                    self._emit("tp1_hit", pos)
+                    # TP1 order is missing from exchange. Verify if it was actually filled.
+                    # Find matching exchange position size:
+                    matching_bn_pos = None
+                    for p in bn_positions:
+                        p_sym = _strip_contract_suffix(p["symbol"])
+                        if p_sym == pos.symbol:
+                            if self.hedge_mode:
+                                p_side = str(p.get("side", "")).upper()
+                                if p_side == pos.direction or p_side == "":
+                                    matching_bn_pos = p
+                                    break
+                            else:
+                                matching_bn_pos = p
+                                break
+                    bn_size = float(matching_bn_pos.get("contracts", 0)) if matching_bn_pos else 0.0
+                    
+                    # If size is reduced (indicating a fill), mark as hit.
+                    # Standard size reduction is by half (pos.size / 2). 
+                    # If bn_size <= pos.size * 0.7, treat as filled.
+                    is_filled = False
+                    if bn_size > 0 and bn_size <= pos.size * 0.7:
+                        is_filled = True
+                        
+                    if is_filled:
+                        pos.tp1_hit = True
+                        log.info(f"RECONCILE: TP1 hit confirmed by size reduction for {pos.symbol}: {bn_size:.4f} <= {pos.size:.4f} * 0.7 → SL → break-even @ {pos.entry}")
+                        self._move_sl_to_breakeven(pos)
+                        if self._is_real_oid(pos.sl_order_id):
+                            bn_order_ids.add(pos.sl_order_id)
+                        self._emit("tp1_hit", pos)
+                    else:
+                        # Order went missing but size is NOT reduced (meaning never filled/placed!).
+                        # Clear tp1_order_id to trigger repair in _repair_missing_protection_orders.
+                        log.warning(
+                            f"⚠️ RECONCILE: TP1 order {pos.tp1_order_id} is missing for {pos.symbol} "
+                            f"but exchange size is still {bn_size:.4f} (expected full {pos.size:.4f}). "
+                            f"Marking TP1 as lost to trigger repair."
+                        )
+                        pos.tp1_order_id = ""
+
+            # Pozisyon hâlâ açık — TP2 missing check
+            if orders_fetch_ok and self._is_real_oid(pos.tp2_order_id):
+                if pos.tp2_order_id not in bn_order_ids:
+                    log.warning(
+                        f"⚠️ RECONCILE: TP2 order {pos.tp2_order_id} is missing for {pos.symbol} "
+                        f"while position is still open. Marking TP2 as lost to trigger repair."
+                    )
+                    pos.tp2_order_id = ""
 
         # 🔧 Repair missing protection orders:
         # If a position was opened but TP1/TP2 placement failed (transient API

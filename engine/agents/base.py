@@ -20,7 +20,7 @@ from typing import Any, Dict
 from .gemini_client import GeminiClient
 
 
-VERDICTS = ("ACCEPT", "REJECT", "NEUTRAL")
+VERDICTS = ("ACCEPT", "REJECT", "NEUTRAL", "ERROR")
 
 
 @dataclass
@@ -80,13 +80,27 @@ class BaseAgent:
 
         Failures (network, parse, empty response) are caught upstream
         by :meth:`GeminiClient.complete_json` and surface as ``{}`` here.
-        We coerce to NEUTRAL with confidence 0 and let the team policy
-        decide whether to proceed.
+        We coerce to NEUTRAL with confidence 0 if no API key is set,
+        or return ERROR if a configured client failed.
         """
         filtered_ctx = self.filter_context(ctx)
         prompt = self.build_prompt(filtered_ctx)
-        data = self.client.complete_json(prompt)
-        return _verdict_from_payload(self.name, data)
+        try:
+            data = self.client.complete_json(prompt)
+            # If the client failed and returned {}
+            if not data:
+                if getattr(self.client, "api_key", None):
+                    # Actual request failure (timeout, network, parse error)
+                    return AgentVerdict(name=self.name, verdict="ERROR",
+                                        confidence=0.0, reasoning="LLM client request failed", raw={})
+                else:
+                    # Silent fallback when key is not configured
+                    return AgentVerdict(name=self.name, verdict="NEUTRAL",
+                                        confidence=0.0, reasoning="LLM client not configured", raw={})
+            return _verdict_from_payload(self.name, data)
+        except Exception as e:
+            return AgentVerdict(name=self.name, verdict="ERROR",
+                                confidence=0.0, reasoning=f"Agent review failed: {e!r}", raw={})
 
 
 def _verdict_from_payload(name: str, data: Dict[str, Any]) -> AgentVerdict:
@@ -95,7 +109,7 @@ def _verdict_from_payload(name: str, data: Dict[str, Any]) -> AgentVerdict:
     Expected schema (validated permissively — missing fields tolerated,
     wrong types coerced):
         {
-          "verdict":    "ACCEPT" | "REJECT" | "NEUTRAL",
+          "verdict":    "ACCEPT" | "REJECT" | "NEUTRAL" | "ERROR",
           "confidence": 0.0 - 1.0,
           "reasoning":  "string"
         }
