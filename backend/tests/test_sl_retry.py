@@ -19,6 +19,10 @@ from exchange import BinanceClient, OrderManager, Position
 def mock_client():
     client = MagicMock(spec=BinanceClient)
     client.exchange = MagicMock()
+    # Identity precision mocks (SL/TP precision hardening, 27e0d74): without
+    # these, float(MagicMock()) == 1.0 corrupts mocked prices/amounts.
+    client.exchange.price_to_precision = MagicMock(side_effect=lambda s, p: p)
+    client.exchange.amount_to_precision = MagicMock(side_effect=lambda s, a: a)
     client.market_type = "futures"
     client.testnet = True
     client.to_ccxt_symbol.side_effect = lambda s: (

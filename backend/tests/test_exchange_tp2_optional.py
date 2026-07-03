@@ -51,6 +51,10 @@ def test_order_manager_live_path_skips_tp2_when_none():
     mock_client = MagicMock()
     mock_client.to_ccxt_symbol.side_effect = lambda s: f"{s}:USDT"
     mock_client.exchange = MagicMock()
+    # Identity precision mocks (SL/TP precision hardening, 27e0d74): without
+    # these, float(MagicMock()) == 1.0 corrupts mocked prices/amounts.
+    mock_client.exchange.price_to_precision = MagicMock(side_effect=lambda s, p: p)
+    mock_client.exchange.amount_to_precision = MagicMock(side_effect=lambda s, a: a)
 
     # Stub exchange.create_order to return order ids
     def make_order(*args, **kwargs):
@@ -130,6 +134,10 @@ def test_order_manager_live_path_two_target_unchanged():
     mock_client = MagicMock()
     mock_client.to_ccxt_symbol.side_effect = lambda s: f"{s}:USDT"
     mock_client.exchange = MagicMock()
+    # Identity precision mocks (SL/TP precision hardening, 27e0d74): without
+    # these, float(MagicMock()) == 1.0 corrupts mocked prices/amounts.
+    mock_client.exchange.price_to_precision = MagicMock(side_effect=lambda s, p: p)
+    mock_client.exchange.amount_to_precision = MagicMock(side_effect=lambda s, a: a)
 
     def make_order(*args, **kwargs):
         return {"id": "ord_x", "average": args[3] * 1.0001}
