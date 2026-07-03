@@ -170,9 +170,10 @@ class TestPruning:
         symbols = sorted(c.symbol for c in store2.candidates)
         assert symbols == ["BTC/USDT", "LINK/USDT"]
 
-    def test_load_drops_terminal_state_entries(self, tmp_path):
-        """If a legacy/corrupted file contains terminal-state entries,
-        they are dropped on load with a warning."""
+    def test_load_keeps_terminal_state_entries(self, tmp_path):
+        """Pullback detection (d03378e): load validates against VALID_STATES,
+        which includes terminal states for backward compat. Terminal entries
+        survive load; the tick loop skips them and the next save() prunes."""
         from engine.smc_v2.setup_state import SetupStateStore, SCHEMA_VERSION
         import json
         # Hand-craft a file with terminal entries (simulating legacy data)
@@ -202,10 +203,11 @@ class TestPruning:
 
         store = SetupStateStore(path)
         store.load()
-        # Only the IN_ZONE candidate survives
-        assert len(store.candidates) == 1
-        assert store.candidates[0].symbol == "ETH/USDT"
-        assert store.candidates[0].state == "IN_ZONE"
+        # Both entries survive load (terminal states valid for backward compat)
+        assert len(store.candidates) == 2
+        states = {c.symbol: c.state for c in store.candidates}
+        assert states["BTC/USDT"] == "CONFIRMED"
+        assert states["ETH/USDT"] == "IN_ZONE"
 
 
 class TestPerSymbolCap:

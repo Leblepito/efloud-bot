@@ -215,9 +215,12 @@ class TestAdvanceSetupStateTick:
     def test_in_zone_calls_confirm_entry(
         self, minimal_config, tmp_path, store_with_pending
     ):
-        """When state advances to IN_ZONE AND df_15m is provided,
+        """When a candidate is IN_ZONE AND df_15m is provided,
         confirm_entry is called. PR #S3b added the df_15m-None skip;
         this test provides a fake df_15m so the spy assertion still holds.
+        Pullback detection (d03378e): the AWAITING_PULLBACK -> IN_ZONE
+        transition consumes one tick without confirmation; confirm_entry
+        fires on the NEXT tick while still in zone.
         Patched confirm_entry returns (False, None) so state stays IN_ZONE."""
         import pandas as pd
         orc = SafeOrchestrator(
@@ -231,9 +234,17 @@ class TestAdvanceSetupStateTick:
         )
         # Patch confirm_entry to spy on the call
         with patch.object(orc, "confirm_entry", return_value=(False, None)) as spy:
+            # Tick 1: AWAITING_PULLBACK -> IN_ZONE (no confirmation this tick)
             orc._advance_setup_state_tick(
                 symbol="BTC/USDT", current_price=96500.0,
                 current_bar_ts=1700000060000, df_15m=fake_df,
+            )
+            assert spy.call_count == 0
+            assert store_with_pending.candidates[0].state == "IN_ZONE"
+            # Tick 2: still in zone -> confirm_entry is called
+            orc._advance_setup_state_tick(
+                symbol="BTC/USDT", current_price=96500.0,
+                current_bar_ts=1700000120000, df_15m=fake_df,
             )
             assert spy.call_count == 1
             call_kwargs = spy.call_args.kwargs
@@ -243,11 +254,12 @@ class TestAdvanceSetupStateTick:
         # state remains IN_ZONE (confirm returned False)
         assert store_with_pending.candidates[0].state == "IN_ZONE"
 
-    def test_already_in_zone_stays_in_zone(
+    def test_in_zone_price_leaves_moves_to_awaiting_reentry(
         self, minimal_config, tmp_path
     ):
-        """A candidate already in IN_ZONE state stays IN_ZONE; only bars_waited
-        increments (IN_ZONE is sticky per spec §3 state diagram)."""
+        """Pullback detection (d03378e): an IN_ZONE candidate whose price
+        leaves the zone moves to AWAITING_REENTRY with has_left_zone=True
+        (replaces the old sticky IN_ZONE behavior); bars_waited increments."""
         from engine.smc_v2.setup_state import SetupCandidate, SetupStateStore
         from engine.smc_v2.zones import ZoneSpec
         store = SetupStateStore(tmp_path / "state.json")
@@ -263,13 +275,14 @@ class TestAdvanceSetupStateTick:
             minimal_config, state_dir=str(tmp_path), persist=False,
             setup_state_store=store,
         )
-        # Price now OUTSIDE the zone — IN_ZONE must stay (sticky)
+        # Price now OUTSIDE the zone — pullback leg detected
         orc._advance_setup_state_tick(
             symbol="BTC/USDT", current_price=95500.0,
             current_bar_ts=1700000240000,
         )
         cand = store.candidates[0]
-        assert cand.state == "IN_ZONE"
+        assert cand.state == "AWAITING_REENTRY"
+        assert cand.has_left_zone is True
         assert cand.bars_waited == 4
 
     def test_confirmed_setup_not_re_processed(self, minimal_config, tmp_path):
