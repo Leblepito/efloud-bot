@@ -488,3 +488,22 @@ uyumlu). Ayrıca: ölü `recencyBars` input'u V2 üçlüsünden silindi (AUDIT L
 fiilen uygulanmamış olduğu görüldü); V1 başlık metinleri prod default'larıyla
 (minRr 1.8, minConfluence 50) eşitlendi; publish TF notundaki "1Dm" gösterimi
 düzeltildi. Eski AUDIT'lerin "repaint temiz" hükmü bu reçeteyle geçersizdir.
+
+
+---
+
+## 16. Değişiklik kaydı — 2026-07-03 v2.1: V1 özellikleri V2'ye absorbe edildi
+
+Operatör talebiyle V1'in TÜM özellikleri, V2 durum makinesi çekirdeği korunarak
+`efloud_signals.pine` + `efloud_strategy.pine` (senkron) içine taşındı:
+MTF CHoCH onayı (opsiyonel, `useMtf`), Order Block motoru (tespit+mitigasyon+
+retest; zone zinciri artık **FVG > OB > OTE**), SFP, range premium/discount +
+deviation (niyet modu, default OFF), volatilite-hizalı SL buffer (0.5x/0.75x),
+0-100 **confluence skoru** — ONAY (engulfing) anında hesaplanır; `useConfluenceGate`
+(default ON, eşik 50) düşük skorda adayı DÜŞÜRMEZ, timeout'a kadar bekletir —
+AI macro sentiment (manuel), TF-adaptif çizim saklama havuzu, aktif OB kutuları,
+SMC bağlam görselleri ve dashboard tablosu (V2 makine satırları eklenmiş).
+Her iki dosya TradingView Pine Editor'da SIFIR HATA derlendi ve buluta
+kaydedildi (EFloud Signals v2 rev.2 13:28 · EFloud Strategy v2 rev.1 13:33).
+V2'nin "confluence YOK" sadeleştirmesi (§0) bu sürümle bilinçli olarak geri
+alınmıştır; skor artık V1 formülünün V2-bağlamlı uyarlamasıdır.
