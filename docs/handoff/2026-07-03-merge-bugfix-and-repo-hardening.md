@@ -51,3 +51,24 @@ göründü. Sandbox'tan çalışırken:
 - Commit öncesi `GIT_INDEX_FILE=/tmp/...` ile sandbox-local index kullan.
 - Dosya yazımlarını tek seferde, deterministik yap (git içeriği + replace).
 - Her git hatasında önce `python3 -c "print(open('.git/<dosya>','rb').read().count(b'\x00'))"` ile null-byte kontrolü yap.
+
+## Ek — Açık işlerin ele alınması (aynı gün, devam session'ı)
+
+- **SEC-1** ✅ zaten kapalıydı (PR #238, `backend/auth.py` fail-closed + testler).
+  Kalan tek adım operasyonel: VPS prod `.env`'de `ENV=production` ve gerçek bir
+  `SESSION_SECRET` set olduğunu doğrula (yoksa backend fail-closed başlamaz —
+  bu kasıtlı).
+- **H2/H3/H4** ✅ kod tarafı zaten uygulanmıştı (shadow default True,
+  `reject_wide_sl` toggle, drift guard fail-closed). Eksik olan H3 test kapsamı
+  eklendi: `backend/tests/test_position_guard_wide_sl.py` (4 test, `1b99415`).
+  H3'ü canlıda aktive etmek için: config `safety.reject_wide_sl: true`
+  (risk-ops onayıyla; reject oranını önce shadow'da izle).
+- **Edge Measurement Core** ✅ master'a merge edildi (`ea372f7`, additive,
+  `signal_ledger.enabled: false`). C4/H1/H7/M1/M2 için zorunlu NET-cost gate'in
+  altyapısı artık master'da. Aktivasyon: config'de `signal_ledger.enabled: true`
+  + resolver cadence; detay branch handoff'unda
+  (`docs/handoff/2026-06-19-edge-measurement-core-handoff.md`).
+- **C4 / M1 / M2** ⏳ GATED — kod-only merge sözleşme ihlali olur. Sıra:
+  (1) signal_ledger'ı canlıda aç, (2) yeterli N sinyal biriktir,
+  (3) `edge_report` NET-cost çıktısıyla conf-threshold sweep (C4),
+  is_discovery düzeltmesi (M1) ve confluence attribution (M2) kararlarını ver.
