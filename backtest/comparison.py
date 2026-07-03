@@ -148,18 +148,38 @@ def run_v1_v2_comparison(
             "doctrine_tags": list[str] | None,
         }
     """
+    import copy
     entry_tf = entry_tf or config["timeframes"]["entry"]
-    common = dict(
+    
+    v1_cfg = copy.deepcopy(config)
+    v1_cfg.setdefault("engine", {})["smc_version"] = "v1"
+    
+    v2_cfg = copy.deepcopy(config)
+    v2_cfg.setdefault("engine", {})["smc_version"] = "v2"
+    v2_cfg["engine"]["smc_v2_shadow"] = False
+    v2_cfg["engine"]["smc_v2_symbols"] = ["*"]
+    v2_cfg.setdefault("risk", {})["min_confluence"] = 999
+
+    v1 = run_backtest(
         symbols=symbols,
         data=data,
-        config=config,
+        config=v1_cfg,
         initial_balance=initial_balance,
         warmup_bars=warmup_bars,
         step_every_n_bars=step_every_n_bars,
         smc_window_bars=smc_window_bars,
+        smc_version="v1",
     )
-    v1 = run_backtest(**common, smc_version="v1")
-    v2 = run_backtest(**common, smc_version="v2")
+    v2 = run_backtest(
+        symbols=symbols,
+        data=data,
+        config=v2_cfg,
+        initial_balance=initial_balance,
+        warmup_bars=warmup_bars,
+        step_every_n_bars=step_every_n_bars,
+        smc_window_bars=smc_window_bars,
+        smc_version="v2",
+    )
     v1["stop_hunt_rate"] = compute_stop_hunt_rate(v1["trades"], data, entry_tf=entry_tf)
     v2["stop_hunt_rate"] = compute_stop_hunt_rate(v2["trades"], data, entry_tf=entry_tf)
     v1["avg_realized_rr"] = _avg_realized_rr(v1["trades"])

@@ -47,6 +47,12 @@ from exchange import BinanceClient, OrderManager
 
 from typing import Optional
 
+# ── UTF-8 stdout wrapper (Windows cp1252 fix) ──
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 
 # ═══════════════════════════════════════════════
 # SMC v2 feature flag wiring (PR #S6)
@@ -61,14 +67,22 @@ def _build_setup_state_store(cfg: dict, state_dir: str):
     When v2 active: returns SetupStateStore at {state_dir}/setup_candidates.json
     with max_pending_per_symbol from smc_v2 block (default 3 per spec §9).
     """
-    if cfg.get("engine", {}).get("smc_version") != "v2":
+    print(f"[DEBUG] _build_setup_state_store called")
+    print(f"[DEBUG] cfg.get('engine') = {cfg.get('engine')}")
+    smc_version = cfg.get("engine", {}).get("smc_version")
+    print(f"[DEBUG] smc_version = {smc_version!r}")
+    if smc_version != "v2":
+        print(f"[DEBUG] smc_version != 'v2', returning None")
         return None
+    print(f"[DEBUG] Creating SetupStateStore...")
     from engine.smc_v2.setup_state import SetupStateStore
     smc_v2_cfg = cfg.get("smc_v2", {})
-    return SetupStateStore(
+    store = SetupStateStore(
         path=Path(state_dir) / "setup_candidates.json",
         max_pending_per_symbol=int(smc_v2_cfg.get("max_pending_per_symbol", 3)),
     )
+    print(f"[DEBUG] SetupStateStore created: {store}")
+    return store
 
 
 # ═══════════════════════════════════════════════
@@ -361,7 +375,7 @@ def _cli_reconcile_sync(orch, order_mgr, cfg: dict, log) -> None:
 
 def run_cycle(orch: SafeOrchestrator, client: BinanceClient,
                 order_mgr: OrderManager, rate_limiter: RateLimiter,
-                universe: SymbolUniverse, cfg: dict):
+                universe: SymbolUniverse, cfg: dict, last_scan_ts: int) -> int:
     """Tüm symbol universe'ü analiz et."""
     log = logging.getLogger("efloud.main")
 
@@ -371,18 +385,36 @@ def run_cycle(orch: SafeOrchestrator, client: BinanceClient,
     _cli_reconcile_sync(orch, order_mgr, cfg, log)
 
     symbols = universe.resolve()
-    scan_mode = cfg["operation"].get("symbol_scan_mode", "sequential")
+    if symbols:
+        tf = cfg["timeframes"]
+        tf_entry = tf.get("entry", "15m")
+        from exchange import _timeframe_ms
+        try:
+            entry_tf_ms = _timeframe_ms(tf_entry)
+        except Exception as e:
+            log.error(f"Invalid entry timeframe format '{tf_entry}': {e}. Defaulting to 15m (900_000ms).")
+            entry_tf_ms = 900_000
 
-    log.info(f"📡 Watchlist ({len(symbols)} symbols): {', '.join(symbols)}")
+        now_ms = int(time.time() * 1000)
+        current_candle_ts = ((now_ms - 2000) // entry_tf_ms) * entry_tf_ms
 
-    if scan_mode == "parallel":
-        _scan_parallel(symbols, orch, client, order_mgr, rate_limiter, cfg)
-    else:
-        _scan_sequential(symbols, orch, client, order_mgr, rate_limiter, cfg)
+        if last_scan_ts == 0 or current_candle_ts > last_scan_ts:
+            scan_mode = cfg["operation"].get("symbol_scan_mode", "sequential")
+            log.info(f"⏳ New entry candle closed (boundary: {current_candle_ts} ms). Scanning symbol universe...")
+            log.info(f"📡 Watchlist ({len(symbols)} symbols): {', '.join(symbols)}")
+
+            if scan_mode == "parallel":
+                _scan_parallel(symbols, orch, client, order_mgr, rate_limiter, cfg)
+            else:
+                _scan_sequential(symbols, orch, client, order_mgr, rate_limiter, cfg)
+
+            last_scan_ts = current_candle_ts
 
     # Exchange-side position check
     if order_mgr.positions and not cfg["operation"]["dry_run"]:
         order_mgr.check_positions()
+
+    return last_scan_ts
 
 
 def _scan_sequential(symbols, orch, client, order_mgr, rate_limiter, cfg):
@@ -533,9 +565,11 @@ def main():
     # .env dosyasını otomatik yükle (varsa) — BINANCE_API_KEY ve _SECRET'ı set eder
     loaded = load_dotenv()
     if loaded > 0:
-        print(f"📄 Loaded {loaded} variables from .env")
+        print(f"[OK] Loaded {loaded} variables from .env")
 
-    cfg_path = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
+    # Config path resolution: EFLOUD_CONFIG_PATH env var > cmdline arg > default
+    cfg_path = os.getenv("EFLOUD_CONFIG_PATH") or (sys.argv[1] if len(sys.argv) > 1 else "config.yaml")
+    print(f"[INFO] Loading config from: {cfg_path}")
 
     try:
         cfg = load_config(cfg_path)
@@ -679,12 +713,13 @@ def main():
     log.info(f"🚀 Starting main loop — interval={interval}s")
 
     cycle_count = 0
+    last_scan_ts = 0
     while not shutdown.stop:
         cycle_start = time.time()
         cycle_count += 1
         try:
             log.info(f"═══ Cycle #{cycle_count} ═══")
-            run_cycle(orch, client, order_mgr, rate_limiter, universe, cfg)
+            last_scan_ts = run_cycle(orch, client, order_mgr, rate_limiter, universe, cfg, last_scan_ts)
         except KeyboardInterrupt:
             break
         except Exception as e:

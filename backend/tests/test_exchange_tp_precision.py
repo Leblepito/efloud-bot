@@ -125,3 +125,160 @@ def test_order_manager_handles_amount_to_precision_exceptions_gracefully():
     call_args_list = mock_client.exchange.create_order.call_args_list
     assert call_args_list[2].args[3] == 459.5
     assert call_args_list[3].args[3] == 459.5
+
+
+def test_order_manager_rounds_tp_and_sl_prices_using_exchange_precision():
+    """Live path (dry_run=False): when placing entries, SL, or TPs, prices must be rounded
+    using the exchange's price_to_precision method to prevent Binance PRICE_FILTER errors."""
+    mock_client = MagicMock()
+    mock_client.to_ccxt_symbol.side_effect = lambda s: f"{s}:USDT"
+    mock_client.exchange = MagicMock()
+
+    # Stub create_order to return mocked order dict
+    mock_client.exchange.create_order.return_value = {"id": "ord_ok", "average": 0.230005}
+
+    # Stub price_to_precision to round to 4 decimals
+    def mock_price_to_precision(symbol, price):
+        return f"{price:.4f}"
+    mock_client.exchange.price_to_precision = MagicMock(side_effect=mock_price_to_precision)
+
+    om = OrderManager(client=mock_client, dry_run=False)
+
+    # We pass entry, sl, tp1, tp2 with 6 decimals (e.g. 0.231234)
+    pos = om.open_position(
+        symbol="ADA/USDT", direction="SHORT", size=100.0,
+        entry=0.231234, sl=0.251234, tp1=0.211234, tp2=0.201234,
+    )
+
+    assert pos is not None
+    # price_to_precision should be called for entry, sl, tp1, tp2 when opening position
+    assert mock_client.exchange.price_to_precision.call_count >= 4
+
+    # The actual stopPrice parameters sent to create_order must be float strings rounded to 4 decimals
+    calls = mock_client.exchange.create_order.call_args_list
+    
+    # Let's find STOP_MARKET call
+    sl_call = next(c for c in calls if c.args[1] == "STOP_MARKET")
+    assert sl_call.kwargs['params']['stopPrice'] == 0.2512
+
+    # Let's find TAKE_PROFIT_MARKET calls
+    tp_calls = [c for c in calls if c.args[1] == "TAKE_PROFIT_MARKET"]
+    assert tp_calls[0].kwargs['params']['stopPrice'] == 0.2112
+    assert tp_calls[1].kwargs['params']['stopPrice'] == 0.2012
+
+
+def test_reconcile_tp1_missing_unfilled_keeps_active_and_resets_id():
+    """If TP1 order is missing but exchange position size is NOT reduced, reconcile
+    must NOT mark tp1_hit=True. Instead, it resets tp1_order_id to empty to trigger repair."""
+    mock_client = MagicMock()
+    mock_client.to_ccxt_symbol.side_effect = lambda s: f"{s}:USDT"
+    mock_client.exchange = MagicMock()
+
+    # Mock fetch_open_orders to return SL and TP2 (TP1 missing)
+    mock_client.exchange.fetch_open_orders = MagicMock(
+        return_value=[
+            {"id": "sl_1", "symbol": "ADA/USDT"},
+            {"id": "tp2_1", "symbol": "ADA/USDT"},
+        ]
+    )
+    mock_client.exchange.fapiPrivateGetOpenAlgoOrders = MagicMock(return_value=[])
+
+    # Mock get_open_positions to return full position size (contracts = 919.0)
+    mock_client.get_open_positions = MagicMock(
+        return_value=[{"symbol": "ADA/USDT", "contracts": 919.0, "side": "short"}]
+    )
+
+    om = OrderManager(client=mock_client, dry_run=False)
+    pos = Position(
+        symbol="ADA/USDT", direction="SHORT", entry=0.23,
+        sl=0.25, tp1=0.21, tp2=0.20, size=919.0,
+        sl_order_id="sl_1", tp1_order_id="tp1_1", tp2_order_id="tp2_1",
+        opened_at="2026-05-28T00:00:00Z",
+    )
+    om.positions = [pos]
+
+    om.reconcile()
+
+    # TP1 should NOT be marked hit, and tp1_order_id should be cleared so it can be repaired
+    assert not pos.tp1_hit
+    assert pos.tp1_order_id == ""
+    # SL should not be moved (it remains "sl_1")
+    assert pos.sl_order_id == "sl_1"
+
+
+def test_reconcile_tp1_missing_filled_triggers_tp1_hit():
+    """If TP1 order is missing and exchange position size IS reduced to <= 70%, reconcile
+    marks tp1_hit=True and triggers break-even SL shift."""
+    mock_client = MagicMock()
+    mock_client.to_ccxt_symbol.side_effect = lambda s: f"{s}:USDT"
+    mock_client.exchange = MagicMock()
+    mock_client.exchange.amount_to_precision = MagicMock(side_effect=lambda s, a: f"{a:.1f}")
+    mock_client.exchange.price_to_precision = MagicMock(side_effect=lambda s, p: f"{p:.4f}")
+    mock_client.exchange.create_order.return_value = {"id": "new_sl_be"}
+
+    # Mock fetch_open_orders to return only SL and TP2 (TP1 missing)
+    mock_client.exchange.fetch_open_orders = MagicMock(
+        return_value=[
+            {"id": "sl_1", "symbol": "ADA/USDT"},
+            {"id": "tp2_1", "symbol": "ADA/USDT"},
+        ]
+    )
+    mock_client.exchange.fapiPrivateGetOpenAlgoOrders = MagicMock(return_value=[])
+
+    # Mock get_open_positions to return reduced position size (contracts = 459.5)
+    mock_client.get_open_positions = MagicMock(
+        return_value=[{"symbol": "ADA/USDT", "contracts": 459.5, "side": "short"}]
+    )
+
+    om = OrderManager(client=mock_client, dry_run=False)
+    pos = Position(
+        symbol="ADA/USDT", direction="SHORT", entry=0.23,
+        sl=0.25, tp1=0.21, tp2=0.20, size=919.0,
+        sl_order_id="sl_1", tp1_order_id="tp1_1", tp2_order_id="tp2_1",
+        opened_at="2026-05-28T00:00:00Z",
+    )
+    om.positions = [pos]
+
+    om.reconcile()
+
+    # TP1 should be marked hit, and SL moved to break-even (new SL ID placed)
+    assert pos.tp1_hit
+    assert pos.sl_order_id == "new_sl_be"
+
+
+def test_reconcile_tp2_missing_resets_id():
+    """If TP2 order is missing from exchange orders, reconcile clears tp2_order_id to trigger repair."""
+    mock_client = MagicMock()
+    mock_client.to_ccxt_symbol.side_effect = lambda s: f"{s}:USDT"
+    mock_client.exchange = MagicMock()
+
+    # Mock fetch_open_orders to return only SL and TP1 (TP2 missing)
+    mock_client.exchange.fetch_open_orders = MagicMock(
+        return_value=[
+            {"id": "sl_1", "symbol": "ADA/USDT"},
+            {"id": "tp1_1", "symbol": "ADA/USDT"},
+        ]
+    )
+    mock_client.exchange.fapiPrivateGetOpenAlgoOrders = MagicMock(return_value=[])
+
+    # Position is still fully open
+    mock_client.get_open_positions = MagicMock(
+        return_value=[{"symbol": "ADA/USDT", "contracts": 919.0, "side": "short"}]
+    )
+
+    om = OrderManager(client=mock_client, dry_run=False)
+    pos = Position(
+        symbol="ADA/USDT", direction="SHORT", entry=0.23,
+        sl=0.25, tp1=0.21, tp2=0.20, size=919.0,
+        sl_order_id="sl_1", tp1_order_id="tp1_1", tp2_order_id="tp2_1",
+        opened_at="2026-05-28T00:00:00Z",
+    )
+    om.positions = [pos]
+
+    om.reconcile()
+
+    # tp2_order_id should be cleared, tp1_order_id remains set
+    assert pos.tp2_order_id == ""
+    assert pos.tp1_order_id == "tp1_1"
+
+

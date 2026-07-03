@@ -113,24 +113,35 @@ class AgentTeam:
                 self.risk.review(ctx),
                 self.regime.review(ctx),
             ]
-            overseer_input = {
-                "agent_verdicts": [v.to_dict() if hasattr(v, "to_dict") else dict(v) for v in verdicts],
-            }
-            final = self.overseer.review(overseer_input)
-            score = sum(1 for v in verdicts if v.verdict == "ACCEPT") / len(verdicts)
+            has_error = any(v.verdict == "ERROR" for v in verdicts)
+            if has_error:
+                final_verdict = "ERROR"
+                final_confidence = 0.0
+                voting_verdicts = [v for v in verdicts if v.verdict != "ERROR"]
+                score = sum(1 for v in voting_verdicts if v.verdict == "ACCEPT") / len(voting_verdicts) if voting_verdicts else 0.0
+                agents_list = [v.to_dict() if hasattr(v, "to_dict") else dict(v) for v in verdicts]
+            else:
+                overseer_input = {
+                    "agent_verdicts": [v.to_dict() if hasattr(v, "to_dict") else dict(v) for v in verdicts],
+                }
+                final = self.overseer.review(overseer_input)
+                final_verdict = final.verdict
+                final_confidence = final.confidence
+                score = sum(1 for v in verdicts if v.verdict == "ACCEPT") / len(verdicts)
+                agents_list = ([v.to_dict() if hasattr(v, "to_dict") else dict(v) for v in verdicts]
+                               + [final.to_dict() if hasattr(final, "to_dict") else dict(final)])
 
             review: Dict[str, Any] = {
-                "team_verdict": final.verdict,
-                "team_confidence": final.confidence,
+                "team_verdict": final_verdict,
+                "team_confidence": final_confidence,
                 "score": score,
-                "agents": ([v.to_dict() if hasattr(v, "to_dict") else dict(v) for v in verdicts]
-                           + [final.to_dict() if hasattr(final, "to_dict") else dict(final)]),
+                "agents": agents_list,
             }
         except Exception as e:
             # Last-resort safety net — the team must NEVER crash the bot.
             log.warning(f"AgentTeam.review_trade unexpected failure: {e!r}")
             review = {
-                "team_verdict": "NEUTRAL",
+                "team_verdict": "ERROR",
                 "team_confidence": 0.0,
                 "score": 0.0,
                 "agents": [],

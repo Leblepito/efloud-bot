@@ -124,7 +124,7 @@ risk:
 
 # ── Operation ──
 operation:
-  check_interval_sec: 30
+  check_interval_sec: 10
   dry_run: true                     # İlk canlıda mutlaka true bırak
   watch_only: false                  # true = sadece analiz, trade yok
   symbol_scan_mode: sequential       # "sequential" | "parallel"

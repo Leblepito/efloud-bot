@@ -28,7 +28,7 @@ from engine.content_jobs import ContentJobEmitter
 from engine.permissions import PermissionManager
 from engine.safety import MainnetGuard, OrphanProtector, load_orphan_protection_config
 from engine.universe import SymbolUniverse
-from exchange import BinanceClient, OrderManager, Position
+from exchange import BinanceClient, OrderManager, Position, _timeframe_ms
 from main import resolve_credentials, validate_config
 from engine.ai.kronos import run_kronos_prediction, synthesize_signal_with_kronos
 from engine.agents.llm import make_llm_client
@@ -128,6 +128,7 @@ class BotRunner:
             self.cfg.get("operation", {}).get("state_dir") if self.cfg else None
         ) or os.environ.get("EFLOUD_STATE_DIR", "./state")
         self.runtime_state = RuntimeState(state_dir=state_dir)
+        self.last_scan_candle_ts = 0  # Track last scanned candle timestamp
 
     # ─────────────────────────────────────────────────────────────
     # Lifecycle
@@ -435,6 +436,26 @@ class BotRunner:
                     for pos in closed:
                         await self._persist_close(pos)
 
+                    # Update database for any audited P&L corrections
+                    detailed_corrections = getattr(self.order_mgr, "_detailed_pnl_corrections", None)
+                    if detailed_corrections:
+                        for corr in list(detailed_corrections):
+                            try:
+                                await db.update_trade_audited_pnl(
+                                    pnl_usdt=corr["new_pnl"],
+                                    order_id=corr.get("order_id"),
+                                    trace_id=corr.get("trace_id"),
+                                    symbol=corr.get("symbol")
+                                )
+                                log.info(
+                                    f"DB PnL corrected for {corr.get('symbol')} "
+                                    f"({corr.get('order_id') or corr.get('trace_id')}): "
+                                    f"est={corr.get('old_pnl'):.4f} → exchange={corr.get('new_pnl'):.4f}"
+                                )
+                            except Exception as db_err:
+                                log.warning(f"Failed to persist audited PnL correction: {db_err}")
+                        detailed_corrections.clear()
+
                 # Run scan cycle
                 await loop.run_in_executor(None, self._scan_universe)
 
@@ -470,8 +491,31 @@ class BotRunner:
             return
 
         symbols = self.universe.resolve()
+        if not symbols:
+            return
+
         tf = self.cfg["timeframes"]
         limit = tf.get("kline_limit", 500)
+
+        # Candle-close synchronization: only scan when a new entry candle closes.
+        # We add a 2-second buffer to allow Binance's backend to process and serve the closed candle.
+        tf_entry = tf.get("entry", "15m")
+        try:
+            entry_tf_ms = _timeframe_ms(tf_entry)
+        except Exception as e:
+            log.error(f"Invalid entry timeframe format '{tf_entry}': {e}. Defaulting to 15m (900_000ms).")
+            entry_tf_ms = 900_000
+
+        now_ms = int(time.time() * 1000)
+        current_candle_ts = ((now_ms - 2000) // entry_tf_ms) * entry_tf_ms
+
+        if self.last_scan_candle_ts != 0 and current_candle_ts <= self.last_scan_candle_ts:
+            # Still in the same candle. Skip OHLCV fetching and SMC scan to save API weight and eliminate delay.
+            return
+
+        # Update scanned candle timestamp
+        self.last_scan_candle_ts = current_candle_ts
+        log.info(f"⏳ New entry candle closed (boundary: {current_candle_ts} ms). Scanning symbol universe...")
 
         for sym in symbols:
             try:

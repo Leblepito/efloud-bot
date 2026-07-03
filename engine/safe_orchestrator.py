@@ -165,6 +165,7 @@ class SafeOrchestrator:
         # SMC v2 SetupStateStore — None when v1 flag is active (inert default).
         # See PR #S2b + spec §4.3 for the advance/trigger/save data flow.
         self.setup_state_store = setup_state_store
+        print(f"[DEBUG SafeOrchestrator.__init__] self={id(self)}, setup_state_store = {setup_state_store}")
         # Convenience reference to BinanceClient for sizing helpers (PR #24).
         # PR #24 introduced `self.client` references in _calc_size paths but
         # forgot to set the attribute in __init__, causing AttributeError on
@@ -939,6 +940,7 @@ class SafeOrchestrator:
         # SMC v2 setup state advance — opt-in, inert when store is None.
         # Must run BEFORE breaker check so EXPIRE transitions get recorded
         # even on no-trade ticks (operator observability).
+        print(f"[DEBUG run_cycle {symbol}] self={id(self)}, self.setup_state_store = {self.setup_state_store}")
         if self.setup_state_store is not None:
             current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
             self._advance_setup_state_tick(
@@ -1194,11 +1196,14 @@ class SafeOrchestrator:
                     review = self.agent_team.review_trade(ctx)
                     latest.meta["agent_review"] = review
                     latest.meta["risk_review_was_notional_blind"] = review.get("risk_review_was_notional_blind", False)
-                    if review.get("team_verdict") == "REJECT":
+                    verdict = review.get("team_verdict")
+                    if verdict in ("REJECT", "ERROR"):
                         _agent_veto = True
-                        log.warning(f"🚫 [AgentTeam] Signal vetoed by agent team verdict REJECT")
+                        log.warning(f"🚫 [AgentTeam] Signal vetoed by agent team verdict {verdict}")
                 except Exception as e:
                     log.warning(f"Error in synchronous AgentTeam gating review: {e!r}")
+                    _agent_veto = True
+                    log.warning(f"🚫 [AgentTeam] Signal vetoed due to exception in gating review")
 
             if _agent_veto:
                 actions.append(f"[{symbol}] Vetoed by agent team")
@@ -1638,12 +1643,15 @@ class SafeOrchestrator:
                 for IN_ZONE → CONFIRMED transition; if None, the
                 confirm_entry call is SKIPPED (state stays IN_ZONE).
                 run_cycle always passes df_entry; test paths exercising
-                only the state machine may omit it.
+                the IN_ZONE → CONFIRMED transition. Only direct unit tests
+                may omit it.
 
         Other-symbol candidates are untouched (operation is scoped to `symbol`).
         Terminal states (CONFIRMED, EXPIRED) are skipped — they wait for the
         next save() call to be pruned.
         """
+        print(f"[DEBUG _advance_setup_state_tick {symbol}] called")
+
         # Inert default — no v1 behavior change
         if self.setup_state_store is None:
             return
@@ -1669,24 +1677,44 @@ class SafeOrchestrator:
                 cand.state = "EXPIRED"
                 continue
 
-            if cand.state == "AWAITING_PULLBACK" and is_price_in_zone(
-                current_price, cand.target_zone
-            ):
-                if not require_confirmation:
-                    cand.state = "CONFIRMED"
-                    clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
-                    self._place_v2_entry_order(
-                        cand,
-                        current_price=current_price,
-                        entry_price=clamped_entry_price,
-                    )
-                    continue
-                else:
-                    cand.state = "IN_ZONE"
+            price_in_zone = is_price_in_zone(current_price, cand.target_zone)
 
+            # === AWAITING_PULLBACK state ===
+            if cand.state == "AWAITING_PULLBACK":
+                if price_in_zone:
+                    # Price entered zone for the first time
+                    if not cand.has_left_zone:
+                        # First entry into zone — move to IN_ZONE to wait for leave
+                        cand.state = "IN_ZONE"
+                        continue
+                    else:
+                        # Already left zone before, this is a re-entry (pullback)
+                        # Proceed with confirmation logic
+                        if not require_confirmation:
+                            cand.state = "CONFIRMED"
+                            clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
+                            self._place_v2_entry_order(
+                                cand,
+                                current_price=current_price,
+                                entry_price=clamped_entry_price,
+                            )
+                            continue
+                        else:
+                            cand.state = "IN_ZONE"
+
+            # === IN_ZONE state ===
             if cand.state == "IN_ZONE":
+                if not price_in_zone:
+                    # Price left the zone — this is what we want for pullback detection
+                    cand.has_left_zone = True
+                    cand.state = "AWAITING_REENTRY"
+                    continue
+
+                # Price still in zone — check for confirmation
                 if not require_confirmation:
-                    if is_price_in_zone(current_price, cand.target_zone):
+                    # No confirmation required, but need has_left_zone check
+                    if cand.has_left_zone:
+                        # This is a re-entry (pullback) — confirm entry
                         cand.state = "CONFIRMED"
                         clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
                         self._place_v2_entry_order(
@@ -1695,11 +1723,10 @@ class SafeOrchestrator:
                             entry_price=clamped_entry_price,
                         )
                         continue
-                    else:
-                        # Price has left the zone, do NOT confirm/enter, let it expire on timeout
-                        continue
-                # Skip confirmation when df_15m not provided (state-machine-
-                # only test paths). Real run_cycle always passes df_entry.
+                    # else: Still first entry, wait for leave
+                    continue
+
+                # Confirmation required — wait for engulfing
                 if df_15m is None:
                     continue
                 confirmed, entry_px = self.confirm_entry(
@@ -1710,15 +1737,31 @@ class SafeOrchestrator:
                 )
                 if confirmed:
                     cand.state = "CONFIRMED"
-                    # PR #S3c-2: place entry order if order_manager is wired.
-                    # Inert when self.order_manager is None (test/paper).
-                    # All safety gates (dry_run, mainnet, REJECT, size)
-                    # enforced inside _place_v2_entry_order + OrderManager.
                     self._place_v2_entry_order(
                         cand,
                         current_price=current_price,
                         entry_price=entry_px,
                     )
+
+            # === AWAITING_REENTRY state (new for pullback detection) ===
+            if cand.state == "AWAITING_REENTRY":
+                if price_in_zone:
+                    # Price re-entered the zone (pullback complete)
+                    if not require_confirmation:
+                        cand.state = "CONFIRMED"
+                        clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
+                        self._place_v2_entry_order(
+                            cand,
+                            current_price=current_price,
+                            entry_price=clamped_entry_price,
+                        )
+                        continue
+                    else:
+                        # Wait for engulfing confirmation inside zone
+                        cand.state = "IN_ZONE"
+                        # Note: has_left_zone is already True, so next IN_ZONE cycle
+                        # will allow entry on confirmation without requiring another leave
+                # Price still outside zone — keep waiting
 
     def _emit_setup_candidates(
         self,
@@ -1739,6 +1782,7 @@ class SafeOrchestrator:
 
         Inert when self.setup_state_store is None — short-circuits.
         """
+        print(f"[DEBUG _emit_setup_candidates {symbol}] called")
         if self.setup_state_store is None:
             return
 
