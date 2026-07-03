@@ -3,7 +3,7 @@
 // EFloud Signals v2 — Multi-Timeframe Smart Money Concepts
 // Wait-for-confirmation state machine: CHoCH -> pullback zone -> engulfing confirm.
 // HTF bias gate + structural SL + hybrid liquidity/Fibonacci TP ladder.
-// Repaint-safe: HTF data uses lookahead_off on closed bars only.
+// Repaint-safe: HTF bundle is [1]-shifted with lookahead_on — always the LAST CLOSED HTF bar (live == backtest).
 //
 // PUBLISH / PRODUCT VARIANT (English user-facing strings). Adds an "auto"
 // Trade-Horizon Profile that follows the chart timeframe (5m->scalp, 15m->mid,
@@ -42,7 +42,6 @@ eqThr    = eqThrPct / 100.0
 grpV2 = "V2 Setup Machine"
 pullbackTimeoutBars = input.int(8, "Pullback timeout (bars)", minval = 1, group = grpV2)
 maxPending          = input.int(3, "Max pending candidates", minval = 1, group = grpV2)
-recencyBars         = input.int(20, "CHoCH recency (bars)", minval = 1, group = grpV2)
 requireConfirm      = input.bool(true, "Require engulfing confirmation", group = grpV2)
 
 grpRisk = "Risk (SL / TP)"
@@ -155,14 +154,15 @@ htfBundle() =>
         bearFvgBot := na
         bearFvgTop := na
 
-    [bias, lastSH, lastSL, lastEqh, lastEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
+    // Non-repaint (2026-07-03): [1]-shift + lookahead_on = her iki rejimde SON KAPANMIS HTF bari
+    [bias[1], lastSH[1], lastSL[1], lastEqh[1], lastEql[1], oteTop[1], oteBot[1], bullFvgBot[1], bullFvgTop[1], bearFvgBot[1], bearFvgTop[1]]
 
-[htfBias, htfSwingHigh, htfSwingLow, htfEqh, htfEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+[htfBias, htfSwingHigh, htfSwingLow, htfEqh, htfEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)  // non-repaint recetesi: bundle icinde [1]-shift ile birlikte
 
 // Daily bias (optional)
 dailyBias = 0
 if useDaily
-    db = request.security(syminfo.tickerid, dailyTf, (close - close[30]) / close[30] * 100.0, lookahead = barmerge.lookahead_off)
+    db = request.security(syminfo.tickerid, dailyTf, ((close - close[30]) / close[30] * 100.0)[1], lookahead = barmerge.lookahead_on)  // non-repaint: kapanmis 1D bari
     dailyBias := db > 5.0 ? 1 : db < -5.0 ? -1 : 0
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -451,7 +451,7 @@ bgcolor(htfBias == 1 ? color.new(color.teal, 95) : htfBias == -1 ? color.new(col
 //   AUTO: only when chart TF is unsupported (not 5m/15m/1h) -> mid fallback in use.
 //   MANUAL: when chart TF != selected profile entry -> hint to switch chart TF.
 showTfNote = (profileMode == "auto" and not isSupportedTf) or (profileMode != "auto" and profEntry != "" and timeframe.period != profEntry)
-tfNoteMsg  = profileMode == "auto" ? ("ℹ️ Auto: unsupported chart TF " + timeframe.period + "m → using mid (15m) defaults.\nUse 5m / 15m / 1h for scalp / mid / long.") : ("ℹ️ Chart TF=" + timeframe.period + "m · profile(" + effProfile + ") entry=" + profEntry + "m\nSet chart to " + profEntry + "m to match this profile.")
+tfNoteMsg  = profileMode == "auto" ? ("ℹ️ Auto: unsupported chart TF " + timeframe.period + " → using mid (15m) defaults.\nUse 5m / 15m / 1h for scalp / mid / long.") : ("ℹ️ Chart TF=" + timeframe.period + " · profile(" + effProfile + ") entry=" + profEntry + "m\nSet chart to " + profEntry + "m to match this profile.")
 var table warnTbl = table.new(position.top_right, 1, 1)
 if barstate.islast and showTfNote
     table.cell(warnTbl, 0, 0, tfNoteMsg, bgcolor = color.new(color.gray, 20), text_color = color.white, text_size = size.small)

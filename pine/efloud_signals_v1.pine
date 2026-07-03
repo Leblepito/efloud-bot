@@ -5,11 +5,11 @@
 // Spec referansı: pine/PINE_SPEC.md §0 (V1 vs V2 tablosu)
 //
 // V1 = TEK-GEÇİŞ confluence makinesi (V2 durum makinesi DEĞİL):
-//   4-TF akış → her aligned CHoCH/BOS anında 0-100 confluence skoru → eşik (55) →
+//   4-TF akış → her aligned CHoCH/BOS anında 0-100 confluence skoru → eşik (default 50 = prod config) →
 //   SL/TP/RR filtre → sinyal. Bekleme/pullback-onay state'i YOK.
 //
 // V2'den farkları: confluence skoru VAR, CHoCH **veya** BOS girer (anlık snap),
-//   SL clamp'lenir (V2 >5×ATR ise reddeder), minRr=1.5 (V2=1.8).
+//   SL clamp'lenir (V2 >5×ATR ise reddeder). minRr default 1.8 = prod config.phase2_1k (kök config.yaml: 1.5).
 //
 // ── ÇEVRİLEMEYEN / SADELEŞTİRİLEN (Python ↔ Pine farkları) ──────────────────
 //  1) Gemini AI Structure Validation (confidence ≥0.70 gate) → ÇEVRİLEMEZ.
@@ -28,7 +28,7 @@
 //     harici seviye gerektirir, ATLANDI.
 //
 // ✅ Pine Editor'da SIFIR HATA derlendi (2026-05-30).
-// Repaint güvenliği: HTF/MTF lookahead_off + tüm state mutasyonu barstate.isconfirmed.
+// Repaint güvenliği: HTF/MTF bundle [1]-shift + lookahead_on (son KAPANMIŞ üst-TF barı) + state mutasyonu barstate.isconfirmed.
 // =============================================================================
 indicator("EFloud Signals v1", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
 
@@ -133,9 +133,10 @@ htfBundle() =>
         bearFvgBot := na
         bearFvgTop := na
 
-    [trendOrig, bias, lastSH, lastSL, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
+    // Non-repaint (2026-07-03): [1]-shift + lookahead_on = her iki rejimde SON KAPANMIS HTF bari
+    [trendOrig[1], bias[1], lastSH[1], lastSL[1], bullFvgBot[1], bullFvgTop[1], bearFvgBot[1], bearFvgTop[1]]
 
-[htfTrendOrig, htfBias, htfSwingHigh, htfSwingLow, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+[htfTrendOrig, htfBias, htfSwingHigh, htfSwingLow, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)  // non-repaint recetesi: bundle icinde [1]-shift ile birlikte
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MTF BUNDLE (1h) — son CHoCH yönü (confluence onayı)
@@ -161,14 +162,15 @@ mtfBundle() =>
             lastChoch := -1
         trend := -1
         refSL := na
-    lastChoch
+    // Non-repaint (2026-07-03): [1]-shift + lookahead_on = son kapanmis MTF bari
+    lastChoch[1]
 
-mtfChochDir = request.security(syminfo.tickerid, mtfTf, mtfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+mtfChochDir = request.security(syminfo.tickerid, mtfTf, mtfBundle(), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)  // non-repaint recetesi
 
 // Daily bias (opsiyonel, slope-bazlı — V2 ile aynı)
 dailyBias = 0
 if useDaily
-    db = request.security(syminfo.tickerid, dailyTf, (close - close[30]) / close[30] * 100.0, lookahead = barmerge.lookahead_off)
+    db = request.security(syminfo.tickerid, dailyTf, ((close - close[30]) / close[30] * 100.0)[1], lookahead = barmerge.lookahead_on)  // non-repaint: kapanmis 1D bari
     dailyBias := db > 5.0 ? 1 : db < -5.0 ? -1 : 0
 
 // ─────────────────────────────────────────────────────────────────────────────

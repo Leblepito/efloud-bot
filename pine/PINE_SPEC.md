@@ -473,3 +473,18 @@ qty), `strategy.exit` (TP1 %50 + TP2 %50 ladder, ortak SL; `moveSlToBe`=true ise
 SL break-even'a çekilir), `commission=0.04`, `slippage=1`. İndikatörde `showSmcCtx` ile sinyalde
 eşleşen OB/OTE/LIQ görseli çizilir (strateji-only `moveSlToBe` ve indikatör-only `showSmcCtx`
 pozisyon/görsel yaşam döngüsü farkı; senkron kuralı paylaşılan hesap mantığı için geçerli).
+
+
+---
+
+## 15. Değişiklik kaydı — 2026-07-03 repaint fix (5 dosya senkron)
+
+Statik v6 denetimi (bkz. session handoff) `lookahead_off`'un canlıda OLUŞMAKTA
+OLAN HTF/MTF/1D barını okuduğunu doğruladı → canlı sinyal ≠ backtest riski.
+Uygulanan kanonik reçete: bundle dönüşleri `[1]`-shift + `lookahead_on` — her
+iki rejimde de SON KAPANMIŞ üst-TF barı okunur (CLAUDE.md "sadece kapanmış bar"
+kuralı). Etki: sinyaller üst-TF kapanışını bekler (daha muhafazakâr, motorla
+uyumlu). Ayrıca: ölü `recencyBars` input'u V2 üçlüsünden silindi (AUDIT L1'in
+fiilen uygulanmamış olduğu görüldü); V1 başlık metinleri prod default'larıyla
+(minRr 1.8, minConfluence 50) eşitlendi; publish TF notundaki "1Dm" gösterimi
+düzeltildi. Eski AUDIT'lerin "repaint temiz" hükmü bu reçeteyle geçersizdir.

@@ -7,8 +7,8 @@
 // Mantık değişirse HER İKİ V1 dosyası senkron güncellenir (CLAUDE.md kuralı).
 //
 // V1 = tek-geçiş confluence makinesi (V2 durum makinesi DEĞİL):
-//   aligned CHoCH/BOS → confluence skoru (eşik 55) → SL/TP/RR → strategy.entry.
-//   TP1'de %50, TP2'de kalan %50 kapanış (ortak SL). minRr=1.5.
+//   aligned CHoCH/BOS → confluence skoru (eşik default 50 = prod config) → SL/TP/RR → strategy.entry.
+//   TP1'de %50, TP2'de kalan %50 kapanış (ortak SL). minRr default 1.8 = prod config.phase2_1k.
 //
 // ── Python ↔ Pine farkları (indikatörle aynı, bkz. signals_v1 başlığı + spec EK A.7) ──
 //  1) Gemini AI gate çevrilemez → confluence eşiği + manuel aiSentiment input.
@@ -106,9 +106,10 @@ htfBundle() =>
     if not na(bearFvgTop) and high >= bearFvgTop
         bearFvgBot := na
         bearFvgTop := na
-    [trendOrig, bias, lastSH, lastSL, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
+    // Non-repaint (2026-07-03): [1]-shift + lookahead_on = her iki rejimde SON KAPANMIS HTF bari
+    [trendOrig[1], bias[1], lastSH[1], lastSL[1], bullFvgBot[1], bullFvgTop[1], bearFvgBot[1], bearFvgTop[1]]
 
-[htfTrendOrig, htfBias, htfSwingHigh, htfSwingLow, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+[htfTrendOrig, htfBias, htfSwingHigh, htfSwingLow, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)  // non-repaint recetesi: bundle icinde [1]-shift ile birlikte
 
 // MTF BUNDLE (1h) — son CHoCH yönü
 mtfBundle() =>
@@ -132,13 +133,14 @@ mtfBundle() =>
             lastChoch := -1
         trend := -1
         refSL := na
-    lastChoch
+    // Non-repaint (2026-07-03): [1]-shift + lookahead_on = son kapanmis MTF bari
+    lastChoch[1]
 
-mtfChochDir = request.security(syminfo.tickerid, mtfTf, mtfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+mtfChochDir = request.security(syminfo.tickerid, mtfTf, mtfBundle(), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)  // non-repaint recetesi
 
 dailyBias = 0
 if useDaily
-    db = request.security(syminfo.tickerid, dailyTf, (close - close[30]) / close[30] * 100.0, lookahead = barmerge.lookahead_off)
+    db = request.security(syminfo.tickerid, dailyTf, ((close - close[30]) / close[30] * 100.0)[1], lookahead = barmerge.lookahead_on)  // non-repaint: kapanmis 1D bari
     dailyBias := db > 5.0 ? 1 : db < -5.0 ? -1 : 0
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@
 // Confluence YOK, AI gate YOK (V2 sadık port). minRr default 1.8 (prod config).
 //
 // ✅ Pine Editor'da SIFIR HATA derlendi (2026-05-30).
-// Repaint güvenliği: HTF verisi lookahead_off + kapanmış bar.
+// Repaint güvenliği: HTF bundle [1]-shift + lookahead_on (son KAPANMIŞ HTF barı, canlı=backtest).
 // =============================================================================
 indicator("EFloud Signals v2", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
 
@@ -36,7 +36,6 @@ eqThr    = eqThrPct / 100.0
 grpV2 = "V2 Setup Makinesi"
 pullbackTimeoutBars = input.int(8, "Pullback timeout (15m bar)", minval = 1, group = grpV2)
 maxPending          = input.int(3, "Max bekleyen aday", minval = 1, group = grpV2)
-recencyBars         = input.int(20, "CHoCH recency (bar)", minval = 1, group = grpV2)
 requireConfirm      = input.bool(true, "Engulfing teyidi şart", group = grpV2)
 
 grpRisk = "Risk (SL / TP)"
@@ -149,14 +148,15 @@ htfBundle() =>
         bearFvgBot := na
         bearFvgTop := na
 
-    [bias, lastSH, lastSL, lastEqh, lastEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop]
+    // Non-repaint (2026-07-03): [1]-shift + lookahead_on = her iki rejimde SON KAPANMIS HTF bari
+    [bias[1], lastSH[1], lastSL[1], lastEqh[1], lastEql[1], oteTop[1], oteBot[1], bullFvgBot[1], bullFvgTop[1], bearFvgBot[1], bearFvgTop[1]]
 
-[htfBias, htfSwingHigh, htfSwingLow, htfEqh, htfEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_off, gaps = barmerge.gaps_off)
+[htfBias, htfSwingHigh, htfSwingLow, htfEqh, htfEql, oteTop, oteBot, bullFvgBot, bullFvgTop, bearFvgBot, bearFvgTop] = request.security(syminfo.tickerid, htfTf, htfBundle(), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)  // non-repaint recetesi: bundle icinde [1]-shift ile birlikte
 
 // Daily bias (opsiyonel)
 dailyBias = 0
 if useDaily
-    db = request.security(syminfo.tickerid, dailyTf, (close - close[30]) / close[30] * 100.0, lookahead = barmerge.lookahead_off)
+    db = request.security(syminfo.tickerid, dailyTf, ((close - close[30]) / close[30] * 100.0)[1], lookahead = barmerge.lookahead_on)  // non-repaint: kapanmis 1D bari
     dailyBias := db > 5.0 ? 1 : db < -5.0 ? -1 : 0
 
 // ─────────────────────────────────────────────────────────────────────────────
