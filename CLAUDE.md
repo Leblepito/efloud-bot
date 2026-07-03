@@ -2,6 +2,15 @@
 
 > **🚀 Sonraki Claude için Başlangıç Noktası:** Bu README projenin giriş noktasıdır. **Son çalışma (2025-01-20):** SL/TP Precision + Candle-Close Sync implementation tamamlandı (6 commit push edildi: price precision rounding, candle-close sync tests, config interval reduction). Branch: `feat/v2-nipio-dashboard`. Unstaged changes var (`backend/bot_runner.py`, `main.py`). **Dashboard:** `https://bot.ualgotrade.com` / `https://178-104-122-91.nip.io`. **Ana iş:** Bot mantığını TradingView Pine Script'e çevirmek (hem indicator hem strategy). **Kritik kurallar:** (1) Python kaynak mantığı DEĞİŞTİRME — sadece oku ve referans al, (2) Pine v6 syntax ZORUNLU, (3) Her değişiklik TDD + risk-ops review + backtest-gate.
 
+## Cowork/Sandbox Git Uyarısı (2026-07-03)
+
+Cowork sandbox'ından bu repo'da çalışırken mount senkron katmanı git metadata'sını
+bozabiliyor (`.git/index` null-byte korupsiyonu, `.git/config` boşalması, Windows
+edit'lerinin Linux'ta kesik görünmesi). Kural: (1) commit'leri `GIT_INDEX_FILE=/tmp/...`
+sandbox-local index ile yap, (2) her git hatasında önce ilgili `.git/` dosyasında
+null-byte kontrolü yap, (3) dosya yazımlarını tek seferde deterministik yap.
+Detay: `docs/handoff/2026-07-03-merge-bugfix-and-repo-hardening.md`.
+
 ## Amaç
 Bu repo Python ile yazılmış bir trading botudur (`efloud-bot`). Hedef: bu botun
 çekirdek trade mantığını (Multi-Timeframe Smart Money Concepts + Confluence Scoring)
