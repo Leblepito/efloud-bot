@@ -72,3 +72,29 @@ göründü. Sandbox'tan çalışırken:
   (1) signal_ledger'ı canlıda aç, (2) yeterli N sinyal biriktir,
   (3) `edge_report` NET-cost çıktısıyla conf-threshold sweep (C4),
   is_discovery düzeltmesi (M1) ve confluence attribution (M2) kararlarını ver.
+
+## Ek 2 — Branch kararları (2026-07-03, oturum sonu)
+
+74 unmerged local branch salt-okunur analizle karara bağlandı (`git cherry` +
+kod karşılaştırma ile doğrulama): **hiçbirinde master'da olmayan iş yoktu** —
+16 fix/* branch'inin tamamı dahil ~74 branch silindi (origin kopyaları duruyor).
+
+**PARK edilen 7 branch (gate/karar bekliyor):**
+- `feat/smc-sl-tp-redesign` — flag-gated SL/TP deneyi; backtest DIRECTIONAL
+  NO-GO, rigorous RERUN gate'i geçmeden merge YASAK.
+- `feat/audit-remediation` — C1-C3/H2-H4/M3-M4 remediasyonu; master follow-up'ı
+  ile satır satır karşılaştırma + risk-ops gerek.
+- `config/per-mode-sizing` — tiered sizing (scalp 3x/50 · mid 5x/80 · long
+  10x/100); canlı risk parametresi → risk-ops + operatör onayı şart.
+- `clarity-action` — BotRunner crash-loop safety; master bot_runner ile
+  örtüşme kontrolü gerek.
+- `feat/track1-premium-launch` — LemonSqueezy ürün-mapping + entitlements;
+  premium launch gündeme gelince değerlendir.
+- `feat/slippage-telemetry`, `feat/async-review-hardening` — düşük öncelik.
+
+Cherry-pick adayları (branch silindi, commit SHA'lar origin'de):
+overseer'ın "healthz HALTED→200 suspended" fix'i · t021 uptimerobot-as-code.
+
+**Kalan local branch'ler:** master, main + yukarıdaki 7 PARK. Remote temizliği
+(origin'deki ~110 stale branch) istenirse ayrı bir oturumda `git push origin
+--delete` toplu komutuyla yapılabilir.
