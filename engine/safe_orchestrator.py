@@ -165,7 +165,6 @@ class SafeOrchestrator:
         # SMC v2 SetupStateStore — None when v1 flag is active (inert default).
         # See PR #S2b + spec §4.3 for the advance/trigger/save data flow.
         self.setup_state_store = setup_state_store
-        print(f"[DEBUG SafeOrchestrator.__init__] self={id(self)}, setup_state_store = {setup_state_store}")
         # Convenience reference to BinanceClient for sizing helpers (PR #24).
         # PR #24 introduced `self.client` references in _calc_size paths but
         # forgot to set the attribute in __init__, causing AttributeError on
@@ -940,7 +939,6 @@ class SafeOrchestrator:
         # SMC v2 setup state advance — opt-in, inert when store is None.
         # Must run BEFORE breaker check so EXPIRE transitions get recorded
         # even on no-trade ticks (operator observability).
-        print(f"[DEBUG run_cycle {symbol}] self={id(self)}, self.setup_state_store = {self.setup_state_store}")
         if self.setup_state_store is not None:
             current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
             self._advance_setup_state_tick(
@@ -1650,8 +1648,6 @@ class SafeOrchestrator:
         Terminal states (CONFIRMED, EXPIRED) are skipped — they wait for the
         next save() call to be pruned.
         """
-        print(f"[DEBUG _advance_setup_state_tick {symbol}] called")
-
         # Inert default — no v1 behavior change
         if self.setup_state_store is None:
             return
@@ -1782,7 +1778,6 @@ class SafeOrchestrator:
 
         Inert when self.setup_state_store is None — short-circuits.
         """
-        print(f"[DEBUG _emit_setup_candidates {symbol}] called")
         if self.setup_state_store is None:
             return
 

@@ -34,7 +34,7 @@ def make_orc(tmp_path):
                 "max_pending_per_symbol": 3,
             }
         }
-        
+
         store = SetupStateStore(tmp_path / "state.json")
         orc = SafeOrchestrator(
             config=config,
@@ -45,9 +45,12 @@ def make_orc(tmp_path):
         return orc, store
     return _make
 
-def test_immediate_entry_on_zone_touch_when_require_confirmation_false(make_orc):
+def test_pullback_flow_entry_when_require_confirmation_false(make_orc):
+    """Pullback detection (d03378e): first zone touch does NOT enter.
+    Price must leave the zone and re-enter (pullback) before entry fires,
+    even when require_confirmation=False."""
     orc, store = make_orc(require_confirmation=False)
-    
+
     cand = SetupCandidate(
         symbol="BTC/USDT", direction="LONG",
         trigger_bar_ts=1700000000000, trigger_price=95000.0,
@@ -60,12 +63,31 @@ def test_immediate_entry_on_zone_touch_when_require_confirmation_false(make_orc)
 
     # Patch order placement method
     with patch.object(orc, "_place_v2_entry_order") as mock_place:
+        # Tick 1: first touch inside zone -> IN_ZONE, NO entry yet
         orc._advance_setup_state_tick(
             symbol="BTC/USDT",
             current_price=96500.0,  # inside target_zone [96000, 97000]
             current_bar_ts=1700000060000,
         )
-        
+        assert cand.state == "IN_ZONE"
+        mock_place.assert_not_called()
+
+        # Tick 2: price leaves zone -> AWAITING_REENTRY, has_left_zone=True
+        orc._advance_setup_state_tick(
+            symbol="BTC/USDT",
+            current_price=95500.0,  # below zone low
+            current_bar_ts=1700000120000,
+        )
+        assert cand.state == "AWAITING_REENTRY"
+        assert cand.has_left_zone is True
+        mock_place.assert_not_called()
+
+        # Tick 3: price re-enters zone (pullback) -> CONFIRMED, entry fires
+        orc._advance_setup_state_tick(
+            symbol="BTC/USDT",
+            current_price=96500.0,
+            current_bar_ts=1700000180000,
+        )
         assert cand.state == "CONFIRMED"
         mock_place.assert_called_once_with(
             cand,
@@ -75,7 +97,7 @@ def test_immediate_entry_on_zone_touch_when_require_confirmation_false(make_orc)
 
 def test_no_immediate_entry_when_require_confirmation_true(make_orc):
     orc, store = make_orc(require_confirmation=True)
-    
+
     cand = SetupCandidate(
         symbol="BTC/USDT", direction="LONG",
         trigger_bar_ts=1700000000000, trigger_price=95000.0,
@@ -93,13 +115,16 @@ def test_no_immediate_entry_when_require_confirmation_true(make_orc):
             current_price=96500.0,  # inside target_zone [96000, 97000]
             current_bar_ts=1700000060000,
         )
-        
+
         assert cand.state == "IN_ZONE"
         mock_place.assert_not_called()
 
-def test_sticky_in_zone_advances_directly_on_require_confirmation_false(make_orc):
+def test_in_zone_leave_then_reentry_confirms_on_require_confirmation_false(make_orc):
+    """Pullback detection (d03378e): IN_ZONE candidate whose price leaves the
+    zone moves to AWAITING_REENTRY (has_left_zone=True); re-entry then
+    triggers CONFIRMED entry when require_confirmation=False."""
     orc, store = make_orc(require_confirmation=False)
-    
+
     cand = SetupCandidate(
         symbol="BTC/USDT", direction="LONG",
         trigger_bar_ts=1700000000000, trigger_price=95000.0,
@@ -117,9 +142,10 @@ def test_sticky_in_zone_advances_directly_on_require_confirmation_false(make_orc
             current_price=95500.0,
             current_bar_ts=1700000060000,
         )
-        
-        # State must remain IN_ZONE, and mock_place must not be called
-        assert cand.state == "IN_ZONE"
+
+        # Leaving the zone marks the pullback and moves to AWAITING_REENTRY
+        assert cand.state == "AWAITING_REENTRY"
+        assert cand.has_left_zone is True
         mock_place.assert_not_called()
 
         # Case 2: Price is INSIDE the zone (96500 is inside [96000, 97000])
@@ -129,7 +155,7 @@ def test_sticky_in_zone_advances_directly_on_require_confirmation_false(make_orc
             current_bar_ts=1700000120000,
         )
 
-        # State must advance to CONFIRMED, and entry must fire at 96500.0
+        # Re-entry completes the pullback: CONFIRMED, entry fires at 96500.0
         assert cand.state == "CONFIRMED"
         mock_place.assert_called_once_with(
             cand,
