@@ -64,6 +64,32 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  efloud-bot-scalp:
+    image: efloud-bot:latest        # V1'in build ettiği image (ayrı build yok)
+    container_name: efloud-bot-scalp
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    env_file:
+      - .env.production.scalp
+    expose:
+      - "8080"  # internal-only; Caddy scalp.u2algo.com'u proxy'ler
+    volumes:
+      - efloud_state_scalp:/app/state_scalp
+      - efloud_logs_scalp:/app/logs
+      - efloud_reports_scalp:/app/reports_scalp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz', timeout=5).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 600s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   caddy:
     image: caddy:2-alpine
     container_name: efloud-caddy
@@ -257,6 +283,9 @@ services:
         max-file: "3"
 
 volumes:
+  efloud_state_scalp:
+  efloud_logs_scalp:
+  efloud_reports_scalp:
   efloud_state:
   efloud_state_1k:
   efloud_state_aggressive:
