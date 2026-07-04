@@ -24,7 +24,14 @@ def make_future_client(client=None):
     return ccxt.binance({
         "apiKey": os.environ.get("BINANCE_API_KEY"),
         "secret": os.environ.get("BINANCE_API_SECRET"),
-        "options": {"defaultType": "future"},
+        "options": {
+            "defaultType": "future",
+            # position_audit fix (2026-07-04): symbol'süz fetch_open_orders,
+            # ccxt'de acknowledge edilmezse ExchangeError FIRLATIR (uyarı değil).
+            # Audit bilinçli olarak TÜM emirleri tek çağrıda tarar (2dk cadence,
+            # weight bütçesi yeterli) — uyarıyı bilinçli kabul ediyoruz.
+            "warnOnFetchOpenOrdersWithoutSymbol": False,
+        },
     })
 
 def now_utc():

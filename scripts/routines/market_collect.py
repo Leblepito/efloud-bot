@@ -69,7 +69,14 @@ def run(client=None, alert=None, cfg=None):
     config = cfg if cfg is not None else load_config()
     thresholds = derive(config)
     
-    symbols = config.get("symbols", ["BTC/USDT"])
+    symbols_cfg = config.get("symbols", ["BTC/USDT"])
+    if isinstance(symbols_cfg, dict):
+        # config.phase2_1k şeması: symbols: {mode, fixed_core: [...], ...} —
+        # düz liste beklenirken dict key'leri ("mode", "fixed_core", ...)
+        # sembol sanılıp 'does not have market symbol mode' hatası üretiyordu.
+        symbols = list(symbols_cfg.get("fixed_core") or []) or ["BTC/USDT"]
+    else:
+        symbols = symbols_cfg
     now_ts = time.time()
     now_ms = int(now_ts * 1000)
     
