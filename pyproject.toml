@@ -18,6 +18,11 @@ norecursedirs = [
     "scripts",
     "ops",
     "docs",
+    "external_repos",
+    ".claude",
+    ".hermes",
+    "u2algo-site",
+    "backup_rollout",
 ]
 # Stale CLI scripts at repo root that import the retired backtest.runner module.
 # Excluded so pytest discovery doesn't break on import; tracked for follow-up
