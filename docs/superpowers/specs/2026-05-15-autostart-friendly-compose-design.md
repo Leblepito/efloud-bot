@@ -48,7 +48,7 @@ Trade-off: a 10-minute window where a genuinely sick bot would not auto-restart.
 
 After patch:
 - `docker compose ps` shows `caddy` running while `efloud-bot` is `(unhealthy)` but `running`.
-- `https://178-104-122-91.nip.io` reachable (Let's Encrypt may take ~30s on first hit).
+- `https://<VPS-IP>.nip.io` reachable (Let's Encrypt may take ~30s on first hit).
 - Operator presses Start → bot ticks → healthz 200 → all healthy.
 - After Start, autoheal behaves normally (10-minute warmup elapsed by then).
 

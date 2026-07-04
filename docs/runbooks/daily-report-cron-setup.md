@@ -29,7 +29,7 @@ If using Gmail SMTP:
 Before automating, verify the report sends correctly when invoked manually:
 
 ```bash
-ssh efloud@178.104.122.91
+ssh efloud@<VPS_IP>
 cd /opt/efloud-bot
 docker compose -f docker-compose.prod.yml --profile scheduled run --rm daily-report
 ```
@@ -43,7 +43,7 @@ If exit code is non-zero, check the container's stderr for the failure reason
 Edit the `efloud` user's crontab:
 
 ```bash
-ssh efloud@178.104.122.91
+ssh efloud@<VPS_IP>
 crontab -e
 ```
 

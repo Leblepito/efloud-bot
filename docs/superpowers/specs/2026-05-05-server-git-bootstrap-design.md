@@ -8,7 +8,7 @@
 
 ### Why this is needed
 
-The Hetzner production server (178.104.122.91, `bot.ualgotrade.com`) hosts the live trading bot at `/opt/efloud-bot`. Inspection on 2026-05-05 revealed:
+The Hetzner production server (<VPS_IP>, `bot.ualgotrade.com`) hosts the live trading bot at `/opt/efloud-bot`. Inspection on 2026-05-05 revealed:
 
 - Files exist at `/opt/efloud-bot` (mtime 2 May 2026), owned by `efloud:efloud`
 - The directory is **NOT a git repository** (`fatal: not a git repository`)
@@ -43,7 +43,7 @@ Stage 1 protects against unexpected file overwrites. Stage 2 aligns source. Stag
 
 ## Implementation steps
 
-Run as `root` on the production server (`ssh root@178.104.122.91`):
+Run as `root` on the production server (`ssh root@<VPS_IP>`):
 
 ```bash
 set -e
@@ -69,9 +69,9 @@ sudo -u efloud bash deploy/deploy.sh
 Verification after stage 3:
 
 ```bash
-ssh root@178.104.122.91 "cd /opt/efloud-bot && git log --oneline -3 && grep -n '+ 1e-2\|+ 1e-6' engine/safety/position_guard.py"
+ssh root@<VPS_IP> "cd /opt/efloud-bot && git log --oneline -3 && grep -n '+ 1e-2\|+ 1e-6' engine/safety/position_guard.py"
 curl -sI https://bot.ualgotrade.com/healthz   # expect HTTP/2 200
-ssh root@178.104.122.91 "docker ps --format 'table {{.Names}}\t{{.Status}}' && docker logs --tail 30 efloud-bot 2>&1 | grep -E 'cycle|breaker|Watchlist'"
+ssh root@<VPS_IP> "docker ps --format 'table {{.Names}}\t{{.Status}}' && docker logs --tail 30 efloud-bot 2>&1 | grep -E 'cycle|breaker|Watchlist'"
 ```
 
 ## Components
@@ -134,7 +134,7 @@ ssh root@178.104.122.91 "docker ps --format 'table {{.Names}}\t{{.Status}}' && d
 ### Pre-deploy
 
 - Confirm `origin/master` HEAD is `78680b0` (already pushed): `git ls-remote https://github.com/Leblepito/efloud-bot master`
-- Confirm SSH access to `root@178.104.122.91` works
+- Confirm SSH access to `root@<VPS_IP>` works
 - Confirm Phase A backtest is NOT running on the production server (it runs on the dev worktree, not production — verified)
 
 ### Post-deploy
@@ -183,4 +183,4 @@ ssh root@178.104.122.91 "docker ps --format 'table {{.Names}}\t{{.Status}}' && d
 
 ## Success metric
 
-After running the bootstrap, the user can run `ssh root@178.104.122.91 "cd /opt/efloud-bot && bash deploy/deploy.sh"` from any future commit and have the live bot updated within ~30s. No manual file transfers, no scp.
+After running the bootstrap, the user can run `ssh root@<VPS_IP> "cd /opt/efloud-bot && bash deploy/deploy.sh"` from any future commit and have the live bot updated within ~30s. No manual file transfers, no scp.

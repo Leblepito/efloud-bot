@@ -1,6 +1,6 @@
 # EFloud-Bot — TradingView Pine Script Projesi
 
-> **🚀 Sonraki Claude için Başlangıç Noktası:** Bu README projenin giriş noktasıdır. **Son çalışma (2025-01-20):** SL/TP Precision + Candle-Close Sync implementation tamamlandı (6 commit push edildi: price precision rounding, candle-close sync tests, config interval reduction). Branch: `feat/v2-nipio-dashboard`. Unstaged changes var (`backend/bot_runner.py`, `main.py`). **Dashboard:** `https://bot.ualgotrade.com` / `https://178-104-122-91.nip.io`. **Ana iş:** Bot mantığını TradingView Pine Script'e çevirmek (hem indicator hem strategy). **Kritik kurallar:** (1) Python kaynak mantığı DEĞİŞTİRME — sadece oku ve referans al, (2) Pine v6 syntax ZORUNLU, (3) Her değişiklik TDD + risk-ops review + backtest-gate.
+> **🚀 Sonraki Claude için Başlangıç Noktası:** Bu README projenin giriş noktasıdır. **Son çalışma (2025-01-20):** SL/TP Precision + Candle-Close Sync implementation tamamlandı (6 commit push edildi: price precision rounding, candle-close sync tests, config interval reduction). Branch: `feat/v2-nipio-dashboard`. Unstaged changes var (`backend/bot_runner.py`, `main.py`). **Dashboard:** `https://bot.ualgotrade.com` / `https://<VPS-IP>.nip.io`. **Ana iş:** Bot mantığını TradingView Pine Script'e çevirmek (hem indicator hem strategy). **Kritik kurallar:** (1) Python kaynak mantığı DEĞİŞTİRME — sadece oku ve referans al, (2) Pine v6 syntax ZORUNLU, (3) Her değişiklik TDD + risk-ops review + backtest-gate.
 
 ## Cowork/Sandbox Git Uyarısı (2026-07-03)
 

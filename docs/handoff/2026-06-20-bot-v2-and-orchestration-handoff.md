@@ -18,9 +18,9 @@ Mevcut bot (`bot.ualgotrade.com`, Hetzner, profile **mid 15m**) yanına **parale
 > Branch'ler **lokal, push/PR operatör onayına bırakıldı**. Hiçbiri canlıya deploy edilmedi (additive, ayrı container).
 
 ## Operatörün sağlaması gereken GATE'ler
-1. **Yeni Binance hesabı** + API key (`canTrade=true`, `canWithdraw=false`) + **VPS IP'sini (178.104.122.91) IP-whitelist'e** ekle.
+1. **Yeni Binance hesabı** + API key (`canTrade=true`, `canWithdraw=false`) + **VPS IP'sini (<VPS_IP>) IP-whitelist'e** ekle.
 2. **$1035 transfer:** mevcut hesaptan yeni hesaba; yeni hesap **FLAT** (pozisyon/order yok — margin/position-mode değişimi flat-book ister).
-3. **DNS:** `bot.u2algo.com` A-record → `178.104.122.91`.
+3. **DNS:** `bot.u2algo.com` A-record → `<VPS_IP>`.
 4. **Supabase:** proje + connection string/keys (Option A=paylaşılan proje + bot_id migration / Option B=ayrı proje — Gemini karar verecek).
 5. **V1 breaker reset kararı** + V1 recalibration ($2075→$1035) sign-off (mainnet) — **fon transferinden SONRA**.
 
@@ -46,7 +46,7 @@ ALTYAPI HAZIRLIĞI tasarla/yürüt (P1 infra prep). Trade mantığına DOKUNMA.
   - docs/superpowers/specs/2026-06-20-u2algo-rebuild-and-growth-program-design.md  (domain mimarisi)
   - .claude/plans/cryptic-dazzling-balloon.md  YOKSA: docs/handoff/2026-06-20-bot-v2-and-orchestration-handoff.md
 
-BAĞLAM: V1 bot Hetzner'da (178.104.122.91) docker-compose.prod.yml + Caddy ile
+BAĞLAM: V1 bot Hetzner'da (<VPS_IP>) docker-compose.prod.yml + Caddy ile
 bot.ualgotrade.com'da CANLI (profile mid). V2 = AYNI kod, profile LONG (1h/8h/1w),
 YENİ Binance cüzdanı ~$1035, domain bot.u2algo.com, AYNI Hetzner VPS'te paralel
 container, Supabase persistence. Compute Hetzner'da KALIR (Railway DEĞİL — Railway
@@ -71,7 +71,7 @@ Claude cross-test eder, operatör sign-off):
   1. SUPABASE KARARI: Option A (paylaşılan proje + `bot_id` kolonu, migration 012 ile
      singleton breaker_state'i per-instance yap) vs Option B (V2 için AYRI proje, kod
      değişikliği yok) — gerekçeli seç. Seçilen yola göre provisioning + migration apply runbook.
-  2. DNS: bot.u2algo.com A-record → 178.104.122.91 (operatör panelde uygular; sen tam
+  2. DNS: bot.u2algo.com A-record → <VPS_IP> (operatör panelde uygular; sen tam
      adımlar + doğrulama: `dig bot.u2algo.com`, `curl -I https://bot.u2algo.com`).
   3. VPS KAPASİTE: 2 bot için RAM/CPU headroom (`free -m`, `docker stats`) + birleşik
      Binance REST weight analizi (her bot 10 sembol × 30s loop × parallel_workers:3).

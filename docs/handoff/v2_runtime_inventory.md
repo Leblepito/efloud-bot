@@ -12,7 +12,7 @@
 - `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `KIMI_API_KEY`, `MINIMAX_API_KEY`, `OLLAMA_API_KEY`, `MANUS_API_KEY`
 
 **Aksiyon (öncelikli)**:
-1. Binance → API Management → bu key'i **disable + delete** → yeni key oluştur → IP whitelist'e sadece Hetzner VPS IP (`178.104.122.91`)
+1. Binance → API Management → bu key'i **disable + delete** → yeni key oluştur → IP whitelist'e sadece Hetzner VPS IP (`<VPS_IP>`)
 2. Anthropic console → key revoke + yeni key
 3. Diğer 6 LLM provider → aynı işlem
 4. Yeni key'leri **sadece** VPS'teki `.env.production`'a yaz, local `.env`'i sil veya placeholder yap
@@ -123,7 +123,7 @@
 
 | Local Path | GitHub Path | Ne Yapar |
 |---|---|---|
-| `deploy/Caddyfile` | `deploy/Caddyfile` | HTTPS reverse proxy → `bot.ualgotrade.com` + `178-104-122-91.nip.io` |
+| `deploy/Caddyfile` | `deploy/Caddyfile` | HTTPS reverse proxy → `bot.ualgotrade.com` + `<VPS-IP>.nip.io` |
 | `deploy/HETZNER_GUIDE.md` | `deploy/HETZNER_GUIDE.md` | VPS kurulum kılavuzu |
 | `deploy/deploy.sh` | `deploy/deploy.sh` | Pull + build + recreate + healthcheck script |
 | `deploy/setup-server.sh` | `deploy/setup-server.sh` | İlk VPS provision script |
@@ -260,7 +260,7 @@
 
 | Variable | Tip | Değer | Açıklama |
 |---|---|---|---|
-| `BINANCE_API_KEY` | secret | Mainnet futures key | Binance → API Mgmt → Futures + IP whitelist (178.104.122.91) |
+| `BINANCE_API_KEY` | secret | Mainnet futures key | Binance → API Mgmt → Futures + IP whitelist (<VPS_IP>) |
 | `BINANCE_API_SECRET` | secret | Mainnet secret | Aynı |
 | `EFLOUD_ALLOW_MAINNET` | flag | `1` | mainnet_guard bypass'ı için zorunlu |
 | `EFLOUD_CONFIG_PATH` | path | `configs/config.phase2_1k.yaml` | Aktif profile |
@@ -269,7 +269,7 @@
 | `DASHBOARD_PASSWORD` | secret | 32+ char | `bot.ualgotrade.com` login |
 | `SESSION_SECRET` | secret | 32 hex | Cookie imzalama |
 | `DATABASE_URL` | url | (şu an commented out) | Supabase pooler — bkz. 3c |
-| `ALLOWED_ORIGINS` | csv | `https://bot.ualgotrade.com,https://178-104-122-91.nip.io` | CORS |
+| `ALLOWED_ORIGINS` | csv | `https://bot.ualgotrade.com,https://<VPS-IP>.nip.io` | CORS |
 | `ENV` | string | `production` | Secure cookie açar |
 | `LOG_LEVEL` | string | `INFO` | |
 | `ANTHROPIC_API_KEY` | secret | Claude Haiku key | Overseer LLM summarizer |
@@ -300,7 +300,7 @@
 | Item | Değer |
 |---|---|
 | **Provider** | Hetzner Cloud (CPX22 #128829260) |
-| **Host IP** | `178.104.122.91` |
+| **Host IP** | `<VPS_IP>` |
 | **OS** | Ubuntu 22.04 |
 | **SSH alias** | `ssh efloud-bot` (local `~/.ssh/config`) |
 | **SSH key** | `~/.ssh/id_ed25519` (label `efloud-bot-hetzner`) |
@@ -308,7 +308,7 @@
 | **User** | `efloud` (docker group member) |
 | **Ports** | 80 (HTTP→HTTPS), 443 (HTTPS), 22 (SSH) — UFW |
 | **Domain** | `bot.ualgotrade.com` (Caddy + Let's Encrypt) |
-| **Fallback** | `178-104-122-91.nip.io` |
+| **Fallback** | `<VPS-IP>.nip.io` |
 | **Docker volumes** | `efloud_state`, `efloud_state_1k`, `efloud_state_aggressive`, `efloud_logs`, `efloud_reports`, `caddy_data`, `caddy_config` |
 | **Compose dosyası** | `/opt/efloud-bot/docker-compose.prod.yml` |
 | **Env dosyası** | `/opt/efloud-bot/.env.production` (VPS-local, gitignored) |
@@ -317,7 +317,7 @@
 
 - **Tip**: USDT-M Futures (mainnet, isolated margin, hedge mode OFF)
 - **Key permissions**: Futures Read + Trade (Spot Trade KAPALI, Withdraw KAPALI)
-- **IP whitelist**: **Sadece** `178.104.122.91` (Hetzner VPS IP'si)
+- **IP whitelist**: **Sadece** `<VPS_IP>` (Hetzner VPS IP'si)
 - **Symbol format**: Local Position `BTC/USDT`, CCXT call `BTC/USDT:USDT` (`to_ccxt_symbol()` köprüsü)
 - **Tuzak**: `defaultType` mutlaka `future` (singular). `futures` (plural) spot'a düşer — bkz. `binance_ccxt_conditional_orders` memory
 
@@ -335,7 +335,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Hetzner Cloud (CPX22)                       │
-│                       178.104.122.91                            │
+│                       <VPS_IP>                            │
 │                       /opt/efloud-bot                           │
 │                                                                 │
 │  ┌──────────┐    ┌────────────────┐    ┌──────────────────┐   │

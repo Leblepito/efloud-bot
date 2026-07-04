@@ -34,7 +34,7 @@ c) Sen farklı bir VPS'e SSH yaptın (yanlış host alias)
 
 ```bash
 ssh efloud-bot 'hostname && cat /etc/hostname && ip addr show eth0 | grep "inet "'
-# Beklenen: efloud-bot-prod, IP 178.104.122.91
+# Beklenen: efloud-bot-prod, IP <VPS_IP>
 
 ssh efloud-bot 'cd /opt/efloud-bot && git log -10 --oneline && git status -sb'
 # Eğer HEAD d03857c ise: Hermes Faz 1 git pull'unu yapmamış demektir

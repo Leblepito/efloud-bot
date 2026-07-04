@@ -351,7 +351,7 @@ gh pr merge --squash --delete-branch
 - [ ] **Step 4: Deploy to Hetzner**
 
 ```
-ssh efloud@178.104.122.91 'cd /opt/efloud-bot && git pull && bash deploy/deploy.sh'
+ssh efloud@<VPS_IP> 'cd /opt/efloud-bot && git pull && bash deploy/deploy.sh'
 ```
 
 - [ ] **Step 5: Post-deploy URL verification (read-only — no positions opened)**
@@ -359,7 +359,7 @@ ssh efloud@178.104.122.91 'cd /opt/efloud-bot && git pull && bash deploy/deploy.
 SSH command (one-liner; runs inside the bot container so it uses the deployed code path):
 
 ```
-ssh efloud@178.104.122.91 'cd /opt/efloud-bot && docker compose -f docker-compose.prod.yml exec -T efloud-bot python -c "
+ssh efloud@<VPS_IP> 'cd /opt/efloud-bot && docker compose -f docker-compose.prod.yml exec -T efloud-bot python -c "
 import yaml, os
 from exchange import BinanceClient
 cfg = yaml.safe_load(open(os.environ[\"EFLOUD_CONFIG_PATH\"]))

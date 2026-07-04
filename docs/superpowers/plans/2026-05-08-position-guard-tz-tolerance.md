@@ -270,7 +270,7 @@ EOF
 
 ```
 gh pr merge --squash --delete-branch
-ssh efloud@178.104.122.91 'cd /opt/efloud-bot && git pull && bash deploy/deploy.sh'
+ssh efloud@<VPS_IP> 'cd /opt/efloud-bot && git pull && bash deploy/deploy.sh'
 ```
 
 - [ ] **Step 4: No special post-deploy verification needed**

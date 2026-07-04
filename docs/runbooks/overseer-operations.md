@@ -41,7 +41,7 @@ after reviewing logs and confirming no false positives.
 ## Hetzner deploy steps
 
 ```bash
-ssh efloud@178.104.122.91
+ssh efloud@<VPS_IP>
 cd /opt/efloud-bot
 
 # 1) Pull latest image (built by CI or local docker build)

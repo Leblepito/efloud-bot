@@ -44,7 +44,7 @@ long-bot) VPS bringup + V1 recalibration. ÖNCE OKU: LLTODO/PROMPT-hermes.md,
 docs/handoff/2026-06-20-next-step-task-distribution.md.
 
 ÖN-KOŞUL (operatör sağlar): yeni Binance V2 hesabı funded ~$1035 + FLAT, V2 API key+secret,
-DNS bot.u2algo.com→178.104.122.91. Merge'li master (#233 config + #236 A5).
+DNS bot.u2algo.com→<VPS_IP>. Merge'li master (#233 config + #236 A5).
 
 ADIMLAR (her biri öncesi flat-book + healthz doğrula):
 1. VPS'te deploy/.env.production.long oluştur (V2 key+secret, EFLOUD_CONFIG_PATH=

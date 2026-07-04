@@ -608,7 +608,7 @@ Expected: most recent commit is the merge commit for the bull-aware trigger PR.
 - [ ] **Step 2: Hetzner deploy (requires user confirmation)**
 
 ```bash
-ssh efloud@178.104.122.91 \
+ssh efloud@<VPS_IP> \
   "cd /opt/efloud-bot && git pull origin master && bash deploy/deploy.sh"
 ```
 Expected: image rebuild, container restart, "✅ Bot is up and healthy" + healthz JSON.
@@ -621,7 +621,7 @@ curl -s -o /dev/null -w "HTTP %{http_code}\n" https://bot.ualgotrade.com/api/pos
 # Expected: 401
 
 # 5-minute log sample after deploy — look for 'BOS' in trigger logs
-ssh efloud@178.104.122.91 \
+ssh efloud@<VPS_IP> \
   "sleep 300 && cd /opt/efloud-bot && docker compose -f docker-compose.prod.yml logs --since=5m efloud-bot 2>&1 | grep -E 'triggers|BOS|max=' | head -30"
 ```
 Expected: at least some log lines mention BOS or have higher per-bucket counts than the historical 60-only stuck distribution.

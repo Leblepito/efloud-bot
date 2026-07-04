@@ -760,7 +760,7 @@ If you see suspension, the button doesn't work — proceed with manual recovery 
 SSH into Hetzner and inspect the recent logs:
 
 \`\`\`bash
-ssh efloud@178.104.122.91
+ssh efloud@<VPS_IP>
 cd /opt/efloud-bot
 docker compose -f docker-compose.prod.yml logs efloud-bot --tail 200 2>&1 | \
     grep -E "fatal_exception|Cycle error|CRASH LOOP|🛑|💥"

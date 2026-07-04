@@ -322,9 +322,9 @@ asyncio.run(main())
 
 | Şey | Yer |
 |---|---|
-| Dashboard | `https://bot.ualgotrade.com` / `https://178-104-122-91.nip.io` |
+| Dashboard | `https://bot.ualgotrade.com` / `https://<VPS-IP>.nip.io` |
 | Dashboard şifre | Password manager |
-| VPS SSH | `ssh efloud-bot` / `ssh root@178.104.122.91` |
+| VPS SSH | `ssh efloud-bot` / `ssh root@<VPS_IP>` |
 | SSH key | `~/.ssh/id_ed25519` (`efloud-bot-hetzner`) |
 | Repo | `/opt/efloud-bot` |
 | State dir | `/opt/efloud-bot/state_1k/` |

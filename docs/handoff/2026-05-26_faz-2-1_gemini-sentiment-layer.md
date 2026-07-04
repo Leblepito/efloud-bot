@@ -16,7 +16,7 @@
     *   FastAPI endpoint (`/api/ai/sentiment`) `require_auth` ile korumalı olarak eklendi.
     *   Next.js 15 koyu tema (Harmonious green/indigo glassmorphism) interaktif `AISentimentCard.tsx` bileşeni geliştirilip `StatusGrid` altına eklendi.
     *   Next.js static compilation tip kontrolleri (`npm run typecheck`) sıfır hata ile tamamlandı.
-4.  **Hetzner VPS Remote Staging Deploy (`178.104.122.91`):**
+4.  **Hetzner VPS Remote Staging Deploy (`<VPS_IP>`):**
     *   Yerel git master commit'leri VPS üzerine çekildi.
     *   VPS üzerindeki yerel config çakışmaları git stash ile korunarak çözüldü.
     *   Production docker-compose baştan derlendi ve tüm konteynerler (`efloud-bot`, `efloud-caddy`, `efloud-overseer`, `efloud-alerter`, `efloud-autoheal`) ayağa kaldırıldı.

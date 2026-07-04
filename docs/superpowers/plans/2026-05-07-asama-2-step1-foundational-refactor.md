@@ -1304,7 +1304,7 @@ Expected: plain text logs (no JSON). Confirms feature flag default-off works.
 
 ⚠️ Migrations 002 and 003 must be applied to the **production** Supabase BEFORE the deploy that ships code reading those columns. Order:
 
-1. SSH to Hetzner: `ssh efloud@178.104.122.91`
+1. SSH to Hetzner: `ssh efloud@<VPS_IP>`
 2. Pull latest branch into production checkout: `cd /opt/efloud-bot && git fetch && git checkout feature/asama-2-step-1-foundational-refactor`
 3. Apply migrations against production DB: `docker compose -f docker-compose.prod.yml run --rm efloud-bot python -m backend.migrate up`
 4. Verify columns exist: `docker compose run --rm efloud-bot python -c "import asyncio, asyncpg, os; asyncio.run(asyncpg.connect(os.environ['DATABASE_URL']).fetchval('SELECT column_name FROM information_schema.columns WHERE table_name=\\\"trades\\\" AND column_name=\\\"trace_id\\\"'))"` (returns "trace_id" if present)

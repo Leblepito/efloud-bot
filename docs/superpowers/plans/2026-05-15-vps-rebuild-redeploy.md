@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Restore efloud-bot production service on the fresh Hetzner VPS (`efloud-bot-prod`, 178.104.122.91) after the 2026-05-15 disk wipe, deploying master `855bb87` (overseer + healthz fix + all 4 overseer bug fixes), and leave the bot in a safe `EFLOUD_AUTOSTART=0` state for operator-controlled startup.
+**Goal:** Restore efloud-bot production service on the fresh Hetzner VPS (`efloud-bot-prod`, <VPS_IP>) after the 2026-05-15 disk wipe, deploying master `855bb87` (overseer + healthz fix + all 4 overseer bug fixes), and leave the bot in a safe `EFLOUD_AUTOSTART=0` state for operator-controlled startup.
 
 **Architecture:** SSH-driven deploy from the local Windows machine into the empty VPS. The repo already ships `deploy/setup-server.sh` (Docker + UFW + fail2ban + efloud user) and `deploy/deploy.sh` (git pull + compose build + up + healthz wait). Plan reuses both scripts; new work is limited to wiring the production `.env.production` file (lives only locally today as `.env`) and verifying the post-deploy state including the new overseer sidecar container.
 
@@ -18,7 +18,7 @@
 **Safety rails:**
 - `EFLOUD_AUTOSTART=0` in `.env.production` — bot stays stopped after compose up; operator manually presses Start in dashboard.
 - `EFLOUD_OVERSEER_DRY_RUN=1` already baked into `docker-compose.prod.yml` — overseer logs only, no Telegram.
-- Binance API key whitelist will need the VPS IP (`178.104.122.91`) — already there from the previous deploy, but **verify before bot start**.
+- Binance API key whitelist will need the VPS IP (`<VPS_IP>`) — already there from the previous deploy, but **verify before bot start**.
 - Two checkpoints in plan where execution PAUSES for operator confirmation: (a) after server bootstrap, before pushing secrets; (b) after `docker compose up -d`, before bot autostart flip.
 
 ---
@@ -101,7 +101,7 @@ Expected final lines:
 ```
 ✅ Server bootstrap complete.
 Server public IPv4 (whitelist this in Binance API key):
-178.104.122.91
+<VPS_IP>
 ```
 
 If any step fails (e.g., apt mirror issue), STOP — read `/tmp/setup-output.log` to diagnose.
@@ -184,7 +184,7 @@ EFLOUD_AUTO_MIGRATE=0
 DASHBOARD_PASSWORD=<step 2 value>
 SESSION_SECRET=<step 1 value>
 
-ALLOWED_ORIGINS=https://178-104-122-91.nip.io
+ALLOWED_ORIGINS=https://<VPS-IP>.nip.io
 
 ENV=production
 LOG_LEVEL=INFO
@@ -243,9 +243,9 @@ This file held secrets and must not linger on the local machine.
   - ADA/USDT futures position: TP and SL orders present (operator placed manually on 2026-05-14).
   - **OP/USDT futures position: state UNKNOWN** — operator either places manual TP/SL OR closes the position OR confirms it doesn't exist anymore.
 
-- [ ] **Step 2: Operator confirms Binance API key IP whitelist still includes 178.104.122.91**
+- [ ] **Step 2: Operator confirms Binance API key IP whitelist still includes <VPS_IP>**
 
-Binance → API Management → key → Edit restrictions → confirm `178.104.122.91` in trusted IP list.
+Binance → API Management → key → Edit restrictions → confirm `<VPS_IP>` in trusted IP list.
 
 - [ ] **Step 3: Operator gives go-ahead OR aborts**
 
@@ -358,7 +358,7 @@ If errors appear, STOP and diagnose before continuing.
 
 - [ ] **Step 1: Operator opens dashboard URL**
 
-URL: `https://178-104-122-91.nip.io`
+URL: `https://<VPS-IP>.nip.io`
 
 Browser may warn about cert on first load (Let's Encrypt issuing) — wait ~30s, refresh.
 
@@ -457,7 +457,7 @@ Binance positions are **NOT** at risk from any of these failures — the bot can
 Plan succeeds when **all of** the following are true after Task 11 Step 5:
 
 1. `ssh efloud-bot 'docker compose ps'` shows 5 containers running, `efloud-bot` healthy.
-2. `https://178-104-122-91.nip.io/healthz` returns `{"status":"ok",...}` (via Caddy).
+2. `https://<VPS-IP>.nip.io/healthz` returns `{"status":"ok",...}` (via Caddy).
 3. Dashboard login works with new `DASHBOARD_PASSWORD`.
 4. After operator presses Start, logs show `cycle_start` within 2 min, no tracebacks.
 5. Memory `MEMORY.md` index reflects "RUNNING at 855bb87".

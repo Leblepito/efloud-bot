@@ -126,7 +126,7 @@ nano .env.production
 - `BINANCE_API_KEY`, `BINANCE_API_SECRET` — Mainnet key (mevcut)
 - `DASHBOARD_PASSWORD` — güçlü password (lokal'de kullandığın `efloud-test-12345`'ten farklı, en az 16 karakter)
 - `SESSION_SECRET` — `openssl rand -hex 32` ile üret, kopyala
-- `ALLOWED_ORIGINS=https://<hyphenated_ip>.nip.io` — IP'nin noktalarını tireyle değiştir (örn `178.104.122.91` → `178-104-122-91.nip.io`). Caddy bu hostname için Let's Encrypt cert otomatik alır.
+- `ALLOWED_ORIGINS=https://<hyphenated_ip>.nip.io` — IP'nin noktalarını tireyle değiştir (örn `<VPS_IP>` → `<VPS-IP>.nip.io`). Caddy bu hostname için Let's Encrypt cert otomatik alır.
 
 Kaydet: `Ctrl+O`, `Enter`, `Ctrl+X`
 
@@ -175,7 +175,7 @@ Başarılı çıktı:
 
 Caddy reverse-proxy compose'da hazır geldiği için ilk `deploy.sh` çalıştığında HTTPS otomatik kurulur (Let's Encrypt cert ~30s içinde alınır).
 
-1. Browser'da aç: `https://<hyphenated_ip>.nip.io` (örn `https://178-104-122-91.nip.io`)
+1. Browser'da aç: `https://<hyphenated_ip>.nip.io` (örn `https://<VPS-IP>.nip.io`)
 2. Login: `.env.production`'daki `DASHBOARD_PASSWORD`
 3. Top bar → **Start** butonu → Bot başlasın
 4. Status grid'de `running: true`, `cycle_count` artmalı
@@ -187,7 +187,7 @@ Caddy reverse-proxy compose'da hazır geldiği için ilk `deploy.sh` çalıştı
 
 ## 9. (Opsiyonel) Kendi Domain'in
 
-`nip.io` ücretsiz ve sınırsız çalışır ama `https://178-104-122-91.nip.io` gibi görünür.
+`nip.io` ücretsiz ve sınırsız çalışır ama `https://<VPS-IP>.nip.io` gibi görünür.
 Kendi domain'in (örn `bot.example.com`) varsa:
 
 1. DNS A kaydı: `bot.example.com` → sunucu IPv4

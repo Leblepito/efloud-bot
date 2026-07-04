@@ -294,7 +294,7 @@ git format-patch origin/master --stdout > /tmp/X.patch
 sha256sum /tmp/X.patch
 
 # Operatör (Windows):
-scp root@178.104.122.91:/tmp/X.patch C:\tmp\
+scp root@<VPS_IP>:/tmp/X.patch C:\tmp\
 git am C:\tmp\X.patch
 git push -u origin feat/<branch>
 

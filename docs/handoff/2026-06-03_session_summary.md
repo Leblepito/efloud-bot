@@ -15,7 +15,7 @@ Bu oturumda yapılanlar, sırada bekleyen işler, ve bir sonraki Hermes oturumun
 ## Mevcut sistem durumu (3 Haziran 2026 akşam)
 
 ### Sağlam
-- Hetzner VPS (`178.104.122.91`) — production trade botu çalışıyor, `efloud-bot` repo'su `master` branch'inde, `fix/sltp-delivery-reliability` PR'ı hâlâ bekliyor
+- Hetzner VPS (`<VPS_IP>`) — production trade botu çalışıyor, `efloud-bot` repo'su `master` branch'inde, `fix/sltp-delivery-reliability` PR'ı hâlâ bekliyor
 - Supabase prod `trytjrtqdpmeekgxhhdb` — migrations 001-009 + waitlist_leads applied
 - Manus MCP köprüsü + 21 connector envanteri
 - Telegram outbound bridge (u2hermes)

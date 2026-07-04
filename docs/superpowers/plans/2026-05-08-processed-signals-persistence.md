@@ -289,13 +289,13 @@ EOF
 
 ```
 gh pr merge --squash --delete-branch
-ssh efloud@178.104.122.91 'cd /opt/efloud-bot && git pull && bash deploy/deploy.sh'
+ssh efloud@<VPS_IP> 'cd /opt/efloud-bot && git pull && bash deploy/deploy.sh'
 ```
 
 - [ ] **Step 4: Post-deploy smoke**
 
 ```
-ssh efloud@178.104.122.91 'docker compose -f docker-compose.prod.yml exec -T efloud-bot ls -la /app/state_aggressive/'
+ssh efloud@<VPS_IP> 'docker compose -f docker-compose.prod.yml exec -T efloud-bot ls -la /app/state_aggressive/'
 ```
 
 Expected: `processed_signals.json` appears once the bot processes its first signal cycle.

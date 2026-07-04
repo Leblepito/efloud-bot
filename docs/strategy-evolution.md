@@ -156,7 +156,7 @@ aktive olur.
 Eğer aggressive_v1 production'da yeterli performans göstermezse:
 
 ```bash
-ssh efloud@178.104.122.91 "cd /opt/efloud-bot && \
+ssh efloud@<VPS_IP> "cd /opt/efloud-bot && \
   cp .env.production.h2a2.bak .env.production && \
   bash deploy/deploy.sh"
 ```

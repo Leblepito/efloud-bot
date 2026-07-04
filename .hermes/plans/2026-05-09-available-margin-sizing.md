@@ -44,7 +44,7 @@ These are the key files and lines the implementer must read or modify:
 The Hermes dev container does not have `pytest`/dependencies. Run tests by mounting the local repo into the production-image container on Hetzner:
 
 ```bash
-ssh -i ~/.ssh/id_ed25519_hetzner root@178.104.122.91 \
+ssh -i ~/.ssh/id_ed25519_hetzner root@<VPS_IP> \
   "cd /opt/efloud-bot && docker run --rm -v /tmp/efloud-bot:/app -w /app efloud-bot:latest pytest <PATH> -v"
 ```
 
