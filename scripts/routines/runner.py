@@ -4,6 +4,15 @@ import sys
 from pathlib import Path
 from scripts.routines._base import now_utc, RoutineResult
 
+# ── python -m modül-ikiliği fix'i (2026-07-04) ──────────────────────────────
+# `python -m scripts.routines.runner` bu dosyayı __main__ olarak yükler;
+# rutin modülleri ise `from scripts.routines.runner import register` ile
+# İKİNCİ bir kopya import eder → iki ayrı REGISTRY oluşur ve run_one tüm
+# rutinler için "Unknown routine" döner (watch container'ında rutinler hiç
+# koşmaz). Alias ile iki isim TEK modülü paylaşır, REGISTRY ortaklaşır.
+if __name__ == "__main__":
+    sys.modules.setdefault("scripts.routines.runner", sys.modules["__main__"])
+
 REGISTRY = {}
 
 def register(name):
