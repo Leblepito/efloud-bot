@@ -12,9 +12,24 @@ Site "Güncellemeler" bölümü bu dosyadan beslenir
 ## [Unreleased]
 
 ### Eklendi
-- TradingView "u2algo SMC — Wave 1" göstergesi (ücretsiz): çekirdek sinyal
-  mantığı tamamlandı ve derleme doğrulamasından geçti; strateji (backtest)
-  sürümü üzerinde çalışılıyor. Yayın, doğrulama tamamlanınca duyurulacak.
+- **TradingView "EFloud Signals v2" + "EFloud Strategy v2" (Pine v6):** bot'un
+  SMC v2 bekle-onayla durum makinesi artık grafikte — 0-100 confluence skoru,
+  Order Block / FVG / OTE bölge zinciri, TP1/TP2 merdiveni, grafik üstü panel.
+  Her iki betik sıfır hatayla derlendi; strateji sürümüyle backtest alınabilir.
+- **Repaint'siz sinyaller:** tüm üst zaman dilimi verisi yalnızca kapanmış
+  barları kullanacak şekilde yeniden düzenlendi — grafikte canlı gördüğünüz
+  sinyal, backtest'te göreceğinizle birebir aynıdır.
+- **Şeffaf edge ölçümü:** bot artık ürettiği her sinyalin varsayımsal sonucunu
+  komisyon + funding + kayma maliyetlerini düşerek kendi üzerinde ölçüyor ve
+  istatistiksel yeterlilik eşiğiyle raporluyor. Strateji kalibrasyonları bu
+  canlı veriye dayanarak yapılacak.
+- 7/24 bağımsız izleme katmanı güçlendirildi: devre kesici, marjin ve pozisyon
+  tutarlılığı denetimleri trading döngüsünden ayrı, kendi ritminde çalışıyor.
+- Türkçe ve Rusça dokümantasyon paketleri (README.tr.md / README.ru.md).
+
+### Değişti
+- TradingView "u2algo SMC — Wave 1" göstergesinin yerini gelişmiş
+  "EFloud Signals v2" aldı.
 - Aylık performans özeti otomasyonu (yayın öncesi iç doğrulama aşamasında).
 
 ## [2026-06-11]

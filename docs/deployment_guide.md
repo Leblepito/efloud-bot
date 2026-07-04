@@ -1,3 +1,9 @@
+> ⚠️ **TARİHSEL DOKÜMAN (2026-05).** Güncel dağıtım yolu: Hetzner VPS üzerinde
+> `docker-compose.prod.yml` çok-servisli yığın + Caddy TLS. Güncel kılavuzlar:
+> [`deploy/HETZNER_GUIDE.md`](../deploy/HETZNER_GUIDE.md) ve README "Deployment"
+> bölümü. Aşağıdaki Railway/hermes-agent akışı artık kullanılmıyor; Supabase
+> bağlantı sorun giderme bölümleri hâlâ geçerli referanstır.
+
 # 🌐 Efloud-bot Cloud Migration & Otonom Deployment Kılavuzu
 # ══════════════════════════════════════════════════════════════════
 # Son Güncelleme: 2026-05-26 | Model: Gemini 3.5 Flash (SMR Orkestratör)
