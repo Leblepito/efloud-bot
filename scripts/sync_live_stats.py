@@ -5,9 +5,14 @@ import subprocess
 from datetime import datetime, timezone
 import asyncpg
 
-DATABASE_URL = "postgresql://postgres.kjaicqpqfwnfbioofdib:Leblepito_2026@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?options=project%3Dkjaicqpqfwnfbioofdib"
-LOCAL_POSITIONS_PATH = r"c:\Users\utkuc\Downloads\efloud-bot\state\positions.json"
-OUTPUT_REPORT_PATH = r"c:\Users\utkuc\Downloads\efloud-bot\reports\LIVE_PERFORMANCE_SUMMARY.md"
+# Credentials come from the environment only — never hardcode connection
+# strings (they land in git history). Set DATABASE_URL (or SUPABASE_DATABASE_URL)
+# before running this script.
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DATABASE_URL", "")
+LOCAL_POSITIONS_PATH = os.environ.get("LOCAL_POSITIONS_PATH", "state/positions.json")
+OUTPUT_REPORT_PATH = os.environ.get(
+    "OUTPUT_REPORT_PATH", "reports/LIVE_PERFORMANCE_SUMMARY.md"
+)
 
 def run_ssh_command(cmd):
     full_cmd = ["ssh", "efloud-bot", cmd]
@@ -19,6 +24,9 @@ def run_ssh_command(cmd):
         return None
 
 async def fetch_db_trades():
+    if not DATABASE_URL:
+        print("Error: DATABASE_URL (or SUPABASE_DATABASE_URL) env var is not set.")
+        return []
     print("Connecting to remote Supabase database...")
     try:
         # Pass statement_cache_size=0 to handle pgBouncer transaction mode

@@ -24,15 +24,15 @@ Supavisor (Transaction Pooler) için bağlantı parametresine proje referansı (
 
 ```properties
 # Eski (Hatalı) Bağlantı:
-# DATABASE_URL=postgresql://postgres.okimvywmhcwbtwtegyjm:Leblepito_2026!@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+# DATABASE_URL=postgresql://postgres.<PROJECT_REF>:<DB_PASSWORD>@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
 
 # Yeni (Çözülmüş) Bağlantı:
-DATABASE_URL=postgresql://postgres.okimvywmhcwbtwtegyjm:Leblepito_2026!@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?options=project%3Dokimvywmhcwbtwtegyjm
+DATABASE_URL=postgresql://postgres.<PROJECT_REF>:<DB_PASSWORD>@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?options=project%3D<PROJECT_REF>
 ```
 
 > [!TIP]
 > **Direct Connection Alternatifi:** Eğer pooler yerine doğrudan PostgreSQL sunucusuna bağlanmak isterseniz (port 5432) şu URL'i kullanabilirsiniz:
-> `DATABASE_URL=postgresql://postgres:Leblepito_2026!@db.okimvywmhcwbtwtegyjm.supabase.co:5432/postgres`
+> `DATABASE_URL=postgresql://postgres:<DB_PASSWORD>@db.<PROJECT_REF>.supabase.co:5432/postgres`
 
 ### 📊 Otonom Sonuç Senkronizasyonu (`sync_optimization_to_supabase.py`)
 Yazılan otonom senkronizasyon betiği, yereldeki TSV dosyasını (`reports/optimization/results.tsv`) okuyarak tüm parametre optimizasyonu sonuçlarını Supabase üzerindeki `strategy_optimization_results` tablosuna otomatik olarak yazar. Tablo şeması otomatik olarak oluşturulur ve duplicate kayıtları önlemek için UNIQUE kısıtı (`unique_strategy_opt`) kullanılır.
