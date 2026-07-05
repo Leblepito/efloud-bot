@@ -175,7 +175,7 @@ safety:
   max_sl_atr: 3.0                     # Scalp: daha sıkı max SL (3.0 vs 5.0)
   reject_wide_sl: false
 
-  emergency_balance_threshold: 900    # Bakiye $900 altı → HALT
+  emergency_balance_threshold: 450    # Bakiye $450 altı → HALT (~10% kayıp, $500 wallet-split cüzdana göre; 2026-07-05)
   reserve_balance: 0
 
   min_seconds_between_symbol_fetches: 0.5

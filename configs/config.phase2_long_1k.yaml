@@ -17,14 +17,14 @@
 #   Seçicilik:        min_confluence 60, min_rr 2.2 (V1=50/1.8 — long daha seçici)
 #   Daily loss:       %10 ≈ $111 → breaker TRIPS (daily_loss_limit_pct)
 #   Weekly DD:        %20 ≈ $222 → breaker HALTS (weekly_drawdown_limit_pct; V1'den sıkı)
-#   Acil halt:        bakiye $1000 altına düşünce (emergency_balance_threshold)
+#   Acil halt:        bakiye $450 altına düşünce (emergency_balance_threshold; wallet-split $500)
 #   ⚠️ Long profili backtest-EDİLMEDİ; judgment-based konservatif başlangıç.
 #
 # Önkoşullar (preflight.py ile YENİ cüzdan key'iyle doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi) — DOĞRULANDI 2026-06-21
 #   ✓ Position mode = ONE-WAY (hedge_mode:false; bot startup'ta zorlar — set_position_mode)
 #   ✓ Hesap FLAT (pozisyon/order yok — margin/position-mode değişimi flat-book ister)
-#   ✓ Bakiye ≥ $1112 Futures cüzdanında (emergency_balance_threshold $1000 üstü)
+#   ✓ Bakiye ≥ $500 Futures cüzdanında (emergency_balance_threshold $450 üstü; wallet-split 2026-07-05)
 #   ✓ EFLOUD_ALLOW_MAINNET=1
 #   ✓ VPS IP (<VPS_IP>) API IP-whitelist'inde — DOĞRULANDI
 #
@@ -166,7 +166,7 @@ safety:
   # H3 (default OFF) — V1 ile aynı
   reject_wide_sl: false
 
-  emergency_balance_threshold: 1000   # Bakiye $1000 altı → HALT (~10% kayıp, $1112 cüzdana göre)
+  emergency_balance_threshold: 450    # Bakiye $450 altı → HALT (~10% kayıp, $500 wallet-split cüzdana göre; 2026-07-05)
   reserve_balance: 0
 
   min_seconds_between_symbol_fetches: 0.5
