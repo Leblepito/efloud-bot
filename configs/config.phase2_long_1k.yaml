@@ -98,15 +98,16 @@ fibonacci:
 # ── Risk: LONG konservatif tuning (operatör onayı 2026-06-21), ~$1112 cüzdan ──
 risk:
   risk_per_trade_pct: 1.0             # ~$11 risk budget per trade ($1112 × 1%)
-  max_open_positions: 5               # LONG: günlerce tutuş → konsantrasyon kontrolü (V1=10)
+  max_open_positions: 10              # 10 × $50 marjin = $500 (tam cüzdan; operatör 2026-07-04)
   min_rr: 2.2                         # LONG: 1w-yapı büyük hedefler → yüksek R:R (V1=1.8)
   min_confluence: 60                  # LONG: az ama yüksek-konviksiyon setup (V1=50)
   recency_bars: 40
   sl_atr_buffer: 0.5
   daily_filter_strict: false
 
-  position_size_calculation: legacy
-  max_loss_per_trade_usdt: 11         # $1112 × 1% (LONG konservatif; 3x'te ~$67 notional/trade)
+  position_size_calculation: fixed    # operatör 2026-07-04: sabit $50 marjin/trade
+  fixed_position_usdt: 50             # $50 marjin × 3x = $150 notional
+  max_loss_per_trade_usdt: 11         # (legacy sizing kalıntısı — fixed modda kullanılmaz)
   target_stop_distance_pct: 5
 
 operation:
@@ -145,7 +146,7 @@ safety:
   weekly_drawdown_limit_pct: 20.0     # ~$222 (long horizon fresh book → V1'den sıkı; operatör-tunable)
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
-  starting_balance: 1112              # 2026-06-21 canlı totalMarginBalance ~$1112 (multiAssetsMargin=False → BNB margin SAYILMAZ, USDT $1112). C2 calibration.
+  starting_balance: 500               # 2026-07-04: cüzdan ikiye bölündü (~500 scalp'e transfer). C2 recalibration.
 
   adx_trend_threshold: 25
   adx_range_threshold: 20
@@ -153,9 +154,9 @@ safety:
   # C3 (default OFF) — V1 ile aynı
   regime_ml_can_override_gate: false
 
-  # 1112 × 2.0% × 3 (leverage) = ~$67 notional max → cüzdanın ~%6'sı per trade
-  max_position_notional_pct: 2.0      # her trade max ~$67 notional (3x kaldıraçta)
-  max_total_exposure: 1.0             # Toplam notional cüzdan tamamı (1x net leverage cap)
+  # $50 marjin × 3x = $150 notional per trade ($500 cüzdanın %30'u)
+  max_position_notional_pct: 35.0     # $150 notional / $500 balance = %30 (+5 tampon)
+  max_total_exposure: 4.0             # 10 × $150 = $1500 / $500 = 3.0x (+1 tampon)
   # max_holding_hours: long horizon (1h entry / 1w htf) → 24h erken çıkışa neden olur.
   # 168h (7 gün) long-horizon trade'lerin gelişmesine izin verir (operatör-tunable).
   max_holding_hours: 168

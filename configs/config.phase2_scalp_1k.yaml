@@ -104,7 +104,7 @@ fibonacci:
 # ── Risk: SCALP v3.1 tuning — SMC block targeting + blended R:R ──
 risk:
   risk_per_trade_pct: 1.0             # ~$10 risk budget per trade
-  max_open_positions: 20              # Eşzamanlı max 20 (hedge: long+short same coin)
+  max_open_positions: 10              # 10 × $50 marjin = $500 (tam cüzdan; operatör 2026-07-04)
   min_rr: 1.0                         # Legacy min_rr (SMC targeting OFF fallback)
   min_confluence: 55
   recency_bars: 40
@@ -159,16 +159,16 @@ safety:
   weekly_drawdown_limit_pct: 15.0     # Scalp: daha sıkı haftalık DD (%15 vs %25)
   consecutive_loss_limit: 3
   consecutive_pause_min: 90           # Scalp: daha kısa pause (90dk vs 120dk)
-  starting_balance: 1000              # Scalp cüzdan başlangıç (operatör ayarlar)
+  starting_balance: 500               # Scalp cüzdan: long cüzdanından bölünen 500 USDT (2026-07-04)
 
   adx_trend_threshold: 25
   adx_range_threshold: 20
   volatile_atr_mult: 2.5
   regime_ml_can_override_gate: false
 
-  # 10x leverage + $100 margin = $1000 notional per position
-  max_position_notional_pct: 20.0     # $100 margin / $1000 balance ≈ 10%
-  max_total_exposure: 20.0            # 20 × $1000 = $20k / $1000 = 20x
+  # 3x leverage + $50 margin = $150 notional per position ($500 cüzdanın %30'u)
+  max_position_notional_pct: 35.0     # $150 notional / $500 balance = %30 (+5 tampon)
+  max_total_exposure: 4.0             # 10 × $150 = $1500 / $500 = 3.0x (+1 tampon)
   max_holding_hours: 4                # SCALP: max 4 saat tutuş (V1=24, V2=168)
   max_pyramid_adds: 0
   min_sl_atr: 0.3                     # Scalp: daha sıkı min SL (0.3 vs 0.5)
