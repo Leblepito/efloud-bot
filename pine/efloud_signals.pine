@@ -25,13 +25,14 @@ indicator("EFloud Signals v2", overlay = true, max_lines_count = 500, max_labels
 // INPUTS  (strateji dosyasıyla AYNI isimler — senkron şart)
 // ─────────────────────────────────────────────────────────────────────────────
 grpTF   = "Timeframe Chain"
-//   scalp = 5m/1h/12h · mid = 15m/1h/4h · long = 1h/8h/1w · custom = aşağıdaki inputlar
+//   scalp = 5m/1h/4h · mid = 15m/4h/12h · long = 1h/8h/1d · custom = aşağıdaki inputlar
+//   (tek kaynak: data/timeframes.py PROFILES — chain redesign commit 3c96029)
 profileMode = input.string("mid", "Trade-Horizon Profili", options = ["scalp", "mid", "long", "custom"], group = grpTF)
 customMtf   = input.timeframe("60",  "Custom MTF (profile=custom)", group = grpTF)
 customHtf   = input.timeframe("240", "Custom HTF (profile=custom)", group = grpTF)
 profEntry = profileMode == "scalp" ? "5"   : profileMode == "mid" ? "15"  : profileMode == "long" ? "60"  : ""
-mtfTf     = profileMode == "scalp" ? "60"  : profileMode == "mid" ? "60"  : profileMode == "long" ? "480" : customMtf
-htfTf     = profileMode == "scalp" ? "720" : profileMode == "mid" ? "240" : profileMode == "long" ? "W"   : customHtf
+mtfTf     = profileMode == "scalp" ? "60"  : profileMode == "mid" ? "240" : profileMode == "long" ? "480" : customMtf
+htfTf     = profileMode == "scalp" ? "240" : profileMode == "mid" ? "720" : profileMode == "long" ? "D"   : customHtf
 useMtf     = input.bool(true,  "MTF CHoCH onayı kullan (confluence)", group = grpTF)
 useDaily   = input.bool(false, "Daily makro filtre kullan", group = grpTF)
 dailyTf    = input.timeframe("1D", "Daily TF", group = grpTF)
@@ -734,7 +735,7 @@ bgcolor(showBias ? (htfBias == 1 ? color.new(color.teal, 95) : htfBias == -1 ? c
 // ─────────────────────────────────────────────────────────────────────────────
 var table dash = table.new(position.top_right, 2, 15, bgcolor = color.new(color.black, 20), frame_color = color.new(color.gray, 40), frame_width = 1, border_color = color.new(color.gray, 70), border_width = 1)
 if barstate.islast
-    chainStr = profileMode == "scalp" ? "5m·1h·12h" : profileMode == "mid" ? "15m·1h·4h" : profileMode == "long" ? "1h·8h·1w" : ("custom·" + customMtf + "·" + customHtf)
+    chainStr = profileMode == "scalp" ? "5m·1h·4h" : profileMode == "mid" ? "15m·4h·12h" : profileMode == "long" ? "1h·8h·1d" : ("custom·" + customMtf + "·" + customHtf)
     profLbl  = profileMode == "scalp" ? "SCALP" : profileMode == "mid" ? "MID" : profileMode == "long" ? "LONG" : "CUSTOM"
     bool tfOk = profEntry == "" or timeframe.period == profEntry
     biasStr = htfBias == 1 ? "LONG ▲" : htfBias == -1 ? "SHORT ▼" : "UNDEF"

@@ -47,7 +47,7 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
 - `pine_save` → TradingView cloud'a kaydet
 
 ## Efloud Çekirdek Mantığı & Parametreleri (Referans Değerler)
-- **Timeframe Chain**: HTF (4h) Trend/Bias, MTF (1h) swing breaks, Entry (15m) trigger + SL/TP, Daily (1d) makro filter.
+- **Timeframe Chain (profil bazlı — tek kaynak `data/timeframes.py` `PROFILES`, chain redesign 2026-07-06 / commit 3c96029)**: her profil bir Entry/MTF/HTF üçlüsü seçer + Daily (1d) makro filter ortaktır. Merdiven: **scalp** = 5m entry / 1h SMC-yapı (MTF) / 4h trend (HTF) · **mid** = 15m / 4h / 12h · **long** = 1h / 8h / 1d. Roller: HTF Trend/Bias, MTF swing breaks, Entry trigger + SL/TP. Aşağıdaki TF örnekleri tarihsel mid chain'ine (4h/1h/15m) göredir — mantık profil-görelidir (htf/mtf/entry).
 - **HTF Bias Fallback (HTF UNDEF)**: 4h `analyze().trend` UNDEF ise sırayla: (1) son 40 4h-bar slope; |Δ| > %2 → BULL/BEAR (signals.py:308-317). (2) slope nötr (|Δ| ≤ %2) ise **Entry-TF (15m) range** discount/premium'undan türetilir: discount→BULL, premium→BEAR (signals.py:318-322 `range_info(df_entry)`). Bu, 15m bir "range play" senaryosudur ve dokümante edilen HTF(4h)→Entry(15m) yetki zincirini bu özel durumda kasıtlı olarak tersine çevirir. (3) Ne slope ne aktif range varsa → sinyal yok (skip, signals.py:323-325). df_htf < 40 bar → skip (signals.py:326-328).
 - **Swing Lookback**: 5 (Sol ve sağda 5 daha düşük high / daha yüksek low).
 - **Order Blocks (OB)**: 5 ardışık mum (`ob_sequential: 5`). Breakout mumunun gövdesi (body) > 1.5 * SMA(high-low, 14) olmalı (true-range ATR DEĞİL; bkz. PINE_SPEC §A.3 / smc.py:195).

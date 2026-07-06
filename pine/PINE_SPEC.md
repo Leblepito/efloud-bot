@@ -38,6 +38,11 @@ yetmez.
 | **15m** (Entry/LTF) | grafik TF'i (chart) | CHoCH tetik + pullback zone + engulfing teyit |
 | **1d** (Daily) | `"1D"` | Makro filtre (V1'de ±5 puan; V2'de sert/soft filtre olarak opsiyonel) |
 
+> **Profil notu (2026-07-06):** Yukarıdaki tablo TARİHSEL tek-chain (eski mid)
+> düzenidir. Chain artık profil bazlıdır — tek kaynak `data/timeframes.py`
+> `PROFILES`; güncel eşleme için §17'ye bak. Pine'da `profileMode` input'u bu
+> merdiveni seçer.
+
 > **Repaint kuralı (ZORUNLU):** Tüm `request.security()` çağrıları
 > `lookahead=barmerge.lookahead_off`, `gaps=barmerge.gaps_off` ile ve **HTF için
 > kapanmış bar** (`[1]` veya `barstate.isconfirmed`) kullanılarak yapılır.
@@ -507,3 +512,32 @@ Her iki dosya TradingView Pine Editor'da SIFIR HATA derlendi ve buluta
 kaydedildi (EFloud Signals v2 rev.2 13:28 · EFloud Strategy v2 rev.1 13:33).
 V2'nin "confluence YOK" sadeleştirmesi (§0) bu sürümle bilinçli olarak geri
 alınmıştır; skor artık V1 formülünün V2-bağlamlı uyarlamasıdır.
+
+
+---
+
+## 17. Değişiklik kaydı — 2026-07-06 chain redesign: profil merdiveni senkronu
+
+Python tarafında timeframe profil merdiveni yeniden tasarlandı (commit
+`3c96029`, tek kaynak `data/timeframes.py` `PROFILES`). Pine v2.1 üçlü
+(`profileMode` mapping) eski merdivene göre kalmıştı; bu sürümle senkronlandı.
+
+| Profil | ESKİ (Pine v2.1) | **YENİ (PROFILES)** | Pine mapping (mtfTf / htfTf) |
+|---|---|---|---|
+| scalp | 5m / 1h / 12h | **5m / 1h / 4h** | `"60"` / `"240"` (htf 720→240) |
+| mid | 15m / 1h / 4h | **15m / 4h / 12h** | `"240"` / `"720"` (mtf 60→240, htf 240→720) |
+| long | 1h / 8h / 1w | **1h / 8h / 1d** | `"480"` / `"D"` (htf W→D) |
+
+Rasyonel (Python tarafı): scalp SMC-yapıyı 1h'ta okur, trendi 4h'tan alır
+(12h scalp için fazla atıl); mid'in yapı TF'i 1h→4h'e çıkarak HTF'siyle (12h)
+orantılı hale geldi; long'un makro filtresi zaten Daily input'unda olduğundan
+HTF 1w→1d'ye indi. Chain'ler kesin artan (entry < mtf < htf) — `resolve_timeframes`
+bunu fail-fast doğrular.
+
+Değişen satırlar: `efloud_signals.pine` (mapping satırları + başlık yorumu +
+dashboard `chainStr`) ve `efloud_strategy.pine` (mapping satırları) — input
+İSİMLERİ değişmedi, iki dosya senkron (§13 kuralı). `profEntry` (5/15/60)
+değişmedi. Derleme: TradingView MCP bu oturumda erişilemediği için sıfır-hata
+derleme + `pine_save` bir SONRAKİ masaüstü oturumunda yapılmalı (checklist:
+tv_health_check → pine_set_source → pine_smart_compile → pine_get_errors →
+pine_save; kullanıcının u2Algo_FVG-OTE script'ine DOKUNMA).
