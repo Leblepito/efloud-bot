@@ -83,7 +83,7 @@ Bot'un SMC v2 mantığını birebir yansıtan iki grafik betiği — **EFloud Si
 - Tam **bekle-onayla durum makinesi**: CHoCH tetik → pullback bölgesi (FVG > OB > OTE) → engulfing teyidi.
 - Opsiyonel kapılı **0–100 confluence skoru** (MTF CHoCH, HTF FVG, Order Block retest, OTE, SFP, premium/discount, günlük yön, AI-sentiment girdisi).
 - **Yapısal olarak repaint'siz** — tüm üst zaman dilimi verisi son *kapanmış* barı kullanır (`[1]`-kaydırma + `lookahead_on`); canlı sinyal backtest ile birebir aynıdır.
-- İşlem-ufku profilleri (scalp / mid / long), volatilite-hizalı SL tamponu, TP1/TP2 merdiveni, grafik üstü gösterge paneli ve yanlış-zaman-dilimi uyarısı.
+- İşlem-ufku profilleri — scalp = 5m/1h/4h, mid = 15m/4h/12h, long = 1h/8h/1d (giriş / SMC-yapı / trend; tek kaynak: `data/timeframes.py` `PROFILES`) — volatilite-hizalı SL tamponu, TP1/TP2 merdiveni, grafik üstü gösterge paneli ve yanlış-zaman-dilimi uyarısı.
 
 Kaynaklar [`pine/`](pine/) klasöründe; tam çeviri spesifikasyonu [`pine/PINE_SPEC.md`](pine/PINE_SPEC.md) dosyasındadır.
 

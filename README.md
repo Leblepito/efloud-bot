@@ -146,7 +146,7 @@ Two chart-ready scripts mirror the bot's SMC v2 logic — **EFloud Signals v2** 
 - Full **wait-confirm state machine**: CHoCH trigger → pullback zone (FVG > OB > OTE) → engulfing confirmation.
 - **0–100 confluence scoring** (MTF CHoCH, HTF FVG, Order Block retest, OTE, SFP, premium/discount, daily bias, AI-sentiment input) with an optional gate.
 - **Non-repainting by construction** — all higher-TF data uses the last *closed* bar (`[1]`-shift + `lookahead_on`), so live signals match backtest.
-- Trade-horizon profiles (scalp / mid / long), volatility-aligned SL buffer, TP1/TP2 ladder, on-chart dashboard and wrong-timeframe warning.
+- Trade-horizon profiles — scalp = 5m/1h/4h, mid = 15m/4h/12h, long = 1h/8h/1d (entry / SMC-structure / trend; single source: `data/timeframes.py` `PROFILES`) — volatility-aligned SL buffer, TP1/TP2 ladder, on-chart dashboard and wrong-timeframe warning.
 
 Sources live in [`pine/`](pine/) with the full translation spec in [`pine/PINE_SPEC.md`](pine/PINE_SPEC.md).
 

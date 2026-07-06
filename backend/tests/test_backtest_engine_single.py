@@ -35,7 +35,7 @@ def synthetic_data():
 
 
 def test_engine_runs_to_completion(base_config, synthetic_data):
-    data = {"BTC/USDT": {"4h": synthetic_data, "1h": synthetic_data,
+    data = {"BTC/USDT": {"4h": synthetic_data, "12h": synthetic_data,
                          "15m": synthetic_data, "1d": synthetic_data}}
     result = run_backtest(
         symbols=["BTC/USDT"],
@@ -52,7 +52,7 @@ def test_engine_runs_to_completion(base_config, synthetic_data):
 
 def test_engine_deterministic(base_config, synthetic_data):
     """Same data + config → byte-identical result.json."""
-    data = {"BTC/USDT": {"4h": synthetic_data, "1h": synthetic_data,
+    data = {"BTC/USDT": {"4h": synthetic_data, "12h": synthetic_data,
                          "15m": synthetic_data, "1d": synthetic_data}}
     r1 = run_backtest(symbols=["BTC/USDT"], data=data, config=base_config, initial_balance=2000.0)
     r2 = run_backtest(symbols=["BTC/USDT"], data=data, config=base_config, initial_balance=2000.0)
@@ -94,7 +94,7 @@ def test_mtm_dd_isolated_unit(base_config, tmp_path):
 
 def test_mtm_drawdown_field_present(base_config, synthetic_data):
     """run_backtest result must include max_drawdown_pct (>= 0)."""
-    data = {"BTC/USDT": {"4h": synthetic_data, "1h": synthetic_data,
+    data = {"BTC/USDT": {"4h": synthetic_data, "12h": synthetic_data,
                          "15m": synthetic_data, "1d": synthetic_data}}
     result = run_backtest(
         symbols=["BTC/USDT"],

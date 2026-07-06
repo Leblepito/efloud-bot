@@ -29,7 +29,7 @@ def synthetic_data():
         index=idx,
     )
     syms = ["BTC/USDT", "ETH/USDT"]
-    return {s: {"4h": df, "1h": df, "15m": df, "1d": df} for s in syms}
+    return {s: {"4h": df, "12h": df, "15m": df, "1d": df} for s in syms}
 
 
 def test_portfolio_two_symbols_runs(base_config, synthetic_data):
