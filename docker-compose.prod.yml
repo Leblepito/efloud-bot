@@ -254,6 +254,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env.production
+    environment:
+      # get_api default'u localhost:8080 — bu container'da kendisi olur (bot değil).
+      # config_drift/proof_export exit-1 kök nedeni (2026-07-06 handoff).
+      - EFLOUD_API_BASE_URL=http://efloud-bot:8080
     volumes:
       - efloud_state:/app/state
       - efloud_state_1k:/app/state_1k    # V1 live state — signal_ledger.jsonl lives here
@@ -271,6 +275,8 @@ services:
     command: python -m scripts.routines.runner run
     env_file:
       - .env.production
+    environment:
+      - EFLOUD_API_BASE_URL=http://efloud-bot:8080   # bkz. routines-watcher notu
     volumes:
       - efloud_state:/app/state
       - efloud_reports:/app/reports

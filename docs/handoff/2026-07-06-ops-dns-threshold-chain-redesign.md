@@ -79,11 +79,15 @@
   Config'ler image'a gömülü — **restart yetmez, build şart**.
 - VPS deploy key READ-ONLY (push edemez; local commit birikmesi normal).
 - `config_drift` exit-1 analizi (2026-07-06): exit 1 drift'ten GELMEZ (drift
-  sadece warn alert üretir, `ok=True` döner) — tek yol `/api/config` fetch
-  hatası (`config_drift.py` run(); rutinin bağlamında `EFLOUD_API_BASE_URL` /
-  `DASHBOARD_PASSWORD` kontrol edilmeli). Ayrıca baseline yanlıştı: root
-  `config.yaml` yerine artık `EFLOUD_CONFIG_PATH` (instance'ın gerçek config'i)
-  kıyaslanıyor — bu oturumda fix'lendi (TDD, tests/routines/test_config_drift.py).
+  sadece warn alert üretir, `ok=True` döner) — kök neden `/api/config` fetch
+  hatası: `get_api` default'u `http://localhost:8080` ve routines AYRI
+  container'da koşuyor (localhost ≠ bot) → connection refused. İki fix bu
+  oturumda (risk-ops APPROVE): (1) compose'ta routines servislerine
+  `EFLOUD_API_BASE_URL=http://efloud-bot:8080`, (2) baseline root `config.yaml`
+  yerine `EFLOUD_CONFIG_PATH` (TDD, tests/routines/test_config_drift.py).
+  Deploy notu: sadece routines container'ları recreate olur, trading
+  container'ları etkilenmez. Bilinen semantik: bot idle ise `/api/config` `{}`
+  döner → tüm watch key'ler warn drift üretir (pre-existing, sürpriz değil).
 - Sandbox git kuralı: `GIT_INDEX_FILE=/tmp/...` pattern'ı (bkz.
   `2026-07-03-merge-bugfix-and-repo-hardening.md`).
 
