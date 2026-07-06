@@ -325,12 +325,17 @@ addCandidate(int dir, float trigPx) =>
                 array.push(sBarsWait, 0)
 
 // SL hesapla — buffer volatilite-hizalı (V1 absorbe). NA = setup RED (SLTooFar)
+// ATR bazı = safe_orchestrator.py'nin canlı ATR proxy'si max(entry*1%, zone genişliği)
+// (gerçek ATR DEĞİL — "DELIBERATE SIMPLIFICATION", safe_orchestrator.py:1900-1903/1960-1962).
+// Gerçek ta.atr(14) kullanmak clamp'i Python'dan ~2-3x sıkı yapıp HTF anchor uzak
+// olduğunda (12h/8h/4h) setup'ları sistematik reddediyordu (2026-07-06 sinyal-yok bug'ı).
 calcSl(int dir, float entry, float zl, float zh, float anchor) =>
-    buf = bufferMult * atr15
+    float atrProxy = math.max(entry * 0.01, math.abs(zh - zl))
+    buf = bufferMult * atrProxy
     float structuralSl = dir == 1 ? math.min(zl, anchor) - buf : math.max(zh, anchor) + buf
     stopDist = math.abs(entry - structuralSl)
-    minDist  = minSlAtr * atr15
-    maxDist  = maxSlAtr * atr15
+    minDist  = minSlAtr * atrProxy
+    maxDist  = maxSlAtr * atrProxy
     float sl = na
     if stopDist > maxDist
         sl := na
