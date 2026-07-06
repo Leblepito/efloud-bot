@@ -199,7 +199,6 @@ if not na(lRefSL) and close < lRefSL
     lTrend    := -1
     lRefSL    := na
 
-atr15  = ta.atr(atrLen)
 obAtrE = ta.sma(high - low, 14)
 
 hlSpread    = ta.sma(high - low, 14)
@@ -284,12 +283,15 @@ addCandidate(int dir, float trigPx) =>
                 array.push(sTrigPx, trigPx)
                 array.push(sBarsWait, 0)
 
+// ATR bazı = safe_orchestrator.py'nin canlı ATR proxy'si max(entry*1%, zone genişliği)
+// (gerçek ATR DEĞİL — bkz. efloud_signals.pine calcSl yorumu / safe_orchestrator.py:1960-1962).
 calcSl(int dir, float entry, float zl, float zh, float anchor) =>
-    buf = bufferMult * atr15
+    float atrProxy = math.max(entry * 0.01, math.abs(zh - zl))
+    buf = bufferMult * atrProxy
     float structuralSl = dir == 1 ? math.min(zl, anchor) - buf : math.max(zh, anchor) + buf
     stopDist = math.abs(entry - structuralSl)
-    minDist  = minSlAtr * atr15
-    maxDist  = maxSlAtr * atr15
+    minDist  = minSlAtr * atrProxy
+    maxDist  = maxSlAtr * atrProxy
     float sl = na
     if stopDist > maxDist
         sl := na

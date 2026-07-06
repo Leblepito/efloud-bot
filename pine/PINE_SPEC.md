@@ -216,7 +216,15 @@ if stop_dist < min_dist:  SL'yi tabana genişlet:
         LONG  → entry - min_dist ;  SHORT → entry + min_dist
 else:   structural_sl
 ```
-ATR = 15m ATR(14). Pine: `ta.atr(14)` (chart 15m ise doğrudan).
+> **ATR KRİTİK NOT (2026-07-06 düzeltme, bkz. §18):** Yukarıdaki formülde
+> geçen "ATR", canlı `safe_orchestrator.py`'de **gerçek `ta.atr(14)` DEĞİL** —
+> `atr_15m = max(entry_price * 0.01, |zone.high - zone.low|)` proxy'sidir
+> (`safe_orchestrator.py:1900-1903/1960-1962`, dokümante "DELIBERATE
+> SIMPLIFICATION"). `sl_calc.py` bu parametreyi TF-agnostik alır; hangi
+> değerin geleceğine orkestratör karar verir. Pine bu proxy'yi birebir
+> uygular (`calcSl`'de `atrProxy`) — gerçek `ta.atr(14)` kullanmak clamp'i
+> canlıdan çok daha sıkı yapıp (HTF anchor uzakken, özellikle 12h/8h/4h)
+> setup'ları sistematik reddediyordu.
 
 ---
 
@@ -541,3 +549,52 @@ değişmedi. Derleme: TradingView MCP bu oturumda erişilemediği için sıfır-
 derleme + `pine_save` bir SONRAKİ masaüstü oturumunda yapılmalı (checklist:
 tv_health_check → pine_set_source → pine_smart_compile → pine_get_errors →
 pine_save; kullanıcının u2Algo_FVG-OTE script'ine DOKUNMA).
+
+
+---
+
+## 18. Değişiklik kaydı — 2026-07-06 (2): SL clamp ATR paritesi düzeltmesi — "hiç sinyal yok" bug fix
+
+**Belirti:** Operatör TradingView grafiğinde indikatörün hiçbir LONG/SHORT
+sinyali (△/▽) göstermediğini bildirdi.
+
+**Kök neden:** `pine/efloud_signals.pine` + `pine/efloud_strategy.pine`
+`calcSl()` fonksiyonu SL buffer'ı VE min/max clamp mesafesini gerçek
+`ta.atr(14)` (`atr15`) üzerinden hesaplıyordu. Ama canlı Python motoru
+(`safe_orchestrator.py:1960-1962`) `calc_sl()`'e gerçek ATR YERİNE bir proxy
+besliyor: `atr_15m = max(entry_price * 0.01, |zone.high - zone.low|)`
+(dokümante "DELIBERATE SIMPLIFICATION", `safe_orchestrator.py:1900-1903`).
+`sl_calc.py` bu değeri hem buffer hem min/max clamp için kullanır (TF-agnostik
+— hangi ATR'nin geleceğine karar vermez).
+
+Proxy tipik olarak fiyatın ≥%1'i (veya zone genişliği) — gerçek 15m ATR'den
+belirgin şekilde geniş. Chain redesign'den (3c96029, mid HTF 4h→**12h**) sonra
+HTF swing anchor entry'den %3-15 uzaklaşınca: Python'un proxy-tabanlı clamp'i
+bunu hâlâ kabul ediyordu, ama Pine'ın gerçek-ATR-tabanlı clamp'i (`max_sl_atr
+× ATR(14)` ≈ fiyatın %1.5-2.5'i) SİSTEMATİK OLARAK reddediyordu → `calcSl` her
+seferinde `na` dönüyordu → setup hiç `CONFIRMED`'e ulaşmıyordu → sıfır sinyal.
+Scalp (4h anchor vs 5m ATR) ve long (1d anchor vs 1h ATR) profilleri de aynı
+yapısal nedenle örtük olarak etkileniyordu — sadece mid'de en şiddetliydi.
+
+**Fix (bu commit):** `calcSl`'de `atr15` yerine Python'un canlı kullandığı
+proxy — `atrProxy = math.max(entry * 0.01, math.abs(zh - zl))` — buffer VE
+min/max clamp için. `bufferMult` (V1-absorbe volatilite-hizalı çarpan, §16)
+davranışı korunur; artık proxy tabanına uygulanır (Python'un canlı davranışına
+birebir parite — "gerçek" ATR kullanmak Python'dan sapmaktı). Strategy
+dosyasında artık kullanılmayan `atr15` yerel değişkeni temizlendi (kendi
+değişikliğimin orphan'ı); `atrLen` input'u İKİ dosyada da korundu — ancak
+gerekçesi dosyaya göre farklı: `efloud_signals.pine`'da dashboard'da (`ATR(14)`
+satırı) hâlâ canlı tüketiliyor; `efloud_strategy.pine`'da artık HİÇBİR
+fonksiyonel tüketicisi yok, sadece indikatör↔strateji input-isim senkronu
+(§13) için tutuluyor (Pine unused input için hata vermez).
+
+**Not:** Bu proxy Python tarafında dokümante bir geçici basitleştirme
+("Real ATR threading is follow-up") — Pine bilinçli olarak CANLI davranışı
+yansıtıyor, "doğru" tasarımı değil. Python'un ATR proxy'si gerçek ATR'ye
+geçerse (follow-up PR), Pine'ın bu satırları AYNI oturumda güncellenmeli
+(§13 senkron kuralı) — aksi halde parite tekrar bozulur.
+
+**Sorumlu dosyalar:** `pine/efloud_signals.pine` (`calcSl`), `pine/efloud_strategy.pine`
+(`calcSl` + `atr15` temizliği). Doğrulama: TradingView sıfır-hata derleme +
+`pine_save` operatörün masaüstü oturumunda (bu oturumdan MCP erişimi yok).
+Referans: `engine/smc_v2/sl_calc.py`, `engine/safe_orchestrator.py:1900-1903/1960-1962`.
