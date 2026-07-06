@@ -45,9 +45,13 @@ def evaluate(live_cfg, repo_cfg, watch_keys):
 
 @register("config_drift")
 def run(client=None, alert=None, cfg=None):
+    import os
     from scripts.routines._base import write_snapshot, write_report, RoutineResult, load_config, get_api
-    
-    repo_cfg = load_config("config.yaml")
+
+    # Baseline = bu instance'ın GERÇEKTEN yüklediği config (long/scalp
+    # configs/config.phase2_*_1k.yaml kullanır; root config.yaml baseline'ı
+    # onlar için sistematik false-positive drift üretir).
+    repo_cfg = load_config(os.environ.get("EFLOUD_CONFIG_PATH", "config.yaml"))
     
     watch_keys = [
         "min_confluence",
