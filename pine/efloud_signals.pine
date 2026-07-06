@@ -76,6 +76,7 @@ showLevels = input.bool(true, "Entry/SL/TP çizgileri", group = grpViz)
 showObs    = input.bool(true, "Aktif Order Block kutuları", group = grpViz)
 showSmcCtx = input.bool(true, "Sinyalde SMC bağlamı (OB/OTE/Liq)", group = grpViz)
 showBias   = input.bool(true, "HTF bias arka plan tonu", group = grpViz)
+showMachine= input.bool(true, "Makine izleri (△ aday / ◆ zone / × expire)", group = grpViz)
 keepMode   = input.string("Otomatik (timeframe)", "Çizim saklama modu", options = ["Otomatik (timeframe)", "Manuel sinyal sayısı"], group = grpViz)
 keepManual = input.int(3, "Manuel: saklanacak sinyal sayısı", minval = 1, maxval = 20, group = grpViz)
 
@@ -422,6 +423,10 @@ var float lastOteHi = na
 var float lastLiq   = na
 bool firedLong  = false
 bool firedShort = false
+// Makine izleri — huninin görünürlüğü: aday oluşumu / zone'a giriş / expire
+bool candCreated     = false
+bool candEnteredZone = false
+bool candExpired     = false
 
 if barstate.isconfirmed
     // ── V1 absorbe: pivot izleri + SFP ──
@@ -506,10 +511,12 @@ if barstate.isconfirmed
         array.remove(obNS,  0)
 
     // ── V2 çekirdek: yeni CHoCH adayları ──
+    int pendBefore = pendingCount()
     if chochBull
         addCandidate(1, chochPx)
     if chochBear
         addCandidate(-1, chochPx)
+    candCreated := pendingCount() > pendBefore
 
     // ── V2 çekirdek: adayları ilerlet (sondan başa — güvenli silme) ──
     if array.size(sDir) > 0
@@ -525,6 +532,7 @@ if barstate.isconfirmed
             if st == 0 and inZone
                 array.set(sState, i, 1)
                 st := 1
+                candEnteredZone := true
 
             bool expired = wait > pullbackTimeoutBars
             bool confirmed = false
@@ -625,6 +633,8 @@ if barstate.isconfirmed
                                 firedLong  := isLong
                                 firedShort := not isLong
 
+            if expired and not confirmed
+                candExpired := true
             if expired or confirmed
                 array.remove(sDir, i)
                 array.remove(sState, i)
@@ -639,6 +649,10 @@ if barstate.isconfirmed
 // ─────────────────────────────────────────────────────────────────────────────
 plotshape(firedLong,  title = "LONG entry",  style = shape.triangleup,   location = location.belowbar, color = color.new(color.teal, 0), size = size.small)
 plotshape(firedShort, title = "SHORT entry", style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0),  size = size.small)
+// Makine izleri — sinyal ÜRETMEYEN barlarda huninin nerede takıldığını gösterir
+plotchar(showMachine and candCreated,     title = "Aday oluştu (CHoCH+bias)", char = "△", location = location.belowbar, color = color.new(color.blue, 20),   size = size.tiny)
+plotchar(showMachine and candEnteredZone, title = "Aday zone'a girdi",        char = "◆", location = location.belowbar, color = color.new(color.orange, 0),  size = size.tiny)
+plotchar(showMachine and candExpired,     title = "Aday expire (timeout)",    char = "×", location = location.abovebar, color = color.new(color.gray, 20),   size = size.tiny)
 
 tfSec = timeframe.in_seconds()
 bool autoKeep = keepMode == "Otomatik (timeframe)"
