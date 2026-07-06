@@ -60,7 +60,7 @@ def test_run_backtest_trades_carry_sim_time_keys():
          "close": closes, "volume": 1.0},
         index=idx,
     )
-    data = {"BTC/USDT": {"4h": df, "1h": df, "15m": df, "1d": df}}
+    data = {"BTC/USDT": {"4h": df, "12h": df, "15m": df, "1d": df}}
 
     res = run_backtest(symbols=["BTC/USDT"], data=data, config=cfg, initial_balance=2000.0)
 

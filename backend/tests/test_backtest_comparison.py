@@ -32,8 +32,8 @@ def synthetic_data():
     rng = np.random.default_rng(7)
     n_15m = 400
     idx_15m = pd.date_range("2025-01-01", periods=n_15m, freq="15min", tz="UTC")
-    idx_1h = pd.date_range("2025-01-01", periods=n_15m // 4 + 1, freq="1h", tz="UTC")
     idx_4h = pd.date_range("2025-01-01", periods=n_15m // 16 + 1, freq="4h", tz="UTC")
+    idx_12h = pd.date_range("2025-01-01", periods=n_15m // 48 + 2, freq="12h", tz="UTC")
     idx_1d = pd.date_range("2025-01-01", periods=max(n_15m // 96 + 2, 5), freq="1D", tz="UTC")
 
     def make_df(idx):
@@ -49,7 +49,7 @@ def synthetic_data():
     return {
         "ETH/USDT": {
             "4h": make_df(idx_4h),
-            "1h": make_df(idx_1h),
+            "12h": make_df(idx_12h),
             "15m": make_df(idx_15m),
             "1d": make_df(idx_1d),
         }
