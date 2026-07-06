@@ -22,9 +22,9 @@ def tf_to_minutes(tf: str) -> int:
 # a name, not a raw triple. Chains are strictly monotonically increasing.
 # Spec: docs/superpowers/specs/2026-05-31-trade-horizon-profiles-design-spec.md
 PROFILES: dict[str, tuple[str, str, str]] = {
-    "scalp": ("5m", "1h", "12h"),
-    "mid":   ("15m", "1h", "4h"),
-    "long":  ("1h", "8h", "1w"),
+    "scalp": ("5m", "1h", "4h"),
+    "mid":   ("15m", "4h", "12h"),
+    "long":  ("1h", "8h", "1d"),
 }
 
 _WEEKLY_MIN = tf_to_minutes("1w")

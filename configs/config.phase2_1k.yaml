@@ -76,13 +76,13 @@ symbols:
   refresh_dynamic_hours: 24
 
 timeframes:
-  # Trade-horizon profile: scalp (5m/1h/12h) | mid (15m/1h/4h) | long (1h/8h/1w) | custom
-  # 'mid' == mevcut 15m/1h/4h → sıfır regresyon. Profil seçilince entry/mtf/htf
+  # Trade-horizon profile: scalp (5m/1h/4h) | mid (15m/4h/12h) | long (1h/8h/1d) | custom
+  # 'mid' == 15m/4h/12h (operatör 2026-07-06). Profil seçilince entry/mtf/htf
   # data.timeframes.resolve_timeframes ile config-load'da otomatik set edilir.
   # Profil değiştirmeden ÖNCE flat ol + restart (bkz. spec Risk-Ops).
   profile: mid
-  htf: 4h          # custom/fallback (profile yoksa/custom ise kullanılır)
-  mtf: 1h
+  htf: 12h         # custom/fallback (profile yoksa/custom ise kullanılır)
+  mtf: 4h
   entry: 15m
   kline_limit: 500
 

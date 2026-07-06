@@ -74,11 +74,11 @@ symbols:
   refresh_dynamic_hours: 24
 
 timeframes:
-  # Trade-horizon profile: scalp (5m/1h/12h) | mid (15m/1h/4h) | long (1h/8h/1w) | custom
-  # BU BOT = 'long' → entry 1h, mtf 8h, htf 1w (data.timeframes.resolve_timeframes
+  # Trade-horizon profile: scalp (5m/1h/4h) | mid (15m/4h/12h) | long (1h/8h/1d) | custom
+  # BU BOT = 'long' → entry 1h, mtf 8h (SMC yapı), htf 1d (trend; operatör 2026-07-06)
   # config-load'da otomatik set eder). Profil değiştirmeden ÖNCE flat ol + restart.
   profile: long
-  htf: 1w          # custom/fallback (profile=long zaten override eder)
+  htf: 1d          # custom/fallback (profile=long zaten override eder)
   mtf: 8h
   entry: 1h
   kline_limit: 500

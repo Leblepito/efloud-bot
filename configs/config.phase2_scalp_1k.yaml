@@ -76,10 +76,10 @@ symbols:
   refresh_dynamic_hours: 24
 
 timeframes:
-  # SCALP profile: 5m entry, 1h mtf, 12h htf
+  # SCALP profile: 5m entry, 1h mtf (SMC yapı), 4h htf (trend) — operatör 2026-07-06
   # Hızlı sinyal, kısa tutuş. Profil değiştirmeden ÖNCE flat ol + restart.
   profile: scalp
-  htf: 12h         # custom/fallback (profile=scalp zaten override eder)
+  htf: 4h          # custom/fallback (profile=scalp zaten override eder)
   mtf: 1h
   entry: 5m
   kline_limit: 500
