@@ -129,7 +129,7 @@
 - **Hetzner .env.production'da DATABASE_URL YOK** (P28)
 - Bot file-based çalışıyor, state_1k/journal
 - Supabase ref yeni: `kjaicqpqfwnfbioofdib` (ap-southeast-1 Singapore)
-- DB password: `Leblepito_2026!`
+- DB password: `<set via env — see secrets manager>`
 - combined_migrations.sql (root'ta) kullanıcı tarafından SQL Editor'de çalıştırıldı (varsayım)
 
 ### 4.4. Railway
@@ -146,7 +146,7 @@
 
 ### 5.1. Kısa vadede (operatör)
 1. **30dk gözlem** — cron job raporları, P19 verification, ilk gerçek trade emit
-2. **DATABASE_URL ekleme** — .env.production'a `postgresql://postgres.kjaicqpqfwnfbioofdib:Leblepito_2026!@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?options=project%3Dkjaicqpqfwnfbioofdib`
+2. **DATABASE_URL ekleme** — .env.production'a `postgresql://postgres.<PROJECT_REF>:<DB_PASSWORD>@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?options=project%3D<PROJECT_REF>`
 3. **State reconcile** — file-based journal'dan DB'ye upsert (011 migration sonrası)
 4. **Kronos enabled kararı** — sen, +EV kanıtı varsa true, yoksa false kalsın
 

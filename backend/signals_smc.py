@@ -200,10 +200,25 @@ def _engine_smc(symbol: str, timeframe: str, runner: Any) -> Optional[dict[str, 
         return None
 
 
+# Binance-supported kline intervals. `timeframe` is interpolated into the
+# outbound klines URL, so anything outside this set is coerced to a safe default
+# to prevent query-parameter injection (e.g. "15m&limit=1500&foo=") from an
+# authenticated caller.
+_VALID_TIMEFRAMES = frozenset({
+    "1m", "3m", "5m", "15m", "30m",
+    "1h", "2h", "4h", "6h", "8h", "12h",
+    "1d", "3d", "1w", "1M",
+})
+
+
 async def get_smc_signal(symbol: str, timeframe: str, runner: Any) -> dict[str, Any]:
     clean = symbol.replace("/", "").replace(":", "").upper()
     if not clean.endswith("USDT"):
         clean += "USDT"
+
+    if timeframe not in _VALID_TIMEFRAMES:
+        log.warning("SMC signal: invalid timeframe %r, defaulting to 15m", timeframe)
+        timeframe = "15m"
 
     now = time.time()
     cache_key = (clean, timeframe)
