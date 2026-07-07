@@ -3,18 +3,15 @@
 # Caddy auto-provisions a Let's Encrypt cert via TLS-ALPN-01 (port 443)
 # and uses port 80 for HTTP→HTTPS redirects + HTTP-01 fallback.
 # Both 80 and 443 must be open in UFW.
-
 {
     # Global options
     email utkucanuysall@gmail.com  # used by ACME (LE) for cert expiry warnings
 }
-
-bot.ualgotrade.com, 178-104-122-91.nip.io {
+bot.u2algo.com, bot.ualgotrade.com, 178-104-122-91.nip.io {
     encode gzip zstd
     reverse_proxy efloud-bot:8080 {
         header_up X-Real-IP {remote_host}
     }
-
     # Security headers (HTTPS-only)
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -23,19 +20,13 @@ bot.ualgotrade.com, 178-104-122-91.nip.io {
         Referrer-Policy "no-referrer-when-downgrade"
     }
 }
-
 # V2 long-bot dashboard (efloud-bot-long).
-# - v2.178-104-122-91.nip.io: nip.io wildcard → 178.104.122.91, registrar DNS GEREKMEZ,
-#   cert hemen alınır (V1'in nip.io fallback'i gibi). Dashboard ANINDA erişilebilir.
-# - bot.u2algo.com: gerçek domain; A-record 178.104.122.91'e bakınca cert otomatik
-#   (şu an 69.46.46.105'e bakıyor → düzeltilene kadar bu isim için cert-retry, zararsız).
-# V1 bloğu dokunulmaz.
-bot.u2algo.com, v2.178-104-122-91.nip.io {
+# v2.u2algo.com: Cloudflare DNS A-record → 178.104.122.91; cert otomatik.
+v2.u2algo.com, v2.178-104-122-91.nip.io {
     encode gzip zstd
     reverse_proxy efloud-bot-long:8080 {
         header_up X-Real-IP {remote_host}
     }
-
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options "nosniff"
@@ -43,17 +34,13 @@ bot.u2algo.com, v2.178-104-122-91.nip.io {
         Referrer-Policy "no-referrer-when-downgrade"
     }
 }
-
-# Scalp bot dashboard (efloud-bot-scalp) — was never given a Caddy block (2026-07-07 gap fix).
-# scalp.u2algo.com DNS now points to Railway (separate deploy, not this VPS), so the
-# nip.io host below is the only way to reach the VPS scalp bot directly right now —
-# no registrar DNS needed, cert issued immediately (same pattern as v2's nip.io fallback).
-scalp.178-104-122-91.nip.io {
+# ── V3 scalp-bot dashboard (efloud-bot-scalp) ──────────────────────
+# scalp.u2algo.com: Cloudflare DNS A-record → 178.104.122.91; cert otomatik.
+scalp.u2algo.com, v3.178-104-122-91.nip.io {
     encode gzip zstd
     reverse_proxy efloud-bot-scalp:8080 {
         header_up X-Real-IP {remote_host}
     }
-
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options "nosniff"
@@ -61,3 +48,13 @@ scalp.178-104-122-91.nip.io {
         Referrer-Policy "no-referrer-when-downgrade"
     }
 }
+# ── Lato Çeviri PTT Web App ─────────────────────────────────────────
+# Push-to-talk translation web app (Thai ↔ Turkish ↔ English)
+# Host server runs on host port 8088, Caddy reaches it via host gateway IP.
+translate.178-104-122-91.nip.io {
+    encode gzip zstd
+    reverse_proxy lato-translator:8088 {
+        header_up X-Real-IP {remote_host}
+    }
+    header {
+        Strict-Transport-Security "max-age=31536000"
