@@ -43,3 +43,21 @@ bot.u2algo.com, v2.178-104-122-91.nip.io {
         Referrer-Policy "no-referrer-when-downgrade"
     }
 }
+
+# Scalp bot dashboard (efloud-bot-scalp) — was never given a Caddy block (2026-07-07 gap fix).
+# scalp.u2algo.com DNS now points to Railway (separate deploy, not this VPS), so the
+# nip.io host below is the only way to reach the VPS scalp bot directly right now —
+# no registrar DNS needed, cert issued immediately (same pattern as v2's nip.io fallback).
+scalp.178-104-122-91.nip.io {
+    encode gzip zstd
+    reverse_proxy efloud-bot-scalp:8080 {
+        header_up X-Real-IP {remote_host}
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+}
