@@ -52,8 +52,11 @@ exchange:
 # ── SMC v2 feature flag — V1 ile BİREBİR aynı (parite) ──
 engine:
   smc_version: v2               # "v1" | "v2"
-  smc_v2_symbols: ["*"]         # ["*"] = all symbols (shadow), [] = no execution
-  smc_v2_shadow: true           # true = log v2 signal, skip order placement
+  # LIVE (operatör onayı 2026-07-07): explicit whitelist = fixed_core (aşağıdaki
+  # symbols.fixed_core ile birebir aynı) + shadow:false. "*" LIVE'da reddedilir (H2).
+  smc_v2_symbols: ["BTC/USDT", "ETH/USDT", "XRP/USDT", "DOGE/USDT", "SOL/USDT",
+                   "BNB/USDT", "TRX/USDT", "LINK/USDT", "BCH/USDT", "ADA/USDT"]
+  smc_v2_shadow: false          # LIVE (operatör onayı 2026-07-07): gerçek emir
 
 # ── 10 majör sembol (V1 ile aynı; operatör daraltabilir) ──
 symbols:

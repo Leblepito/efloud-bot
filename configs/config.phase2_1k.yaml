@@ -53,9 +53,12 @@ exchange:
 # CLI default but bot_runner (FastAPI mode) does NOT read it. Always edit
 # THIS file for production changes.
 engine:
-  smc_version: v2               # "v1" | "v2"  — set to v2 for shadow rollout (2026-05-25)
-  smc_v2_symbols: ["*"]         # ["*"] = all symbols, [] = no execution
-  smc_v2_shadow: true           # true = log v2 signal, skip order placement
+  smc_version: v2               # "v1" | "v2"
+  # LIVE (operatör onayı 2026-07-07): explicit whitelist = fixed_core (aşağıdaki
+  # symbols.fixed_core ile birebir aynı) + shadow:false. "*" LIVE'da reddedilir (H2).
+  smc_v2_symbols: ["BTC/USDT", "ETH/USDT", "XRP/USDT", "DOGE/USDT", "SOL/USDT",
+                   "BNB/USDT", "TRX/USDT", "LINK/USDT", "BCH/USDT", "ADA/USDT"]
+  smc_v2_shadow: false          # LIVE (operatör onayı 2026-07-07): gerçek emir
 
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:

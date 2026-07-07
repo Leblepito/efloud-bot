@@ -51,11 +51,14 @@ exchange:
                            # test edilmiş yol. Branch tasarımı hedge idi; scalp cüzdanı yeni
                            # olsa da mod savaşı riskine karşı one-way ile başlıyoruz.
 
-# ── SMC v2 feature flag — V1 ile aynı (shadow) ──
+# ── SMC v2 feature flag ──
 engine:
   smc_version: v2
-  smc_v2_symbols: ["*"]
-  smc_v2_shadow: true      # shadow mode (log only, no orders)
+  # LIVE (operatör onayı 2026-07-07): explicit whitelist = symbols.fixed_core
+  # (aşağıda) + shadow:false. "*" LIVE'da reddedilir (H2, safe_orchestrator.py).
+  smc_v2_symbols: ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT",
+                   "DOGE/USDT", "TRX/USDT", "LINK/USDT", "AVAX/USDT", "ADA/USDT"]
+  smc_v2_shadow: false     # LIVE (operatör onayı 2026-07-07): gerçek emir
 
 # ── 10 majör sembol (scalp için yüksek likidite) ──
 symbols:
