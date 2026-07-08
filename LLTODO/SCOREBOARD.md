@@ -10,8 +10,8 @@
 | Aktif epic | ~~1 (P-001)~~ → 3 (P-001 IN_PROGRESS, P-002 CONSENSUS_REACHED, P-003 CONSENSUS_REACHED) |
 | Tamamlanan epic | 0 |
 | Toplam görev | ~~3 (T-001, T-002, T-003)~~ → 18 (T-001..T-003, T-010..T-024) → 25 (T-025..T-031 eklendi: P-002 M3/M1/M6/M2) |
-| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ → 19 (T-019 ✅ quickstart 17 Jun merged [kart 18 Jun DONE]; T-018 ✅ müşteri telegram digest 16 Jun merged [kart 18 Jun DONE]; T-021 ✅ status page 18 Jun kod + runbook; T-025 ✅ Manus REST client 18 Jun; T-026 ✅ xurl facade [PR #228 merged 18 Jun]; T-029 ✅ M2 manifest consumer [19 Jun]; T-030 ✅ approval callback [19 Jun]; T-031 ✅ xurl publisher [19 Jun]) |
-| Claim edilmiş görev | 1 (T-028 @hermes [19 Jun, M6 renderers]) |
+| Tamamlanan görev | 11 (T-001..T-014 ✅ mevcut + T-011 ✅ consent [15 Jun] + T-016 ✅ INERT DELIVERED [15 Jun]; T-017 ✅ runbook [15 Jun]) ~~önceki: 10~~ → 19 (T-019 ✅ quickstart 17 Jun merged [kart 18 Jun DONE]; T-018 ✅ müşteri telegram digest 16 Jun merged [kart 18 Jun DONE]; T-021 ✅ status page 18 Jun kod + runbook; T-025 ✅ Manus REST client 18 Jun; T-026 ✅ xurl facade [PR #228 merged 18 Jun]; T-029 ✅ M2 manifest consumer [19 Jun]; T-030 ✅ approval callback [19 Jun]; T-031 ✅ xurl publisher [19 Jun]) → 20 (T-028 ✅ Tier-2 renderers — kod zaten master'da 19 Jun'dan beri canlıydı, kart 2026-07-08 @claude tarafından DONE/'a taşındı [bookkeeping-only fix, fonksiyonel değişiklik yok]) |
+| Claim edilmiş görev | 0 (T-028 DONE/'a taşındı, 2026-07-08 @claude) |
 
 ## P-001 Görev Skoru
 
@@ -64,7 +64,7 @@
 | T-025 | M3 | Manus API client + retry + key masking + 3 template + 41 test | 🟡 placeholder DONE (kod branch'te, push bekliyor; gerçek dosya feat/p002-m3-manus-client @ 53b0cc2, 3 commit, T-025 bookkeeping) | @hermes (2026-06-19) |
 | T-026 | M1 | xurl CLI facade + runbook + config schema (default OFF) | 🟡 IN_PROGRESS (kod + 23 test + runbook hazır, commit + push bekliyor; feat/p002-m1-xurl-runbook) | @hermes (2026-06-19) |
 | T-027 | M6 | Content Approval Queue skeleton (state machine + migration 009 + storage + runbook) | 🟡 IN_PROGRESS (29 test PASS, 8/8 lint PASS, commit + push bekliyor; feat/p002-m6-content-queue @ 4e6dc90; renderer PR'a merge edildi [19 Jun @hermes]) | @hermes (2026-06-19) |
-| T-028 | M6.2 | Tier-2 Content Renderers (yaml → render → pre-gate → queue enqueue) | 🟡 IN_PROGRESS (31 test PASS + 5 yeni M2 integration, 8/8 lint bekleniyor; feat/p002-m6-templates HEAD; chart_img_resolver DI parametre eklendi) | @hermes (2026-06-19) |
+| T-028 | M6.2 | Tier-2 Content Renderers (yaml → render → pre-gate → queue enqueue) | ✅ DONE (31 test PASS + 5 M2 integration, 8/8 lint PASS; master'a merge edilmiş [db03b5b/bbe32f6/3839659, PR #230]; kart bookkeeping fix 2026-07-08 @claude — kod zaten canlıydı, tracker dosyası IN_PROGRESS/'ta unutulmuştu) | @hermes (2026-06-19) |
 | T-029 | M2 | Chart-Export Manifest Consumer (VPS-side, operatör-lokal manifest → renderer resolver) | ✅ DONE (26 test PASS; tv_manifest.py + tier2_renderers entegrasyonu + push fix + runbook; feat/p002-m6-templates HEAD @ 0056ef1+) | @hermes (2026-06-19) |
 
 ## Review Skoru

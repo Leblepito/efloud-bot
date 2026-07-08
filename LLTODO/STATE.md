@@ -76,6 +76,7 @@
 2026-06-11  REVIEW_OPEN       @claude  Plan Hermes + operatör onayına açıldı (özellikle OQ#1-#12 operatör kararları)
 2026-06-11  DEDUP-NOTU        @claude  M11 SUPERSEDED-BY P-003 T-012/T-014 (statik proof export; bot API kapalı kalır) → OQ#12 KAPANDI. M9→T-011 sıralaması; M10↔T-010 site serializasyonu; M12 domain değişiminde LS webhook yeniden kaydı.
 2026-06-11  CONSENSUS_REACHED @claude  UR-003 oturumunda kapsandı (UR-002 işlevi): M11 dedup bulgularının §4/§5/§6'ya yayılımı tamamlandı (plan v1.1). Operatör merge onayı bekleniyor.
+2026-07-08  BOOKKEEPING_FIX  @claude  T-028 (M6.2 Tier-2 Content Renderers) kartı `tasks/IN_PROGRESS/`'ta unutulmuştu — kod zaten 19 Jun'dan beri master'da (PR #230, T-027 ile aynı merge), 31/31 test + 8/8 lint PASS doğrulandı disk üzerinde. Fonksiyonel değişiklik YOK: kart `tasks/DONE/`'a taşındı, `status: DONE` olarak düzeltildi, SCOREBOARD.md "Claim edilmiş görev" 1→0. Genel proje tamamlama taramasının parçası olarak bulundu/düzeltildi.
 ```
 
 ### Aktif Durum

@@ -4,7 +4,16 @@ Epic: P-002
 Claimed by: @hermes
 branch: feat/p002-m6-templates + merged feat/p002-m6-content-queue (T-027 dependency)
 claimed_at: 2026-06-19T16:30:00Z
-status: IN_PROGRESS
+status: DONE
+
+> **Bookkeeping fix (2026-07-08 @claude):** card was still sitting in
+> `tasks/IN_PROGRESS/` despite all 5 acceptance criteria checked and the code
+> genuinely merged to master (`db03b5b`/`bbe32f6`/`3839659`, PR #230, same as
+> T-027). Verified `backend/social/tier2_renderers.py` +
+> `backend/tests/test_tier2_renderers.py` exist on disk and 60/60 tests
+> (content_queue + tier2_renderers) pass. No functional change — moving the
+> card to `tasks/DONE/` and correcting `status:` to match reality (found
+> during a 2026-07-08 LLTODO branch-status check, see STATE.md heartbeat).
 
 ## Goal
 M6 ikinci yarısı — `scripts/content_templates/templates.yaml` → render → pre-gate →

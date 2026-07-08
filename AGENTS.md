@@ -24,7 +24,13 @@ When the user types `/optimize` or requests strategy optimization:
 ## Runtime Agent Team (canonical Part A)
 
 There is a runtime multi-agent LLM layer under `engine/agents/`:
-- `GeminiClient` — single source of truth for all Gemini REST calls.
+- `make_llm_client()` (`engine/agents/llm.py`) — provider factory; the
+  single source of truth for which backend the advisory layer calls.
+  Default provider is **Claude** (`ClaudeClient`, model `claude-sonnet-5`
+  as of 2026-07-06); `GeminiClient` and `MiniMaxClient` remain selectable
+  via `agent_team.provider` or the `LLM_PROVIDER` env lever. All call
+  sites (agent team, macro sentiment, structure validation, alerter) go
+  through this factory — never construct a provider client directly.
 - `BaseAgent` / `AgentVerdict` — uniform per-role verdict schema.
 - `SignalValidatorAgent` / `RiskReviewerAgent` / `RegimeAgent` /
   `OverseerAgent` — per-trade advisory roles. Per-role

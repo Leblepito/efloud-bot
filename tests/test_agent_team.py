@@ -405,6 +405,14 @@ class TestGeminiModelValidity:
             "backend/api.py",
             "ops/alerter/formatter.py",
             "main.py",
+            # A1 blind spot: the dead alias hid in config.yaml (agent_team.model)
+            # with no matching call-site guard. make_llm_client() passes
+            # cfg["model"] through verbatim regardless of provider, so a
+            # Gemini alias surviving here gets handed straight to ClaudeClient
+            # too — every call fails and the whole advisory layer degrades to
+            # its NEUTRAL/{} fail-safe silently. See 2026-07-06 dashboard
+            # report: "Fallback default state due to API timeout or failure".
+            "config.yaml",
         ]
         offenders = [
             rel for rel in call_sites
