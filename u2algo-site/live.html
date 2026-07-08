@@ -442,8 +442,8 @@
           <li class="security-item"><span class="security-name">3. Yetim Pozisyon Koruması</span><span class="badge-active">AKTİF</span></li>
           <li class="security-item"><span class="security-name">4. Kârda-Değilse-Ters-Çevirme Koruması</span><span class="badge-active">AKTİF</span></li>
           <li class="security-item"><span class="security-name">5. Fail-Closed Giriş-Kayması Koruması</span><span class="badge-active">AKTİF</span></li>
-          <li class="security-item"><span class="security-name">6. Düz Defter Ön Kontrolü</span><span class="badge-active">AKTİF</span></li>
-          <li class="security-item"><span class="security-name">7. İzole Marjin Zorlaması</span><span class="badge-active">AKTİF</span></li>
+          <li class="security-item"><span class="security-name">6. SL/TP Hassasiyet + Yerleşim Doğrulama</span><span class="badge-active">AKTİF</span></li>
+          <li class="security-item"><span class="security-name">7. İzole Marjin + Tek Yön (+ düz-defter ön kontrolü)</span><span class="badge-active">AKTİF</span></li>
           <li class="security-item"><span class="security-name">+1 V2 Gölge Fail-Closed (deneysel)</span><span class="badge-shadow">GÖLGE MOD</span></li>
         </ul>
       </div>
@@ -555,8 +555,8 @@
       <div class="sec-card"><div class="sec-card-num">KATMAN 03</div><div class="sec-card-title">Yetim Pozisyon Koruması</div><div class="sec-card-desc">Borsada açık olan ancak bot tarafından bilinmeyen pozisyonları tespit eder ve raporlar.</div></div>
       <div class="sec-card"><div class="sec-card-num">KATMAN 04</div><div class="sec-card-title">Kârda-Değilse-Ters-Çevirme Koruması</div><div class="sec-card-desc">Mevcut pozisyon kârda değilse ters yönlü sinyal geldiğinde girişi engeller.</div></div>
       <div class="sec-card"><div class="sec-card-num">KATMAN 05</div><div class="sec-card-title">Fail-Closed Giriş-Kayması Koruması</div><div class="sec-card-desc">Sinyal fiyatı ile gerçek fiyat arasında kayma varsa girişi reddeder — belirsizlikte varsayılan davranış işlem AÇMAMAKTIR.</div></div>
-      <div class="sec-card"><div class="sec-card-num">KATMAN 06</div><div class="sec-card-title">Düz Defter Ön Kontrolü</div><div class="sec-card-desc">Her döngü öncesi borsadaki gerçek pozisyon/emir defterini bot durumuyla karşılaştırır; tutarsızlıkta işlem açmadan önce durur.</div></div>
-      <div class="sec-card"><div class="sec-card-num">KATMAN 07</div><div class="sec-card-title">İzole Marjin Zorlaması</div><div class="sec-card-desc">ISOLATED marjin ve one-way pozisyon modu zorlanır. Çapraz marjin ve hedge modu engellenir.</div></div>
+      <div class="sec-card"><div class="sec-card-num">KATMAN 06</div><div class="sec-card-title">SL/TP Hassasiyet + Yerleşim Doğrulama</div><div class="sec-card-desc">Fiyatlar borsa hassasiyet kurallarıyla yuvarlanır (PRICE_FILTER reddi yok). Girişten sonra yeniden sorgular, eksik bacakları onarır; SL doğrulanamazsa pozisyonu kapatır.</div></div>
+      <div class="sec-card"><div class="sec-card-num">KATMAN 07</div><div class="sec-card-title">İzole Marjin + Tek Yön</div><div class="sec-card-desc">Başlangıçta ISOLATED marjin + one-way mod zorlanır. Mod değişikliği öncesi düz-defter [5/5] ön kontrolü yapılır — çapraz marjin ve hedge modu engellenir.</div></div>
       <div class="sec-card shadow">
         <div class="sec-card-num">+1 — DENEYSEL, ÇEKİRDEK 7'YE DAHİL DEĞİL</div>
         <div class="sec-card-title">V2 Gölge Fail-Closed Modu</div>
@@ -615,7 +615,7 @@
       <div class="concept-card"><div class="concept-tag">CHoCH</div><div class="concept-desc">Change of Character — Karakter değişimi, trend dönüşünün ilk sinyali</div></div>
       <div class="concept-card"><div class="concept-tag">OB</div><div class="concept-desc">Order Block — Kurumsal emirlerin yoğunlaştığı fiyat bölgesi</div></div>
       <div class="concept-card"><div class="concept-tag">FVG</div><div class="concept-desc">Fair Value Gap — Dengesiz fiyat hareketi, dolum bölgesi</div></div>
-      <div class="concept-card"><div class="concept-tag">OTE</div><div class="concept-desc">Optimal Trade Entry — Fibonacci %61.8-%79 geri çekilme bölgesi</div></div>
+      <div class="concept-card"><div class="concept-tag">OTE</div><div class="concept-desc">Optimal Trade Entry — Fibonacci %61.8-%78.6 geri çekilme bölgesi</div></div>
     </div>
   </div>
 </section>
@@ -697,7 +697,8 @@
           <tr><td>efloud-bot</td><td style="color:var(--text-secondary)">Mid profili (varsayılan) — 15m/4h/12h</td><td>bot.u2algo.com</td><td><span class="badge-active">Çalışıyor</span></td></tr>
           <tr><td>efloud-bot-long</td><td style="color:var(--text-secondary)">Long profili — 1h/8h/1d, uzun vadeli yapısal işlemler</td><td>v2.u2algo.com</td><td><span class="badge-active">Çalışıyor</span></td></tr>
           <tr><td>routines-watcher</td><td style="color:var(--text-secondary)">Periyodik görevler — reconciliation, yetim pozisyon taraması, marjin izleme</td><td>—</td><td><span class="badge-active">Çalışıyor</span></td></tr>
-          <tr><td>alerter / overseer / daily-report</td><td style="color:var(--text-secondary)">Telegram bildirimleri, LLM danışma katmanı gözlemi, günlük raporlama</td><td>—</td><td><span class="badge-active">Çalışıyor</span></td></tr>
+          <tr><td>alerter / overseer</td><td style="color:var(--text-secondary)">Telegram bildirimleri, LLM danışma katmanı gözlemi</td><td>—</td><td><span class="badge-active">Çalışıyor</span></td></tr>
+          <tr><td>daily-report</td><td style="color:var(--text-secondary)">Günlük raporlama — sürekli çalışmaz, cron ile tetiklenir</td><td>—</td><td><span class="badge-neutral">Zamanlanmış</span></td></tr>
           <tr><td>caddy</td><td style="color:var(--text-secondary)">Reverse proxy — otomatik TLS (Let's Encrypt), HTTP/2, 3 bot domain'ini ayrı ayrı proxy'ler</td><td>—</td><td><span class="badge-active">Çalışıyor</span></td></tr>
         </tbody>
       </table>
@@ -822,7 +823,7 @@
       maxP = Math.max.apply(null, allPrices);
       var pad = (maxP - minP) * 0.08;
       minP -= pad; maxP += pad;
-      var priceRange = maxP - minP;
+      var priceRange = (maxP - minP) || 1;
 
       function toY(p) { return padT + chartH - ((p - minP) / priceRange) * chartH; }
 
@@ -1125,7 +1126,7 @@
       var solEntry = 158.4;
       var solPct = ((solLive - solEntry) / solEntry) * 100;
       var solUsdt = solPct * 0.01 * 950;
-      document.getElementById('pos-sol-live').textContent = formatPrice(solLive, 2);
+      document.getElementById('pos-sol-live').textContent = formatPrice(solLive, 3);
       setCell('pos-sol-pct', (solPct >= 0 ? '+' : '') + solPct.toFixed(2) + '%', solPct >= 0);
       setCell('pos-sol-usdt', (solUsdt >= 0 ? '+' : '') + solUsdt.toFixed(2), solUsdt >= 0);
     } catch(e) { console.error('updatePositions error:', e); }
