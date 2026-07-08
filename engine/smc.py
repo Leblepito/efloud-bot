@@ -297,6 +297,18 @@ class SMCEngine:
         if not sh or not sl: return None
         d = sh[-1].price - sl[-1].price
         if d <= 0: return None
+        # H6 (2026-06-20 audit): sh[-1]/sl[-1] are each "the most recent swing of
+        # that type" independently — nothing guarantees they bracket ONE impulse
+        # leg. A BULL leg must be low-then-high (sl before sh); a BEAR leg must be
+        # high-then-low (sh before sl). Reject the mismatched-order case instead
+        # of building a 0.618-0.786 band across two unrelated swings — this only
+        # makes the gate MORE conservative (a leg that would have been accepted
+        # before still is; one that wouldn't bracket a real leg no longer feeds
+        # the +10 confluence bonus / entry pullback refinement).
+        if trend == "BULL" and sl[-1].idx >= sh[-1].idx:
+            return None
+        if trend == "BEAR" and sh[-1].idx >= sl[-1].idx:
+            return None
         if trend == "BULL":
             return OTE(sh[-1].price - d * self.ote_lo, sh[-1].price - d * self.ote_hi,
                        sl[-1].price + d * 1.272, sl[-1].price + d * 1.618, "BULL")

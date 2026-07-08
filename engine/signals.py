@@ -281,6 +281,8 @@ def generate_signals(
     symbol_confluence_overrides: Optional[Dict[str, int]] = None,  # NEW
     levels: Optional[List[Level]] = None,       # NEW — injected levels for PA confluence
     ai_sentiment: Optional[Dict[str, Any]] = None,  # NEW — async macro sentiment
+    strict_target_reject: bool = False,   # H7 (2026-06-20 audit): default OFF — see below
+    fix_discovery_classification: bool = False,  # M1 (2026-06-20 audit): default OFF — see below
 ) -> List[Signal]:
     """
     4-Timeframe Efloud akışı:
@@ -302,6 +304,15 @@ def generate_signals(
     htf_fvgs = htf["active_fvgs"]
     htf_obs = htf["active_obs"]
 
+    # H5 (2026-06-20 audit) telemetry: tag WHERE htf_bias came from. Structural
+    # CHoCH/BOS bias is what the +25 "HTF aligned" confluence bonus was designed
+    # to reward; the two fallbacks below are looser proxies (a 40-bar slope, or
+    # an entry-TF range read) used only so a signal can still be generated when
+    # structure is UNDEF. Recording the source lets the journal/dashboard
+    # distinguish "real HTF alignment" from "chop-derived bias" without
+    # changing the entry gate or score — telemetry only, no gating change.
+    htf_bias_source = "structural"
+
     if htf_bias == "UNDEF":
         # Fallback: Son 40 HTF bar'ının eğiminden trend çıkar
         # Eğer fiyat başlangıca göre >%2 yukarıdaysa BULL, <%-2 BEAR
@@ -311,14 +322,17 @@ def generate_signals(
             change_pct = (recent_close - past_close) / past_close * 100
             if change_pct > 2.0:
                 htf_bias = "BULL"
+                htf_bias_source = "slope_fallback"
                 log.info(f"HTF fallback: +{change_pct:.1f}% slope → BULL")
             elif change_pct < -2.0:
                 htf_bias = "BEAR"
+                htf_bias_source = "slope_fallback"
                 log.info(f"HTF fallback: {change_pct:.1f}% slope → BEAR")
             else:
                 e_range = engine.range_info(df_entry)
                 if e_range and (e_range.discount or e_range.premium):
                     htf_bias = "BULL" if e_range.discount else "BEAR"
+                    htf_bias_source = "range_fallback"
                     log.info(f"HTF flat but Range active → trading range play ({htf_bias})")
                 else:
                     log.info(f"HTF undefined, slope neutral ({change_pct:+.1f}%), and no active range — skipping")
@@ -368,12 +382,13 @@ def generate_signals(
     signals = []
     last_bar_idx = len(df_entry) - 1
     recent_cutoff = last_bar_idx - recency_bars
-    
+
     # Diagnostics: reject reasons
     aligned_triggers = 0  # CHoCH or BOS aligned with HTF bias + within recency
     reject_confluence = 0
     reject_rr = 0
     reject_tp_wrong_side = 0
+    reject_no_target = 0  # H7: strict_target_reject rejects instead of clamping
     max_seen_score = 0
     max_seen_rr = 0.0
     score_buckets: Dict[int, int] = {}
@@ -445,6 +460,15 @@ def generate_signals(
             has_sfp, in_ob, ob_ns, ob_eq, correct_zone, has_dev
         )
 
+        # H1 (2026-06-20 audit) telemetry: calc_confluence() already caps its
+        # output at min(s,100) — everything below (Gemini sentiment, daily
+        # filter, major-level, stacked-zone) adds MORE score AFTER that cap,
+        # so min_confluence stops meaning "structural confluence" once those
+        # bonuses land. Recording the pre-bonus structural score lets the
+        # journal/dashboard see how much of a passing score was earned by
+        # structure vs. bolted-on bonuses, without touching the live gate.
+        structural_score = score
+
         # Gemini AI Macro Sentiment confluence bonus/penalty
         if ai_sentiment and "macro_sentiment" in ai_sentiment:
             macro = ai_sentiment["macro_sentiment"]
@@ -482,7 +506,7 @@ def generate_signals(
                     if abs(price - lvl.price) / lvl.price <= 0.003: # Within 0.3%
                         score = min(100, score + 5)
                         reasons.append(f"Price near major level {lvl.name} ({lvl.price:.2f})")
-                
+
                 # 2. Price in Stacked S/R Zone (3+ levels cluster)
                 if lvl.strength >= 3:
                     if abs(price - lvl.price) / lvl.price <= 0.005: # Within 0.5%
@@ -510,17 +534,17 @@ def generate_signals(
         # to ensure the SL is tight and professional (matches the red invalidation point),
         # instead of using very old swing highs/lows from before brk.idx which ruins R:R.
         # Plus a buffer of 0.5 * ATR(14) on the entry timeframe.
-        
+
         # Simple true range ATR(14) calculation
         h_vals = df_entry["high"].values
         l_vals = df_entry["low"].values
         c_vals = df_entry["close"].values
         tr = [
-            max(h_vals[i] - l_vals[i], abs(h_vals[i] - c_vals[i-1]), abs(l_vals[i] - c_vals[i-1])) 
+            max(h_vals[i] - l_vals[i], abs(h_vals[i] - c_vals[i-1]), abs(l_vals[i] - c_vals[i-1]))
             for i in range(1, len(df_entry))
         ]
         atr14 = float(pd.Series(tr).rolling(14).mean().iloc[-1]) if len(tr) >= 14 else (price * 0.005)
-        
+
         # ── Dynamic ATR Invalidation Buffer (Volatility Alignment) ──
         # "Hiçbir konsept kesin doğrudur diye düşünülmemeli yanılma payı unutulmamalı, buna göre stop koyulmalıdır."
         buffer_mult = 0.5
@@ -530,6 +554,12 @@ def generate_signals(
             if close_spread > 1.2 * high_low_spread:
                 buffer_mult = 0.75  # Trend-aligned volatility buffer to prevent deviasyon sweeps
         buffer = buffer_mult * atr14
+
+        # M1 (2026-06-20 audit): tracks whether TP1 came from the literal
+        # Fibonacci price-discovery clamp below (no real FVG/liquidity target
+        # within min_rr) — used to correctly classify is_discovery further
+        # down instead of the old empty-list proxy (see M1 fix below).
+        tp1_is_synthetic = False
 
         if is_long:
             htf_above_targets = []
@@ -543,22 +573,22 @@ def generate_signals(
             sl = (sl_c[-1].price - buffer) if sl_c else local_lo
             if sl < local_lo:
                 sl = local_lo
-            
+
             # Range deviation tight SL override
             if has_dev and e_range:
                 sl = min(sl, e_range.lo - buffer)
 
             # Safety clamp: at least 0.1% below entry price
             sl = min(sl, price * 0.999)
-            
+
             risk_tmp = abs(price - sl)
             min_tp_long = price + risk_tmp * min_rr
-            
+
             # Prioritize Liquidity over Imbalance in ranging markets
             liquidity_targets = [s.price for s in htf["swing_highs"] if s.price >= min_tp_long]
             if "eq_highs" in htf:
                 liquidity_targets += [eq["price"] for eq in htf["eq_highs"] if eq["price"] >= min_tp_long]
-                
+
             if has_dev and e_range:
                 # Efloud Range deviation play: target EQ for TP1, RH for TP2
                 tp1 = e_range.eq
@@ -577,10 +607,20 @@ def generate_signals(
                 else:
                     # ── Fibonacci price discovery targets (empty structures) ──
                     # "fiyat oluşmamış bir alanda hedef belirlemek için kullanılabilir. 1.272"
+                    # H7 (2026-06-20 audit): no real FVG/liquidity target exists within
+                    # min_rr here — this branch manufactures one via a bare 1.272
+                    # projection, which is exactly what lets the rr1<min_rr reject at
+                    # the bottom of this loop never fire (dead gate). Default-OFF flag
+                    # lets the operator switch to "no real target = no trade" once
+                    # backtest-gated; unflagged behavior is unchanged.
+                    if strict_target_reject:
+                        reject_no_target += 1
+                        continue
                     # Clamp to min_rr: a bare 1.272 projection (rr1=1.27) would be
                     # rejected 100% of the time by the min_rr gate below. Mirrors
                     # smc_v2 RR_PROJECTION (engine/smc_v2/tp_calc.py:76).
                     tp1 = price + risk_tmp * max(1.272, min_rr)
+                    tp1_is_synthetic = True
         else:
             htf_below_targets = []
             sl_c = [s for s in e_sh if s.idx < brk.idx]
@@ -590,22 +630,22 @@ def generate_signals(
             sl = (sl_c[-1].price + buffer) if sl_c else local_hi
             if sl > local_hi:
                 sl = local_hi
-            
+
             # Range deviation tight SL override
             if has_dev and e_range:
                 sl = max(sl, e_range.hi + buffer)
 
             # Safety clamp: at least 0.1% above entry price
             sl = max(sl, price * 1.001)
-            
+
             risk_tmp = abs(price - sl)
             min_tp_short = price - risk_tmp * min_rr
-            
+
             # Prioritize Liquidity over Imbalance in ranging markets
             liquidity_targets = [s.price for s in htf["swing_lows"] if s.price <= min_tp_short]
             if "eq_lows" in htf:
                 liquidity_targets += [eq["price"] for eq in htf["eq_lows"] if eq["price"] <= min_tp_short]
-                
+
             if has_dev and e_range:
                 # Efloud Range deviation play: target EQ for TP1, RL for TP2
                 tp1 = e_range.eq
@@ -624,13 +664,18 @@ def generate_signals(
                 else:
                     # ── Fibonacci price discovery targets (empty structures) ──
                     # "fiyat oluşmamış bir alanda hedef belirlemek için kullanılabilir. 1.272"
+                    # H7: mirrors the LONG branch — see comment there.
+                    if strict_target_reject:
+                        reject_no_target += 1
+                        continue
                     # Clamp to min_rr: see LONG branch — mirrors smc_v2 RR_PROJECTION.
                     tp1 = price - risk_tmp * max(1.272, min_rr)
+                    tp1_is_synthetic = True
 
         risk = abs(price - sl)
         if risk == 0:
             continue
-            
+
         # Target opposite range extreme for deviation play, else fib extension
         if has_dev and e_range:
             raw_tp2 = e_range.hi if is_long else e_range.lo
@@ -641,14 +686,27 @@ def generate_signals(
             )
         else:
             # If tp1 is our 1.272 Fibo target, tp2 targets 2.618 (or fib_ext if configured)
-            is_discovery = False
-            if is_long:
-                if not htf_above_targets:
-                    is_discovery = True
+            # M1 (2026-06-20 audit): htf_above_targets/htf_below_targets are only
+            # ever populated in the TRENDING branch above — the ranging branch
+            # (htf_bias_original=="UNDEF" with real liquidity_targets) leaves them
+            # `[]`, so the old `not htf_above_targets` proxy misclassified a
+            # real-liquidity ranging TP1 as "discovery" and gave it TP2=2.618R
+            # instead of the correct fib_ext. tp1_is_synthetic tracks the TRUE
+            # condition (TP1 came from the literal 1.272 clamp, no real target).
+            # Default-OFF: unflagged behavior is byte-for-byte unchanged pending
+            # operator backtest sign-off (this does change live TP2 for that
+            # specific ranging+real-liquidity bucket once enabled).
+            if fix_discovery_classification:
+                is_discovery = tp1_is_synthetic
             else:
-                if not htf_below_targets:
-                    is_discovery = True
-                    
+                is_discovery = False
+                if is_long:
+                    if not htf_above_targets:
+                        is_discovery = True
+                else:
+                    if not htf_below_targets:
+                        is_discovery = True
+
             if not has_dev and is_discovery:
                 tp2 = (price + risk * 2.618) if is_long else (price - risk * 2.618)
             else:
@@ -683,7 +741,15 @@ def generate_signals(
             in_ote=in_ote, in_ob=in_ob, has_sfp=has_sfp,
             zone="DISCOUNT" if e_range.discount else "PREMIUM"
         )
-        
+        # H1/H5 (2026-06-20 audit) telemetry — read-only annotations, no gating
+        # or scoring impact. structural_score = confluence before any post-cap
+        # bonuses (H1); htf_bias_source flags when the +25 HTF-aligned score
+        # rode a slope/range fallback instead of real structure (H5);
+        # tp1_is_synthetic flags the H7/M1 discovery-clamp case.
+        sig.meta["structural_score"] = structural_score
+        sig.meta["htf_bias_source"] = htf_bias_source
+        sig.meta["tp1_is_synthetic"] = tp1_is_synthetic
+
         # SMC Structure Validation Layer (Phase 2.2)
         if symbol:
             val_res = validate_signal_with_gemini(
@@ -696,11 +762,11 @@ def generate_signals(
                 df_mtf=df_mtf,
                 df_entry=df_entry
             )
-            
+
             confidence = val_res.get("confidence", 1.0)
             is_valid = val_res.get("valid", True)
             reasoning = val_res.get("reasoning", "")
-            
+
             log.info(f"SMC Structure Validation [{symbol}]: valid={is_valid}, confidence={confidence:.2f}, reasoning='{reasoning}'")
 
             # C8: advisory ONLY — annotate the signal, NEVER drop it. An external
@@ -743,6 +809,8 @@ def generate_signals(
             reasons.append(f"TP wrong side ({reject_tp_wrong_side}×)")
         if reject_rr > 0:
             reasons.append(f"R:R<{min_rr} ({reject_rr}×, max seen: {max_seen_rr:.2f})")
+        if reject_no_target > 0:
+            reasons.append(f"no real target, strict_target_reject ({reject_no_target}×)")
         log.info(f"📉 {prefix}{aligned_triggers} triggers, 0 signals. Rejects: {' | '.join(reasons)}")
 
     return signals
