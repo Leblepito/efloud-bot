@@ -45,6 +45,42 @@ def evaluate_flat_book(mode_change_needed: bool, open_positions: int,
     return True, "Flat-book gate OK"
 
 
+def count_open_book(ex) -> tuple:
+    """Return (n_positions, n_orders, regular_ok, algo_ok) for the flat-book gate.
+
+    BUG (2026-07-08 debug session): this used to be inlined in main() as a
+    bare `ex.fetch_open_orders()` call, which only sees REGULAR orders.
+    Binance's SL/TP are placed as server-side ALGO orders (STOP_MARKET /
+    TAKE_PROFIT_MARKET, routed through /fapi/v1/algo/*) and are invisible to
+    fetch_open_orders — the exact same gap the reconcile path already had to
+    patch (exchange/__init__.py, 2026-05-09 LTC/ADA incident:
+    fapiPrivateGetOpenAlgoOrders). A leftover algo SL/TP from a previously
+    closed position made preflight report "0 open orders" (flat book) while
+    Binance's own dualSidePosition change still rejected with the book
+    genuinely not flat — the operator saw a false "safe to start" green light.
+
+    regular_ok=False (fail-open, advisory only) on a read error for
+    positions/regular-orders — mirrors the existing fail-open behavior in
+    main(): a query failure must not block the operator, Binance's own
+    rejection is the authoritative guard. algo_ok=False means the algo-order
+    count could not be confirmed (n_orders may be an UNDERCOUNT) even though
+    regular_ok is True — the caller must surface this distinctly rather than
+    reporting a confident "flat" when it isn't verified.
+    """
+    try:
+        positions = [p for p in ex.fetch_positions() if float(p.get("contracts", 0) or 0) > 0]
+        open_orders = ex.fetch_open_orders()
+        n_pos, n_ord = len(positions), len(open_orders)
+    except Exception:
+        return 0, 0, False, False
+    try:
+        algo_orders = ex.fapiPrivateGetOpenAlgoOrders({})
+        n_ord += len(algo_orders)
+    except Exception:
+        return n_pos, n_ord, True, False
+    return n_pos, n_ord, True, True
+
+
 def main():
     _fix_win_console()
     ALLOW = os.environ.get("EFLOUD_ALLOW_MAINNET") == "1"
@@ -162,17 +198,22 @@ def main():
     #    they differ, a position-mode switch will be attempted at startup, which
     #    Binance rejects unless the book is flat.
     mode_change_needed = (is_hedge != hedge_mode)
-    try:
-        positions = [p for p in ex.fetch_positions() if float(p.get("contracts", 0) or 0) > 0]
-        open_orders = ex.fetch_open_orders()
-        n_pos, n_ord = len(positions), len(open_orders)
-    except Exception as e:
+    n_pos, n_ord, regular_ok, algo_ok = count_open_book(ex)
+    if not regular_ok:
         # Fail-open: a read error must not block the operator. This is only an
         # ADVISORY preflight check — Binance's own rejection + the startup abort
         # in _enforce_margin_setup are the authoritative guards. Treat a ⚠️ here
         # as inconclusive and verify flatness manually (runbook step 4).
-        print(f"  [5/5] Flat-book gate: ⚠️ pozisyon/emir sorgulanamadı ({e}) — manuel doğrula")
-        n_pos = n_ord = 0
+        print(f"  [5/5] Flat-book gate: ⚠️ pozisyon/emir sorgulanamadı — manuel doğrula")
+        mode_change_needed = False
+    elif not algo_ok:
+        # Regular orders/positions counted fine, but the algo-order (SL/TP)
+        # count is UNCONFIRMED — n_ord may be an undercount. A clean "0
+        # orders" here would be a false green light (see count_open_book
+        # docstring), so this must not report as a confident flat book.
+        print(f"  [5/5] Flat-book gate: ⚠️ algo (SL/TP) emirleri doğrulanamadı — "
+              f"{n_ord} normal emir görüldü ama SAYIM EKSİK OLABİLİR. "
+              f"Binance uygulamasından/TradingView'dan manuel kontrol et.")
         mode_change_needed = False
     ok, msg = evaluate_flat_book(mode_change_needed, n_pos, n_ord)
     if not ok:
