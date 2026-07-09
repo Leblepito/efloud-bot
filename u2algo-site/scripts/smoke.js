@@ -154,8 +154,7 @@ const premiumRequired = [
   'yatırım tavsiyesi değildir',
   'getiri garantisi',
   'geçmiş performans',
-  'founding',
-  'checkout/buy',
+  'lemonsqueezy.com',
   '/privacy.html',
   '/terms.html'
 ];
