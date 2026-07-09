@@ -5,14 +5,30 @@ All endpoints under /api. /api/login is public; rest require auth.
 from __future__ import annotations
 
 import logging
+import os
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
+from fastapi.responses import FileResponse
 
-from backend.auth import login as auth_login, logout as auth_logout, require_auth
+from backend.auth import (
+    login as auth_login,
+    logout as auth_logout,
+    require_auth,
+    issue_token,
+    verify_password,
+    _check_rate_limit,
+    _record_failed_attempt,
+    COOKIE_MAX_AGE,
+)
 from backend.bot_runner import runner
 from backend.db import db
+from backend.social.queue_storage import load_draft, save_draft, list_by_status
+from backend.social.content_queue import ContentStatus, approve_draft, reject_draft
 
 log = logging.getLogger("efloud.api")
 
@@ -23,6 +39,10 @@ class LoginBody(BaseModel):
     password: str
 
 
+class MobileLoginBody(BaseModel):
+    password: str
+
+
 @router.post("/login")
 async def login(body: LoginBody, request: Request, response: Response) -> dict:
     if auth_login(request, response, body.password):
@@ -30,6 +50,20 @@ async def login(body: LoginBody, request: Request, response: Response) -> dict:
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password"
     )
+
+
+@router.post("/mobile/login")
+async def mobile_login(body: MobileLoginBody, request: Request) -> dict:
+    """Mobil için token-based login. Bearer token döner (cookie atmaz)."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)  # web login ile aynı rate-limit (5/15dk)
+    if not verify_password(body.password):
+        _record_failed_attempt(client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password"
+        )
+    token = issue_token()
+    return {"token": token, "expires_in": COOKIE_MAX_AGE}
 
 
 @router.post("/logout", dependencies=[Depends(require_auth)])
@@ -685,4 +719,166 @@ from backend.signals_smc import get_smc_signal
 async def signals_smc(symbol: str = "BTCUSDT", timeframe: str = "15m") -> dict:
     """Calculated SMC structure (swings → BOS/ChoCh, OB, FVG, premium/discount, PDH/PDL)."""
     return await get_smc_signal(symbol, timeframe, runner)
+
+
+# ── MOBILE API ENDPOINTS ──
+
+def _log_mobile_action(action: str, details: dict) -> None:
+    """Log mobile actions for audit trail."""
+    try:
+        os.makedirs("state", exist_ok=True)
+        with open("state/mobile_actions.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "action": action,
+                "details": details,
+                "source": "mobile",
+            }, ensure_ascii=False) + "\n")
+    except Exception:
+        log.exception("mobile audit log write failed")
+
+
+# ── SOCIAL APPROVAL ENDPOINTS ──
+@router.get("/social/pending", dependencies=[Depends(require_auth)])
+async def social_pending(limit: int = 50) -> list[dict]:
+    """List pending content drafts awaiting approval."""
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="DB pool not ready")
+    drafts = await list_by_status(db.pool, ContentStatus.PENDING_REVIEW, limit=limit)
+    return [d.to_dict() for d in drafts]
+
+
+class ApproveBody(BaseModel):
+    draft_id: str
+
+
+@router.post("/social/approve", dependencies=[Depends(require_auth)])
+async def social_approve(body: ApproveBody) -> dict:
+    """Approve a content draft for publishing."""
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="DB pool not ready")
+    draft = await load_draft(db.pool, body.draft_id)
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    try:
+        approve_draft(draft, "mobile")  # (draft, reviewer_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await save_draft(db.pool, draft)
+    _log_mobile_action("social_approve", {"draft_id": body.draft_id})
+    return {"ok": True, "status": draft.status.value}
+    # NOT: yayın burada tetiklenmez — manus_client.process_approved_drafts worker'ı APPROVED'ları gönderir
+
+
+class RejectBody(BaseModel):
+    draft_id: str
+    reason: str
+
+
+@router.post("/social/reject", dependencies=[Depends(require_auth)])
+async def social_reject(body: RejectBody) -> dict:
+    """Reject a content draft with reason."""
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="DB pool not ready")
+    draft = await load_draft(db.pool, body.draft_id)
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    try:
+        reject_draft(draft, "mobile", body.reason)  # (draft, reviewer_id, reason)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await save_draft(db.pool, draft)
+    _log_mobile_action("social_reject", {"draft_id": body.draft_id, "reason": body.reason})
+    return {"ok": True, "status": draft.status.value}
+
+
+# ── ORDER CONTROL ENDPOINTS ──
+_recent_idem_keys: set[str] = set()
+
+
+class ClosePositionBody(BaseModel):
+    symbol: str
+    direction: str
+    idempotency_key: str
+
+
+@router.post("/orders/close", dependencies=[Depends(require_auth)])
+async def close_position(body: ClosePositionBody) -> dict:
+    """Close a trading position at market price."""
+    if not runner.order_mgr or not runner.client:
+        raise HTTPException(status_code=503, detail="Bot not running / exchange not connected")
+    if body.direction.upper() not in ("LONG", "SHORT"):
+        raise HTTPException(status_code=400, detail="direction must be LONG or SHORT")
+    if body.idempotency_key in _recent_idem_keys:
+        return {"ok": True, "dedup": True}
+    _recent_idem_keys.add(body.idempotency_key)
+
+    from exchange import _strip_contract_suffix
+    sym = _strip_contract_suffix(body.symbol)
+    direction = body.direction.upper()
+
+    # 1) tracked -> public close_position (orphan-safe)
+    target = next(
+        (
+            p
+            for p in runner.order_mgr.positions
+            if _strip_contract_suffix(p.symbol) == sym and p.direction == direction
+        ),
+        None,
+    )
+    try:
+        if target is not None:
+            if not runner.order_mgr.close_position(target, reason="manual_mobile"):
+                raise HTTPException(status_code=404, detail="Position not tracked locally")
+            _log_mobile_action(
+                "close_tracked", {"symbol": body.symbol, "direction": direction}
+            )
+            return {"ok": True, "type": "tracked"}
+
+        # 2) untracked/orphan -> direct reduceOnly market close (MVP: sibling cleanup best-effort)
+        bn = runner.client.get_open_positions()
+        match = next(
+            (
+                bp
+                for bp in bn
+                if _strip_contract_suffix(bp.get("symbol", "")) == sym
+                and str(bp.get("side", "")).upper() == direction
+            ),
+            None,
+        )
+        if not match:
+            raise HTTPException(status_code=404, detail="Position not found on exchange")
+        contracts = float(match.get("contracts", 0))
+        if contracts <= 0:
+            raise HTTPException(status_code=400, detail="Position size zero")
+        close_side = "sell" if direction == "LONG" else "buy"
+        ccxt_sym = runner.client.to_ccxt_symbol(match.get("symbol", ""))
+        close_params = {"reduceOnly": True}
+        if runner.order_mgr.hedge_mode:
+            close_params["positionSide"] = direction
+        runner.client.exchange.create_order(
+            ccxt_sym, "market", close_side, contracts, params=close_params
+        )
+        _log_mobile_action(
+            "close_untracked",
+            {"symbol": body.symbol, "direction": direction, "size": contracts},
+        )
+        return {"ok": True, "type": "untracked"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("mobile close_position failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── MEDIA ENDPOINTS ──
+@router.get("/media/{filename}")
+async def get_media(filename: str):
+    """Serve cached media files for public URLs (Instagram, etc)."""
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="bad filename")
+    path = Path("cache") / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="not found")
+    return FileResponse(path)
 

@@ -66,6 +66,14 @@ async def lifespan(app: FastAPI):
     else:
         log.info("Autostart disabled (EFLOUD_AUTOSTART=0) — start bot via /api/bot/start")
 
+    # Start publishing worker (processes approved drafts → X/Instagram/YouTube)
+    try:
+        from backend.social.publishing_worker import start_worker
+        await start_worker()
+        log.info("✅ Publishing worker started")
+    except Exception as e:
+        log.error(f"Publishing worker startup failed: {e}", exc_info=True)
+
     # === Aşama 2 Step 2 healthz wiring (ORDER MATTERS) ===
     # Step 1: ensure `runner` is constructed and has runtime_state
     #         (BotRunner.__init__ from Task 3.1 creates runner.runtime_state eagerly).
@@ -100,6 +108,14 @@ async def lifespan(app: FastAPI):
     log.info("🔴 App shutdown")
     await runner.stop()
     await db.close()
+
+    # Stop publishing worker
+    try:
+        from backend.social.publishing_worker import stop_worker
+        await stop_worker()
+        log.info("✅ Publishing worker stopped")
+    except Exception as e:
+        log.error(f"Publishing worker shutdown failed: {e}", exc_info=True)
 
 
 app = FastAPI(

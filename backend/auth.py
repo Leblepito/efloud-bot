@@ -17,7 +17,7 @@ import secrets
 import time
 from typing import Optional
 
-from fastapi import Cookie, HTTPException, Request, Response, status
+from fastapi import Cookie, Header, HTTPException, Request, Response, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 log = logging.getLogger("efloud.auth")
@@ -112,9 +112,38 @@ def is_authenticated(session_cookie: Optional[str]) -> bool:
 
 
 # FastAPI dependency
-async def require_auth(efloud_session: Optional[str] = Cookie(default=None, alias=COOKIE_NAME)) -> None:
-    if not is_authenticated(efloud_session):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
+async def require_auth(
+    efloud_session: Optional[str] = Cookie(default=None, alias=COOKIE_NAME),
+    authorization: Optional[str] = Header(default=None),
+) -> None:
+    # Cookie path (web)
+    if efloud_session and is_authenticated(efloud_session):
+        return
+    # Bearer token path (mobile)
+    if authorization and authorization.lower().startswith("bearer "):
+        if validate_token(authorization[7:]):
+            return
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+    )
+
+
+# ── Bearer token auth (mobile) ──
+# Cookie session ile AYNI serializer secret'ini paylaşır. Token = imzalı
+# payload, cookie ile aynı; sadece header ile taşınır. Ayrı sır YOK.
+
+
+def issue_token() -> str:
+    """Mobil istemci için Bearer token üret."""
+    serializer = _get_serializer()
+    return serializer.dumps({"v": 1, "ts": int(time.time()), "m": 1})  # m=mobile
+
+
+def validate_token(token: str) -> bool:
+    try:
+        serializer = _get_serializer()
+        serializer.loads(token, max_age=COOKIE_MAX_AGE)
+        return True
+    except (BadSignature, SignatureExpired):
+        return False

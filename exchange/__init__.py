@@ -2136,6 +2136,21 @@ class OrderManager:
         self.positions.remove(pos)
         self._persist()
 
+    def close_position(self, pos: Position, reason: str = "manual") -> bool:
+        """Close a single tracked position at market with orphan cleanup.
+
+        Returns True if attempted, False if not tracked.
+        Used by mobile API for manual position closing.
+        """
+        if pos not in self.positions:
+            return False
+        try:
+            price = self.client.get_price(pos.symbol)
+        except Exception:
+            price = pos.entry  # fallback for PnL record
+        self._fallback_close(pos, price, reason)
+        return True
+
     def kill_switch(self) -> int:
         """Tüm açık pozisyonları piyasa fiyatından kapat + tüm pending order'ları iptal et.
 
