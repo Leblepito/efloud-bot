@@ -114,10 +114,22 @@ risk:
   sl_atr_buffer: 0.3                  # Daha sıkı stop (makas daraltıldı)
   daily_filter_strict: false
 
-  position_size_calculation: fixed   # Fixed $50 margin per coin
-  fixed_position_usdt: 50             # $50 margin × 3x = $150 notional
+  position_size_calculation: fixed   # Fixed $50 margin per coin İSTENDİ, ANCAK "fixed" tanınan
+                                      # bir mode DEĞİL (engine/safe_orchestrator.py sadece
+                                      # "reverse_from_risk"'i özel işler) → sessizce legacy
+                                      # risk_per_trade_pct+calc_position_size yoluna düşüyor.
+                                      # 2026-07-08 grep ile doğrulandı, henüz düzeltilmedi.
+  fixed_position_usdt: 50             # $50 margin × 3x = $150 notional (DEAD: hiçbir .py dosyasında okunmuyor)
   max_loss_per_trade_usdt: 10
   target_stop_distance_pct: 3
+
+  # 2026-07-09: V1/V2/V3 TEK gerçek Binance cüzdanını paylaşıyor. "total"
+  # (varsayılan) → sizing her zaman TÜM ortak cüzdana göre hesaplanıyordu; bir
+  # bot büyük pozisyon açtığında gerçek marjin tükeniyor, diğer semboller
+  # borsada "insufficient margin" ile sessizce reddediliyordu (tek coin +
+  # şişirilmiş pozisyon semptomu). "available" → her sizing kararı Binance'ın
+  # CANLI availableBalance'ına bakar (_sizing_balance, safe_orchestrator.py:47-99).
+  sizing_balance_source: available
 
   # ═══ SCALP v3.1: SMC Block Targeting + Blended R:R ═══
   # TP1/TP2 artık gerçek SMC yapılarında (OB/FVG/liq/swing), fib değil.
@@ -162,7 +174,7 @@ safety:
   weekly_drawdown_limit_pct: 15.0     # Scalp: daha sıkı haftalık DD (%15 vs %25)
   consecutive_loss_limit: 3
   consecutive_pause_min: 90           # Scalp: daha kısa pause (90dk vs 120dk)
-  starting_balance: 500               # Scalp cüzdan: long cüzdanından bölünen 500 USDT (2026-07-04)
+  starting_balance: 283               # 2026-07-08 C2 re-recalibration: 3-bot toplam varsayım $2065 vs gerçek ortak cüzdan ~$1168 (×0.5656). Bkz. config.phase2_1k.yaml dosya başı.
 
   adx_trend_threshold: 25
   adx_range_threshold: 20
@@ -178,7 +190,7 @@ safety:
   max_sl_atr: 3.0                     # Scalp: daha sıkı max SL (3.0 vs 5.0)
   reject_wide_sl: false
 
-  emergency_balance_threshold: 450    # Bakiye $450 altı → HALT (~10% kayıp, $500 wallet-split cüzdana göre; 2026-07-05)
+  emergency_balance_threshold: 255    # Bakiye $255 altı → HALT (~10% kayıp, $283 cüzdana göre). 2026-07-08 C2 re-recalibration.
   reserve_balance: 0
 
   min_seconds_between_symbol_fetches: 0.5
