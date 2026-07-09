@@ -1,41 +1,39 @@
 # ══════════════════════════════════════════════════════════════════
-# BOT V2 — LONG profil paralel setup  (cüzdan ~$283)
+# BOT V2 — LONG profil paralel setup  (cüzdan ~$582)
 # ══════════════════════════════════════════════════════════════════
 # Bu, V1 (configs/config.phase2_1k.yaml, profile MID) yanında AYNI Hetzner
 # VPS'te paralel çalışan İKİNCİ bot'tur (container: efloud-bot-long,
 # domain: bot.u2algo.com, EFLOUD_BOT_ID=v2-long, state_dir: ./state_long).
 #
-# Gerçek Binance Futures bakiyesi: ~$1112 USDT (2026-06-21 canlı totalMarginBalance;
-# $1000 USDT V1'den transfer; multiAssetsMargin=False → BNB margin SAYILMAZ).
-# safety:/risk: blokları $1112'ye SENKRON (C2 calibration).
-# 2026-07-08 (C2 re-recalibration): V1+V2+V3 aslında TEK gerçek Binance cüzdanını
-# paylaşıyor (gerçek toplam ~$1168 vs 3 config'in varsaydığı $2065) → ×0.5656
-# ölçek: starting_balance 500→283, emergency_balance_threshold 450→255. Detay:
-# configs/config.phase2_1k.yaml dosya başı. NOT: risk.fixed_position_usdt (aşağıda)
-# hiçbir Python kod yolunda okunmuyor (grep doğrulandı) — dead config; gerçek
-# sizing risk_per_trade_pct üzerinden legacy calc_position_size ile yapılıyor.
-# 2026-07-09: risk.sizing_balance_source: available eklendi (aşağıda) — asıl
-# sizing bug'ı buydu: get_balance() hep TÜM ortak cüzdanı (totalMarginBalance)
-# döndürüyordu, starting_balance sadece breaker eşiğini etkiliyordu.
+# Kendi ayrı Binance sub-account'ı (kendi API key + izole futures cüzdanı).
+# Gerçek bakiye: ~$582 USDT (2026-07-09, operatör Binance app'ten doğruladı).
+# 2026-07-08 (C2 re-recalibration, GERİ ALINDI 2026-07-09): O gün V1+V2+V3'ün
+# TEK ortak cüzdanı paylaştığı YANLIŞ varsayımıyla starting_balance 500→283
+# düşürülmüştü. 2026-07-09'da her botun ayrı sub-account'ta olduğu doğrulandı
+# → starting_balance gerçek bakiyeye (582) göre DÜZELTİLDİ. NOT: risk.fixed_position_usdt
+# (aşağıda) artık DEAD DEĞİL — engine/safe_orchestrator.py + risk/__init__.py'ye
+# calc_fixed_position_size() ile bağlandı (2026-07-09 VPS→GitHub sync, commit
+# 9ff0624); "fixed" modu gerçekten aktif, docker loglarıyla doğrulandı.
+# 2026-07-09: risk.sizing_balance_source: available eklendi (aşağıda) — ancak
+# "fixed" sizing modu balance'ı hiç kullanmadığı için bu ayar bu bot için İNERT;
+# yine de zararsız, "legacy" moda geçilirse hazır bekler.
 #
 # Risk profili — LONG KONSERVATİF (operatör onayı 2026-06-21; SENKRON tut):
-#   Cüzdan:           ~$283 (2026-07-08 C2 re-recalibration)
+#   Cüzdan:           ~$582 (2026-07-09 düzeltme; kendi izole Binance sub-account'ı)
 #   Kaldıraç:         3x (exchange.leverage; V1=5x — long uzun tutuş → düşük likidasyon riski)
-#   Sembol başı max:  ~$67 notional (max_position_notional_pct 2% × $1112 × 3) [ESKİ ÖRNEK —
-#                      pre-existing doc bug: config'teki gerçek max_position_notional_pct
-#                      35.0'tır, 2.0 değil; C2 kapsamı dışı, düzeltilmedi]
+#   Sizing modu:      FIXED — $50 margin/coin × 3x = $150 notional/pozisyon (bakiyeden bağımsız)
 #   Eşzamanlı max:    5 pozisyon (max_open_positions; long horizon konsantrasyon kontrolü)
 #   Seçicilik:        min_confluence 60, min_rr 2.2 (V1=50/1.8 — long daha seçici)
-#   Daily loss:       %10 ≈ $28 → breaker TRIPS (daily_loss_limit_pct)
-#   Weekly DD:        %20 ≈ $57 → breaker HALTS (weekly_drawdown_limit_pct; V1'den sıkı)
-#   Acil halt:        bakiye $255 altına düşünce (emergency_balance_threshold; 2026-07-08 C2 re-recalibration)
+#   Daily loss:       %10 ≈ $58 → breaker TRIPS (daily_loss_limit_pct)
+#   Weekly DD:        %20 ≈ $116 → breaker HALTS (weekly_drawdown_limit_pct; V1'den sıkı)
+#   Acil halt:        bakiye $524 altına düşünce (emergency_balance_threshold; 2026-07-09 düzeltme)
 #   ⚠️ Long profili backtest-EDİLMEDİ; judgment-based konservatif başlangıç.
 #
 # Önkoşullar (preflight.py ile YENİ cüzdan key'iyle doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi) — DOĞRULANDI 2026-06-21
 #   ✓ Position mode = ONE-WAY (hedge_mode:false; bot startup'ta zorlar — set_position_mode)
 #   ✓ Hesap FLAT (pozisyon/order yok — margin/position-mode değişimi flat-book ister)
-#   ✓ Bakiye ≥ $283 Futures cüzdanında (emergency_balance_threshold $255 üstü; 2026-07-08 C2 re-recalibration)
+#   ✓ Bakiye ≥ $582 Futures cüzdanında (emergency_balance_threshold $524 üstü; 2026-07-09 düzeltme)
 #   ✓ EFLOUD_ALLOW_MAINNET=1
 #   ✓ VPS IP (<VPS_IP>) API IP-whitelist'inde — DOĞRULANDI
 #
@@ -119,21 +117,22 @@ risk:
   sl_atr_buffer: 0.5
   daily_filter_strict: false
 
-  position_size_calculation: fixed    # operatör 2026-07-04: sabit $50 marjin/trade İSTENDİ, ANCAK
-                                      # "fixed" tanınan bir mode DEĞİL (engine/safe_orchestrator.py
-                                      # sadece "reverse_from_risk"'i özel işler) → sessizce legacy
-                                      # risk_per_trade_pct+calc_position_size yoluna düşüyor. 2026-07-08
-                                      # grep ile doğrulandı, henüz düzeltilmedi — operatör kararı bekliyor.
-  fixed_position_usdt: 50             # $50 marjin × 3x = $150 notional (DEAD: hiçbir .py dosyasında okunmuyor)
+  position_size_calculation: fixed    # operatör 2026-07-04: sabit $50 marjin/trade İSTENDİ.
+                                      # 2026-07-09 GÜNCELLEME: artık gerçekten AKTİF — VPS-local
+                                      # engine/safe_orchestrator.py + risk/__init__.py
+                                      # calc_fixed_position_size() ile bağlandı (2026-07-09
+                                      # VPS→GitHub sync, commit 9ff0624); docker loglarında
+                                      # "✅ fixed sizing active: margin=$50 per coin, leverage=3x,
+                                      # notional=$150.00 per position" ile doğrulandı.
+  fixed_position_usdt: 50             # $50 marjin × 3x = $150 notional/pozisyon — AKTİF
   max_loss_per_trade_usdt: 11         # (legacy sizing kalıntısı — fixed modda kullanılmaz)
   target_stop_distance_pct: 5
 
-  # 2026-07-09: V1/V2/V3 TEK gerçek Binance cüzdanını paylaşıyor. "total"
-  # (varsayılan) → sizing her zaman TÜM ortak cüzdana göre hesaplanıyordu; bir
-  # bot büyük pozisyon açtığında gerçek marjin tükeniyor, diğer semboller
-  # borsada "insufficient margin" ile sessizce reddediliyordu (tek coin +
-  # şişirilmiş pozisyon semptomu). "available" → her sizing kararı Binance'ın
-  # CANLI availableBalance'ına bakar (_sizing_balance, safe_orchestrator.py:47-99).
+  # 2026-07-09 (düzeltildi): V1/V2/V3 TEK ortak cüzdanı paylaşıyor varsayımı
+  # YANLIŞTI — her botun kendi ayrı sub-account'ı var. Ayrıca bu bot "fixed"
+  # sizing modunda olduğu için sizing_balance_source zaten HİÇ kullanılmıyor
+  # (calc_fixed_position_size balance almaz) — bu ayar şu an İNERT, "legacy"
+  # moda geçilirse diye zararsızca bırakıldı.
   sizing_balance_source: available
 
 operation:
@@ -172,7 +171,7 @@ safety:
   weekly_drawdown_limit_pct: 20.0     # ~$222 (long horizon fresh book → V1'den sıkı; operatör-tunable)
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
-  starting_balance: 283               # 2026-07-08 C2 re-recalibration: 3-bot toplam varsayım $2065 vs gerçek ortak cüzdan ~$1168 (×0.5656). Bkz. config.phase2_1k.yaml dosya başı.
+  starting_balance: 582               # 2026-07-09 düzeltme: kendi izole Binance sub-account bakiyesi. Bkz. dosya başı.
 
   adx_trend_threshold: 25
   adx_range_threshold: 20
@@ -180,9 +179,11 @@ safety:
   # C3 (default OFF) — V1 ile aynı
   regime_ml_can_override_gate: false
 
-  # $50 marjin × 3x = $150 notional per trade ($500 cüzdanın %30'u)
-  max_position_notional_pct: 35.0     # $150 notional / $500 balance = %30 (+5 tampon)
-  max_total_exposure: 4.0             # 10 × $150 = $1500 / $500 = 3.0x (+1 tampon)
+  # $50 marjin × 3x = $150 notional per trade (~$582 cüzdanın %25.8'i).
+  # NOT: "fixed" sizing modunda bu iki % alanı İNERT (calc_fixed_position_size
+  # balance/max_notional_pct kullanmaz) — sadece "legacy" moda geçilirse devreye girer.
+  max_position_notional_pct: 35.0     # $150 notional / $582 balance ≈ %25.8 (+tampon)
+  max_total_exposure: 4.0             # 5 × $150 = $750 / $582 ≈ 1.3x (max_open_positions=5)
   # max_holding_hours: long horizon (1h entry / 1w htf) → 24h erken çıkışa neden olur.
   # 168h (7 gün) long-horizon trade'lerin gelişmesine izin verir (operatör-tunable).
   max_holding_hours: 168
@@ -192,7 +193,7 @@ safety:
   # H3 (default OFF) — V1 ile aynı
   reject_wide_sl: false
 
-  emergency_balance_threshold: 255    # Bakiye $255 altı → HALT (~10% kayıp, $283 cüzdana göre). 2026-07-08 C2 re-recalibration.
+  emergency_balance_threshold: 524    # Bakiye $524 altı → HALT (~10% kayıp, $582 cüzdana göre). 2026-07-09 düzeltme.
   reserve_balance: 0
 
   min_seconds_between_symbol_fetches: 0.5
