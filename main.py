@@ -242,6 +242,20 @@ def validate_config(cfg: dict) -> bool:
             f"✅ reverse_from_risk active: max_loss=${max_loss}, "
             f"stop={stop_pct}%, notional=${notional:.2f}"
         )
+    elif risk_cfg.get("position_size_calculation") == "fixed":
+        fixed_usdt = risk_cfg.get("fixed_position_usdt")
+        if fixed_usdt is None or fixed_usdt <= 0:
+            raise ValueError("fixed requires fixed_position_usdt > 0")
+        notional = fixed_usdt * leverage
+        if notional < 5.0:
+            raise ValueError(
+                f"fixed: calculated notional ${notional:.2f} too small "
+                f"(fixed_position_usdt={fixed_usdt} × leverage={leverage})"
+            )
+        log.info(
+            f"✅ fixed sizing active: margin=${fixed_usdt} per coin, "
+            f"leverage={leverage}x, notional=${notional:.2f} per position"
+        )
 
     log.info(f"✅ Config validated: leverage={leverage}x, margin={margin_mode}")
 

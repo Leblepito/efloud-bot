@@ -95,8 +95,134 @@ def _resolve_deviation_tp2(raw_tp2, tp1, min_tp, price, risk, is_long):
     return tp2
 
 
-def _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long):
+def _collect_smc_blocks(
+    is_long: bool,
+    entry_price: float,
+    htf: dict,
+    e_range,  # RangeInfo
+    levels: Optional[List] = None,
+) -> List[tuple]:
+    """Kâr yönündeki TÜM SMC bloklarını topla, mesafeye göre sırala.
+
+    Kaynak önceliği (tie-break):
+      LIQUIDITY (EQH/EQL, swing) > OB > FVG > RANGE_EXTREME > LEVEL
+
+    Returns:
+        [(price, source_tag), ...] — mesafeye göre artan (entry'ye en yakın önce).
+        LONG: entry'den YUKARIdaki bloklar
+        SHORT: entry'den AŞAĞIDAKI bloklar
+    """
+    blocks: List[tuple] = []
+
+    if is_long:
+        # ── Liquidity: equal highs + swing highs ──
+        for s in htf.get("swing_highs", []):
+            if s.price > entry_price:
+                blocks.append((s.price, "LIQ_SWING"))
+        for eq in htf.get("eq_highs", []):
+            if eq["price"] > entry_price:
+                blocks.append((eq["price"], "LIQ_EQH"))
+        # ── Order Blocks: BULL OB top edge ──
+        for ob in htf.get("active_obs", []):
+            if ob.direction == "BULL" and ob.top > entry_price:
+                blocks.append((ob.top, "OB"))
+        # ── FVG: BULL gap top edge ──
+        for f in htf.get("active_fvgs", []):
+            if f.direction == "BULL" and f.top > entry_price:
+                blocks.append((f.top, "FVG"))
+        # ── Range extreme ──
+        if e_range and e_range.hi > entry_price:
+            blocks.append((e_range.hi, "RANGE_HI"))
+        # ── Injected levels (resistance) ──
+        if levels:
+            for lvl in levels:
+                p = getattr(lvl, "price", lvl.get("price", 0)) if isinstance(lvl, (dict, object)) else 0
+                if p and p > entry_price:
+                    blocks.append((float(p), "LEVEL"))
+    else:
+        # SHORT — mirror
+        for s in htf.get("swing_lows", []):
+            if s.price < entry_price:
+                blocks.append((s.price, "LIQ_SWING"))
+        for eq in htf.get("eq_lows", []):
+            if eq["price"] < entry_price:
+                blocks.append((eq["price"], "LIQ_EQL"))
+        for ob in htf.get("active_obs", []):
+            if ob.direction == "BEAR" and ob.bot < entry_price:
+                blocks.append((ob.bot, "OB"))
+        for f in htf.get("active_fvgs", []):
+            if f.direction == "BEAR" and f.bot < entry_price:
+                blocks.append((f.bot, "FVG"))
+        if e_range and e_range.lo < entry_price:
+            blocks.append((e_range.lo, "RANGE_LO"))
+        if levels:
+            for lvl in levels:
+                p = getattr(lvl, "price", lvl.get("price", 0)) if isinstance(lvl, (dict, object)) else 0
+                if p and p < entry_price:
+                    blocks.append((float(p), "LEVEL"))
+
+    # Fiyata göre sırala: LONG = artan (en yakın önce), SHORT = azalan
+    blocks.sort(key=lambda b: b[0], reverse=not is_long)
+    return blocks
+
+
+def _select_tp_from_smc_blocks(
+    blocks: List[tuple],
+    entry_price: float,
+    risk: float,
+    min_rr_tp1: float,
+    target_blended_rr: float,
+    is_long: bool,
+    tp1_close_pct: float = 0.5,
+    fib_ext: float = 1.618,
+) -> tuple:
+    """SMC bloklarından TP1/TP2 seç — blended R:R gate ile.
+
+    Strateji:
+      1. TP1 = min_rr_tp1 × risk'i geçen ilk SMC bloğu
+      2. TP2 = TP1'den sonraki ilk SMC bloğu
+      3. Blended R:R = (tp1_pct × TP1_R + (1-tp1_pct) × TP2_R) >= target_blended_rr
+      4. Tek blok varsa → single-TP (TP2=None), TP1_R >= target_blended_rr
+      5. Blok yoksa → fib fallback
+
+    Returns:
+        (tp1, tp2, tp1_source, tp2_source)
+        tp2=None → single-target mode (lifecycle full-close at TP1)
+    """
+    min_tp1_dist = min_rr_tp1 * risk
+    qualifying = [
+        (p, src) for p, src in blocks
+        if abs(p - entry_price) >= min_tp1_dist
+    ]
+
+    if not qualifying:
+        # Fallback: RR projection (fib tabanlı, son çare)
+        tp1 = entry_price + (fib_ext * risk if is_long else -(fib_ext * risk))
+        return tp1, None, "RR_FALLBACK", "NONE"
+
+    tp1, tp1_source = qualifying[0]
+
+    # TP2: TP1'den sonraki ilk blok
+    tp2 = None
+    tp2_source = "NONE"
+    if len(qualifying) >= 2:
+        tp2, tp2_source = qualifying[1]
+    else:
+        # Tek blok → single-TP, ama R:R hedefini tek başına karşılamalı
+        tp1_r = abs(tp1 - entry_price) / risk
+        if tp1_r < target_blended_rr:
+            # Blok çok yakın, hedef R:R karşılanmıyor → fib fallback TP
+            tp2 = entry_price + (fib_ext * risk * 2 if is_long else -(fib_ext * risk * 2))
+            tp2_source = "FIB_FALLBACK"
+
+    return tp1, tp2, tp1_source, tp2_source
+
+
+def _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long, min_gap_r: float = 0.0):
     """TP2'yi daima TP1'den DAHA UZAĞA zorla (target-inversion koruması, Y5).
+
+    min_gap_r > 0 ise TP1→TP2 arası en az min_gap_r × risk olmalı (scalp v3).
+    min_gap_r = 0 ise eski davranış: sadece TP1+0.5R veya entry+2.618R'e zorla.
 
     TP2, TP1'e eşit/daha yakın olursa borsa SHORT/LONG TP emrini "anında
     tetiklenir" (-2021) diye reddedebilir veya iki-aşamalı çıkış dejenere olur.
@@ -104,12 +230,22 @@ def _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long):
     (2.618R) çek. Davranış, generate_signals içindeki eski inline guard ile
     BİREBİR aynıdır.
     """
-    if is_long:
-        if tp2 <= tp1:
-            tp2 = max(tp2, tp1 + risk * 0.5, price + risk * 2.618)
+    if min_gap_r > 0:
+        # Scalp v3: configurable minimum gap between TP1 and TP2
+        gap = min_gap_r * risk
+        if is_long:
+            if tp2 < tp1 + gap:
+                tp2 = tp1 + gap
+        else:
+            if tp2 > tp1 - gap:
+                tp2 = tp1 - gap
     else:
-        if tp2 >= tp1:
-            tp2 = min(tp2, tp1 - risk * 0.5, price - risk * 2.618)
+        if is_long:
+            if tp2 <= tp1:
+                tp2 = max(tp2, tp1 + risk * 0.5, price + risk * 2.618)
+        else:
+            if tp2 >= tp1:
+                tp2 = min(tp2, tp1 - risk * 0.5, price - risk * 2.618)
     return tp2
 
 
@@ -281,6 +417,14 @@ def generate_signals(
     symbol_confluence_overrides: Optional[Dict[str, int]] = None,  # NEW
     levels: Optional[List[Level]] = None,       # NEW — injected levels for PA confluence
     ai_sentiment: Optional[Dict[str, Any]] = None,  # NEW — async macro sentiment
+    # ── Scalp v3: Fibonacci-aware range TP / minimum gap enforcement ──
+    range_tp1_fib: float = 0.5,      # Range TP1 at this fib level (default: EQ=0.5; scalp: 0.618)
+    range_tp2_fib: float = 1.0,      # Range TP2 at this fib level (default: extreme=1.0)
+    min_tp_gap_r: float = 0.0,       # Minimum TP1→TP2 gap in R multiples (0=disabled; scalp: 0.5)
+    # ── Scalp v3.1: SMC block targeting + blended R:R ──
+    smc_tp_targeting: bool = False,  # true = use _collect_smc_blocks for TP1/TP2 (v3.1+)
+    min_rr_tp1: float = 0.5,         # TP1 minimum R:R (lower than target → forces TP2 hold)
+    blended_rr_target: float = 1.5,  # Blended R:R target (0.5×TP1_R + 0.5×TP2_R >= this)
     strict_target_reject: bool = False,   # H7 (2026-06-20 audit): default OFF — see below
     fix_discovery_classification: bool = False,  # M1 (2026-06-20 audit): default OFF — see below
 ) -> List[Signal]:
@@ -590,8 +734,13 @@ def generate_signals(
                 liquidity_targets += [eq["price"] for eq in htf["eq_highs"] if eq["price"] >= min_tp_long]
 
             if has_dev and e_range:
-                # Efloud Range deviation play: target EQ for TP1, RH for TP2
-                tp1 = e_range.eq
+                # ── Scalp v3: Fibonacci-aware range TP targeting ──
+                # Instead of always targeting EQ (0.5), use configurable fib level.
+                # Entry at discount → TP toward premium side.
+                # range_tp1_fib=0.618 → TP1 at 61.8% of range (deeper into profit than EQ).
+                # range_tp1_fib=0.5  → TP1 at EQ (legacy behavior, backward compatible).
+                range_size = e_range.hi - e_range.lo
+                tp1 = e_range.lo + range_tp1_fib * range_size
                 if tp1 < min_tp_long:
                     tp1 = min_tp_long
             elif (htf_bias_original == "UNDEF") and liquidity_targets:
@@ -647,8 +796,10 @@ def generate_signals(
                 liquidity_targets += [eq["price"] for eq in htf["eq_lows"] if eq["price"] <= min_tp_short]
 
             if has_dev and e_range:
-                # Efloud Range deviation play: target EQ for TP1, RL for TP2
-                tp1 = e_range.eq
+                # ── Scalp v3: Fibonacci-aware range TP targeting (SHORT mirror) ──
+                # Entry at premium → TP toward discount side.
+                range_size = e_range.hi - e_range.lo
+                tp1 = e_range.hi - range_tp1_fib * range_size
                 if tp1 > min_tp_short:
                     tp1 = min_tp_short
             elif (htf_bias_original == "UNDEF") and liquidity_targets:
@@ -678,7 +829,12 @@ def generate_signals(
 
         # Target opposite range extreme for deviation play, else fib extension
         if has_dev and e_range:
-            raw_tp2 = e_range.hi if is_long else e_range.lo
+            # ── Scalp v3: config-driven range TP2 (range_tp2_fib) ──
+            # Default range_tp2_fib=1.0 → range extreme (backward compatible).
+            # range_tp2_fib=0.786 → TP2 at 78.6% of range (tighter scalp exit).
+            range_size_tp2 = e_range.hi - e_range.lo
+            raw_tp2 = (e_range.lo + range_tp2_fib * range_size_tp2) if is_long \
+                      else (e_range.hi - range_tp2_fib * range_size_tp2)
             tp2 = _resolve_deviation_tp2(
                 raw_tp2, tp1,
                 min_tp_long if is_long else min_tp_short,
@@ -712,10 +868,32 @@ def generate_signals(
             else:
                 tp2 = (price + risk * fib_ext) if is_long else (price - risk * fib_ext)
         # Target-inversion koruması (Y5): TP2 daima TP1'den uzakta olmalı.
-        tp2 = _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long)
+        # Scalp v3: min_tp_gap_r > 0 ise TP1→TP2 arası min_gap_r × risk olmalı.
+        tp2 = _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long, min_gap_r=min_tp_gap_r)
+
+        # ═══ Scalp v3.1: SMC Block Targeting — override TP1/TP2 ═══
+        # When enabled, TP1/TP2 are placed at actual SMC structures (OB/FVG/
+        # liquidity/swing), NOT fib projections. Blended R:R gate ensures
+        # the weighted average of TP1+TP2 meets the target.
+        _tp1_source = "LEGACY"
+        _tp2_source = "LEGACY"
+        if smc_tp_targeting:
+            smc_blocks = _collect_smc_blocks(is_long, price, htf, e_range, levels)
+            tp1, tp2, _tp1_source, _tp2_source = _select_tp_from_smc_blocks(
+                smc_blocks, price, risk,
+                min_rr_tp1=min_rr_tp1,
+                target_blended_rr=blended_rr_target,
+                is_long=is_long,
+                tp1_close_pct=0.5,
+                fib_ext=fib_ext,
+            )
+            if tp2 is not None:
+                tp2 = _enforce_tp2_beyond_tp1(
+                    tp2, tp1, price, risk, is_long, min_gap_r=min_tp_gap_r,
+                )
 
         rr1 = round(abs(tp1 - price) / risk, 2)
-        rr2 = round(abs(tp2 - price) / risk, 2)
+        rr2 = round(abs(tp2 - price) / risk, 2) if tp2 is not None else 0.0
 
         # TP1 fiyatın yanlış tarafında olmamalı
         if is_long and tp1 <= price:
@@ -728,18 +906,39 @@ def generate_signals(
         if rr1 > max_seen_rr:
             max_seen_rr = rr1
 
-        if rr1 < min_rr:
-            reject_rr += 1
-            continue
+        # ── R:R Gate ──
+        if smc_tp_targeting:
+            # Blended R:R: (0.5 × TP1_R + 0.5 × TP2_R) >= blended_rr_target
+            # Single-TP (tp2=None): TP1_R must individually >= blended_rr_target
+            if tp2 is not None:
+                blended_rr = round(0.5 * rr1 + 0.5 * rr2, 2)
+                if blended_rr < blended_rr_target:
+                    reject_rr += 1
+                    continue
+            else:
+                if rr1 < blended_rr_target:
+                    reject_rr += 1
+                    continue
+        else:
+            # Legacy gate: TP1 individually >= min_rr
+            if rr1 < min_rr:
+                reject_rr += 1
+                continue
 
         sig = Signal(
             direction="LONG" if is_long else "SHORT",
             entry=round(price, 8), sl=round(sl, 8),
-            tp1=round(tp1, 8), tp2=round(tp2, 8),
+            tp1=round(tp1, 8),
+            tp2=round(tp2, 8) if tp2 is not None else 0.0,
             rr1=rr1, rr2=rr2, confluence=score,
             reasons=reasons, timestamp=brk.ts,
             in_ote=in_ote, in_ob=in_ob, has_sfp=has_sfp,
-            zone="DISCOUNT" if e_range.discount else "PREMIUM"
+            zone="DISCOUNT" if e_range.discount else "PREMIUM",
+            meta={
+                "tp1_source": _tp1_source,
+                "tp2_source": _tp2_source,
+                "tp2_is_single_target": tp2 is None,
+            } if smc_tp_targeting else {},
         )
         # H1/H5 (2026-06-20 audit) telemetry — read-only annotations, no gating
         # or scoring impact. structural_score = confluence before any post-cap

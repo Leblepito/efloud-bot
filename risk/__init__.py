@@ -1,4 +1,4 @@
-"""Pozisyon boyutu hesaplama — risk bazlı + notional cap."""
+"""Pozisyon boyutu hesaplama — risk bazlı + notional cap + fixed mode."""
 
 import logging
 
@@ -45,4 +45,29 @@ def calc_position_size(
 
     log.debug(f"Position: balance={balance:.0f} risk=${risk_amount:.2f} "
               f"sl_dist={sl_distance:.4f} size={contracts:.6f} ({position_usdt:.2f} USDT)")
+    return round(contracts, 6)
+
+
+def calc_fixed_position_size(
+    fixed_usdt: float,
+    entry: float,
+    leverage: int = 1,
+) -> float:
+    """
+    Fixed (sabit) pozisyon boyutu — coin başı sabit USDT margin.
+    
+    fixed_usdt: pozisyon başına ayrılan margin (örn 100 = $100 margin)
+    leverage: kaldıraç çarpanı (örn 10 = $100 margin → $1000 notional)
+    
+    Returns: kontrat miktarı (entry fiyatına bölünmüş notional)
+    """
+    if entry <= 0:
+        log.warning("Entry price <= 0, returning 0")
+        return 0.0
+    
+    notional = fixed_usdt * leverage  # margin × leverage = position notional
+    contracts = notional / entry
+    
+    log.debug(f"Fixed position: margin=${fixed_usdt:.2f} lev={leverage}x "
+              f"notional=${notional:.2f} size={contracts:.6f}")
     return round(contracts, 6)

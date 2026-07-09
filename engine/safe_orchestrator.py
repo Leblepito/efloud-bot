@@ -448,14 +448,23 @@ class SafeOrchestrator:
         if not balance or float(balance) <= 0 or entry <= 0:
             return 0.0
         try:
-            from risk import calc_position_size
             risk_cfg = self.config.get("risk", {})
             lev = self.config.get("exchange", {}).get("leverage", 1)
-            max_notional = self.config.get("safety", {}).get("max_position_notional_pct", 3.0)
-            size = calc_position_size(
-                float(balance), risk_cfg.get("risk_per_trade_pct", 1.0),
-                entry, sl, lev, max_notional_pct=max_notional,
-            )
+            if risk_cfg.get("position_size_calculation") == "fixed":
+                from risk import calc_fixed_position_size
+                fixed_usdt = risk_cfg.get("fixed_position_usdt", 100)
+                size = calc_fixed_position_size(
+                    fixed_usdt=fixed_usdt,
+                    entry=entry,
+                    leverage=lev,
+                )
+            else:
+                from risk import calc_position_size
+                max_notional = self.config.get("safety", {}).get("max_position_notional_pct", 3.0)
+                size = calc_position_size(
+                    float(balance), risk_cfg.get("risk_per_trade_pct", 1.0),
+                    entry, sl, lev, max_notional_pct=max_notional,
+                )
             return (size * entry) / float(balance) * 100.0
         except Exception:
             return 0.0
@@ -1062,6 +1071,14 @@ class SafeOrchestrator:
             symbol_confluence_overrides=risk_cfg.get("symbol_confluence_overrides"),
             levels=all_levels,
             ai_sentiment=self.sentiment_state,
+            # ── Scalp v3: Fibonacci-aware range TP / min gap ──
+            range_tp1_fib=self.config.get("fibonacci", {}).get("range_tp1_fib", 0.5),
+            range_tp2_fib=self.config.get("fibonacci", {}).get("range_tp2_fib", 1.0),
+            min_tp_gap_r=self.config.get("fibonacci", {}).get("min_tp_gap_r", 0.0),
+            # ── Scalp v3.1: SMC block targeting + blended R:R ──
+            smc_tp_targeting=risk_cfg.get("smc_tp_targeting", False),
+            min_rr_tp1=risk_cfg.get("min_rr_tp1", 0.5),
+            blended_rr_target=risk_cfg.get("blended_rr_target", risk_cfg["min_rr"]),
         )
 
         # ═══ STEP 4: Scenario Planning (per-symbol) ═══
@@ -1261,8 +1278,16 @@ class SafeOrchestrator:
                         # Tradeable → normal akış: pozisyon aç
                         actual_balance = balance if balance is not None else 10000.0
 
-                        # Opt-in: reverse-from-risk position sizing (cherry-picked v2.2.0)
-                        if risk_cfg.get("position_size_calculation") == "reverse_from_risk":
+                        # Position sizing mode selection
+                        if risk_cfg.get("position_size_calculation") == "fixed":
+                            from risk import calc_fixed_position_size
+                            fixed_usdt = risk_cfg.get("fixed_position_usdt", 100)
+                            size = calc_fixed_position_size(
+                                fixed_usdt=fixed_usdt,
+                                entry=latest.entry,
+                                leverage=self.config["exchange"].get("leverage", 1),
+                            )
+                        elif risk_cfg.get("position_size_calculation") == "reverse_from_risk":
                             from engine.risk.custom_calculator import CustomRiskCalculator
                             calc = CustomRiskCalculator(
                                 max_loss_usdt=risk_cfg["max_loss_per_trade_usdt"],
@@ -1505,20 +1530,28 @@ class SafeOrchestrator:
                 if not self.intent.check_confirmation(df_entry, bias_check, min_score=50):
                     continue
 
-                from risk import calc_position_size
+                from risk import calc_position_size, calc_fixed_position_size
                 balance_now = balance if balance else 10000.0
                 mid = (scen.entry_zone_top + scen.entry_zone_bottom) / 2
-                max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
-                # Choose sizing balance: 'total' (default) or 'available'
-                sizing_source = risk_cfg.get("sizing_balance_source", "total")
-                sizing_bal = _sizing_balance(
-                    self.client, sizing_source, balance_now
-                )
-                add_size = calc_position_size(
-                    sizing_bal, risk_cfg["risk_per_trade_pct"] * 0.5,
-                    mid, scen.sl, self.config["exchange"].get("leverage", 1),
-                    max_notional_pct=max_notional,
-                )
+                lev = self.config["exchange"].get("leverage", 1)
+                if risk_cfg.get("position_size_calculation") == "fixed":
+                    fixed_usdt = risk_cfg.get("fixed_position_usdt", 100)
+                    add_size = calc_fixed_position_size(
+                        fixed_usdt=fixed_usdt * 0.5,
+                        entry=mid, leverage=lev,
+                    )
+                else:
+                    max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
+                    # Choose sizing balance: 'total' (default) or 'available'
+                    sizing_source = risk_cfg.get("sizing_balance_source", "total")
+                    sizing_bal = _sizing_balance(
+                        self.client, sizing_source, balance_now
+                    )
+                    add_size = calc_position_size(
+                        sizing_bal, risk_cfg["risk_per_trade_pct"] * 0.5,
+                        mid, scen.sl, lev,
+                        max_notional_pct=max_notional,
+                    )
 
                 # Add guard first so pause_new_entries does not mask real rejection reasons.
                 add_check = self.pos_guard.can_add_to_position(existing, add_size, current_price)
@@ -2005,21 +2038,31 @@ class SafeOrchestrator:
         # (calc_position_size respects both caps; ignoring them would
         # produce strictly-larger positions than v1 would on the same setup)
         try:
-            from risk import calc_position_size
             leverage = exchange_cfg.get("leverage", 1)
-            max_notional = safety_cfg.get("max_position_notional_pct")
             if self.order_manager is not None and self.order_manager.client is not None:
                 balance = self.order_manager.client.get_balance()
             else:
                 balance = self.breaker.current_balance
-            size = calc_position_size(
-                balance=balance,
-                risk_pct=risk_cfg.get("risk_per_trade_pct", 0.75),
-                entry=entry_price,
-                sl=sl,
-                leverage=leverage,
-                max_notional_pct=max_notional,
-            )
+            
+            if risk_cfg.get("position_size_calculation") == "fixed":
+                from risk import calc_fixed_position_size
+                fixed_usdt = risk_cfg.get("fixed_position_usdt", 100)
+                size = calc_fixed_position_size(
+                    fixed_usdt=fixed_usdt,
+                    entry=entry_price,
+                    leverage=leverage,
+                )
+            else:
+                from risk import calc_position_size
+                max_notional = safety_cfg.get("max_position_notional_pct")
+                size = calc_position_size(
+                    balance=balance,
+                    risk_pct=risk_cfg.get("risk_per_trade_pct", 0.75),
+                    entry=entry_price,
+                    sl=sl,
+                    leverage=leverage,
+                    max_notional_pct=max_notional,
+                )
         except (TypeError, ValueError, ZeroDivisionError, AttributeError) as e:
             log.warning(f"[v2 reject] {cand.symbol}: sizing failed ({e})")
             return None

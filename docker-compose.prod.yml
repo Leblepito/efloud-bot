@@ -64,6 +64,10 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  # ── V3: paralel SCALP-profil bot (5m/1h/12h, Fibonacci-aware TP/SL) ──
+  # V1 (mid) + V2 (long) yanında AYNI VPS'te ayrı container. İzole state/log/reports
+  # volume + kendi .env.production.scalp'ı (V3 Binance key, EFLOUD_BOT_ID=v3-scalp).
+  # Caddy scalp.u2algo.com'da servis eder. V1/V2 DOKUNULMAZ. AUTOSTART=0 (manuel start).
   efloud-bot-scalp:
     image: efloud-bot:latest        # V1'in build ettiği image (ayrı build yok)
     container_name: efloud-bot-scalp
@@ -289,9 +293,6 @@ services:
         max-file: "3"
 
 volumes:
-  efloud_state_scalp:
-  efloud_logs_scalp:
-  efloud_reports_scalp:
   efloud_state:
   efloud_state_1k:
   efloud_state_aggressive:
@@ -302,5 +303,8 @@ volumes:
   efloud_state_long:      # V2 long-bot isolated state (breaker/positions/journal)
   efloud_logs_long:       # V2 long-bot isolated logs
   efloud_reports_long:    # V2 long-bot isolated reports
+  efloud_state_scalp:     # V3 scalp-bot isolated state (breaker/positions/journal)
+  efloud_logs_scalp:      # V3 scalp-bot isolated logs
+  efloud_reports_scalp:   # V3 scalp-bot isolated reports
   caddy_data:
   caddy_config:
