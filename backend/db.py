@@ -328,6 +328,39 @@ class Database:
             log.warning(f"log_audit failed: {e}")
 
     # ─────────────────────────────────────────────────────────────
+    # Mobile idempotency (migration 013)
+    # ─────────────────────────────────────────────────────────────
+
+    async def check_mobile_idempotency(self, key: str) -> bool:
+        """Return True if key already used (duplicate close request)."""
+        if not self.pool:
+            return False  # no-op: allow duplicate if DB unavailable
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT 1 FROM mobile_idempotency WHERE bot_id = $1 AND idempotency_key = $2",
+                    self.bot_id, key,
+                )
+                return row is not None
+        except Exception as e:
+            log.warning(f"check_mobile_idempotency failed: {e}")
+            return False
+
+    async def record_mobile_idempotency(self, key: str) -> None:
+        """Record idempotency key (INSERT ... ON CONFLICT DO NOTHING)."""
+        if not self.pool:
+            return
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO mobile_idempotency (bot_id, idempotency_key) VALUES ($1, $2) "
+                    "ON CONFLICT (bot_id, idempotency_key) DO NOTHING",
+                    self.bot_id, key,
+                )
+        except Exception as e:
+            log.warning(f"record_mobile_idempotency failed: {e}")
+
+    # ─────────────────────────────────────────────────────────────
     # Circuit-breaker state mirror (migration 010)
     # ─────────────────────────────────────────────────────────────
     # The file-based StateStore is the PRIMARY, full-fidelity breaker

@@ -2151,6 +2151,119 @@ class OrderManager:
         self._fallback_close(pos, price, reason)
         return True
 
+    def close_orphan(self, symbol: str, direction: str) -> dict:
+        """Close an untracked orphan position at market (reduceOnly + sibling cleanup).
+
+        Mobile endpoint için public API: Binance'te var ama local'de olmayan
+        pozisyonları güvenli kapatır. Aynı sembol/direction için diğer hedge-mode
+        sibling pozisyonlarını da temizler (_cancel_position_siblings).
+
+        Returns: dict with keys:
+            - 'closed': True if close order submitted, False otherwise
+            - 'reason': short tag ('not_found', 'zero_size', 'closed', 'failed')
+            - 'message': human-readable status
+        """
+        if not self.client:
+            return {"closed": False, "reason": "no_client", "message": "Binance client not initialized"}
+
+        try:
+            # Binance'te açık pozisyonları kontrol et
+            bn_positions = self.client.get_open_positions()
+            match = next(
+                (
+                    bp
+                    for bp in bn_positions
+                    if _strip_contract_suffix(bp.get("symbol", "")) == _strip_contract_suffix(symbol)
+                    and str(bp.get("side", "")).upper() == direction
+                ),
+                None,
+            )
+
+            if not match:
+                return {"closed": False, "reason": "not_found", "message": f"Orphan position not found: {symbol} {direction}"}
+
+            contracts = float(match.get("contracts", 0))
+            if contracts <= 0:
+                return {"closed": False, "reason": "zero_size", "message": f"Position size zero: {symbol} {direction}"}
+
+            close_side = "sell" if direction == "LONG" else "buy"
+            ccxt_sym = self.client.to_ccxt_symbol(match.get("symbol", ""))
+            close_params = {"reduceOnly": True}
+
+            if self.hedge_mode:
+                close_params["positionSide"] = direction
+
+            # Sibling cleanup: aynı sembol için karşı taraftaki küçük pozisyonları iptal et
+            self._cancel_position_siblings_by_direction(symbol, direction)
+
+            # Market close emri gönder
+            order = self.client.exchange.create_order(
+                ccxt_sym, "market", close_side, contracts, params=close_params
+            )
+
+            log.info(
+                f"Closed orphan position: {symbol} {direction} size={contracts} "
+                f"order_id={order.get('id', '') if isinstance(order, dict) else ''}"
+            )
+            return {
+                "closed": True,
+                "reason": "closed",
+                "message": f"Orphan position closed: {symbol} {direction} size={contracts}",
+                "order_id": order.get("id", "") if isinstance(order, dict) else "",
+            }
+
+        except Exception as e:
+            log.error(f"close_orphan failed for {symbol} {direction}: {e}")
+            return {"closed": False, "reason": "failed", "message": str(e)}
+
+    def _cancel_position_siblings_by_direction(self, symbol: str, keep_direction: str) -> None:
+        """Cancel small sibling positions in hedge mode (örn: LONG kapatırken micro SHORT iptal).
+
+        Best-effort: hata durumunda pozisyon kapatma işlemine devam et.
+        Hedge mode'da aynı sembol için hem LONG hem SHORT pozisyonlar olabilir.
+        Ana pozisyonu kapatırken karşı taraftaki küçük sibling pozisyonları temizler.
+
+        Args:
+            symbol: Trading sembolü (örn: 'BTCUSDT')
+            keep_direction: Korunacak yön ('LONG' veya 'SHORT')
+        """
+        if not self.hedge_mode:
+            return  # One-way mode'da sibling pozisyonlar yok
+
+        try:
+            open_orders = self.client.exchange.fetch_open_orders(symbol)
+            cancel_side = "SHORT" if keep_direction == "LONG" else "LONG"
+
+            cancelled_count = 0
+            for order in open_orders:
+                info = order.get("info", {})
+                # Sibling order'ları tespit et:
+                # 1. Karşı taraf (LONG kapatırken SHORT, veya tersi)
+                # 2. Hedge mode'da positionSide yanlış eşleşiyorsa
+                side = info.get("side", "").upper()
+                position_side = info.get("positionSide", "").upper()
+
+                if side == cancel_side or position_side == cancel_side:
+                    try:
+                        self.client.exchange.cancel_order(order["id"], symbol)
+                        cancelled_count += 1
+                        log.debug(
+                            f"Cancelled sibling order: {order['id']} "
+                            f"side={side} positionSide={position_side}"
+                        )
+                    except Exception as e:
+                        log.debug(f"Failed to cancel sibling order {order.get('id')}: {e}")
+
+            if cancelled_count > 0:
+                log.info(
+                    f"Cancelled {cancelled_count} sibling order(s) for {symbol} "
+                    f"(kept {keep_direction})"
+                )
+
+        except Exception as e:
+            log.warning(f"Sibling order cleanup failed for {symbol}: {e}")
+            # Best-effort: pozisyon kapatma işlemine devam et
+
     def kill_switch(self) -> int:
         """Tüm açık pozisyonları piyasa fiyatından kapat + tüm pending order'ları iptal et.
 

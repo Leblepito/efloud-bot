@@ -793,7 +793,6 @@ async def social_reject(body: RejectBody) -> dict:
 
 
 # ── ORDER CONTROL ENDPOINTS ──
-_recent_idem_keys: set[str] = set()
 
 
 class ClosePositionBody(BaseModel):
@@ -804,14 +803,18 @@ class ClosePositionBody(BaseModel):
 
 @router.post("/orders/close", dependencies=[Depends(require_auth)])
 async def close_position(body: ClosePositionBody) -> dict:
-    """Close a trading position at market price."""
+    """Close a trading position at market price (idempotent)."""
     if not runner.order_mgr or not runner.client:
         raise HTTPException(status_code=503, detail="Bot not running / exchange not connected")
     if body.direction.upper() not in ("LONG", "SHORT"):
         raise HTTPException(status_code=400, detail="direction must be LONG or SHORT")
-    if body.idempotency_key in _recent_idem_keys:
+
+    # DB idempotency kontrolü
+    if await db.check_mobile_idempotency(body.idempotency_key):
+        _log_mobile_action("close_duplicate", {"idempotency_key": body.idempotency_key})
         return {"ok": True, "dedup": True}
-    _recent_idem_keys.add(body.idempotency_key)
+
+    await db.record_mobile_idempotency(body.idempotency_key)  # best-effort: ignore errors
 
     from exchange import _strip_contract_suffix
     sym = _strip_contract_suffix(body.symbol)
@@ -874,11 +877,9 @@ async def close_position(body: ClosePositionBody) -> dict:
 # ── MEDIA ENDPOINTS ──
 @router.get("/media/{filename}")
 async def get_media(filename: str):
-    """Serve cached media files for public URLs (Instagram, etc)."""
-    if "/" in filename or "\\" in filename or ".." in filename:
-        raise HTTPException(status_code=400, detail="bad filename")
-    path = Path("cache") / filename
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="not found")
-    return FileResponse(path)
+    base_dir = Path("cache").resolve()
+    target = (base_dir / filename).resolve()
+    if not str(target).startswith(str(base_dir)) or not target.exists():
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return FileResponse(target)
 
