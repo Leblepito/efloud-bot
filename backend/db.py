@@ -476,27 +476,24 @@ class Database:
         lease_token = str(uuid.uuid4())
         try:
             async with self.pool.acquire() as conn:
-                row = await conn.fetchrow(
-                    "SELECT instance_id FROM symbol_lease WHERE symbol = $1 AND expires_at > NOW()",
-                    symbol
-                )
-                if row and row["instance_id"] != instance_id:
-                    return None
-                await conn.execute(
-                    """
+                row = await conn.fetchrow("""
                     INSERT INTO symbol_lease (symbol, instance_id, lease_token, acquired_at, expires_at)
                     VALUES ($1, $2, $3, NOW(), NOW() + $4 * INTERVAL '1 SECOND')
-                    ON CONFLICT (symbol) DO UPDATE SET
-                        instance_id = EXCLUDED.instance_id,
-                        lease_token = EXCLUDED.lease_token,
-                        acquired_at = NOW(),
-                        expires_at = NOW() + $4 * INTERVAL '1 SECOND'
-                    """,
-                    symbol, instance_id, lease_token, ttl_seconds
-                )
-                return lease_token
+                    ON CONFLICT (symbol) DO UPDATE
+                        SET instance_id = EXCLUDED.instance_id,
+                            lease_token = EXCLUDED.lease_token,
+                            acquired_at = NOW(),
+                            expires_at = EXCLUDED.expires_at
+                        WHERE symbol_lease.expires_at < NOW()
+                           OR symbol_lease.instance_id = EXCLUDED.instance_id
+                    RETURNING lease_token, instance_id
+                """, symbol, instance_id, lease_token, ttl_seconds)
+
+                if row and row["instance_id"] == instance_id:
+                    return row["lease_token"]   # acquired, renewed own, or stole expired
+                return None                     # held by another active instance
         except Exception as e:
-            log.warning(f"acquire_lease failed: {e}")
+            log.error(f"acquire_lease failed: {e}", exc_info=True)
             return None
 
     async def release_lease(self, symbol: str, instance_id: str) -> bool:
