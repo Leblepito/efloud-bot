@@ -1498,46 +1498,48 @@ class SafeOrchestrator:
                                             "atr_ratio": float(regime_analysis.atr_ratio),
                                         } if latest is not None else None
 
-                                        # Multi-instance lease check (PR #236) - demoted to warning, fail-open for trading safety
+                                        # Multi-instance lease check (PR #236) - fail-closed for trading safety
                                         if self.instance_mgr and not self.instance_mgr.sync_acquire_symbol(symbol):
-                                            log.warning(f"Symbol {symbol} lease contended — proceeding (fail-open)")
-                                            actions.append(f"[LEASE] {symbol} contended, trade allowed")
+                                            log.error(f"Symbol {symbol} lease acquisition failed/contended — trade blocked for safety")
+                                            actions.append(f"[LEASE] {symbol} contended, trade BLOCKED")
+                                            exchange_ok = False
+                                        else:
+                                            exchange_pos = self.order_manager.open_position(
+                                                symbol, latest.direction, size,
+                                                latest.entry, latest.sl, latest.tp1, latest.tp2,
+                                                trace_id=trace_id,
+                                                atr_value=float(atr) if atr is not None else None,
+                                                confluence_details=_conf_details,
+                                            )
 
-                                        exchange_pos = self.order_manager.open_position(
-                                            symbol, latest.direction, size,
-                                            latest.entry, latest.sl, latest.tp1, latest.tp2,
-                                            trace_id=trace_id,
-                                            atr_value=float(atr) if atr is not None else None,
-                                            confluence_details=_conf_details,
-                                        )
+                                        if exchange_pos is None:
+                                            log.warning(
+                                                f"🚫 [{symbol}] Exchange order failed — "
+                                                f"local position NOT opened (no logical state mismatch)"
+                                            )
+                                            if reversed_from is not None:
+                                                # Reverse close succeeded but open failed —
+                                                # the symbol is intentionally flat. Trader
+                                                # must know they're sitting on no exposure
+                                                # so they can decide whether to retry manually.
+                                                flat_msg = (
+                                                    f"Reverse close succeeded but open failed "
+                                                    f"for {symbol} — symbol flat, awaiting next signal"
+                                                )
+                                                warnings.append(flat_msg)
+                                                if self.notification_mgr is not None:
+                                                    try:
+                                                        self.notification_mgr.alert("WARNING", flat_msg)
+                                                    except Exception:
+                                                        pass
+                                            else:
+                                                warnings.append(
+                                                    f"Order failed for {symbol}: exchange rejected"
+                                                )
+                                            exchange_ok = False
                                     except Exception as e:
                                         log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
                                         exchange_pos = None
-
-                                    if exchange_pos is None:
-                                        log.warning(
-                                            f"🚫 [{symbol}] Exchange order failed — "
-                                            f"local position NOT opened (no logical state mismatch)"
-                                        )
-                                        if reversed_from is not None:
-                                            # Reverse close succeeded but open failed —
-                                            # the symbol is intentionally flat. Trader
-                                            # must know they're sitting on no exposure
-                                            # so they can decide whether to retry manually.
-                                            flat_msg = (
-                                                f"Reverse close succeeded but open failed "
-                                                f"for {symbol} — symbol flat, awaiting next signal"
-                                            )
-                                            warnings.append(flat_msg)
-                                            if self.notification_mgr is not None:
-                                                try:
-                                                    self.notification_mgr.alert("WARNING", flat_msg)
-                                                except Exception:
-                                                    pass
-                                        else:
-                                            warnings.append(
-                                                f"Order failed for {symbol}: exchange rejected"
-                                            )
                                         exchange_ok = False
 
                                 # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──

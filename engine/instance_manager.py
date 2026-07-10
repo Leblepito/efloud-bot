@@ -69,9 +69,8 @@ class InstanceManager:
 
         # Event loop check - critical error for coordination path
         if not self._loop or self._loop.is_closed():
-            log.critical("Coordination enabled but event loop missing — disabling coordination, single-instance fallback")
-            self.coordination_enabled = False
-            return True
+            log.critical("Coordination enabled but event loop missing — block trade decision")
+            return False
 
         try:
             future = asyncio.run_coroutine_threadsafe(
@@ -79,8 +78,8 @@ class InstanceManager:
             )
             return future.result(timeout=0.5)
         except (asyncio.TimeoutError, Exception) as e:
-            log.warning(f"Lease acquire {symbol} failed ({e}) — fail-open, trading continues")
-            return True
+            log.warning(f"Lease acquire {symbol} failed ({e}) — fail-closed, trade blocked")
+            return False
 
     def sync_release_symbol(self, symbol: str) -> bool:
         if not self._loop:
