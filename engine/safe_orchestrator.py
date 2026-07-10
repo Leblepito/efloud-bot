@@ -44,6 +44,12 @@ from utils.logging import new_trace_id, set_trace_id
 log = logging.getLogger("efloud.safe_orch")
 
 
+@dataclass
+class GuardCheck:
+    allowed: bool
+    reason: str = ""
+
+
 def _sizing_balance(client, source, live_balance: float) -> float:
     """Choose which balance metric to feed into position sizing.
 
@@ -902,6 +908,35 @@ class SafeOrchestrator:
                 except Exception as e:
                     log.error(f"Error during automated regime ML training: {e}")
 
+    def _check_leblep_limits(self, balance, symbol, direction, entry, size, existing_positions):
+        """Leblep risk-ops enforcement (PR #234)."""
+        max_combined_lev = self.config.get("LEBLEP_MAX_COMBINED_LEVERAGE", 5.0)
+        max_dd_pct = self.config.get("LEBLEP_MAX_DRAWDOWN", 12.0)
+        max_instances = self.config.get("LEBLEP_MULTI_INSTANCE_LIMIT", 3)
+        risk_ops_approved = self.config.get("RISK_OPS_APPROVED", False)
+
+        if not risk_ops_approved:
+            return GuardCheck(allowed=False, reason="Leblep: RISK_OPS_APPROVED=false (requires explicit approval)")
+
+        instance_count = len(set(p.symbol for p in existing_positions if p.is_open))
+        if instance_count >= max_instances:
+            return GuardCheck(allowed=False, reason=f"Leblep: Multi-instance limit ({instance_count}/{max_instances})")
+
+        current_notional = sum(p.avg_entry_price * p.remaining_size for p in existing_positions if p.is_open)
+        new_notional = entry * size
+        total_exposure = (current_notional + new_notional) / balance if balance > 0 else 0
+
+        if total_exposure > max_combined_lev:
+            return GuardCheck(allowed=False, reason=f"Leblep: Combined leverage {total_exposure:.2f}x exceeds {max_combined_lev}x")
+
+        peak = self.breaker.peak_balance
+        curr = self.breaker.current_balance
+        current_dd_pct = ((peak - curr) / peak * 100) if peak > 0 else 0.0
+        if current_dd_pct > max_dd_pct:
+            return GuardCheck(allowed=False, reason=f"Leblep: Drawdown {current_dd_pct:.1f}% exceeds {max_dd_pct}%")
+
+        return GuardCheck(allowed=True)
+
     def run_cycle(
         self,
         symbol: str,
@@ -1320,6 +1355,21 @@ class SafeOrchestrator:
                                 )
 
                         atr = self.intent._atr(df_entry, 14)
+
+                        # ═══ Leblep Risk-Ops Enforcement (PR #234) ═══
+                        leblep_check = self._check_leblep_limits(
+                            balance=actual_balance,
+                            symbol=symbol,
+                            direction=latest.direction,
+                            entry=latest.entry,
+                            size=size,
+                            existing_positions=self.lifecycle.positions,
+                        )
+                        if not leblep_check.allowed:
+                            log.warning(f"🚫 Leblep risk-ops reject: {leblep_check.reason}")
+                            warnings.append(f"Signal rejected: {leblep_check.reason}")
+                            continue
+
                         guard_check = self.pos_guard.can_open_position(
                             balance=actual_balance,
                             entry=latest.entry, size=size, sl=latest.sl, atr=atr,
