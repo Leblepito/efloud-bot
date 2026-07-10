@@ -20,6 +20,7 @@ from typing import Any, Dict, Optional
 from .claude_client import ClaudeClient, DEFAULT_MODEL as CLAUDE_DEFAULT_MODEL
 from .gemini_client import GeminiClient, DEFAULT_MODEL as GEMINI_DEFAULT_MODEL
 from .minimax_client import MiniMaxClient, DEFAULT_MODEL as MINIMAX_DEFAULT_MODEL
+from .deepseek_client import DeepSeekClient, DEFAULT_MODEL as DEEPSEEK_DEFAULT_MODEL
 
 
 def make_llm_client(config: Optional[Dict[str, Any]] = None):
@@ -42,5 +43,7 @@ def make_llm_client(config: Optional[Dict[str, Any]] = None):
         return GeminiClient(api_key=api_key, model=model or GEMINI_DEFAULT_MODEL)
     if provider == "minimax":
         return MiniMaxClient(api_key=api_key, model=model or MINIMAX_DEFAULT_MODEL)
+    if provider == "deepseek":
+        return DeepSeekClient(api_key=api_key, model=model or DEEPSEEK_DEFAULT_MODEL)
     # default + unknown → claude
     return ClaudeClient(api_key=api_key, model=model or CLAUDE_DEFAULT_MODEL)

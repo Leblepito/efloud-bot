@@ -22,6 +22,7 @@ from backend.db import db
 from backend.events import bus
 from backend.notifications import TelegramNotifier
 from engine import SafeOrchestrator
+from engine.instance_manager import InstanceManager
 from engine.journal import TradeJournal
 from engine.notifications import NotificationManager
 from engine.content_jobs import ContentJobEmitter
@@ -320,6 +321,17 @@ class BotRunner:
             breaker_state_sink=self._mirror_breaker_to_db,  # best-effort DB mirror
         )
 
+        # Multi-instance coordination (PR #236) - lazy registration, never blocks startup
+        self.instance_mgr = InstanceManager(db, self.cfg)
+        self.instance_mgr.set_event_loop(asyncio.get_running_loop())
+
+        # Inject instance_mgr into orchestrator after creation
+        self.orch.instance_mgr = self.instance_mgr
+
+        # Start lazy registration retry in background if coordination enabled
+        if self.cfg.get("INSTANCE_COORDINATION_ENABLED", False):
+            self._start_instance_registration()
+
         # Capture the running loop so executor-thread callbacks can schedule DB writes
         self.loop = asyncio.get_running_loop()
 
@@ -456,6 +468,12 @@ class BotRunner:
                                 log.warning(f"Failed to persist audited PnL correction: {db_err}")
                         detailed_corrections.clear()
 
+                # Multi-instance heartbeat and dead instance reaping (PR #236)
+                await self.instance_mgr.heartbeat()
+                reaped = await db.reap_dead_instances()
+                if reaped > 0:
+                    log.info(f"Reaped {reaped} dead instances")
+
                 # Run scan cycle
                 await loop.run_in_executor(None, self._scan_universe)
 
@@ -579,6 +597,24 @@ class BotRunner:
             )
         except Exception as e:
             log.warning(f"_mirror_breaker_to_db schedule failed (ignored): {e}")
+
+    def _start_instance_registration(self):
+        """Lazy instance registration retry in background thread."""
+        import threading
+        import time
+
+        def _loop():
+            while not getattr(self, "_shutdown", False):
+                try:
+                    if self.instance_mgr and not self.instance_mgr._registered:
+                        if self.instance_mgr.register():
+                            log.info("Instance registration succeeded")
+                            return
+                except Exception as e:
+                    log.warning(f"Registration retry: {e}")
+                time.sleep(30)
+
+        threading.Thread(target=_loop, daemon=True).start()
 
     def _on_position_change(self, event_type: str, pos: Position) -> None:
         """Sync callback from OrderManager — bridge to async event bus + DB.

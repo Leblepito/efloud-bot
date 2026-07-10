@@ -138,6 +138,45 @@ leblep:
   risk_ops_approval_code: "$1035"   # Audit marker: risk-ops approval code (env: RISK_OPS_APPROVAL_CODE)
   risk_ops_approved: false          # Safety gate: default false, set true only where approved (env: RISK_OPS_APPROVED)
 
+leblep_enabled: false
+leblep_providers:
+  gpt55:
+    provider: claude
+    model: claude-opus-4-20250514
+    role: primary
+    weight: 2.0
+    enabled: false
+    timeout: 5.0
+  minimax:
+    provider: minimax
+    model: abab6.5s-chat
+    role: secondary
+    weight: 1.0
+    enabled: false
+    timeout: 8.0
+  deepseek:
+    provider: deepseek
+    model: deepseek-chat
+    role: secondary
+    weight: 1.0
+    enabled: false
+    timeout: 10.0
+  gemini:
+    provider: gemini
+    model: gemini-2.0-flash-exp
+    role: relay
+    weight: 0.5
+    enabled: false
+    timeout: 5.0
+
+# ── Multi-Instance Configuration (PR #236) ──
+INSTANCE_COORDINATION_ENABLED: false
+INSTANCE_ID: ""
+INSTANCE_SYMBOLS: ""
+INSTANCE_MAX_INSTANCES: 1
+INSTANCE_HEARTBEAT_TTL: 900
+INSTANCE_LEASE_TTL: 300
+
 # ── Operation ──
 operation:
   check_interval_sec: 10

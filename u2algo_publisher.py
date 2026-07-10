@@ -340,57 +340,41 @@ def make_chart_image(bot_id: str, trade: dict, is_open: bool) -> str | None:
 
 # ─── Instagram Yayınlama (MCP üzerinden) ─────────────────────────────────────
 
-def publish_to_instagram(caption: str, image_path: str | None = None) -> tuple[bool, str]:
-    """Instagram'a görsel + metin paylaşımı yap (MCP üzerinden)."""
+def publish_to_instagram(caption: str, image_path: str | None = None, bot_id: str = "unknown", symbol: str = "", direction: str = "") -> tuple[bool, str]:
+    """
+    Instagram paylaşımını /tmp/ig_pending/ klasörüne yazar.
+    Sandbox'taki zamanlanmış görev bu dosyayı okuyup MCP ile yayınlar.
+    """
     try:
-        # Önce görseli S3'e yükle
-        image_url = None
+        import base64, uuid
+        pending_dir = "/tmp/ig_pending"
+        os.makedirs(pending_dir, exist_ok=True)
+
+        # Görseli base64 olarak kodla (dosya yolu yerine)
+        image_b64 = None
         if image_path and os.path.exists(image_path):
-            upload = subprocess.run(
-                ["manus-upload-file", image_path],
-                capture_output=True, text=True, timeout=120,
-            )
-            for line in upload.stdout.splitlines():
-                if "CDN URL:" in line:
-                    image_url = line.split("CDN URL:")[-1].strip()
-                    break
+            with open(image_path, "rb") as f:
+                image_b64 = base64.b64encode(f.read()).decode()
 
-        if image_url:
-            input_data = json.dumps({
-                "type": "post",
-                "caption": caption,
-                "media": [{"type": "image", "media_url": image_url}],
-            })
-        else:
-            # Görsel yoksa sadece metin (Instagram text post desteklemiyor, placeholder kullan)
-            input_data = json.dumps({
-                "type": "post",
-                "caption": caption,
-                "media": [{"type": "image", "media_url": "https://files.manuscdn.com/user_upload_by_module/session_file/310419663026764535/fLgjgluhkCDUSMqo.png"}],
-            })
+        payload = {
+            "caption": caption,
+            "image_b64": image_b64,
+            "image_path": image_path,
+            "bot_id": bot_id,
+            "symbol": symbol,
+            "direction": direction,
+            "created_at": time.time(),
+        }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
-            f.write(input_data)
-            tmp_path = f.name
+        fname = f"{pending_dir}/{int(time.time())}_{uuid.uuid4().hex[:8]}.json"
+        with open(fname, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
 
-        result = subprocess.run(
-            ["manus-mcp-cli", "tool", "call", "create_instagram",
-             "--server", "instagram", "--input-file", tmp_path],
-            capture_output=True, text=True, timeout=90,
-        )
-        os.unlink(tmp_path)
+        logger.info("Paylaşım kuyruğa alındı: %s", fname)
+        return True, "⏳ Sandbox kuyruğuna alındı, kısa süre içinde Instagram'da yayınlanacak"
 
-        if result.returncode == 0:
-            for line in result.stdout.splitlines():
-                if "instagram.com/p/" in line:
-                    return True, f"✅ Paylaşıldı: {line.strip()}"
-            return True, "✅ Paylaşıldı"
-        else:
-            err = result.stderr[:200] or result.stdout[:200]
-            logger.error("Instagram hatası: %s", err)
-            return False, f"❌ Hata: {err[:100]}"
     except Exception as e:
-        logger.error("Instagram exception: %s", e)
+        logger.error("publish_to_instagram exception: %s", e)
         return False, f"❌ Exception: {str(e)[:100]}"
 
 # ─── Telegram Onay Gönderici ──────────────────────────────────────────────────
@@ -406,7 +390,13 @@ async def send_approval_request(
 
     # Grafik görsel oluştur
     image_path = make_chart_image(bot_id, trade, is_open)
-    _pending[callback_id] = {"text": text, "bot_id": bot_id, "image_path": image_path}
+    _pending[callback_id] = {
+        "text": text,
+        "bot_id": bot_id,
+        "image_path": image_path,
+        "symbol": trade.get("symbol", ""),
+        "direction": trade.get("direction", ""),
+    }
 
     trade_type = "Açık Pozisyon" if is_open else "Kapanmış İşlem"
     sym = trade.get("symbol", "?")
@@ -568,7 +558,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action == "approve":
         caption = pending["text"]
         image_path = pending.get("image_path")
-        ok, info = publish_to_instagram(caption, image_path)
+        bot_id_p = pending.get("bot_id", "unknown")
+        symbol_p = pending.get("symbol", "")
+        direction_p = pending.get("direction", "")
+        ok, info = publish_to_instagram(caption, image_path, bot_id_p, symbol_p, direction_p)
         result_line = f"📸 Instagram: {info}"
         await query.edit_message_text(
             text=query.message.text + f"\n\n📢 <b>Sonuç:</b>\n{result_line}",

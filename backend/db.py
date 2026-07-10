@@ -430,6 +430,116 @@ class Database:
             log.warning(f"load_breaker_state failed: {e}")
             return None
 
+    # ─────────────────────────────────────────────────────────────
+    # Multi-instance coordination (migration 015)
+    # ─────────────────────────────────────────────────────────────
+
+    async def register_instance(self, instance_id: str, symbols: list) -> bool:
+        if not self.pool:
+            return False
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO instance_registry (instance_id, symbols, status, started_at, last_heartbeat)
+                    VALUES ($1, $2, 'active', NOW(), NOW())
+                    ON CONFLICT (instance_id) DO UPDATE SET
+                        symbols = EXCLUDED.symbols,
+                        status = EXCLUDED.status,
+                        last_heartbeat = NOW()
+                    """,
+                    instance_id, ",".join(symbols)
+                )
+                return True
+        except Exception as e:
+            log.warning(f"register_instance failed: {e}")
+            return False
+
+    async def heartbeat(self, instance_id: str) -> bool:
+        if not self.pool:
+            return False
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE instance_registry SET last_heartbeat = NOW() WHERE instance_id = $1",
+                    instance_id
+                )
+                return True
+        except Exception as e:
+            log.warning(f"heartbeat failed: {e}")
+            return False
+
+    async def acquire_lease(self, symbol: str, instance_id: str, ttl_seconds: int = 300) -> Optional[str]:
+        if not self.pool:
+            return None
+        import uuid
+        lease_token = str(uuid.uuid4())
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT instance_id FROM symbol_lease WHERE symbol = $1 AND expires_at > NOW()",
+                    symbol
+                )
+                if row and row["instance_id"] != instance_id:
+                    return None
+                await conn.execute(
+                    """
+                    INSERT INTO symbol_lease (symbol, instance_id, lease_token, acquired_at, expires_at)
+                    VALUES ($1, $2, $3, NOW(), NOW() + $4 * INTERVAL '1 SECOND')
+                    ON CONFLICT (symbol) DO UPDATE SET
+                        instance_id = EXCLUDED.instance_id,
+                        lease_token = EXCLUDED.lease_token,
+                        acquired_at = NOW(),
+                        expires_at = NOW() + $4 * INTERVAL '1 SECOND'
+                    """,
+                    symbol, instance_id, lease_token, ttl_seconds
+                )
+                return lease_token
+        except Exception as e:
+            log.warning(f"acquire_lease failed: {e}")
+            return None
+
+    async def release_lease(self, symbol: str, instance_id: str) -> bool:
+        if not self.pool:
+            return False
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    "DELETE FROM symbol_lease WHERE symbol = $1 AND instance_id = $2",
+                    symbol, instance_id
+                )
+                return True
+        except Exception as e:
+            log.warning(f"release_lease failed: {e}")
+            return False
+
+    async def reap_dead_instances(self, ttl_seconds: int = 900) -> int:
+        if not self.pool:
+            return 0
+        try:
+            async with self.pool.acquire() as conn:
+                async with conn.transaction():
+                    rows = await conn.fetch(
+                        "SELECT instance_id FROM instance_registry WHERE last_heartbeat < (NOW() - make_interval(secs => $1)) AND status = 'active'",
+                        ttl_seconds
+                    )
+                    if not rows:
+                        return 0
+                    ids = [r["instance_id"] for r in rows]
+                    # Delete leases FIRST to avoid FK constraint violations
+                    await conn.execute(
+                        "DELETE FROM symbol_lease WHERE instance_id = ANY($1)", ids
+                    )
+                    # Then update instance status
+                    await conn.execute(
+                        "UPDATE instance_registry SET status = 'dead' WHERE instance_id = ANY($1)", ids
+                    )
+                    log.info(f"Reaped {len(ids)} dead instances: {ids}")
+                return len(rows)
+        except Exception as e:
+            log.error(f"reap_dead_instances failed (rolled back): {e}")
+            return 0
+
 
 def _parse_dt(value):
     """ISO-string → datetime; pass through datetime/None. Best-effort."""
