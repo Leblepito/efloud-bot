@@ -496,16 +496,15 @@ class Database:
             log.error(f"acquire_lease failed: {e}", exc_info=True)
             return None
 
-    async def release_lease(self, symbol: str, instance_id: str) -> bool:
+    async def release_lease(self, symbol: str, instance_id: str, lease_token: str) -> bool:
         if not self.pool:
             return False
         try:
             async with self.pool.acquire() as conn:
-                await conn.execute(
-                    "DELETE FROM symbol_lease WHERE symbol = $1 AND instance_id = $2",
-                    symbol, instance_id
-                )
-                return True
+                res = await conn.execute(
+                    "DELETE FROM symbol_lease WHERE symbol=$1 AND instance_id=$2 AND lease_token=$3",
+                    symbol, instance_id, lease_token)
+                return res != "DELETE 0"
         except Exception as e:
             log.warning(f"release_lease failed: {e}")
             return False

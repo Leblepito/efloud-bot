@@ -146,8 +146,7 @@ class SafeOrchestrator:
                   persist: bool = True,
                   trade_journal: Optional[TradeJournal] = None,
                   setup_state_store: Optional["SetupStateStore"] = None,
-                  breaker_state_sink: Optional[Callable[[dict], None]] = None,
-                  instance_mgr=None):
+                  breaker_state_sink: Optional[Callable[[dict], None]] = None):
         """
         permission_mgr: PermissionManager instance (opsiyonel)
         notification_mgr: NotificationManager instance (opsiyonel)
@@ -169,7 +168,6 @@ class SafeOrchestrator:
         self.notification_mgr = notification_mgr
         self.order_manager = order_manager
         self.trade_journal = trade_journal
-        self.instance_mgr = instance_mgr
         # SMC v2 SetupStateStore — None when v1 flag is active (inert default).
         # See PR #S2b + spec §4.3 for the advance/trigger/save data flow.
         self.setup_state_store = setup_state_store
@@ -824,11 +822,6 @@ class SafeOrchestrator:
                 return False
 
         self.lifecycle.close_position(opposite_pos, current_price, "REVERSE")
-
-        # Multi-instance lease release (PR #236)
-        if self.instance_mgr:
-            self.instance_mgr.sync_release_symbol(symbol)
-
         # Journal-write avoidance: when exchange_close_ran is True, the
         # OrderManager path already wrote a TradeSnapshot via its own
         # _journal_record_close (keyed on exchange_pos.order_id). The
@@ -888,11 +881,6 @@ class SafeOrchestrator:
                     return False
 
         self.lifecycle.close_position(pos, current_price, "MANUAL")
-
-        # Multi-instance lease release (PR #236)
-        if self.instance_mgr:
-            self.instance_mgr.sync_release_symbol(symbol)
-
         # When the exchange path ran, OrderManager._fallback_close already wrote a
         # close TradeSnapshot; avoid a duplicate orchestrator-side row (mirror
         # _handle_reverse).
@@ -1380,8 +1368,24 @@ class SafeOrchestrator:
                         if not leblep_check.allowed:
                             log.warning(f"🚫 Leblep risk-ops reject: {leblep_check.reason}")
                             warnings.append(f"Signal rejected: {leblep_check.reason}")
-                            actions.append(f"[RISK_OPS] Leblep reject: {leblep_check.reason}")
-                            actual_balance = balance if balance is not None else 10000.0
+                            return SafeCycleResult(
+                                symbol=symbol,
+                                timeframe=tf["entry"],
+                                current_price=current_price,
+                                htf_bias=htf_bias,
+                                can_trade=False,
+                                breaker_state=breaker_status.state.value,
+                                regime=regime_analysis.regime,
+                                stale_data=stale,
+                                warnings=warnings,
+                                levels=all_levels,
+                                stacked_zones=stacked,
+                                intent=intent_score,
+                                signals=signals,
+                                scenarios=planner.active_scenarios(),
+                                report_md="",
+                                actions_taken=actions,
+                            )
 
                         guard_check = self.pos_guard.can_open_position(
                             balance=actual_balance,
@@ -1484,8 +1488,30 @@ class SafeOrchestrator:
                                 )
 
                                 # ── 1) Borsaya gerçek emir gönder (varsa) ──
+                                # Multi-instance safety lease check (PR #236) -- fail-closed, symbol-scoped
+                                if self.instance_mgr and not self.instance_mgr.sync_acquire_symbol(symbol):
+                                    log.error(f"Symbol {symbol} lease acquisition failed/contended -- trade blocked")
+                                    actions.append(f"[LEASE] {symbol} contended, trade BLOCKED")
+                                    return SafeCycleResult(
+                                        symbol=symbol,
+                                        timeframe=tf["entry"],
+                                        current_price=current_price,
+                                        htf_bias=htf_bias,
+                                        can_trade=False,
+                                        breaker_state=breaker_status.state.value,
+                                        regime=regime_analysis.regime,
+                                        stale_data=stale,
+                                        warnings=warnings,
+                                        levels=all_levels,
+                                        stacked_zones=stacked,
+                                        intent=intent_score,
+                                        signals=signals,
+                                        scenarios=planner.active_scenarios(),
+                                        report_md="",
+                                        actions_taken=actions,
+                                    )
+
                                 exchange_ok = True
-                                exchange_pos = None
                                 if self.order_manager is not None:
                                     try:
                                         # Phase 3.2: build confluence_details for DB warehouse
@@ -1497,49 +1523,41 @@ class SafeOrchestrator:
                                             "adx": float(regime_analysis.adx),
                                             "atr_ratio": float(regime_analysis.atr_ratio),
                                         } if latest is not None else None
-
-                                        # Multi-instance lease check (PR #236) - fail-closed for trading safety
-                                        if self.instance_mgr and not self.instance_mgr.sync_acquire_symbol(symbol):
-                                            log.error(f"Symbol {symbol} lease acquisition failed/contended — trade blocked for safety")
-                                            actions.append(f"[LEASE] {symbol} contended, trade BLOCKED")
-                                            exchange_ok = False
-                                        else:
-                                            exchange_pos = self.order_manager.open_position(
-                                                symbol, latest.direction, size,
-                                                latest.entry, latest.sl, latest.tp1, latest.tp2,
-                                                trace_id=trace_id,
-                                                atr_value=float(atr) if atr is not None else None,
-                                                confluence_details=_conf_details,
-                                            )
-
-                                        if exchange_pos is None:
-                                            log.warning(
-                                                f"🚫 [{symbol}] Exchange order failed — "
-                                                f"local position NOT opened (no logical state mismatch)"
-                                            )
-                                            if reversed_from is not None:
-                                                # Reverse close succeeded but open failed —
-                                                # the symbol is intentionally flat. Trader
-                                                # must know they're sitting on no exposure
-                                                # so they can decide whether to retry manually.
-                                                flat_msg = (
-                                                    f"Reverse close succeeded but open failed "
-                                                    f"for {symbol} — symbol flat, awaiting next signal"
-                                                )
-                                                warnings.append(flat_msg)
-                                                if self.notification_mgr is not None:
-                                                    try:
-                                                        self.notification_mgr.alert("WARNING", flat_msg)
-                                                    except Exception:
-                                                        pass
-                                            else:
-                                                warnings.append(
-                                                    f"Order failed for {symbol}: exchange rejected"
-                                                )
-                                            exchange_ok = False
+                                        exchange_pos = self.order_manager.open_position(
+                                            symbol, latest.direction, size,
+                                            latest.entry, latest.sl, latest.tp1, latest.tp2,
+                                            trace_id=trace_id,
+                                            atr_value=float(atr) if atr is not None else None,
+                                            confluence_details=_conf_details,
+                                        )
                                     except Exception as e:
                                         log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
                                         exchange_pos = None
+
+                                    if exchange_pos is None:
+                                        log.warning(
+                                            f"🚫 [{symbol}] Exchange order failed — "
+                                            f"local position NOT opened (no logical state mismatch)"
+                                        )
+                                        if reversed_from is not None:
+                                            # Reverse close succeeded but open failed —
+                                            # the symbol is intentionally flat. Trader
+                                            # must know they're sitting on no exposure
+                                            # so they can decide whether to retry manually.
+                                            flat_msg = (
+                                                f"Reverse close succeeded but open failed "
+                                                f"for {symbol} — symbol flat, awaiting next signal"
+                                            )
+                                            warnings.append(flat_msg)
+                                            if self.notification_mgr is not None:
+                                                try:
+                                                    self.notification_mgr.alert("WARNING", flat_msg)
+                                                except Exception:
+                                                    pass
+                                        else:
+                                            warnings.append(
+                                                f"Order failed for {symbol}: exchange rejected"
+                                            )
                                         exchange_ok = False
 
                                 # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──

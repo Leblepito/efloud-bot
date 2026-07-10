@@ -3,6 +3,8 @@ import os
 import uuid
 import asyncio
 import re
+import json
+import time
 from typing import Optional
 
 log = logging.getLogger("efloud.instance")
@@ -31,11 +33,29 @@ class InstanceManager:
         if not 1 <= self.max_instances <= 10:
             raise ValueError("INSTANCE_MAX_INSTANCES must be 1-10")
 
+        # Timeout configuration (standardized, not magic numbers)
+        self.acquire_timeout_sec = float(config.get("INSTANCE_ACQUIRE_TIMEOUT_SEC", 1.5))
+        self.release_timeout_sec = float(config.get("INSTANCE_RELEASE_TIMEOUT_SEC", 3.0))
+        self.lease_duration_sec = int(config.get("INSTANCE_LEASE_DURATION_SEC", 30))
+
         self._registered = False
         self._loop = None
+        self._active_leases = {}  # symbol -> lease_token tracking (HIGH-3/HIGH-5)
 
     def set_event_loop(self, loop):
         self._loop = loop
+
+    def _alert(self, event: str, detail: str) -> None:
+        """Structured alert sink. `ALERT` prefix + JSON for log-based monitoring."""
+        log.critical(f"ALERT event={event} detail={detail}")
+        try:
+            with open("state/alerts.jsonl", "a") as f:
+                f.write(json.dumps({
+                    "ts": time.time(), "event": event,
+                    "instance_id": self.instance_id, "detail": detail,
+                }) + "\n")
+        except Exception:
+            pass  # never let alerting crash the trade path
 
     def register(self) -> bool:
         if self._registered:
@@ -67,30 +87,45 @@ class InstanceManager:
         if not self.coordination_enabled:
             return True
 
-        # Event loop check - critical error for coordination path
+        # Event loop check - critical error for coordination path (BLOCK-1)
         if not self._loop or self._loop.is_closed():
-            log.critical("Coordination enabled but event loop missing — block trade decision")
+            self._alert("coord_event_loop_missing",
+                       f"coordination enabled but loop missing — blocking {symbol}")
             return False
 
         try:
             future = asyncio.run_coroutine_threadsafe(
                 self.acquire_symbol(symbol), self._loop
             )
-            return future.result(timeout=0.5)
-        except (asyncio.TimeoutError, Exception) as e:
-            log.warning(f"Lease acquire {symbol} failed ({e}) — fail-closed, trade blocked")
+            lease_token = future.result(timeout=self.acquire_timeout_sec)
+            if lease_token is not None:
+                self._active_leases[symbol] = lease_token   # track token (Fix HIGH-3/5)
+                return True
+            return False   # legit contention — another instance holds it
+        except asyncio.TimeoutError:
+            self._alert("coord_db_timeout", f"lease acquire {symbol} timed out — blocking")
+            return False
+        except Exception as e:
+            self._alert("coord_db_error", f"lease acquire {symbol} failed ({e}) — blocking")
             return False
 
     def sync_release_symbol(self, symbol: str) -> bool:
+        if not self.coordination_enabled:
+            return True
         if not self._loop:
             return True
+        token = self._active_leases.get(symbol)
+        if token is None:
+            return True   # nothing to release
         try:
             future = asyncio.run_coroutine_threadsafe(
-                self.release_symbol(symbol), self._loop
+                self.db.release_lease(symbol, self.instance_id, token), self._loop
             )
-            return future.result(timeout=5)
+            ok = future.result(timeout=self.release_timeout_sec)
+            self._active_leases.pop(symbol, None)
+            return ok
         except Exception as e:
-            log.warning(f"Lease release failed: {e}")
+            log.warning(f"Release lease {symbol} failed: {e}")
             return False
 
     def _sync_register_instance(self) -> bool:
