@@ -122,6 +122,22 @@ risk:
   max_loss_per_trade_usdt: 10        # reverse_from_risk modu için: trade başı max kayıp USDT
   target_stop_distance_pct: 5         # reverse_from_risk modu için: hedef stop mesafesi (%)
 
+# ── Bot V2 + Leblep Risk-Ops Configuration (PR #233) ──
+# Bot V2 parallel long-bot (1h/8h/1w) + Leblep multi-LLM orchestrator
+bot_v2:
+  enabled: false                    # V2 bot aktif mi? (env: BOT_V2_ENABLED)
+  profile: long                     # V2 profile: long (1h/8h/1w) vs mid vs scalp
+
+# ── Leblep Risk-Ops Limits (risk-ops APPROVED $1035) ──
+# These limits are enforced at order-intercept in bot_runner.py (PR #234)
+# Config-only in this PR, enforcement wiring follows
+leblep:
+  max_combined_leverage: 5.0        # Max toplam leverage (env: LEBLEP_MAX_COMBINED_LEVERAGE)
+  max_drawdown_pct: 12.0            # Max drawdown % (env: LEBLEP_MAX_DRAWDOWN)
+  multi_instance_limit: 3           # Max concurrent bot instances (env: LEBLEP_MULTI_INSTANCE_LIMIT)
+  risk_ops_approval_code: "$1035"   # Audit marker: risk-ops approval code (env: RISK_OPS_APPROVAL_CODE)
+  risk_ops_approved: false          # Safety gate: default false, set true only where approved (env: RISK_OPS_APPROVED)
+
 # ── Operation ──
 operation:
   check_interval_sec: 10
