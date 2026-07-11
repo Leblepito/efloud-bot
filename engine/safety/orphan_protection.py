@@ -206,7 +206,9 @@ class OrphanProtector:
                 "STOP_MARKET",
                 close_side,
                 None,
-                params={"stopPrice": sl_price, "closePosition": True, "reduceOnly": True},
+                # F15 (2026-07-11): closePosition=True ile reduceOnly birlikte
+                # Binance -1106 verir — closePosition zaten reduce-only semantiği taşır.
+                params={"stopPrice": sl_price, "closePosition": True},
             )
             log.info(
                 "orphan_protection placed close-position SL",

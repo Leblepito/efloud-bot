@@ -741,7 +741,7 @@ class OrderManager:
         3. The order ID is empty (never successfully placed)
         4. tp2 is not None (for TP2 repair; single-target has no TP2)
         """
-        for pos in self.positions:
+        for pos in self.positions[:]:  # F4: _fallback_close listeyi mutasyona uğratır
             ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
             reverse_side = "sell" if pos.direction == "LONG" else "buy"
             is_single_target = pos.tp2 is None
@@ -825,8 +825,23 @@ class OrderManager:
                     price_display=pos.sl,
                     tp1_order_id=pos.tp1_order_id or "",
                 )
-                if new_sl_oid:
+                if self._is_real_oid(new_sl_oid):
                     pos.sl_order_id = new_sl_oid
+                elif new_sl_oid == _TP_UNREACHABLE_SENTINEL:
+                    # F4 (2026-07-11 spec): SL repair'de -2021 = fiyat SL'nin zarar
+                    # tarafında; pozisyon korumasız VE stop seviyesi aşılmış durumda.
+                    # Sentineli saklamak repair'i kalıcı susturuyordu. Stop fiilen
+                    # gerçekleşti → pozisyonu market-close et (fail-closed).
+                    log.critical(
+                        "order_manager.sl_repair_unreachable_closing: %s %s — price "
+                        "already beyond SL; closing position at market (fail-closed)",
+                        pos.symbol, pos.direction,
+                        extra={"event": "order_manager.sl_repair_unreachable_closing",
+                               "symbol": pos.symbol, "direction": pos.direction},
+                    )
+                    pos.sl_order_id = ""
+                    self._fallback_close(pos, pos.sl, "SL_REPAIR_UNREACHABLE")
+                    continue
 
             # Repair TP1 if missing and not yet hit
             if not pos.tp1_order_id and not pos.tp1_hit:
@@ -1084,14 +1099,20 @@ class OrderManager:
                 log.warning(f"Failed to format entry/SL/TP prices using exchange precision for {symbol}: {e}")
 
             try:
-                # 2) Round sizes
-                res1 = self.client.exchange.amount_to_precision(ccxt_sym, tp1_size)
-                if isinstance(res1, str):
-                    tp1_size = float(res1)
-                if not is_single_target:
-                    res2 = self.client.exchange.amount_to_precision(ccxt_sym, tp2_size)
-                    if isinstance(res2, str):
-                        tp2_size = float(res2)
+                # 2) Round sizes — F7 (2026-07-11 spec): önce TOPLAM boyutu step'e
+                # yuvarla (entry emri de bu boyutla gider), sonra TP1 = round(size/2),
+                # TP2 = size - TP1 (kalan; step-hizalı). Eski sıra iki yarımı bağımsız
+                # truncate ediyordu → step-uyumsuz boyutlarda hiçbir TP'nin
+                # kapatmadığı dust kalıntısı ve hiç tam kapanmayan pozisyon.
+                res_total = self.client.exchange.amount_to_precision(ccxt_sym, size)
+                if isinstance(res_total, str):
+                    size = float(res_total)
+                if is_single_target:
+                    tp1_size = size
+                else:
+                    res1 = self.client.exchange.amount_to_precision(ccxt_sym, size / 2)
+                    tp1_size = float(res1) if isinstance(res1, str) else size / 2
+                    tp2_size = size - tp1_size
             except Exception as e:
                 log.warning(f"Failed to format TP sizes using exchange precision for {symbol}: {e}")
 
@@ -1651,9 +1672,24 @@ class OrderManager:
         # Always update logical SL (lifecycle state stays consistent)
         pos.sl = pos.entry
 
-        if new_sl_oid:
+        if self._is_real_oid(new_sl_oid):
             pos.sl_order_id = new_sl_oid
             log.info(f"  ↳ New SL @ break-even {pos.entry:.4f} | order_id={pos.sl_order_id}")
+        elif new_sl_oid == _TP_UNREACHABLE_SENTINEL:
+            # F3 (2026-07-11 spec): -2021 = fiyat ZATEN break-even'ın zarar tarafında.
+            # Sentineli order id gibi saklamak repair'i kalıcı susturuyordu → kalan
+            # yarım pozisyon stopsuz kalıyordu. Stop koşulu fiilen gerçekleşti:
+            # fail-closed → kalanı market-close et.
+            log.critical(
+                "order_manager.be_sl_unreachable_closing: %s %s — price already "
+                "beyond break-even; closing remainder at market (fail-closed)",
+                pos.symbol, pos.direction,
+                extra={"event": "order_manager.be_sl_unreachable_closing",
+                       "symbol": pos.symbol, "direction": pos.direction},
+            )
+            pos.sl_order_id = ""
+            self._fallback_close(pos, pos.entry, "SL_BE_UNREACHABLE")
+            return
         else:
             # All retries exhausted — clear order_id so reconcile repairs
             pos.sl_order_id = ""
@@ -2112,11 +2148,25 @@ class OrderManager:
                 log.warning(f"Polling TP2 hit detected for {pos.symbol} (server-side missed?)")
                 self._fallback_close(pos, price, "TP2_POLL")
 
-    def _fallback_close(self, pos: Position, price: float, reason: str):
-        """Polling fallback: market close + cancel pending TP/SL orders."""
+    def _fallback_close(self, pos: Position, price: float, reason: str) -> bool:
+        """Polling fallback: market close + cancel pending TP/SL orders.
+
+        F5 (2026-07-11 spec): close emri BAŞARISIZSA abort — siblings iptal
+        edilmez, tracking düşürülmez (aksi hâlde pozisyon hem korumasız hem
+        izlenmez kalıyordu). False döner; çağıran retry/alarm kararını verir.
+        F6: TP1 sonrası kalan gerçek miktar gönderilir — full pos.size
+        reduceOnly'de Binance -2022 ile reddedilir (yarısı zaten kapalı).
+        """
         if not self.dry_run:
             close_side = "sell" if pos.direction == "LONG" else "buy"
             ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
+            close_amount = pos.size / 2 if pos.tp1_hit else pos.size
+            try:
+                res = self.client.exchange.amount_to_precision(ccxt_sym, close_amount)
+                if isinstance(res, str):
+                    close_amount = float(res)
+            except Exception:
+                pass
             try:
                 close_params = {}
                 if self.hedge_mode:
@@ -2124,10 +2174,18 @@ class OrderManager:
                 else:
                     close_params["reduceOnly"] = True
                 self.client.exchange.create_order(
-                    ccxt_sym, "market", close_side, pos.size,
+                    ccxt_sym, "market", close_side, close_amount,
                     params=close_params)
             except Exception as e:
-                log.error(f"Fallback close failed: {e}")
+                log.critical(
+                    "order_manager.fallback_close_failed: %s %s reason=%s error=%s "
+                    "— aborting cleanup; SL/TP siblings and tracking PRESERVED",
+                    pos.symbol, pos.direction, reason, e,
+                    extra={"event": "order_manager.fallback_close_failed",
+                           "symbol": pos.symbol, "direction": pos.direction,
+                           "reason": reason},
+                )
+                return False
 
             # Pending order cleanup — DRY via shared helper
             self._cancel_position_siblings(pos, ccxt_sym, reason=f"FALLBACK_{reason}")
@@ -2135,6 +2193,7 @@ class OrderManager:
         self._record_close(pos, price, reason)
         self.positions.remove(pos)
         self._persist()
+        return True
 
     def close_position(self, pos: Position, reason: str = "manual") -> bool:
         """Close a single tracked position at market with orphan cleanup.
@@ -2148,8 +2207,7 @@ class OrderManager:
             price = self.client.get_price(pos.symbol)
         except Exception:
             price = pos.entry  # fallback for PnL record
-        self._fallback_close(pos, price, reason)
-        return True
+        return self._fallback_close(pos, price, reason)
 
     def close_orphan(self, symbol: str, direction: str) -> dict:
         """Close an untracked orphan position at market (reduceOnly + sibling cleanup).
@@ -2188,10 +2246,13 @@ class OrderManager:
 
             close_side = "sell" if direction == "LONG" else "buy"
             ccxt_sym = self.client.to_ccxt_symbol(match.get("symbol", ""))
-            close_params = {"reduceOnly": True}
-
+            # F15 (2026-07-11): reduceOnly + positionSide birlikte -1106 verir —
+            # repo genelindeki XOR pattern'i uygula.
+            close_params = {}
             if self.hedge_mode:
                 close_params["positionSide"] = direction
+            else:
+                close_params["reduceOnly"] = True
 
             # Sibling cleanup: aynı sembol için karşı taraftaki küçük pozisyonları iptal et
             self._cancel_position_siblings_by_direction(symbol, direction)
