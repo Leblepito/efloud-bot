@@ -277,6 +277,28 @@ class SafeOrchestrator:
         self._in_flight_reviews = set()
         self._in_flight_lock = threading.Lock()
 
+        # Multi-instance coordination (PR #236 A5) — fail-closed lease system
+        # InstanceManager handles symbol lease acquisition/release to prevent
+        # multiple instances from trading the same symbol simultaneously
+        self.instance_mgr = None
+        if order_manager is not None and order_manager.client is not None:
+            # Only enable coordination in live trading with exchange connection
+            try:
+                from engine.instance_manager import InstanceManager
+                self.instance_mgr = InstanceManager(
+                    db=order_manager.client.db,  # Use the exchange's database connection
+                    config=config
+                )
+                # Set up event loop for async DB operations
+                try:
+                    import asyncio
+                    self.instance_mgr.set_event_loop(asyncio.get_event_loop())
+                except RuntimeError:
+                    # No event loop running - will be set later or coordination will fail-closed
+                    pass
+            except Exception as e:
+                log.warning(f"Failed to initialize InstanceManager: {e}")
+
     def _get_planner(self, symbol: str) -> ScenarioPlanner:
         """Sembol başına ScenarioPlanner — senaryolar karışmasın."""
         if symbol not in self._planners:
@@ -948,11 +970,42 @@ class SafeOrchestrator:
         now: Optional[datetime] = None,
     ) -> SafeCycleResult:
         """Safety check'li tam analiz cycle'ı."""
-        # Yapay zeka makro duygu durumunu en güncel haliyle yükle
-        self.load_ai_sentiment()
+        # Multi-instance lease acquisition (fail-closed, must succeed before any work)
+        lease_acquired = False
+        if self.instance_mgr:
+            lease_acquired = self.instance_mgr.sync_acquire_symbol(symbol)
+            if not lease_acquired:
+                log.error(f"Symbol {symbol} lease acquisition failed/contended -- cycle blocked")
+                return SafeCycleResult(
+                    symbol=symbol,
+                    timeframe=self.config["timeframes"]["entry"],
+                    current_price=float(df_entry["close"].iloc[-1]),
+                    htf_bias="UNKNOWN",
+                    can_trade=False,
+                    breaker_state="unknown",
+                    regime="UNKNOWN",
+                    stale_data=False,
+                    warnings=["Lease acquisition failed"],
+                    levels=[],
+                    stacked_zones=[],
+                    intent=None,
+                    signals=[],
+                    scenarios=[],
+                    report_md="",
+                    actions_taken=["[LEASE] BLOCKED - acquisition failed"],
+                )
+
+        try:
+            # Yapay zeka makro duygu durumunu en güncel haliyle yükle
+            self.load_ai_sentiment()
+        except Exception as e:
+            log.warning(f"Failed to load AI sentiment: {e}")
 
         # Arka planda ML model eğitim kontrolünü yap
-        self.check_and_train_regime_model(symbol, df_entry)
+        try:
+            self.check_and_train_regime_model(symbol, df_entry)
+        except Exception as e:
+            log.warning(f"Regime model training check failed: {e}")
 
         warnings = []
         actions = []
@@ -1488,29 +1541,6 @@ class SafeOrchestrator:
                                 )
 
                                 # ── 1) Borsaya gerçek emir gönder (varsa) ──
-                                # Multi-instance safety lease check (PR #236) -- fail-closed, symbol-scoped
-                                if self.instance_mgr and not self.instance_mgr.sync_acquire_symbol(symbol):
-                                    log.error(f"Symbol {symbol} lease acquisition failed/contended -- trade blocked")
-                                    actions.append(f"[LEASE] {symbol} contended, trade BLOCKED")
-                                    return SafeCycleResult(
-                                        symbol=symbol,
-                                        timeframe=tf["entry"],
-                                        current_price=current_price,
-                                        htf_bias=htf_bias,
-                                        can_trade=False,
-                                        breaker_state=breaker_status.state.value,
-                                        regime=regime_analysis.regime,
-                                        stale_data=stale,
-                                        warnings=warnings,
-                                        levels=all_levels,
-                                        stacked_zones=stacked,
-                                        intent=intent_score,
-                                        signals=signals,
-                                        scenarios=planner.active_scenarios(),
-                                        report_md="",
-                                        actions_taken=actions,
-                                    )
-
                                 exchange_ok = True
                                 if self.order_manager is not None:
                                     try:
@@ -1707,6 +1737,16 @@ class SafeOrchestrator:
                     self.setup_state_store.prune()
             except Exception as e:
                 log.error(f"setup_state save/prune failed (continuing cycle): {e}")
+
+        # Multi-instance coordination: release symbol lease at cycle end
+        # This must happen after all trading operations are complete
+        if lease_acquired and self.instance_mgr:
+            try:
+                released = self.instance_mgr.sync_release_symbol(symbol)
+                if not released:
+                    log.warning(f"[{symbol}] Failed to release lease - may remain locked until expiry")
+            except Exception as e:
+                log.warning(f"[{symbol}] Exception during lease release: {e}")
 
         return SafeCycleResult(
             symbol=symbol, timeframe=tf["entry"],

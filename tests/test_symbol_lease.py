@@ -73,21 +73,21 @@ class TestSymbolLease:
         token2 = await db.acquire_lease("BTCUSDT", "instance-2", ttl_seconds=60)
         assert token2 is not None  # Successfully stole expired lease
 
-        await db.release_lease("BTCUSDT", "instance-2")
+        await db.release_lease("BTCUSDT", "instance-2", token2)
 
     async def test_release_lease_success(self):
         """Lease release should succeed and allow new acquisition."""
         token1 = await db.acquire_lease("BTCUSDT", "instance-1", ttl_seconds=60)
         assert token1 is not None
 
-        success = await db.release_lease("BTCUSDT", "instance-1")
+        success = await db.release_lease("BTCUSDT", "instance-1", token1)
         assert success is True
 
         # Now instance-2 should acquire
         token2 = await db.acquire_lease("BTCUSDT", "instance-2", ttl_seconds=60)
         assert token2 is not None
 
-        await db.release_lease("BTCUSDT", "instance-2")
+        await db.release_lease("BTCUSDT", "instance-2", token2)
 
     async def test_concurrent_lease_acquisition_race_condition(self):
         """Test that concurrent acquisitions are properly serialized."""
@@ -95,7 +95,7 @@ class TestSymbolLease:
             token = await db.acquire_lease("BTCUSDT", instance_id, ttl_seconds=10)
             if token:
                 await asyncio.sleep(0.5)  # Hold briefly
-                await db.release_lease("BTCUSDT", instance_id)
+                await db.release_lease("BTCUSDT", instance_id, token)
             return token
 
         # Launch concurrent acquisitions

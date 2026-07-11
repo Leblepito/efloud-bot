@@ -72,12 +72,14 @@ class InstanceManager:
     async def heartbeat(self) -> bool:
         return await self.db.heartbeat(self.instance_id)
 
-    async def acquire_symbol(self, symbol: str) -> bool:
-        token = await self.db.acquire_lease(symbol, self.instance_id)
+    async def acquire_symbol(self, symbol: str):
+        token = await self.db.acquire_lease(
+            symbol, self.instance_id, self.lease_duration_sec
+        )
         if token:
-            return True
+            return token
         log.warning(f"Lease denied for {symbol} - held by another instance")
-        return False
+        return None
 
     async def release_symbol(self, symbol: str) -> bool:
         return await self.db.release_symbol(symbol, self.instance_id)

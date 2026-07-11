@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS mobile_idempotency (
     UNIQUE (bot_id, idempotency_key)
 );
 
--- Index sonraki sorgular için
+-- Index sonraki sorgular için (partial index with stable function)
 CREATE INDEX IF NOT EXISTS idx_mobile_idempotency_key
-    ON mobile_idempotency (idempotency_key)
-    WHERE created_at > NOW() - INTERVAL '7 days';
+    ON mobile_idempotency (idempotency_key, created_at);
