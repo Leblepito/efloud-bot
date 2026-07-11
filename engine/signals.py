@@ -101,11 +101,19 @@ def _collect_smc_blocks(
     htf: dict,
     e_range,  # RangeInfo
     levels: Optional[List] = None,
+    mtf: Optional[dict] = None,
 ) -> List[tuple]:
     """Kâr yönündeki TÜM SMC bloklarını topla, mesafeye göre sırala.
 
     Kaynak önceliği (tie-break):
       LIQUIDITY (EQH/EQL, swing) > OB > FVG > RANGE_EXTREME > LEVEL
+
+    v3.2 (spec 2026-07-11): iki yeni kaynak —
+      RANGE_EQ  : entry-TF range EQ (0.50), entry kâr yönünün doğru
+                  tarafındaysa. Range içi trade'de 0.50 birincil magnet.
+      LIQ_MTF   : MTF swing + equal-level likiditesi (`mtf` dict'i verilirse).
+                  HTF-only havuzun entry'den çok uzak kalmasını köprüler.
+    mtf=None → eski davranış (geriye dönük uyumlu).
 
     Returns:
         [(price, source_tag), ...] — mesafeye göre artan (entry'ye en yakın önce).
@@ -122,6 +130,17 @@ def _collect_smc_blocks(
         for eq in htf.get("eq_highs", []):
             if eq["price"] > entry_price:
                 blocks.append((eq["price"], "LIQ_EQH"))
+        # ── MTF liquidity (v3.2) ──
+        if mtf:
+            for s in mtf.get("swing_highs", []):
+                if s.price > entry_price:
+                    blocks.append((s.price, "LIQ_MTF"))
+            for eq in mtf.get("eq_highs", []):
+                if eq["price"] > entry_price:
+                    blocks.append((eq["price"], "LIQ_MTF_EQ"))
+        # ── Range EQ 0.50 (v3.2): entry discount tarafındaysa EQ kâr yönünde ──
+        if e_range and entry_price < e_range.eq:
+            blocks.append((e_range.eq, "RANGE_EQ"))
         # ── Order Blocks: BULL OB top edge ──
         for ob in htf.get("active_obs", []):
             if ob.direction == "BULL" and ob.top > entry_price:
@@ -147,6 +166,17 @@ def _collect_smc_blocks(
         for eq in htf.get("eq_lows", []):
             if eq["price"] < entry_price:
                 blocks.append((eq["price"], "LIQ_EQL"))
+        # ── MTF liquidity (v3.2) ──
+        if mtf:
+            for s in mtf.get("swing_lows", []):
+                if s.price < entry_price:
+                    blocks.append((s.price, "LIQ_MTF"))
+            for eq in mtf.get("eq_lows", []):
+                if eq["price"] < entry_price:
+                    blocks.append((eq["price"], "LIQ_MTF_EQ"))
+        # ── Range EQ 0.50 (v3.2): entry premium tarafındaysa EQ kâr yönünde ──
+        if e_range and entry_price > e_range.eq:
+            blocks.append((e_range.eq, "RANGE_EQ"))
         for ob in htf.get("active_obs", []):
             if ob.direction == "BEAR" and ob.bot < entry_price:
                 blocks.append((ob.bot, "OB"))
@@ -513,6 +543,18 @@ def generate_signals(
     mtf_brks = engine.structure(df_mtf, mtf_sh, mtf_sl)
     mtf_chochs = [b for b in mtf_brks if b.kind == "CHoCH"]
 
+    # v3.2 (spec 2026-07-11): MTF likidite havuzu — sadece SMC TP targeting
+    # açıkken kurulur (loop-invariant, bir kez). Zaten hesaplanmış MTF
+    # swing'lerini kullanır; full analyze() maliyeti YOK.
+    mtf_liq: Optional[dict] = None
+    if smc_tp_targeting:
+        mtf_liq = {
+            "swing_highs": mtf_sh,
+            "swing_lows": mtf_sl,
+            "eq_highs": engine.equal_levels(mtf_sh),
+            "eq_lows": engine.equal_levels(mtf_sl),
+        }
+
     # ── Entry TF analiz ──
     e_sh, e_sl = engine.swings(df_entry)
     e_brks = engine.structure(df_entry, e_sh, e_sl)
@@ -878,7 +920,8 @@ def generate_signals(
         _tp1_source = "LEGACY"
         _tp2_source = "LEGACY"
         if smc_tp_targeting:
-            smc_blocks = _collect_smc_blocks(is_long, price, htf, e_range, levels)
+            smc_blocks = _collect_smc_blocks(is_long, price, htf, e_range, levels,
+                                             mtf=mtf_liq)
             tp1, tp2, _tp1_source, _tp2_source = _select_tp_from_smc_blocks(
                 smc_blocks, price, risk,
                 min_rr_tp1=min_rr_tp1,

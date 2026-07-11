@@ -107,6 +107,10 @@ risk:
   risk_per_trade_pct: 2.0         # 20 coin için düşürüldü (risk dağılımı) (Optimized from 0.75)
   max_open_positions: 20             # Aynı anda max 20 pozisyon (hedge mode için)
   min_rr: 1.5                       # R:R 1:1.5 minimum — TP1 mantığı düzeltildi (signals.py) (Optimized from 1.8)
+  # ── v3.2 Entry-anchored SMC TP targeting (spec 2026-07-11) ──
+  smc_tp_targeting: true            # TP1/TP2 gerçek SMC bloklarında (MTF+range EQ dahil)
+  min_rr_tp1: 0.5                   # TP1 min mesafe (R) — ilk yapısal blok
+  blended_rr_target: 1.5            # 0.5×TP1_R + 0.5×TP2_R >= 1.5
   min_confluence: 55                # 55'te: HTF+MTF+OB+OTE gibi 4 konsept bir arada = ~65 puan
                                     # Tek başına HTF+MTF (45 puan) yetmez — multi-concept zorunlu
   recency_bars: 40                   # Sinyal tazelik penceresi (son N bar'daki CHoCH'ları değerlendirir)
