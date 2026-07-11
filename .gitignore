@@ -96,3 +96,7 @@ graphify-out/
 
 .env.supabase
 node_modules
+
+# F17 (2026-07-11): production secrets asla repo'ya girmemeli
+.env.production
+.env.*.local

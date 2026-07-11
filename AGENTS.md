@@ -73,4 +73,6 @@ When the user asks to plan a multi-step change, use the
 `writing-plans` skill. When the user asks "what Claude Code
 automations should I add?", use `claude-automation-recommender`.
 
+## Dev-Contract
 
+Her kod değişikliği Karpathy prensiplerine uyar: `docs/dev/karpathy-guidelines.md` (+ CLAUDE.md 'Geliştirme Sözleşmesi' eşlemesi).

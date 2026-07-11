@@ -30,6 +30,8 @@ TradingView Pine Script v6'ya çevirmek — hem INDIKATÖR hem de STRATEGY (back
 
 ## Geliştirme Sözleşmesi — Karpathy Prensipleri (efloud-bot'a uyarlanmış)
 
+> Ham prensip metni repo içinde: `docs/dev/karpathy-guidelines.md` (2026-07-11'de absorbe edildi — plugin kurulu olmayan ortamlarda da geçerli).
+
 Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensibe uyar. Prensipler efloud-bot'un mevcut sert kurallarını **güçlendirir**, değiştirmez. (Kaynak: Andrej Karpathy LLM-coding pitfalls; `andrej-karpathy-skills` plugin.)
 
 1. **Think Before Coding ↔ risk-ops + operatör sign-off** — Mainnet trade mantığına (`engine/safety/`, `engine/risk/`, `engine/lifecycle.py`, `exchange/`, `config` `safety:`/`risk:` blokları) dokunan değişiklik ÖNCE varsayımları + risk trade-off'larını açıkça yazar; birden fazla yorum varsa sessizce seçme — operatöre sun; mainnet'e gitmeden risk-ops review + operatör onayı zorunlu.
@@ -51,7 +53,7 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
 - **HTF Bias Fallback (HTF UNDEF)**: 4h `analyze().trend` UNDEF ise sırayla: (1) son 40 4h-bar slope; |Δ| > %2 → BULL/BEAR (signals.py:308-317). (2) slope nötr (|Δ| ≤ %2) ise **Entry-TF (15m) range** discount/premium'undan türetilir: discount→BULL, premium→BEAR (signals.py:318-322 `range_info(df_entry)`). Bu, 15m bir "range play" senaryosudur ve dokümante edilen HTF(4h)→Entry(15m) yetki zincirini bu özel durumda kasıtlı olarak tersine çevirir. (3) Ne slope ne aktif range varsa → sinyal yok (skip, signals.py:323-325). df_htf < 40 bar → skip (signals.py:326-328).
 - **Swing Lookback**: 5 (Sol ve sağda 5 daha düşük high / daha yüksek low).
 - **Order Blocks (OB)**: 5 ardışık mum (`ob_sequential: 5`). Breakout mumunun gövdesi (body) > 1.5 * SMA(high-low, 14) olmalı (true-range ATR DEĞİL; bkz. PINE_SPEC §A.3 / smc.py:195).
-- **Confluence Threshold**: Minimum 55.
+- **Confluence Threshold**: Minimum 55 (kök config; CANLI prod config `configs/config.phase2_1k.yaml` = 50, operatör kararı 2026-06).
 - **Stop Loss (SL)**: Breakout öncesi son 20 mumun en düşük/en yüksek seviyesi + ATR(14, true-range) * 0.5 (veya yüksek volatilitede * 0.75) buffer (true-range; bkz. PINE_SPEC §A.4 / signals.py:518-522). Minimum 0.1% mesafe clamp'i.
 - **Take Profit (TP)**: 
   - TP1: Yakın HTF likidite swing'leri / Equal Highs-Lows. Range deviation varsa Range EQ. Price discovery durumunda (yapı yoksa) 1.272 Fibo. Min R:R: 1.5.
