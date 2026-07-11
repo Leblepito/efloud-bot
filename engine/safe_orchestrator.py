@@ -13,6 +13,7 @@ Safe Orchestrator v2.1 — Güvenlik Katmanları Entegre
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional, TYPE_CHECKING
@@ -799,9 +800,16 @@ class SafeOrchestrator:
             )
             if exchange_pos is not None:
                 try:
-                    self.order_manager._fallback_close(
+                    _ok = self.order_manager._fallback_close(
                         exchange_pos, current_price, "REVERSE"
                     )
+                    if _ok is False:
+                        # F5 (2026-07-11): fallback_close artık exception yerine False
+                        # dönüyor — mevcut fail-closed except dalını yeniden kullan.
+                        raise RuntimeError(
+                            "fallback close order failed "
+                            "(order_manager.fallback_close_failed)"
+                        )
                     exchange_close_ran = True
                 except Exception as e:
                     log.error(
@@ -881,9 +889,16 @@ class SafeOrchestrator:
             )
             if exchange_pos is not None:
                 try:
-                    self.order_manager._fallback_close(
+                    _ok = self.order_manager._fallback_close(
                         exchange_pos, current_price, "MAX_HOLD"
                     )
+                    if _ok is False:
+                        # F5 (2026-07-11): fallback_close artık exception yerine False
+                        # dönüyor — mevcut fail-closed except dalını yeniden kullan.
+                        raise RuntimeError(
+                            "fallback close order failed "
+                            "(order_manager.fallback_close_failed)"
+                        )
                     exchange_close_ran = True
                 except Exception as e:
                     log.error(
@@ -931,11 +946,40 @@ class SafeOrchestrator:
                     log.error(f"Error during automated regime ML training: {e}")
 
     def _check_leblep_limits(self, balance, symbol, direction, entry, size, existing_positions):
-        """Leblep risk-ops enforcement (PR #234)."""
-        max_combined_lev = self.config.get("LEBLEP_MAX_COMBINED_LEVERAGE", 5.0)
-        max_dd_pct = self.config.get("LEBLEP_MAX_DRAWDOWN", 12.0)
-        max_instances = self.config.get("LEBLEP_MULTI_INSTANCE_LIMIT", 3)
-        risk_ops_approved = self.config.get("RISK_OPS_APPROVED", False)
+        """Leblep risk-ops enforcement (PR #234).
+
+        F1 (2026-07-11 spec): eski implementasyon hiçbir config dosyasında var
+        olmayan root-level UPPERCASE key'leri okuyordu → `RISK_OPS_APPROVED`
+        default False → gate her deployda allowed=False dönüyor ve v1
+        sinyal→emir yolunu sessizce öldürüyordu. Gate artık yalnız leblep /
+        bot_v2 özelliği AÇIKKEN uygulanır; değerler nested `leblep.*`
+        bloğundan okunur (öncelik: env > nested > legacy uppercase root >
+        default). Özellik kapalıyken inert (allowed) — PositionGuard/breaker
+        korumaları değişmeden yürürlükte.
+        """
+        lb = self.config.get("leblep") or {}
+        feature_on = bool(
+            (self.config.get("bot_v2") or {}).get("enabled", False)
+            or self.config.get("leblep_enabled", False)
+        )
+        if not feature_on:
+            return GuardCheck(allowed=True)
+
+        def _resolve(env_key: str, nested_key: str, default):
+            env_val = os.environ.get(env_key)
+            if env_val is not None:
+                return env_val
+            if nested_key in lb:
+                return lb[nested_key]
+            return self.config.get(env_key, default)  # legacy uppercase root
+
+        def _as_bool(v) -> bool:
+            return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+        max_combined_lev = float(_resolve("LEBLEP_MAX_COMBINED_LEVERAGE", "max_combined_leverage", 5.0))
+        max_dd_pct = float(_resolve("LEBLEP_MAX_DRAWDOWN", "max_drawdown_pct", 12.0))
+        max_instances = int(float(_resolve("LEBLEP_MULTI_INSTANCE_LIMIT", "multi_instance_limit", 3)))
+        risk_ops_approved = _as_bool(_resolve("RISK_OPS_APPROVED", "risk_ops_approved", False))
 
         if not risk_ops_approved:
             return GuardCheck(allowed=False, reason="Leblep: RISK_OPS_APPROVED=false (requires explicit approval)")
@@ -1452,8 +1496,19 @@ class SafeOrchestrator:
                         # blocks can_open_position. Re-evaluate with the live price
                         # — if currently profitable beyond the buffer threshold,
                         # close the existing side and let the open flow continue.
+                        # F8 (2026-07-11 spec): pause guard'ı reverse-close'dan ÖNCE
+                        # değerlendir — pause "yalnız YENİ girişleri durdur" sözü verir;
+                        # eski sıra önce mevcut pozisyonu kapatıp sonra girişi bloklayarak
+                        # pozisyonu istemeden flatten ediyordu.
+                        pause_signal = type("PauseSignal", (), {
+                            "symbol": symbol,
+                            "side": latest.direction.lower(),
+                        })()
+                        pause_decision = self.pos_guard.is_new_entry_allowed(pause_signal)
+
                         reversed_from: Optional[str] = None
                         if (not guard_check.allowed
+                            and pause_decision.allowed
                             and guard_check.reason.startswith("OPPOSITE_DIRECTION_EXISTS")):
                             opposite = next(
                                 (p for p in self.lifecycle.positions
@@ -1516,11 +1571,7 @@ class SafeOrchestrator:
                             log.warning(f"🚫 Position blocked: {guard_check.reason}")
                             warnings.append(f"Signal rejected: {guard_check.reason}")
                         else:
-                            pause_signal = type("PauseSignal", (), {
-                                "symbol": symbol,
-                                "side": latest.direction.lower(),
-                            })()
-                            pause_decision = self.pos_guard.is_new_entry_allowed(pause_signal)
+                            # F8: pause_decision yukarıda (reverse'ten önce) hesaplandı.
                             if not pause_decision.allowed:
                                 log.warning(
                                     f"🚫 Position blocked: {pause_decision.reason} "
@@ -1589,6 +1640,11 @@ class SafeOrchestrator:
                                                 f"Order failed for {symbol}: exchange rejected"
                                             )
                                         exchange_ok = False
+                                        # F9 (2026-07-11): transient exchange hatası sinyali
+                                        # 1h yutmasın — reverse-fail yolu ile simetrik:
+                                        # dedup kaydını düş ve hemen persist et.
+                                        self._processed_signals.pop(sig_key, None)
+                                        self._persist_state()
 
                                 # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──
                                 if exchange_ok:
@@ -1690,6 +1746,14 @@ class SafeOrchestrator:
                     warnings.append(f"Add rejected: {pause_pyramid_decision.reason}")
                     continue
 
+                # F16 (2026-07-11 spec): canlı modda pyramid add'in exchange emri yok —
+                # lifecycle'a eklemek hayalet boyut yaratır (exposure/PnL/SL-TP sapması).
+                # Gerçek emirli pyramid ayrı iş; şimdilik canlıda atla (paper aynı).
+                if self.order_manager is not None:
+                    log.info(f"[{symbol}] Scenario pyramid SKIPPED in live mode "
+                             f"(no exchange order path for adds yet)")
+                    warnings.append(f"Scenario add skipped (live mode): {scen.id}")
+                    continue
                 self.lifecycle.add_to_position(existing, mid, add_size, "scenario_add")
                 actions.append(f"Added to {existing.id} via scenario {scen.id}")
                 warnings.extend(add_check.warnings)
@@ -2307,6 +2371,21 @@ class SafeOrchestrator:
             )
 
         if pos is not None:
+            # F2 (2026-07-11 spec): canlı v2 open'ını lifecycle'a v1 pattern'iyle
+            # (bkz. v1 yolu ~satır 1595) mirror et. pos_guard duplicate/exposure/
+            # max-open kontrolleri ve STEP 5 breaker PnL raporlaması
+            # lifecycle.positions'ı okur — mirror olmadan canlı v2 pozisyonları
+            # tüm portföy guard'larına ve breaker'a görünmez kalıyordu.
+            # (order_manager None = paper dalı zaten lifecycle'a açtı → çift kayıt yok.)
+            if self.order_manager is not None:
+                self.lifecycle.open_position(
+                    cand.symbol, cand.direction, entry_price, size,
+                    sl, tp1, tp2,
+                    entry_setup_source=entry_setup_source,
+                    tp1_target_type=tp_tags.get("tp1_source"),
+                    tp2_target_type=tp_tags.get("tp2_source"),
+                    bars_to_pullback=cand.bars_waited,
+                )
             # Plumb telemetry for V2 entry
             z_mid = 0.0
             if getattr(cand, "target_zone", None):
