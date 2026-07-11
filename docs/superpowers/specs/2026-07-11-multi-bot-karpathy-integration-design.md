@@ -1,7 +1,7 @@
 # Multi-Bot Karpathi Integration + Audit Fix Design
 
 **Date:** 2026-07-11  
-**Status:** APPROVED - Ready for Implementation Planning  
+**Status:** REVISED - Critical feedback resolved, ready for implementation planning  
 **Scope:** Karpathy prensiplerini 3-bot sistemine entegre etme + PARKED audit fixlerini tamamlama
 
 ## Context
@@ -18,6 +18,102 @@ The 4 Karpathi principles need active enforcement, not just documentation:
 2. **Simplicity First** → No speculative abstraction, minimal code
 3. **Surgical Changes** → Touch only needed lines, no drive-by refactors
 4. **Goal-Driven Execution** → Test-first, verifiable success criteria
+
+### Phase 1 Decisions Required (Blocking)
+
+Before Phase 3 backtests can begin, these decisions MUST be made:
+
+#### 1.1 Capital Allocation Policy
+
+**Proposed Allocation (Operatőr Confirmation Required):**
+
+- **5m Scalp**: 30% of capital ($300 of $1000) - highest frequency, lowest position size
+- **15m Mid**: 40% of capital ($400) - balanced approach, moderate positions
+- **1h Long**: 30% of capital ($300) - highest quality, larger positions per trade
+
+**Rationale:** Mid timeframe gets most capital as balance between frequency and quality. Scalp gets less due to higher churn/slip risk. Long gets less due to lower frequency but higher per-trade size.
+
+#### 1.2 Correlation Risk Policy
+
+**Concrete Deterministic Guard:**
+
+```python
+# engine/safety/correlation_guard.py (NEW)
+MAX_AGGREGATE_POSITION_USD = 800  # 80% of total capital
+MAX_SAME_DIRECTION_POSITIONS = 2   # Max 2 bots LONG same symbol simultaneously
+
+def can_enter_position(bot_id: str, symbol: str, direction: str, position_size_usd: float) -> bool:
+    """Deterministic correlation guard - REJECTS if limits exceeded."""
+
+    # Check 1: Aggregate exposure across all bots
+    aggregate_exposure = sum_existing_positions(symbol) + position_size_usd
+    if aggregate_exposure > MAX_AGGREGATE_POSITION_USD:
+        return False  # BLOCKED - too much total exposure
+
+    # Check 2: Same-direction stacking (prevent 3 bots all LONG BTC)
+    same_direction_count = count_positions_by_direction(symbol, direction)
+    if same_direction_count >= MAX_SAME_DIRECTION_POSITIONS:
+        return False  # BLOCKED - max 2 bots same direction
+
+    return True  # ALLOWED
+```
+
+**Priority:** Correlation guard > individual bot signals. If guard rejects, signal blocked regardless of confluence score.
+
+#### 1.3 State Isolation Architecture
+
+**Per-Bot State Namespaces:**
+
+```
+state/
+├── bot_5m/
+│   ├── positions.json       # 5m bot positions only
+│   ├── journal.db          # 5m trade journal
+│   ├── breaker_state.json  # 5m breaker counters
+│   └── regime_cache.json   # 5m regime detection
+├── bot_15m/
+│   ├── positions.json
+│   ├── journal.db
+│   ├── breaker_state.json
+│   └── regime_cache.json
+└── bot_1h/
+    ├── positions.json
+    ├── journal.db
+    ├── breaker_state.json
+    └── regime_cache.json
+```
+
+**Isolation Rules:**
+
+- Zero mutable state sharing between bots
+- Cross-bot communication read-only via correlation guard
+- Each bot has independent breaker, journal, regime cache
+
+#### 1.4 Rollout Stage Criteria
+
+**Quantitative Promote/Abort Thresholds:**
+
+**Stage 1 - Config Migration (Shadow Mode):**
+
+- **Promote:** All 3 bots run 48h in shadow mode without crashes
+- **Abort:** Any config parsing error OR state isolation breach detected
+
+**Stage 2 - 1h Bot First (Lowest Risk):**
+
+- **Promote:** Shadow agreement ≥80% AND max drawdown <5% for 7 days
+- **Abort:** Shadow agreement <60% OR daily drawdown >8% OR correlation guard >10% blocks
+
+**Stage 3 - 15m Bot Second:**
+
+- **Promote:** Combined (1h+15m) shadow agreement ≥75% AND aggregate drawdown <7% for 7 days
+- **Abort:** Any bot daily loss >10% OR correlation guard >15% blocks
+
+**Stage 4 - 5m Bot Last (Highest Risk):**
+
+- **Promote:** All-3-bot shadow agreement ≥70% AND total drawdown <10% for 14 days
+- **Abort:** Any circuit breaker trip OR daily loss >12% OR correlation guard >20% blocks
+
+**Rollback Triggers:** Any abort threshold hit → immediate rollback to previous stage + root cause analysis.
 
 ## Design
 
@@ -218,11 +314,11 @@ done
 ### Risk 2: Backtest Computational Load
 **Mitigation:** Use Edge Measurement Core (already optimized), run per bot sequentially
 
-### Risk 3: Multi-Bot Coordination Issues  
+### Risk 3: Multi-Bot Coordination Issues
 **Mitigation:** Fail-safe circuit breakers, staged rollout, shadow mode validation
 
-## Open Questions
+## Monitoring Requirements (Deferred to Implementation Planning)
 
-1. **Capital Allocation:** How to split capital across 3 bots? (Operatőr decision required)
-2. **Correlation Risk:** What if all 3 bots get signals simultaneously? (Cross-bot coordination needed)
-3. **Monitoring:** Dashboard requirements for 3-bot monitoring?
+Per-bot dashboard requirements + cross-bot correlation monitoring UI TBD in implementation phase.
+
+Per-bot dashboard requirements + cross-bot correlation monitoring UI TBD in implementation phase.
