@@ -7,6 +7,7 @@ Spec §5.1:
   if stop_dist < min_sl_atr * ATR: widen to min_dist
   if stop_dist > max_sl_atr * ATR: raise SLTooFarError (reject setup)
 """
+import math
 from typing import Protocol
 
 from engine.smc_v2.exceptions import SLTooFarError
@@ -46,6 +47,12 @@ def calc_sl(
     Raises:
         SLTooFarError: when structural stop distance exceeds max_sl_atr * ATR.
     """
+    # F13 (2026-07-11 spec): NaN/0 ATR (warmup/kısa df) NaN SL üretip emir
+    # yoluna sızıyordu — fail-closed: setup reddi (çağıran SLTooFarError'ı
+    # zaten "reject setup" olarak ele alıyor; yeni exception tipi yok).
+    if atr_15m is None or not math.isfinite(atr_15m) or atr_15m <= 0:
+        raise SLTooFarError(stop_dist=float("inf"), max_dist=0.0)
+
     buffer = config.sl_atr_buffer * atr_15m
     if direction == "LONG":
         structural_sl = min(zone.low, htf_swing_anchor) - buffer

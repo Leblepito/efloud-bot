@@ -14,10 +14,27 @@ from backtest.metrics import (
     aggregate_metrics, apply_commission_costs, apply_funding_costs, serialize_trade,
 )
 from backtest.slippage import adverse_fill, SlippageConfig
+from data.timeframes import tf_to_minutes
 from engine import SafeOrchestrator
 from engine.notifications import NullNotificationManager
 
 log = logging.getLogger("efloud.backtest.engine")
+
+
+def _closed_higher_tf_bars(df: pd.DataFrame, tf_minutes: int,
+                           decision_ts: pd.Timestamp) -> pd.DataFrame:
+    """F11 (2026-07-11 spec): open-time index'te `loc[:ts]` HÂLÂ OLUŞAN yüksek-TF
+    barını FINAL OHLC'siyle içerir — klasik MTF look-ahead (HTF bias/MTF yapı/
+    daily filter her cycle 4-24 saatlik geleceği görüyordu). Yalnız kapanış
+    zamanı (open + tf) karar anına kadar TAMAMLANMIŞ barlar döner; tam karar
+    anında kapanan bar dahildir.
+    """
+    out = df.loc[:decision_ts]
+    tf_delta = pd.Timedelta(minutes=tf_minutes)
+    while len(out) > 0 and out.index[-1] + tf_delta > decision_ts:
+        out = out.iloc[:-1]
+    return out
+
 
 
 @dataclass
@@ -147,6 +164,11 @@ def run_backtest(
         if n_bars < warmup_bars + 50:
             raise ValueError(f"Not enough bars: {n_bars} < {warmup_bars + 50}")
 
+        # F11: karar anı = entry barının kapanışı (open + entry_tf)
+        _entry_delta = pd.Timedelta(minutes=tf_to_minutes(entry_tf_name))
+        _htf_minutes = tf_to_minutes(config["timeframes"]["htf"])
+        _mtf_minutes = tf_to_minutes(config["timeframes"]["mtf"])
+
         for i in range(warmup_bars, n_bars, step_every_n_bars):
             current_ts = primary_idx[i]
             # Convert pandas Timestamp → naive datetime for breaker (pure Python).
@@ -162,15 +184,18 @@ def run_backtest(
                 #   - HTF/MTF/daily: loc[:current_ts] returns bars where index <= current_ts; non-aligned
                 #     boundaries are handled correctly (a 15min ts on a 4h index returns the latest <= ts).
                 e_slice = tfs[entry_tf_name].iloc[: i + 1]
-                h_slice = tfs[config["timeframes"]["htf"]].loc[: current_ts]
-                m_slice = tfs[config["timeframes"]["mtf"]].loc[: current_ts]
+                decision_ts = current_ts + _entry_delta
+                h_slice = _closed_higher_tf_bars(
+                    tfs[config["timeframes"]["htf"]], _htf_minutes, decision_ts)
+                m_slice = _closed_higher_tf_bars(
+                    tfs[config["timeframes"]["mtf"]], _mtf_minutes, decision_ts)
                 if smc_window_bars > 0:
                     e_slice = e_slice.iloc[-smc_window_bars:]
                     h_slice = h_slice.iloc[-smc_window_bars:]
                     m_slice = m_slice.iloc[-smc_window_bars:]
                 d_slice = tfs.get("1d")
                 if d_slice is not None:
-                    d_slice = d_slice.loc[: current_ts]
+                    d_slice = _closed_higher_tf_bars(d_slice, 1440, decision_ts)
                 if len(h_slice) < 50 or len(m_slice) < 50:
                     continue
                 try:

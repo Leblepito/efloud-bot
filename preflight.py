@@ -27,6 +27,13 @@ def _fix_win_console():
             pass
 
 
+def _parse_dual_side(value) -> bool:
+    """F14 (2026-07-11 spec): Binance dualSidePosition string "true"/"false"
+    dönebilir (bkz. exchange/__init__.py set_position_mode notu) — bool'a
+    normalize edilmezse hedge-mode karşılaştırması her zaman mismatch verir."""
+    return str(value).strip().lower() == "true"
+
+
 def evaluate_flat_book(mode_change_needed: bool, open_positions: int,
                        open_orders: int) -> tuple:
     """Decide whether preflight may proceed given a pending mode change.
@@ -178,7 +185,7 @@ def main():
     is_hedge = hedge_mode
     try:
         pos_mode = ex.fapiPrivateGetPositionSideDual()
-        is_hedge = pos_mode.get("dualSidePosition", False)
+        is_hedge = _parse_dual_side(pos_mode.get("dualSidePosition", False))
         if is_hedge == hedge_mode:
             print(f"  [4/5] Position mode: ✅ {'HEDGE' if is_hedge else 'ONE-WAY'}")
         else:

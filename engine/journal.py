@@ -11,6 +11,7 @@ Her trade için kaydedilen bilgiler:
 Dosya: trade_journal.jsonl (her satır bir trade)
 """
 
+import dataclasses
 import json
 import logging
 import threading
@@ -126,17 +127,28 @@ class TradeJournal:
         with self._lock:
             if not self.path.exists():
                 return
+            known_fields = {f.name for f in dataclasses.fields(TradeSnapshot)}
+            skipped = 0
             try:
                 with self.path.open("r", encoding="utf-8") as f:
                     for line in f:
                         line = line.strip()
                         if not line:
                             continue
-                        data = json.loads(line)
-                        snap = TradeSnapshot(**data)
-                        self._cache.append(snap)
-                log.info(f"Loaded {len(self._cache)} trades from journal")
-            except Exception as e:
+                        # F12 (2026-07-11 spec): satır-başına dayanıklılık — tek
+                        # bozuk/legacy satır tüm SONRAKI trade'leri düşürüyordu ve
+                        # bir sonraki _persist (full rewrite) onları kalıcı siliyordu.
+                        # Bilinmeyen (kaldırılmış/legacy) alanlar filtrelenir.
+                        try:
+                            data = json.loads(line)
+                            data = {k: v for k, v in data.items() if k in known_fields}
+                            self._cache.append(TradeSnapshot(**data))
+                        except Exception as line_err:
+                            skipped += 1
+                            log.warning(f"Journal line skipped (corrupt/legacy): {line_err}")
+                suffix = f" ({skipped} skipped)" if skipped else ""
+                log.info(f"Loaded {len(self._cache)} trades from journal{suffix}")
+            except OSError as e:
                 log.error(f"Journal load failed: {e}")
 
     def record_entry(self, snapshot: TradeSnapshot):
