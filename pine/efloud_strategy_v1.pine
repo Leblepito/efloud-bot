@@ -500,7 +500,12 @@ if strategy.position_size != 0 and not na(curSl) and not na(curTp1)
         strategy.exit("TP", limit = curTp1, stop = effStop)
 
 // Flat olunca seviyeleri temizle
-if strategy.position_size == 0
+// F10 (2026-07-11 spec): process_orders_on_close=true ile entry emri verilen
+// barda position_size HÂLÂ 0 (fill script sonrası) — koşulsuz reset, entry
+// mantığının o bar set ettiği SL/TP state'ini siliyordu → exit bloğu hiç
+// kurulmuyor, pozisyon SL/TP'siz sonsuza dek açık kalıyordu. Reset yalnız
+// open→flat GEÇİŞİNDE çalışmalı.
+if strategy.position_size == 0 and strategy.position_size[1] != 0
     curSl  := na
     curTp1 := na
     curTp2 := na

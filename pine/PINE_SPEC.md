@@ -598,3 +598,24 @@ geçerse (follow-up PR), Pine'ın bu satırları AYNI oturumda güncellenmeli
 (`calcSl` + `atr15` temizliği). Doğrulama: TradingView sıfır-hata derleme +
 `pine_save` operatörün masaüstü oturumunda (bu oturumdan MCP erişimi yok).
 Referans: `engine/smc_v2/sl_calc.py`, `engine/safe_orchestrator.py:1900-1903/1960-1962`.
+
+---
+
+## §19 — 2026-07-11 Python Değişiklikleri (Pine'a PORT BEKLİYOR)
+
+1. **v3.2 Entry-anchored SMC TP targeting** (`engine/signals.py`,
+   spec `docs/superpowers/specs/2026-07-11-tp-entry-anchored-targeting-and-bugfix-batch-design.md`):
+   `smc_tp_targeting` blok havuzuna iki kaynak eklendi — (a) `RANGE_EQ`:
+   entry-TF range EQ (0.50), entry doğru taraftaysa; (b) `LIQ_MTF` /
+   `LIQ_MTF_EQ`: MTF swing + equal-level likiditesi. Canlı mid config artık
+   `smc_tp_targeting: true, min_rr_tp1: 0.5, blended_rr_target: 1.5`.
+   → Pine `calcTp` zinciri bir sonraki Pine oturumunda senkronlanmalı
+   (indicator + strategy AYNI anda; input isimleri: smcTpTargeting,
+   minRrTp1, blendedRrTarget).
+
+2. **F10 — strategy state-reset fixi** (`efloud_strategy.pine`,
+   `efloud_strategy_v1.pine`): `strategy.position_size == 0` koşulsuz reset'i
+   entry barında SL/TP state'ini siliyordu (process_orders_on_close=true ile
+   fill script SONRASI) → exit bloğu hiç kurulmuyordu. Reset artık yalnız
+   open→flat geçişinde (`position_size[1] != 0`). Eski backtest sonuçları
+   (bu fix öncesi) GEÇERSİZDİR — exit'siz koşuyorlardı.
