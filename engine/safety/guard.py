@@ -80,6 +80,16 @@ class RateLimiter:
         """
         Token al. block=True ise bekle, False ise limit aşıldıysa False dön.
         """
+        # 2026-07-11 review (ertelenen kalem): weight > max hicbir bekleme
+        # ile sigamaz — eski kod bos bucket'ta self.tokens[0] IndexError'a
+        # dusuyordu (canli loop crash), doluysa sonsuz bekleme dongusune
+        # giriyordu. Fail-closed: acik hata. (Repo'daki tek gercek cagri
+        # weight=4, max=1000 — canli yol etkilenmez.)
+        if weight > self.max:
+            raise ValueError(
+                f"RateLimiter: weight={weight} > max_per_minute={self.max} — "
+                "bu istek hicbir zaman admit edilemez (config/cagri hatasi)"
+            )
         now = time.time()
         # 1 dakikadan eski tokenları temizle
         self.tokens = [t for t in self.tokens if now - t[0] < 60]
@@ -89,8 +99,10 @@ class RateLimiter:
         if current_usage + weight > self.max:
             if not block:
                 return False
-            # En eski token'ın 60s dolmasını bekle
-            wait = 60 - (now - self.tokens[0][0]) + 0.5
+            # En eski token'ın 60s dolmasını bekle. tokens burada bos olamaz
+            # (weight <= max garanti; bos bucket'ta usage=0+weight <= max ->
+            # admit). Yine de indexleme korumali kalsin.
+            wait = (60 - (now - self.tokens[0][0]) + 0.5) if self.tokens else 1.0
             log.warning(f"Rate limit: waiting {wait:.1f}s")
             time.sleep(max(wait, 0))
             return self.acquire(weight, block)
