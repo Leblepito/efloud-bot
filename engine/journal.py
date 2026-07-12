@@ -200,6 +200,10 @@ class TradeJournal:
                 snap.hedge_opened = True
             elif kind == "hedge_close":
                 snap.hedge_pnl = data.get("pnl", 0.0)
+            # 2026-07-11 review (ertelenen kalem): adaptasyonlar yalniz in-memory
+            # kaliyordu — restart/crash'te piramit/partial/hedge gecmisi
+            # kayboluyordu (acik pozisyonda record_exit hic gelmeyebilir).
+            self._persist(snap)
 
     def record_exit(self, trade_id: str, exit_price: float, exit_reason: str,
                      realized_pnl: float, bars_held: int,
