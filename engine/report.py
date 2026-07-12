@@ -30,7 +30,7 @@ Efloud'un raporlarının yapısı:
 """
 
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 log = logging.getLogger("efloud.report")
@@ -54,7 +54,7 @@ class ReportEngine:
         range_info=None,
     ) -> str:
         """Tam rapor üret."""
-        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+        now = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M UTC")
 
         lines = []
         lines.append(f"# {symbol} | {timeframe.upper()} Update")

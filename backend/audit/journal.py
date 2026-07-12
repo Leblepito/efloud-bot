@@ -177,7 +177,7 @@ class AuditEngine:
             )
             if row:
                 closed_at = row["closed_at"]
-                now = datetime.now(tz=closed_at.tzinfo) if closed_at.tzinfo else datetime.utcnow()
+                now = datetime.now(tz=closed_at.tzinfo) if closed_at.tzinfo else datetime.now(timezone.utc).replace(tzinfo=None)
                 age = (now - closed_at).total_seconds()
                 if age < RECENT_CLOSE_WINDOW_SECONDS:
                     log.info(

@@ -14,7 +14,7 @@ import time
 import os
 import logging
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Any, Optional
 import pandas as pd
 
@@ -142,9 +142,8 @@ def validate_kline_freshness(df: pd.DataFrame, timeframe: str,
 
     # UTC'ye çevir
     if last_ts.tzinfo is None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
     else:
-        from datetime import timezone
         now = datetime.now(timezone.utc)
 
     delta = (now - last_ts).total_seconds() / 60

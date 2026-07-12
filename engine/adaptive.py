@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .memory import LearningMemory, Pattern
 
@@ -142,7 +142,7 @@ class AdaptiveConfig:
 
             rule = self.RULES[p.tag]
             param = rule["param"]
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
             # Boolean toggle
             if rule.get("bool"):

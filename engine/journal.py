@@ -18,7 +18,7 @@ import threading
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 log = logging.getLogger("efloud.journal")
 
@@ -191,7 +191,7 @@ class TradeJournal:
             snap = self.get(trade_id)
             if not snap:
                 return
-            data["timestamp"] = datetime.utcnow().isoformat()
+            data["timestamp"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             if kind == "addition":
                 snap.additions.append(data)
             elif kind == "partial":
@@ -215,7 +215,7 @@ class TradeJournal:
                 log.warning(f"Trade {trade_id} not in journal, cannot record exit")
                 return
 
-            snap.exit_timestamp = datetime.utcnow().isoformat()
+            snap.exit_timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             snap.exit_price = exit_price
             snap.exit_reason = exit_reason
             snap.realized_pnl = realized_pnl

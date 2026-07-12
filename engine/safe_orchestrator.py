@@ -562,7 +562,7 @@ class SafeOrchestrator:
             entry_price = entry.price
             position_size = entry.size
         else:
-            entry_timestamp = getattr(pos, "opened_at", None) or datetime.utcnow().isoformat()
+            entry_timestamp = getattr(pos, "opened_at", None) or datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             entry_price = getattr(pos, "entry", 0.0)
             position_size = getattr(pos, "size", 0.0)
 

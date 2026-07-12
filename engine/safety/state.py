@@ -19,7 +19,7 @@ import os
 import tempfile
 import shutil
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any
 import logging
 
@@ -40,7 +40,7 @@ class StateStore:
 
         try:
             payload = {
-                "saved_at": datetime.utcnow().isoformat(),
+                "saved_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 "data": data,
             }
             with open(tmp_path, "w", encoding="utf-8") as f:
@@ -73,7 +73,7 @@ class StateStore:
         except Exception as e:
             log.error(f"State load failed for {key}: {e}")
             # Corrupted file'ı backup'a taşı
-            backup = path.with_suffix(f".corrupted.{int(datetime.utcnow().timestamp())}")
+            backup = path.with_suffix(f".corrupted.{int(datetime.now(timezone.utc).replace(tzinfo=None).timestamp())}")
             try:
                 shutil.move(str(path), str(backup))
                 log.warning(f"Corrupted state moved to {backup}")

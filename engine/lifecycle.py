@@ -335,7 +335,7 @@ class PositionLifecycle:
         signature stable for existing v1 callers. v1 path passes none of them.
         `tp2` accepts None for single-target setups (v2 may produce these).
         """
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         pos_id = str(uuid.uuid4())[:8]
 
         entry = Entry(str(uuid.uuid4())[:8], entry_price, size, now, "initial")
@@ -368,7 +368,7 @@ class PositionLifecycle:
             log.warning(f"Cannot add to closed position {pos.id}")
             return False
 
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         entry = Entry(str(uuid.uuid4())[:8], price, size, now, reason)
         pos.entries.append(entry)
 
@@ -400,7 +400,7 @@ class PositionLifecycle:
             return self.close_position(pos, price, "TP1")
 
         size = pos.remaining_size * size_pct
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         avg = pos.avg_entry_price
         diff = (price - avg) if pos.direction == "LONG" else (avg - price)
         pnl = diff * size
@@ -431,7 +431,7 @@ class PositionLifecycle:
             return False
 
         size = pos.remaining_size
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         avg = pos.avg_entry_price
         diff = (price - avg) if pos.direction == "LONG" else (avg - price)
         pnl = diff * size

@@ -16,7 +16,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 
 log = logging.getLogger("efloud.breaker")
@@ -53,7 +53,7 @@ class BreakerStatus:
         if self.state == BreakerState.HALTED:
             return False
         # TRIPPED — zamanı geldiyse resume et
-        if self.resume_at and datetime.utcnow() >= self.resume_at:
+        if self.resume_at and datetime.now(timezone.utc).replace(tzinfo=None) >= self.resume_at:
             return True
         return False
 
@@ -120,7 +120,7 @@ class CircuitBreaker:
 
     def record_trade(self, pnl: float, timestamp: Optional[datetime] = None):
         """Kapanan trade kaydı."""
-        ts = timestamp or datetime.utcnow()
+        ts = timestamp or datetime.now(timezone.utc).replace(tzinfo=None)
         trade = {"pnl": pnl, "ts": ts}
         self.trades_today.append(trade)
         self.trades_this_week.append(trade)
@@ -188,7 +188,7 @@ class CircuitBreaker:
         minutes of backtest while sim-time advances unbounded).
         """
         if now is None:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
         self._cleanup_old_trades(now)
 
         # Eğer zaten HALTED → manual reset bekler
@@ -260,7 +260,7 @@ class CircuitBreaker:
         return self.status
 
     def _trip(self, reason: str, resume_at: datetime):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         log.warning(f"🚨 BREAKER TRIPPED: {reason} | Resume at {resume_at.isoformat()}")
         self.status = BreakerStatus(
             state=BreakerState.TRIPPED,
@@ -274,7 +274,7 @@ class CircuitBreaker:
         self.status = BreakerStatus(
             state=BreakerState.HALTED,
             reason=reason,
-            tripped_at=datetime.utcnow(),
+            tripped_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
     def manual_reset(self, reason: str = "manual"):

@@ -468,7 +468,7 @@ class PositionGuard:
         if opened.tzinfo is not None:
             opened = opened.astimezone(timezone.utc).replace(tzinfo=None)
 
-        age = datetime.utcnow() - opened
+        age = datetime.now(timezone.utc).replace(tzinfo=None) - opened
         hours = age.total_seconds() / 3600
 
         if hours > self.max_hold:

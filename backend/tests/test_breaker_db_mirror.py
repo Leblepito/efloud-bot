@@ -14,7 +14,7 @@ Contract:
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from backend.db import Database
 from engine.safety.breaker import CircuitBreaker
@@ -117,7 +117,7 @@ async def test_upsert_tripped_breaker_carries_reset_at():
     db = _db_with(conn)
 
     breaker = CircuitBreaker(starting_balance=2000.0)
-    resume = datetime.utcnow() + timedelta(minutes=120)
+    resume = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=120)
     breaker._trip("3 consecutive losses", resume_at=resume)
 
     await db.upsert_breaker_state(breaker.to_dict())

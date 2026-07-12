@@ -14,7 +14,7 @@ round-trip, and SafeOrchestrator uses restore_from_dict() on startup.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from engine.safety.breaker import CircuitBreaker, BreakerState
@@ -32,7 +32,7 @@ def test_to_dict_includes_full_state_timestamps():
     """to_dict must emit tripped_at and resume_at so a TRIPPED/HALTED breaker
     can be faithfully reconstructed (old to_dict dropped them)."""
     breaker = CircuitBreaker(starting_balance=2000.0)
-    resume = datetime.utcnow() + timedelta(minutes=120)
+    resume = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=120)
     breaker._trip("3 consecutive losses", resume_at=resume)
 
     d = breaker.to_dict()
@@ -83,7 +83,7 @@ def test_restore_from_dict_tripped_with_future_resume_blocks_trading():
     """A TRIPPED breaker whose resume_at is still in the future restores as
     non-tradeable."""
     src = CircuitBreaker(starting_balance=2000.0)
-    src._trip("daily loss", resume_at=datetime.utcnow() + timedelta(hours=6))
+    src._trip("daily loss", resume_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=6))
     d = src.to_dict()
 
     restored = CircuitBreaker(starting_balance=2000.0)
@@ -97,7 +97,7 @@ def test_restore_from_dict_tripped_with_past_resume_allows_resume():
     """If resume_at has already passed, the restored TRIPPED breaker can trade
     again (cooldown elapsed during downtime)."""
     src = CircuitBreaker(starting_balance=2000.0)
-    src._trip("daily loss", resume_at=datetime.utcnow() - timedelta(minutes=1))
+    src._trip("daily loss", resume_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1))
     d = src.to_dict()
 
     restored = CircuitBreaker(starting_balance=2000.0)

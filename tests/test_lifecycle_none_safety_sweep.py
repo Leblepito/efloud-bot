@@ -9,7 +9,7 @@ Run: python -m pytest tests/test_lifecycle_none_safety_sweep.py -v
 """
 
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -28,7 +28,7 @@ def _make_position_with_entries(entries, exits=None, direction="LONG"):
         direction=direction,
         entries=entries,
         exits=exits or [],
-        opened_at=datetime.utcnow().isoformat(),
+        opened_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         sl=0.0,
         tp1=0.0,
         tp2=0.0,

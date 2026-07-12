@@ -25,7 +25,7 @@ def guard():
 def _hours_ago(h: float, tz_aware: bool, suffix: str = "") -> str:
     if tz_aware:
         return (datetime.now(timezone.utc) - timedelta(hours=h)).isoformat()
-    base = (datetime.utcnow() - timedelta(hours=h)).isoformat()
+    base = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=h)).isoformat()
     return base + suffix  # support "Z" or empty
 
 

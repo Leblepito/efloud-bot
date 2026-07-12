@@ -41,8 +41,8 @@ def test_position_past_max_hold_is_force_closed_exchange_leg_first(tmp_path):
         entry_price=100.0, size=1.0, sl=95.0, tp1=105.0, tp2=110.0,
     )
     # Backdate well past the 1-hour limit.
-    from datetime import datetime, timedelta
-    pos.opened_at = (datetime.utcnow() - timedelta(hours=5)).isoformat()
+    from datetime import datetime, timedelta, timezone
+    pos.opened_at = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=5)).isoformat()
 
     exchange_pos = MagicMock(symbol="BTC/USDT", direction="LONG")
     om = MagicMock()
@@ -90,8 +90,8 @@ def test_exchange_close_failure_keeps_logical_position_tracked(tmp_path):
         symbol="BTC/USDT", direction="LONG",
         entry_price=100.0, size=1.0, sl=95.0, tp1=105.0, tp2=110.0,
     )
-    from datetime import datetime, timedelta
-    pos.opened_at = (datetime.utcnow() - timedelta(hours=5)).isoformat()
+    from datetime import datetime, timedelta, timezone
+    pos.opened_at = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=5)).isoformat()
 
     exchange_pos = MagicMock(symbol="BTC/USDT", direction="LONG")
     om = MagicMock()

@@ -24,7 +24,7 @@ import uuid
 import logging
 from dataclasses import dataclass, field
 from typing import List, Optional, Literal
-from datetime import datetime
+from datetime import datetime, timezone
 
 log = logging.getLogger("efloud.scenario")
 
@@ -136,7 +136,7 @@ class ScenarioPlanner:
 
         # Register
         for s in scenarios:
-            s.created_at = datetime.utcnow().isoformat()
+            s.created_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             self.scenarios.append(s)
 
         log.info(f"📋 {len(scenarios)} scenarios planned (bias={htf_bias})")
@@ -392,7 +392,7 @@ class ScenarioPlanner:
 
             if is_triggered:
                 s.state = "TRIGGERED"
-                s.triggered_at = datetime.utcnow().isoformat()
+                s.triggered_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                 triggered.append(s)
                 log.info(f"⚡ SCENARIO TRIGGERED: {s.kind} | {s.name}")
 

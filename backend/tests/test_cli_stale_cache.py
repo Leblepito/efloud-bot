@@ -28,7 +28,7 @@ def _put(cache_dir, symbol, tf, end_ts, n=200, freq="15min"):
 
 
 def test_stale_cache_emits_loud_warning(tmp_path, caplog):
-    stale_end = pd.Timestamp.utcnow().tz_localize(None) - pd.Timedelta(days=10)
+    stale_end = pd.Timestamp.now(tz="UTC").tz_localize(None) - pd.Timedelta(days=10)
     _put(tmp_path, "BTC/USDT", "15m", stale_end)
     with caplog.at_level(logging.WARNING, logger="efloud.backtest.cli"):
         data = _load_data_for_period(["BTC/USDT"], ["15m"], period_days=30,
@@ -40,7 +40,7 @@ def test_stale_cache_emits_loud_warning(tmp_path, caplog):
 
 
 def test_fresh_cache_no_warning(tmp_path, caplog):
-    fresh_end = pd.Timestamp.utcnow().tz_localize(None)
+    fresh_end = pd.Timestamp.now(tz="UTC").tz_localize(None)
     _put(tmp_path, "BTC/USDT", "15m", fresh_end)
     with caplog.at_level(logging.WARNING, logger="efloud.backtest.cli"):
         _load_data_for_period(["BTC/USDT"], ["15m"], period_days=30,
