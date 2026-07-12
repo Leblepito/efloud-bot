@@ -44,6 +44,18 @@ def _evaluate_metric(v1_val: float, v2_val: float, spec: dict) -> str:
         # higher is better
         if v1_val == 0:
             return "pass" if v2_val >= 0 else "hard_reject"
+        # BT-10 (2026-07-11 review): v1 < 0 iken v2/v1 orani monotonlugu ters
+        # cevirir (iyilesme hard_reject, kotulesme pass gorunur — orn. sharpe
+        # -1.0 -> +0.5 red, -1.0 -> -2.0 gecer). Isaretli normalize delta
+        # (v2-v1)/|v1| kullan; v1 > 0 icin ratio testiyle birebir denk:
+        # ratio < T  <=>  norm < T - 1.
+        if v1_val < 0:
+            norm = (v2_val - v1_val) / abs(v1_val)
+            if norm < spec["hard_reject_vs_v1"] - 1.0:
+                return "hard_reject"
+            if norm < spec["v2_min_vs_v1"] - 1.0:
+                return "warn"
+            return "pass"
         ratio = v2_val / v1_val
         if ratio < spec["hard_reject_vs_v1"]:
             return "hard_reject"
@@ -54,6 +66,14 @@ def _evaluate_metric(v1_val: float, v2_val: float, spec: dict) -> str:
         # lower is better
         if v1_val == 0:
             return "pass" if v2_val <= 0 else "hard_reject"
+        # BT-10: ayni isaret duzeltmesi — lower-is-better yonunde.
+        if v1_val < 0:
+            norm = (v2_val - v1_val) / abs(v1_val)
+            if norm > spec["hard_reject_vs_v1"] - 1.0:
+                return "hard_reject"
+            if norm > spec["v2_max_vs_v1"] - 1.0:
+                return "warn"
+            return "pass"
         ratio = v2_val / v1_val
         if ratio > spec["hard_reject_vs_v1"]:
             return "hard_reject"

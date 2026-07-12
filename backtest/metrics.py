@@ -180,7 +180,14 @@ def compute_stop_hunt_rate(
         if sym_data is None or entry_tf not in sym_data:
             continue
         df = sym_data[entry_tf]
-        closed_at = pd.Timestamp(t["closed_at"])
+        # BT-7 (2026-07-11 review): backtest kayitlarinda closed_at wall-clock'tur
+        # (kosu ani) — tarihsel df.index ile asla kesismez ve metrik hep ~0'a
+        # cokuyordu (olu metrik). Sim zamani varsa onu kullan; canli/legacy
+        # kayitlar closed_at ile calismaya devam eder.
+        close_ts = t.get("sim_closed_at") or t.get("closed_at")
+        if close_ts is None:
+            continue
+        closed_at = pd.Timestamp(close_ts)
         after = df.loc[df.index > closed_at].iloc[:lookback_bars]
         if after.empty:
             continue

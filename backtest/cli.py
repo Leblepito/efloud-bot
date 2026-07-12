@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -14,7 +15,9 @@ from backtest.engine import run_backtest
 from backtest.grid import GridRunner, expand_grid, config_hash
 from backtest.reproducibility import capture_provenance
 from data.cache import OHLCVCache
-from data.timeframes import resolve_timeframes
+from data.timeframes import resolve_timeframes, tf_to_minutes
+
+log = logging.getLogger("efloud.backtest.cli")
 
 
 def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohlcv", verify_sha=True):
@@ -35,6 +38,24 @@ def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohl
                 raise FileNotFoundError(
                     f"No cache for {s} {tf}. Run `python -m scripts.prefetch_data` first."
                 )
+            # BT-15 (2026-07-11 review): periyot [now-N gun, now] istenir ama
+            # cache'in periyot SONUNU kapsadigi hic kontrol edilmiyordu — bayat
+            # cache ile "son N gun" backtest'i sessizce daha eski bir pencerede
+            # kosuyordu. Manifest max_ts periyot sonundan 2xTF'den fazla gerideyse
+            # yuksek sesle uyar (fail etmez: offline kosu bilincli eski cache
+            # ile calisabilir; esik validate_kline_freshness'in 2x toleransini
+            # aynalar).
+            entry = cache.manifest.get(s, tf)
+            if entry and entry.get("max_ts") is not None:
+                lag_ms = end_ms - int(entry["max_ts"])
+                if lag_ms > 2 * tf_to_minutes(tf) * 60_000:
+                    log.warning(
+                        "STALE CACHE: %s %s cache'i periyot sonundan %.1f gun geride "
+                        "(max_ts=%s). Sonuclar istenen pencereyi kapsamiyor — "
+                        "`python -m scripts.prefetch_data` ile tazeleyin.",
+                        s, tf, lag_ms / 86_400_000.0,
+                        pd.Timestamp(int(entry["max_ts"]), unit="ms"),
+                    )
             # Slice to period
             cutoff = pd.Timestamp(start_ms, unit="ms")
             data[s][tf] = df[df.index >= cutoff]

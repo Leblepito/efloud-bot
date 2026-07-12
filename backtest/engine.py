@@ -151,6 +151,11 @@ def run_backtest(
         peak_balance = balance
         skipped_cycles = 0  # cycles where run_cycle raised — see "skipped_cycles" in return dict
         slippage_cfg = SlippageConfig()
+        # BT-4 (2026-07-11 review): entry fill'lerine slippage. run_cycle icinde
+        # lifecycle'a eklenen her YENI Entry tranche'i (ilk giris + piramit) tam
+        # 1 kez adverse yonde slip edilir. SL/TP seviyeleri sinyalin planladigi
+        # (slip'siz) fiyattan hesaplanmis kalir — canlidaki gercekligin aynisi.
+        entry_tranches_slipped: dict = {}  # pos.id -> slip edilmis Entry sayisi
         max_drawdown_pct = 0.0
         current_prices: dict[str, float] = {}
         # S2b: sim-time open/close per position id → funding holding duration.
@@ -207,6 +212,18 @@ def run_backtest(
                     continue
                 current_prices[symbol] = float(e_slice["close"].iloc[-1])
 
+            # BT-4: bu cycle'da eklenen yeni entry tranche'larini slip et.
+            for pos in orch.lifecycle.positions:
+                if not pos.is_open:
+                    continue
+                seen = entry_tranches_slipped.get(pos.id, 0)
+                if len(pos.entries) > seen:
+                    for e in pos.entries[seen:]:
+                        if e.price is not None:
+                            e.price = adverse_fill(
+                                float(e.price), pos.direction, "entry", slippage_cfg)
+                    entry_tranches_slipped[pos.id] = len(pos.entries)
+
             # MAE/MFE excursion update on bar i for all open positions — mirrors
             # main.py _scan_one update_excursion call so trade records carry
             # non-zero mae_pct/mfe_pct (needed by T2 bug retrospective pipeline).
@@ -228,21 +245,23 @@ def run_backtest(
                     float(bar_data["low"]),
                 )
 
-            # Intrabar fill check on next bar (i+1) for any open positions
-            # TODO(Chunk 5): add run_backtest-level test triggering actual SL fill on synthetic data.
-            # Currently the helper composition is unit-tested but the engine wiring is implicit.
-            if i + 1 < n_bars:
+            # Intrabar fill check — BT-9 (2026-07-11 review): step_every_n_bars>1
+            # iken sonraki cycle i+step'te baslar ve yalniz i+step+1'i tarardi;
+            # i+1..i+step araligindaki SL/TP dokunuslari SONSUZA DEK kayboluyordu.
+            # Simdi atlanan barlar dahil taranir (step=1'de davranis birebir ayni:
+            # yalniz i+1). Engine-wiring testleri: backend/tests/test_backtest_hygiene_batch1.py
+            for j in range(i + 1, min(i + step_every_n_bars, n_bars - 1) + 1):
                 for pos in list(orch.lifecycle.positions):
                     if not pos.is_open:
                         continue
                     sym_data = data.get(pos.symbol)
                     if sym_data is None:
                         continue
-                    # Same mismatched-bar-count guard as above for the i+1 lookahead.
+                    # Same mismatched-bar-count guard as above for the lookahead.
                     symbol_df = sym_data[entry_tf_name]
-                    if i + 1 >= len(symbol_df):
+                    if j >= len(symbol_df):
                         continue
-                    next_bar_data = symbol_df.iloc[i + 1]
+                    next_bar_data = symbol_df.iloc[j]
                     bar = Bar(
                         open=float(next_bar_data["open"]),
                         high=float(next_bar_data["high"]),
@@ -266,6 +285,10 @@ def run_backtest(
                     pnl_after = pos.realized_pnl
                     balance += (pnl_after - pnl_before)
                     peak_balance = max(peak_balance, balance)
+                    # BT-12: sim_close_ts fill BARININ timestamp'i olmali — onceden
+                    # karar bari i'nin damgasi vuruluyordu (holding suresi step
+                    # kadar kisaliyor, funding hesabi carpitiliyordu).
+                    sim_close_ts[pos.id] = symbol_df.index[j]
 
             # MTM uses bar-i's close (current cycle); balance was just updated by bar-(i+1) slipped fills.
             # Intentional 1-bar lag — MTM equity drifts forward on the next iteration.
@@ -276,6 +299,8 @@ def run_backtest(
 
             # S2b: stamp sim-time open (first sighting) and close (first time the
             # position is no longer open) so funding can use real holding hours.
+            # BT-12: intrabar fill'ler yukarida fill bariyla damgalandi; buradaki
+            # close damgasi yalniz run_cycle icinde kapanan pozisyonlari yakalar.
             for pos in orch.lifecycle.positions:
                 if pos.id not in sim_open_ts:
                     sim_open_ts[pos.id] = current_ts
