@@ -25,7 +25,10 @@ def test_order_manager_rounds_tp_sizes_using_exchange_precision():
     mock_client.exchange.amount_to_precision = MagicMock(side_effect=mock_amount_to_precision)
 
     om = OrderManager(client=mock_client, dry_run=False)
-    # Size = 919. TP1 = 459.5, which is rounded to '460' via our mock, and TP2 = 459.5 rounded to '460'
+    # Size = 919. F7 (2026-07-11, b912245): once TOPLAM precision'a cekilir (919),
+    # TP1 = round(size/2) = 460, TP2 = KALAN = 919 - 460 = 459. Eski davranis
+    # (TP1 ve TP2 bagimsiz round: 460+460 = 920 > 919) dust/oversize buguydu —
+    # kalan-miktar semantigi toplamın pozisyonu asla asmamasini garantiler.
     pos = om.open_position(
         symbol="ADA/USDT", direction="SHORT", size=919.0,
         entry=0.23, sl=0.25, tp1=0.21, tp2=0.20,
@@ -36,8 +39,10 @@ def test_order_manager_rounds_tp_sizes_using_exchange_precision():
 
     # Check that create_order was called with rounded integer amounts (float 460.0) instead of raw 459.5
     call_args_list = mock_client.exchange.create_order.call_args_list
-    assert call_args_list[2].args[3] == 460.0  # TP1 size
-    assert call_args_list[3].args[3] == 460.0  # TP2 size
+    assert call_args_list[2].args[3] == 460.0  # TP1 size (round(size/2))
+    assert call_args_list[3].args[3] == 459.0  # TP2 size = kalan (919 - 460), F7
+    # Invariant: TP bacaklari toplami pozisyon boyutunu asamaz (dust/oversize yok)
+    assert call_args_list[2].args[3] + call_args_list[3].args[3] == 919.0
 
 
 def test_order_manager_reconcile_repair_rounds_sizes():

@@ -207,7 +207,10 @@ def test_long_orphan_places_sell_close_position_stop_market():
     args, kwargs = client.exchange.create_order.call_args
     assert args[:4] == ("FIL/USDT:USDT", "STOP_MARKET", "sell", None)
     assert kwargs["params"]["closePosition"] is True
-    assert kwargs["params"]["reduceOnly"] is True
+    # F15 (2026-07-11, b912245): closePosition=True ile reduceOnly BIRLIKTE
+    # gonderilirse Binance -1106 verir; closePosition zaten reduce-only
+    # semantigi tasir. XOR pattern: reduceOnly hic gonderilmemeli.
+    assert "reduceOnly" not in kwargs["params"]
     assert kwargs["params"]["stopPrice"] == pytest.approx(98.0)
 
 

@@ -49,12 +49,12 @@
 
 | # | Yer | Bulgu |
 |---|-----|-------|
-| F1 | backend/tests/test_exchange_tp_precision (1 test) + test_orphan_protection (1 test) | Sandbox'ta HEAD kodla da kırık (Batch-1/utcnow'dan bağımsız). Windows'ta triage: `python -m pytest backend/tests/test_exchange_tp_precision.py backend/tests/test_orphan_protection.py -q` — geçiyorsa ccxt/ortam sürüm farkı, kırıksa gerçek bug |
+| F1 | test_exchange_tp_precision + test_orphan_protection | ✅ ÇÖZÜLDÜ (2026-07-12): Windows triage'ı kırığı doğruladı; analiz kodun DOĞRU olduğunu gösterdi — testler Jul-11 F7 (TP2 = kalan miktar) ve F15 (closePosition XOR reduceOnly) fix'lerinin eski davranışını assert eden bayat testlerdi, yeni semantiğe güncellendi |
 | F2 | Bilinen ön-mevcut suite kırıkları | tests/test_publishing_worker.py (6) + tests/test_monthly_statement.py (1) — hâlâ açık; istenirse Batch-2'ye alınır |
 
 ## 2. Önerilen Sıra
 
-1. **F1 triage** (5 dk, Windows) → gerçek bug ise kapsama al.
+1. ~~F1 triage~~ ✅ tamamlandı (bayat test çıktı, düzeltildi).
 2. **Grup B** (davranış-nötr, gate hafif — momentum kazandırır).
 3. **Grup C** (backtest-gate ister → cache taze olmalı; comparison harness Batch-1 fix'leriyle artık güvenilir: negatif-v1 gate + entry slippage + step taraması).
 4. **Grup A** (operatör kararları netleşince; her kalem default-OFF flag).
@@ -93,9 +93,7 @@ Windows komutu bırak), commit'ler read-tree/write-tree/commit-tree + doğrudan
 ref yazımı, PUSH YAPMA.
 
 Bilinen ön-mevcut kırıklar (dokunma, yenisini çıkarma):
-tests/test_publishing_worker.py (6), tests/test_monthly_statement.py (1);
-sandbox'ta ayrıca backend/tests/test_exchange_tp_precision (1) ve
-test_orphan_protection (1) — F1 triage sonucuma göre davran.
+tests/test_publishing_worker.py (6), tests/test_monthly_statement.py (1).
 
 Doğrulama: python3 -m pytest tests/ -q --deselect
 tests/engine/test_regime_train.py::test_run_auto_train + değişen alanların
