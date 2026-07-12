@@ -26,6 +26,9 @@ Fix'ler: spec `docs/superpowers/specs/2026-07-11-tp-entry-anchored-targeting-and
 | F15 | exchange.close_orphan + safety/orphan_protection | reduceOnly+positionSide / closePosition+reduceOnly → -1106; XOR pattern |
 | F16 | safe_orchestrator STEP 7 | Canlıda exchange emirsiz pyramid → hayalet boyut; canlıda atlanıyor |
 | F17 | .gitignore | .env.production ignore edilmiyordu (secret riski) |
+| B1 | backtest/engine+metrics+comparison+cli | Batch-1 hijyen (2026-07-12): entry fill'lerine slippage (BT-4); stop_hunt_rate sim_closed_at ile canlandı (BT-7); step>1'de atlanan barlarda SL/TP taraması (BT-9); sim_close_ts fill barının damgası (BT-12); comparison negatif-v1 işaretli delta (BT-10); cli stale-cache uyarısı (BT-15) |
+| B2 | engine/journal.update_adaptation | Adaptasyonlar (piramit/partial/hedge) artık _persist ediliyor — restart'ta kayıp bitti |
+| B3 | engine/safety/guard.RateLimiter | weight>max fail-closed ValueError; boş-bucket IndexError + sonsuz bekleme öldü |
 
 ## ⏸ Bilinçli ERTELENDİ (ayrı operatör kararı / ayrı iş)
 
@@ -39,15 +42,14 @@ Fix'ler: spec `docs/superpowers/specs/2026-07-11-tp-entry-anchored-targeting-and
 | safe_orchestrator:1321 | Dedup key round(entry,2) sub-$1 coinlerde kaba | Davranış ayarı; sinyal sıklığını etkiler |
 | exchange:1623 | BE-SL boyutu pos.size/2 (reconcile bn_size değil) | F3 fail-closed yolu ana riski kapattı; sizing iyileştirmesi ayrı |
 | exchange._record_close | tp1_hit sonrası fallback PnL tek-leg tahmini | Muhasebe hijyeni; breaker'a etkisi audit'li ayrı iş |
-| backtest slippage/metrics | entry_slip uygulanmıyor; stop_hunt metriği ölü; step>1 fill atlaması; comparison negatif-metrik oranı; cli stale-cache; sim_close_ts | Backtest hijyen paketi — ayrı PR önerilir |
 | smc_v2/triggers:109 | trigger_idx LTF↔HTF eksen karışıklığı (anchor havuzu daralıyor) | Konservatif yönde bozuk; düzeltme SL seçimini değiştirir → backtest-gate |
 | smc_v2/confirmation:59 | Stale engulfing onayı (geçmiş bar) | Entry davranışı değişir → backtest-gate |
 | data/fetcher | Bar trim + gap detection kombinasyonu | Data pipeline değişikliği; cache yeniden doğrulama ister |
 | pine satellites | publish/v1/wave1 dosyaları eski chain/ATR/repaint | Ayrı Pine senkron oturumu (PINE_SPEC §19) |
-| journal.update_adaptation | _persist çağrılmıyor | Küçük; bir sonraki journal PR'ına |
-| safety/guard RateLimiter | Boş token listesi IndexError | Edge-case; guard hijyen PR'ına |
 
 ## Not
 - Canlı etki için VPS'te container recreate gerekir (`docker compose up -d`).
+- B1 (BT-4/BT-9) öncesi Python backtest sonuçları iyimserdir: entry slippage'sız
+  ve step>1 koşularında atlanan barlardaki SL/TP fill'leri kayıp.
 - F10 öncesi Pine strategy backtest sonuçları geçersizdir (exitsiz koşuyordu).
 - F11 öncesi Python backtest sonuçları iyimserdir (MTF look-ahead).
