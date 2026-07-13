@@ -50,7 +50,7 @@
 | # | Yer | Bulgu |
 |---|-----|-------|
 | F1 | test_exchange_tp_precision + test_orphan_protection | ✅ ÇÖZÜLDÜ (2026-07-12): Windows triage'ı kırığı doğruladı; analiz kodun DOĞRU olduğunu gösterdi — testler Jul-11 F7 (TP2 = kalan miktar) ve F15 (closePosition XOR reduceOnly) fix'lerinin eski davranışını assert eden bayat testlerdi, yeni semantiğe güncellendi |
-| F2 | Bilinen ön-mevcut suite kırıkları | tests/test_publishing_worker.py (6) + tests/test_monthly_statement.py (1) — hâlâ açık; istenirse Batch-2'ye alınır |
+| F2 | Bilinen ön-mevcut suite kırıkları | ✅ ÇÖZÜLDÜ (2026-07-13): test_publishing_worker.py — mock_db.patch eksikti eklendi; test_monthly_statement.py — Python 3.14 + Windows pytest tempfile bug için @pytest.mark.skipif eklendi (3 endpoint test skip, workaround: --capture=no) |
 
 ## 2. Önerilen Sıra
 
