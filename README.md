@@ -205,15 +205,15 @@ python -m scripts.routines.runner watch
 ## ✅ Testing & CI
 
 ```bash
-python -m pytest -q              # quick local run (may have Windows tempfile issues)
+python -m pytest tests/test_foo.py -v     # single-file targeted run (3.11/3.12 venv OK)
 ```
 
-**Official Test Gate (Docker):**
+**Official Test Gate (Docker — Linux Required):**
 ```powershell
-.\scripts\run_tests_docker.ps1   # 600+ passing, 0 errors — Linux environment
+.\scripts\run_tests_docker.ps1   # 600+ passing, 0 errors — Python 3.11-slim container
 ```
 
-> **📌 Docker Gate Required:** The pytest+Windows+tempfile teardown bug causes 500+ spurious errors on Windows. The Docker script above is the **official verification mechanism** — it builds the production image (Python 3.11-slim) and runs the full suite inside a Linux container, yielding 600+ passing, 0 errors.
+> **📌 Windows-Native Full Suite Not Supported:** The pytest+Windows+tempfile teardown bug causes 500+ spurious errors. The Docker script above is the **only verification mechanism** for the full suite. Single-file targeted runs work fine on local 3.11/3.12 venvs.
 
 GitHub Actions runs the whole suite on every PR (Python 3.11+, hermetic — no secrets, agent layer falls back to NEUTRAL). CI is a hard gate: claims of "tests pass" are re-verified on the actual pushed commit. Trade-logic changes additionally require a **NET-cost backtest / edge gate** before merge.
 
