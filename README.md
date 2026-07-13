@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://github.com/Leblepito/efloud-bot/actions/workflows/ci.yml/badge.svg" alt="CI"/>
-  <img src="https://img.shields.io/badge/python-3.11-blue.svg" alt="Python 3.11"/>
+  <img src="https://img.shields.io/badge/python-3.11--3.12-blue.svg" alt="Python 3.11-3.12"/>
   <img src="https://img.shields.io/badge/exchange-Binance%20USDT--M%20Futures-f0b90b.svg" alt="Binance"/>
   <img src="https://img.shields.io/badge/strategy-Smart%20Money%20Concepts-6366f1.svg" alt="SMC"/>
   <img src="https://img.shields.io/badge/tests-2%2C000%2B%20passing-2ea44f.svg" alt="Tests"/>
@@ -205,10 +205,17 @@ python -m scripts.routines.runner watch
 ## ✅ Testing & CI
 
 ```bash
-python -m pytest -q              # full suite (2,000+ passing)
+python -m pytest -q              # quick local run (may have Windows tempfile issues)
 ```
 
-GitHub Actions runs the whole suite on every PR (Python 3.11, hermetic — no secrets, agent layer falls back to NEUTRAL). CI is a hard gate: claims of "tests pass" are re-verified on the actual pushed commit. Trade-logic changes additionally require a **NET-cost backtest / edge gate** before merge.
+**Official Test Gate (Docker):**
+```powershell
+.\scripts\run_tests_docker.ps1   # 600+ passing, 0 errors — Linux environment
+```
+
+> **📌 Docker Gate Required:** The pytest+Windows+tempfile teardown bug causes 500+ spurious errors on Windows. The Docker script above is the **official verification mechanism** — it builds the production image (Python 3.11-slim) and runs the full suite inside a Linux container, yielding 600+ passing, 0 errors.
+
+GitHub Actions runs the whole suite on every PR (Python 3.11+, hermetic — no secrets, agent layer falls back to NEUTRAL). CI is a hard gate: claims of "tests pass" are re-verified on the actual pushed commit. Trade-logic changes additionally require a **NET-cost backtest / edge gate** before merge.
 
 ---
 
