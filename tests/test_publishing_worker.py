@@ -55,7 +55,8 @@ class TestPublishingWorker:
     @pytest.mark.asyncio
     async def test_process_approved_drafts_empty(self, worker, mock_db):
         """Test processing when no approved drafts exist."""
-        with patch('backend.social.publishing_worker.list_by_status', return_value=[]):
+        with patch('backend.social.publishing_worker.db', mock_db), \
+             patch('backend.social.publishing_worker.list_by_status', return_value=[]):
             count = await worker.process_approved_drafts()
             assert count == 0
 
@@ -73,10 +74,11 @@ class TestPublishingWorker:
 
         worker._x_client = mock_x_client
 
-        with patch('backend.social.publishing_worker.list_by_status', return_value=[sample_draft]):
-            with patch('backend.social.publishing_worker.save_draft'):
-                count = await worker.process_approved_drafts()
-                assert count == 1
+        with patch('backend.social.publishing_worker.db', mock_db), \
+             patch('backend.social.publishing_worker.list_by_status', return_value=[sample_draft]), \
+             patch('backend.social.publishing_worker.save_draft'):
+            count = await worker.process_approved_drafts()
+            assert count == 1
 
     @pytest.mark.asyncio
     async def test_process_draft_x_failure(self, worker, mock_db, sample_draft):
@@ -91,10 +93,11 @@ class TestPublishingWorker:
 
         worker._x_client = mock_x_client
 
-        with patch('backend.social.publishing_worker.list_by_status', return_value=[sample_draft]):
-            with patch('backend.social.publishing_worker.save_draft'):
-                count = await worker.process_approved_drafts()
-                assert count == 1  # Still processed (attempted)
+        with patch('backend.social.publishing_worker.db', mock_db), \
+             patch('backend.social.publishing_worker.list_by_status', return_value=[sample_draft]), \
+             patch('backend.social.publishing_worker.save_draft'):
+            count = await worker.process_approved_drafts()
+            assert count == 1  # Still processed (attempted)
 
     @pytest.mark.asyncio
     async def test_process_draft_multi_platform(self, worker, mock_db):
@@ -131,10 +134,11 @@ class TestPublishingWorker:
         worker._x_client = mock_x_client
         worker._instagram_client = mock_instagram_client
 
-        with patch('backend.social.publishing_worker.list_by_status', return_value=[multi_platform_draft]):
-            with patch('backend.social.publishing_worker.save_draft'):
-                count = await worker.process_approved_drafts()
-                assert count == 1
+        with patch('backend.social.publishing_worker.db', mock_db), \
+             patch('backend.social.publishing_worker.list_by_status', return_value=[multi_platform_draft]), \
+             patch('backend.social.publishing_worker.save_draft'):
+            count = await worker.process_approved_drafts()
+            assert count == 1
 
     @pytest.mark.asyncio
     async def test_process_draft_skip_already_published(self, worker, mock_db):
@@ -162,11 +166,12 @@ class TestPublishingWorker:
         mock_x_client.is_active.return_value = True
         worker._x_client = mock_x_client
 
-        with patch('backend.social.publishing_worker.list_by_status', return_value=[published_draft]):
-            with patch('backend.social.publishing_worker.save_draft'):
-                count = await worker.process_approved_drafts()
-                # Should process but skip X platform (already published)
-                assert count == 1
+        with patch('backend.social.publishing_worker.db', mock_db), \
+             patch('backend.social.publishing_worker.list_by_status', return_value=[published_draft]), \
+             patch('backend.social.publishing_worker.save_draft'):
+            count = await worker.process_approved_drafts()
+            # Should process but skip X platform (already published)
+            assert count == 1
 
     @pytest.mark.asyncio
     async def test_process_draft_inactive_platform(self, worker, mock_db, sample_draft):
@@ -177,10 +182,11 @@ class TestPublishingWorker:
 
         worker._x_client = mock_x_client
 
-        with patch('backend.social.publishing_worker.list_by_status', return_value=[sample_draft]):
-            with patch('backend.social.publishing_worker.save_draft'):
-                count = await worker.process_approved_drafts()
-                assert count == 1  # Still processed (attempted)
+        with patch('backend.social.publishing_worker.db', mock_db), \
+             patch('backend.social.publishing_worker.list_by_status', return_value=[sample_draft]), \
+             patch('backend.social.publishing_worker.save_draft'):
+            count = await worker.process_approved_drafts()
+            assert count == 1  # Still processed (attempted)
 
     def test_worker_stop(self, worker):
         """Test worker stops correctly."""
@@ -230,8 +236,9 @@ class TestWorkerIntegration:
 
         worker._x_client = mock_x_client
 
-        with patch('backend.social.publishing_worker.list_by_status', return_value=[error_draft]):
-            with patch('backend.social.publishing_worker.save_draft'):
-                # Should not raise, should handle error gracefully
-                count = await worker.process_approved_drafts()
-                assert count == 1  # Still counts as processed (attempted)
+        with patch('backend.social.publishing_worker.db', mock_db), \
+             patch('backend.social.publishing_worker.list_by_status', return_value=[error_draft]), \
+             patch('backend.social.publishing_worker.save_draft'):
+            # Should not raise, should handle error gracefully
+            count = await worker.process_approved_drafts()
+            assert count == 1  # Still counts as processed (attempted)
