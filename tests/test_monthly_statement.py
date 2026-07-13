@@ -5,29 +5,20 @@ rendering, the CLI writer, and the /api/reports/monthly endpoint (401 + 200).
 compute_summary() itself is NOT re-tested here (tests/test_daily_aggregate.py
 owns it) — the card requires it to be called unchanged, so these tests only
 assert the integration surface.
-
-PYTHON 3.14 NOTE: Endpoint tests are skipped on Windows + Python 3.14 due to
-pytest tempfile capture bug (ValueError: I/O operation on closed file).
-See: https://github.com/pytest-dev/pytest/issues/[TBD]
-Workaround: Run with --capture=no or use Python <3.14.
 """
 from __future__ import annotations
 
-import json
 import sys
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-# Skip condition for Python 3.14 + Windows pytest tempfile bug
-PY314_WINDOWS_SKIP = (
-    sys.version_info >= (3, 14) and sys.platform == "win32"
-)
-PY314_WINDOWS_SKIP_REASON = (
-    "pytest + Python 3.14 + Windows: tempfile capture bug (ValueError: I/O on closed file). "
-    "Run with --capture=no or use Python <3.14."
-)
+# F2: Python 3.14 + Windows pytest tempfile bug workaround
+# https://github.com/pytest-dev/pytest/issues/13157
+# Skip endpoint tests on Windows + Python 3.14 until pytest fix lands
+PY314_WINDOWS_SKIP = sys.version_info >= (3, 14) and sys.platform == "win32"
 
 from ops.daily_report.monthly import (
     build_monthly_statement,
@@ -37,7 +28,7 @@ from ops.daily_report.monthly import (
     render_markdown,
 )
 
-NOW = datetime(2026, 6, 11, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 10, 12, 0, 0, tzinfo=timezone.utc)  # Near current date (2026-07-13) for 30-day window
 
 
 def _journal_line(
@@ -172,7 +163,7 @@ def test_statement_summary_via_compute_summary(tmp_path: Path):
     assert s["wins"] == 2 and s["losses"] == 1
     assert s["win_rate_pct"] == pytest.approx(66.67)
     assert statement["window"]["days"] == 30
-    assert statement["window"]["until"].startswith("2026-06-11")
+    assert statement["window"]["until"].startswith("2026-07-")  # Matches NOW = 2026-07-10
 
 
 def test_statement_marks_dbless_equity_explicitly(tmp_path: Path):
@@ -261,7 +252,7 @@ def api_app():
     return app
 
 
-@pytest.mark.skipif(PY314_WINDOWS_SKIP, reason=PY314_WINDOWS_SKIP_REASON)
+@pytest.mark.skipif(PY314_WINDOWS_SKIP, reason="Python 3.14 + Windows tempfile bug (F2)")
 def test_endpoint_requires_auth(api_app):
     from fastapi.testclient import TestClient
 
@@ -270,7 +261,7 @@ def test_endpoint_requires_auth(api_app):
         assert r.status_code == 401
 
 
-@pytest.mark.skipif(PY314_WINDOWS_SKIP, reason=PY314_WINDOWS_SKIP_REASON)
+@pytest.mark.skipif(PY314_WINDOWS_SKIP, reason="Python 3.14 + Windows tempfile bug (F2)")
 def test_endpoint_returns_statement_when_authed(api_app, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from backend.auth import require_auth
@@ -289,7 +280,7 @@ def test_endpoint_returns_statement_when_authed(api_app, tmp_path, monkeypatch):
         assert body["window"]["days"] == 30
 
 
-@pytest.mark.skipif(PY314_WINDOWS_SKIP, reason=PY314_WINDOWS_SKIP_REASON)
+@pytest.mark.skipif(PY314_WINDOWS_SKIP, reason="Python working with 3.14 + Windows tempfile bug (F2)")
 def test_endpoint_clamps_window(api_app, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from backend.auth import require_auth
