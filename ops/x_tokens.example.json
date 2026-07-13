@@ -1,0 +1,8 @@
+{
+  "_comment": "Bu dosyayı ~/x_tokens.json olarak kopyalayın ve gerçek değerleri girin.",
+  "_note": "Ortam değişkenleri de kullanılabilir: X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET",
+  "consumer_key": "BURAYA_X_API_KEY_GIRIN",
+  "consumer_secret": "BURAYA_X_API_SECRET_GIRIN",
+  "access_token": "BURAYA_ACCESS_TOKEN_GIRIN",
+  "access_token_secret": "BURAYA_ACCESS_TOKEN_SECRET_GIRIN"
+}
