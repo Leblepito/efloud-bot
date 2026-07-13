@@ -109,3 +109,48 @@ findings tablosu güncellemesi + kısa Türkçe rapor.
 - Dev sözleşmesi: `docs/dev/karpathy-guidelines.md`, `CLAUDE.md`
 - Batch-1 commit'leri: `7a26138` (backtest hijyen), `87b132a` (journal), `f4f9df2` (guard), `7dc5a93` (docs), `add2d09` (utcnow)
 - Comparison gate notu: BT-10 fix'i sonrası negatif v1 metriklerinde gate güvenilir; BT-4/BT-9 sonrası backtest sonuçları eski koşulardan sistematik biraz kötü görünür (gerçekçilik arttı) — eski baseline'larla karşılaştırırken dikkat.
+
+---
+
+## W1.0 Sonucu — Git Status Doğrulama (2026-07-13)
+
+**Amaç:** Cowork sandbox'tan Windows'a geçiş sonrası MM/D dosya durumuunu analiz etmek ve working tree'yi temizlemek.
+
+### 1. Teşhis Doğrulama
+- `git diff HEAD --stat`: 11 dosya, 100 satır (+), 1212 satır (−)
+- 3 örnek dosya (CLAUDE.md, karpathy-guidelines.md, backtest/comparison.py): 0 satır diff
+- **Sonuç:** Beklendi TUTUYOR — working ≈ HEAD, staged = Batch-1 öncesi bayat index
+
+### 2. Sağlık Kontrolü
+- `git fsck --no-progress`: dangling objects (normal, GC ile temizlenir)
+- `.git/index`: null-byte yok ✅
+- `.git/config`: null-byte yok ✅
+- **Sonuç:** Git korupsiyonu YOK
+
+### 3. Yedek
+- `../efloud-w10-backup/` klasörüne kopyalama tamamlandı (4 alt klasör: backend, docs, engine, tests)
+
+### 4. Reset (Mixed)
+- `git reset` (default, --hard YOK) ile staged index HEAD'e reset'lendi
+- Working tree korundu
+- **Sonuç:** Staged temizlendi, working'te sadece `engine/signals.py` kaldı
+
+### 5. Kalan Diff
+- `engine/signals.py`: 100 satırlık `new_confluence_score` fonksiyonu (alternatif scoring)
+- **Eylem:** `wip/w10-leftovers` branch'ine commit edildi (`3dbaa93`) — operatör kararı bekleniyor
+
+### 6. Plan Commit
+- `docs/plans/2026-07-13-bir-aylik-master-plan.md` → `3d35d03` (zaten commit edilmişti)
+
+### 7. Working Tree
+- **Durum:** TEMİZ (sadece `.claude/` untracked dosyalar — git dışı)
+
+### 8. Sonraki Adım
+- **W1.1:** F2 — `test_publishing_worker.py` (6) + `test_monthly_statement.py` (1) kırıklarını düzelt
+
+### Operatör Kararı (Seçenek A — Doğrulamalı Mixed Reset)
+- ✅ Adımlar 1-8 tamamlandı
+- ✅ Working tree temiz
+- ✅ Plan dosyası commit edildi
+- ✅ Leftovers branch'e ayrıldı
+- **Sonuç:** W1.0 BAŞARILI, W1.1'e hazır
