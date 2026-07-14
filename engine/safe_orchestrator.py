@@ -1040,777 +1040,783 @@ class SafeOrchestrator:
                 )
 
         try:
-            # Yapay zeka makro duygu durumunu en güncel haliyle yükle
-            self.load_ai_sentiment()
-        except Exception as e:
-            log.warning(f"Failed to load AI sentiment: {e}")
-
-        # Arka planda ML model eğitim kontrolünü yap
-        try:
-            self.check_and_train_regime_model(symbol, df_entry)
-        except Exception as e:
-            log.warning(f"Regime model training check failed: {e}")
-
-        warnings = []
-        actions = []
-        tf = self.config["timeframes"]
-        risk_cfg = self.config["risk"]
-
-        # ═══ STEP 0: Data Validation ═══
-        stale = False
-        for name, df, tfname in [
-            ("HTF", df_htf, tf["htf"]),
-            ("MTF", df_mtf, tf["mtf"]),
-            ("Entry", df_entry, tf["entry"]),
-        ]:
-            try:
-                validate_kline_integrity(df)
-                if self.freshness_check:
-                    validate_kline_freshness(df, tfname, tolerance_factor=2.5)
-            except (StaleDataError, ValueError) as e:
-                warnings.append(f"{name} data issue: {e}")
-                log.warning(f"⚠️  {name} ({tfname}): {e}")
-                stale = True
-
-        if stale:
-            log.warning("📛 Stale/invalid data detected — analysis only, NO TRADING")
-
-        current_price = float(df_entry["close"].iloc[-1])
-        bar_high = float(df_entry["high"].iloc[-1])
-        bar_low = float(df_entry["low"].iloc[-1])
-
-        # SMC v2 setup state advance — opt-in, inert when store is None.
-        # Must run BEFORE breaker check so EXPIRE transitions get recorded
-        # even on no-trade ticks (operator observability).
-        if self.setup_state_store is not None:
-            current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
-            self._advance_setup_state_tick(
-                symbol=symbol,
-                current_price=current_price,
-                current_bar_ts=current_bar_ts,
-                df_15m=df_entry,
-            )
-
-            # SMC v2 trigger phase: detect new CHoCH → emit SetupCandidates.
-            # Per spec §4.3 step 3. Runs AFTER advance (existing candidates
-            # progress first) and BEFORE save (new candidates persisted).
+            # ═══ CYCLE BODY (all operations) ═══
+            # Wrapped in try/finally to ensure lease release even on early return/exception
             #
-            # Inputs derived from SMC engine analyze() result and ltf.structure().
-            # For PR #S3c-1 we compute them inline here. Future PR may
-            # refactor to share with the v1 signals path.
-            htf_analysis = self.smc.analyze(df_htf)
-            ltf_swings_h, ltf_swings_l = self.smc.swings(df_entry)
-            ltf_brks = self.smc.structure(df_entry, ltf_swings_h, ltf_swings_l)
-
-            # Build htf_bars from df_htf rows (ordinal axis for swing_anchor).
-            # HtfBar dataclass hoisted to engine.smc_v2.triggers to keep
-            # run_cycle hot-path clean (avoid re-defining the class each tick).
-            from engine.smc_v2.triggers import HtfBar
-
-            htf_bars = [
-                HtfBar(ordinal=i, high=float(row["high"]), low=float(row["low"]))
-                for i, (_, row) in enumerate(df_htf.iterrows())
-            ]
-
-            # Recency cutoff: only consider LTF breaks in last N bars
-            recency = self.config.get("risk", {}).get("recency_bars", 40)
-            ltf_trigger_idx_min = max(0, len(df_entry) - 1 - recency)
-
-            # OTE band: from htf_analysis if available, else degenerate
-            ote_obj = htf_analysis.get("ote")
-            if ote_obj is not None:
-                ote_low, ote_high = min(ote_obj.bot, ote_obj.top), max(ote_obj.bot, ote_obj.top)
-            else:
-                ote_low, ote_high = 0.0, 0.0
-
-            self._emit_setup_candidates(
-                symbol=symbol,
-                htf_bias=htf_analysis.get("trend", "UNDEF"),
-                ltf_structure_breaks=ltf_brks,
-                htf_swings={
-                    "swing_highs": htf_analysis.get("swing_highs", []),
-                    "swing_lows": htf_analysis.get("swing_lows", []),
-                },
-                htf_bars=htf_bars,
-                htf_fvgs=htf_analysis.get("active_fvgs", []),
-                ote_band=(ote_low, ote_high),
-                ltf_trigger_idx_min=ltf_trigger_idx_min,
-            )
-
-        # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
-        # Update excursion for every open position in this symbol before any
-        # downstream decision (breaker, regime, close, open). MAE/MFE flow
-        # into TradeJournal at close-time, enabling Phase 0 to separate H2
-        # (SL too tight: MAE ≤ sl_distance) from H3 (price ran far: MAE >>).
-        for _pos in self.lifecycle.open_positions(symbol):
-            _pos.update_excursion(bar_high, bar_low)
-
-        # ═══ STEP 1: Circuit Breaker ═══
-        # Sync breaker's current_balance with live exchange equity BEFORE check.
-        # Without this, breaker drifts (record_trade is realized-only, ignores
-        # unrealized PnL and external wallet changes like manual transfers).
-        if balance is not None:
-            self.breaker.sync_balance(balance)
-        # `now` is sim-time in backtest, None in live (uses wall-clock).
-        breaker_status = self.breaker.check(now=now)
-        if not breaker_status.can_trade:
-            log.warning(f"🚨 Breaker {breaker_status.state.value}: {breaker_status.reason}")
-            warnings.append(f"Breaker {breaker_status.state.value}: {breaker_status.reason}")
-
-        # ═══ STEP 2: Regime Detection ═══
-        regime_analysis = self.regime.analyze(df_entry, df_htf)
-        log.info(f"📊 Regime: {regime_analysis.regime} ({regime_analysis.confidence}%) | "
-                 f"ADX={regime_analysis.adx:.1f} BBW={regime_analysis.bb_width:.2f} "
-                 f"ATR={regime_analysis.atr_ratio:.1f}x")
-
-        # Volatilite per-symbol regime ile filtreleniyor (regime=VOLATILE → can_open_new_position=False).
-        # Global breaker volatilite-trip'lemiyor: tek sembolün ATR spike'ı tüm portföyü kilitlememeli.
-
-        # Aşırı volatilite — mevcut pozisyonlarda stop sıkılaştır
-        if regime_analysis.should_tighten_stops:
-            for pos in self.lifecycle.open_positions(symbol):
-                if not pos.sl_moved_to_be and pos.tp1_hit:
-                    # SL'yi daha agresif yere çek
-                    old_sl = pos.sl
-                    pos.sl = pos.avg_entry_price * (1.005 if pos.direction == "LONG" else 0.995)
-                    log.info(f"🔒 Tightened SL for {pos.id}: {old_sl:.2f} → {pos.sl:.2f} "
-                             f"(regime={regime_analysis.regime})")
-                    actions.append(f"Tightened SL on {pos.id}")
-
-        # ═══ STEP 3: Level & SMC analysis (her zaman yap, watch-only için de) ═══
-        all_levels = self.levels.extract_all(
-            df_daily=df_daily if df_daily is not None else df_htf,
-            df_current=df_entry,
-            range_lookback=self.config["structure"]["range_lookback"],
-        )
-        stacked = self.levels.detect_stacked_zones(all_levels)
-
-        htf_analysis = self.smc.analyze(df_htf)
-        htf_bias = htf_analysis["trend"]
-        rng = htf_analysis["range"]
-
-        intent_score = self.intent.analyze(df_entry)
-
-        signals = generate_signals(
-            self.smc, df_htf, df_mtf, df_entry,
-            min_confluence=risk_cfg["min_confluence"],
-            min_rr=risk_cfg["min_rr"],
-            fib_ext=self.config["fibonacci"]["ext_tp2"],
-            recency_bars=risk_cfg.get("recency_bars", 40),
-            df_daily=df_daily,
-            daily_filter_strict=risk_cfg.get("daily_filter_strict", False),
-            symbol=symbol,
-            symbol_confluence_overrides=risk_cfg.get("symbol_confluence_overrides"),
-            levels=all_levels,
-            ai_sentiment=self.sentiment_state,
-            # ── Scalp v3: Fibonacci-aware range TP / min gap ──
-            range_tp1_fib=self.config.get("fibonacci", {}).get("range_tp1_fib", 0.5),
-            range_tp2_fib=self.config.get("fibonacci", {}).get("range_tp2_fib", 1.0),
-            min_tp_gap_r=self.config.get("fibonacci", {}).get("min_tp_gap_r", 0.0),
-            # ── Scalp v3.1: SMC block targeting + blended R:R ──
-            smc_tp_targeting=risk_cfg.get("smc_tp_targeting", False),
-            min_rr_tp1=risk_cfg.get("min_rr_tp1", 0.5),
-            blended_rr_target=risk_cfg.get("blended_rr_target", risk_cfg["min_rr"]),
-        )
-
-        # ═══ STEP 4: Scenario Planning (per-symbol) ═══
-        planner = self._get_planner(symbol)
-        if not planner.active_scenarios() and htf_bias != "UNDEF":
-            above, below = self.levels.get_nearest_levels(current_price, all_levels)
-            planner.plan_three_scenarios(
-                current_price=current_price,
-                htf_bias=htf_bias,
-                nearest_support=below[0].price if below else current_price * 0.98,
-                nearest_resistance=above[0].price if above else current_price * 1.02,
-                stacked_zones=stacked,
-                range_low=rng.lo, range_high=rng.hi,
-            )
-            actions.append(f"[{symbol}] Planned {len(planner.scenarios)} scenarios")
-
-        triggered = planner.check_triggers(current_price)
-        planner.invalidate_scenarios(current_price)
-
-        # ═══ STEP 5: Position Lifecycle Updates ═══
-        price_map = {symbol: current_price}
-
-        def weakness_check(pos):
-            bias = "BULL" if pos.direction == "LONG" else "BEAR"
-            return self.intent.check_weakness(df_entry, bias)
-
-        # Trade öncesi mevcut pozisyonları güncelle (SL/TP/weakness)
-        prev_open_count = len(self.lifecycle.open_positions())
-        self.lifecycle.on_tick(price_map, intent_checker=weakness_check)
-        new_open_count = len(self.lifecycle.open_positions())
-
-        # Kapanan trade'ler varsa breaker'a bildir
-        for p in self.lifecycle.positions:
-            if not p.is_open and p.closed_at and \
-               not getattr(p, "_reported_to_breaker", False):
-                self.breaker.record_trade(p.realized_pnl)
-                p._reported_to_breaker = True
-                actions.append(f"Recorded PnL ${p.realized_pnl:.2f} to breaker")
-
-        # M4: re-apply exchange-truth PnL corrections to the breaker's consecutive
-        # -loss counter. A sign-flipped local estimate can wrongly RESET the
-        # counter; audit_realized_pnl corrects pnl_usdt and collects the deltas.
-        # We always drain the list (no leak) but only apply sign-flipped
-        # corrections when breaker_backcorrect_consecutive is enabled (default OFF).
-        # Over-counting is fail-CLOSED (breaker trips earlier, never later).
-        corrections = getattr(self.order_manager, "_last_pnl_corrections", None) if self.order_manager else None
-        if corrections:
-            if self.config.get("safety", {}).get("breaker_backcorrect_consecutive", False):
-                for _trade_id, old_pnl, new_pnl in corrections:
-                    if (old_pnl >= 0) != (new_pnl >= 0):  # sign flip only
-                        self.breaker.record_trade_correction(old_pnl, new_pnl)
-                        actions.append(f"Breaker corrected PnL ${old_pnl:.2f}→${new_pnl:.2f}")
-            corrections.clear()
-
-        # Orphan hedge cleanup
-        orphans = cleanup_orphan_hedges(self.lifecycle.positions, log)
-        for o in orphans:
-            warnings.append(f"Orphan hedge {o.id} — consider closing")
-
-        # Max holding time check
-        for pos in self.lifecycle.open_positions(symbol):
-            hold_check = self.pos_guard.check_holding_time(pos)
-            if not hold_check.allowed:
-                log.warning(f"⏰ Force-closing {pos.id}: {hold_check.reason}")
-                # Close the EXCHANGE leg before the logical one — a logical-only
-                # close leaves the live Binance position untracked → stacking +
-                # phantom PnL. Keep logical state if the exchange close fails.
-                if self._force_close_max_hold(pos, current_price):
-                    actions.append(f"Force-closed {pos.id} (max holding time)")
-                else:
-                    warnings.append(
-                        f"⚠️ MAX_HOLD exchange close failed for {pos.symbol} — "
-                        f"position still live, manual intervention required"
-                    )
-            warnings.extend(hold_check.warnings)
-
-        # ═══ STEP 6: Yeni Trade Decision ═══
-        # C4: a failed balance fetch on a LIVE cycle must NOT fabricate a $10k
-        # balance and size new entries against it (see actual_balance fallback
-        # below). Treat unavailable balance like stale data → existing positions
-        # were already managed in STEP 5, but open NO new entries this cycle.
-        # Dry-run/backtest pass an explicit balance, so None there is exempt.
-        balance_unavailable = (
-            balance is None and not self.config["operation"].get("dry_run", False)
-        )
-        if balance_unavailable:
-            warnings.append(
-                "Balance unavailable (fetch failed) — skipping new entries this cycle"
-            )
-        can_trade = (
-            breaker_status.can_trade
-            and not stale
-            and not balance_unavailable
-            and regime_analysis.can_open_new_position
-            and not self.config["operation"].get("watch_only", False)
-        )
-
-        if not can_trade:
-            reasons = []
-            if not breaker_status.can_trade:
-                reasons.append(f"breaker={breaker_status.state.value}")
-            if stale:
-                reasons.append("stale_data")
-            if not regime_analysis.can_open_new_position:
-                reasons.append(f"regime={regime_analysis.regime}")
-            log.info(f"🚫 Trading disabled: {', '.join(reasons)}")
-
-        elif signals:
-            latest = signals[-1]
-            # === Runtime Agent Team pre-review (canonical A4) ===
-            _agent_veto = False
-            if self.agent_team and self.agent_team.cfg.get("gating", False):
-                # Run review trade SYNCHRONOUSLY pre-trade and veto on "REJECT"
-                rr = float(latest.rr1) if latest.rr1 else 0.0
-                actual_balance = balance if balance is not None else 10000.0
-                size_notional_pct = self._estimate_size_notional_pct(actual_balance, latest.entry, latest.sl)
-                htf_slope = self._htf_slope_pct(df_htf) if df_htf is not None else 0.0
-                ctx = {
-                    "symbol": symbol,
-                    "direction": latest.direction,
-                    "entry": float(latest.entry),
-                    "sl": float(latest.sl),
-                    "tp1": float(latest.tp1),
-                    "confluence": int(latest.confluence),
-                    "htf_bias": htf_bias,
-                    "htf_slope_pct": htf_slope,
-                    "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
-                    "rr": float(rr),
-                    "size_notional_pct": size_notional_pct,
-                }
+            try:
+                # Yapay zeka makro duygu durumunu en güncel haliyle yükle
+                self.load_ai_sentiment()
+            except Exception as e:
+                log.warning(f"Failed to load AI sentiment: {e}")
+            
+            # Arka planda ML model eğitim kontrolünü yap
+            try:
+                self.check_and_train_regime_model(symbol, df_entry)
+            except Exception as e:
+                log.warning(f"Regime model training check failed: {e}")
+            
+            warnings = []
+            actions = []
+            tf = self.config["timeframes"]
+            risk_cfg = self.config["risk"]
+            
+            # ═══ STEP 0: Data Validation ═══
+            stale = False
+            for name, df, tfname in [
+                ("HTF", df_htf, tf["htf"]),
+                ("MTF", df_mtf, tf["mtf"]),
+                ("Entry", df_entry, tf["entry"]),
+            ]:
                 try:
-                    review = self.agent_team.review_trade(ctx)
-                    latest.meta["agent_review"] = review
-                    latest.meta["risk_review_was_notional_blind"] = review.get("risk_review_was_notional_blind", False)
-                    verdict = review.get("team_verdict")
-                    if verdict in ("REJECT", "ERROR"):
-                        _agent_veto = True
-                        log.warning(f"🚫 [AgentTeam] Signal vetoed by agent team verdict {verdict}")
-                except Exception as e:
-                    log.warning(f"Error in synchronous AgentTeam gating review: {e!r}")
-                    _agent_veto = True
-                    log.warning(f"🚫 [AgentTeam] Signal vetoed due to exception in gating review")
-
-            if _agent_veto:
-                actions.append(f"[{symbol}] Vetoed by agent team")
-            else:
-
-                # Time-windowed dedup: aynı signal 1 saat içinde iki kez açılmasın
-                # Ama 1 saat sonra aynı sinyal yine üretilirse (ikinci CHoCH) açabilir
-                import time as _time
-                now_ts = _time.time()
-                sig_key = (symbol, latest.direction, round(latest.entry, 2))
-
-                # Eski kayıtları temizle (>1 saat)
-                self._processed_signals = {
-                    k: ts for k, ts in self._processed_signals.items()
-                    if now_ts - ts < 3600
-                } if isinstance(self._processed_signals, dict) else {}
-
-                if sig_key in self._processed_signals:
-                    age_min = (now_ts - self._processed_signals[sig_key]) / 60
-                    log.info(f"🔁 [{symbol}] Signal already processed {age_min:.0f}min ago — skipping")
+                    validate_kline_integrity(df)
+                    if self.freshness_check:
+                        validate_kline_freshness(df, tfname, tolerance_factor=2.5)
+                except (StaleDataError, ValueError) as e:
+                    warnings.append(f"{name} data issue: {e}")
+                    log.warning(f"⚠️  {name} ({tfname}): {e}")
+                    stale = True
+            
+            if stale:
+                log.warning("📛 Stale/invalid data detected — analysis only, NO TRADING")
+            
+            current_price = float(df_entry["close"].iloc[-1])
+            bar_high = float(df_entry["high"].iloc[-1])
+            bar_low = float(df_entry["low"].iloc[-1])
+            
+            # SMC v2 setup state advance — opt-in, inert when store is None.
+            # Must run BEFORE breaker check so EXPIRE transitions get recorded
+            # even on no-trade ticks (operator observability).
+            if self.setup_state_store is not None:
+                current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
+                self._advance_setup_state_tick(
+                    symbol=symbol,
+                    current_price=current_price,
+                    current_bar_ts=current_bar_ts,
+                    df_15m=df_entry,
+                )
+            
+                # SMC v2 trigger phase: detect new CHoCH → emit SetupCandidates.
+                # Per spec §4.3 step 3. Runs AFTER advance (existing candidates
+                # progress first) and BEFORE save (new candidates persisted).
+                #
+                # Inputs derived from SMC engine analyze() result and ltf.structure().
+                # For PR #S3c-1 we compute them inline here. Future PR may
+                # refactor to share with the v1 signals path.
+                htf_analysis = self.smc.analyze(df_htf)
+                ltf_swings_h, ltf_swings_l = self.smc.swings(df_entry)
+                ltf_brks = self.smc.structure(df_entry, ltf_swings_h, ltf_swings_l)
+            
+                # Build htf_bars from df_htf rows (ordinal axis for swing_anchor).
+                # HtfBar dataclass hoisted to engine.smc_v2.triggers to keep
+                # run_cycle hot-path clean (avoid re-defining the class each tick).
+                from engine.smc_v2.triggers import HtfBar
+            
+                htf_bars = [
+                    HtfBar(ordinal=i, high=float(row["high"]), low=float(row["low"]))
+                    for i, (_, row) in enumerate(df_htf.iterrows())
+                ]
+            
+                # Recency cutoff: only consider LTF breaks in last N bars
+                recency = self.config.get("risk", {}).get("recency_bars", 40)
+                ltf_trigger_idx_min = max(0, len(df_entry) - 1 - recency)
+            
+                # OTE band: from htf_analysis if available, else degenerate
+                ote_obj = htf_analysis.get("ote")
+                if ote_obj is not None:
+                    ote_low, ote_high = min(ote_obj.bot, ote_obj.top), max(ote_obj.bot, ote_obj.top)
                 else:
-                    self._processed_signals[sig_key] = now_ts
-                    # Persist dedup cache immediately so a mid-cycle restart can't
-                    # re-open the same signal (SOL double-open, 2026-05-08).
-                    self._persist_state()
-
-                    # Sembol tradeable mi? (read-only ise notification gönder, trade etme)
-                    is_tradeable = True
-                    if self.permission_mgr is not None:
-                        is_tradeable = self.permission_mgr.is_tradeable(symbol)
-
-                    # Task 8 (Edge Measurement Core): first-sight ledger record —
-                    # BOTH tradeable and read-only signals, recorded right after
-                    # the dedup insert and before the is_tradeable split diverges.
-                    # Best-effort + flag-gated: never blocks the trade path.
-                    _ledger_sid = self._ledger_record_signal(
-                        symbol, latest, was_tradeable=is_tradeable,
-                        htf_bias=htf_bias,
-                        regime=getattr(regime_analysis, "regime", ""),
-                    )
-
-                    if not is_tradeable:
-                        # Read-only sembol → manuel trader'a bildir
-                        if self.notification_mgr:
-                            self.notification_mgr.signal_readonly(
-                                symbol=symbol, direction=latest.direction,
-                                entry=latest.entry, sl=latest.sl,
-                                tp1=latest.tp1, tp2=latest.tp2,
-                                confluence=latest.confluence,
-                                reasons=latest.reasons,
-                            )
-                        actions.append(f"[READONLY] Signal {latest.direction} @ {latest.entry:.2f} (notify only)")
-
+                    ote_low, ote_high = 0.0, 0.0
+            
+                self._emit_setup_candidates(
+                    symbol=symbol,
+                    htf_bias=htf_analysis.get("trend", "UNDEF"),
+                    ltf_structure_breaks=ltf_brks,
+                    htf_swings={
+                        "swing_highs": htf_analysis.get("swing_highs", []),
+                        "swing_lows": htf_analysis.get("swing_lows", []),
+                    },
+                    htf_bars=htf_bars,
+                    htf_fvgs=htf_analysis.get("active_fvgs", []),
+                    ote_band=(ote_low, ote_high),
+                    ltf_trigger_idx_min=ltf_trigger_idx_min,
+                )
+            
+            # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
+            # Update excursion for every open position in this symbol before any
+            # downstream decision (breaker, regime, close, open). MAE/MFE flow
+            # into TradeJournal at close-time, enabling Phase 0 to separate H2
+            # (SL too tight: MAE ≤ sl_distance) from H3 (price ran far: MAE >>).
+            for _pos in self.lifecycle.open_positions(symbol):
+                _pos.update_excursion(bar_high, bar_low)
+            
+            # ═══ STEP 1: Circuit Breaker ═══
+            # Sync breaker's current_balance with live exchange equity BEFORE check.
+            # Without this, breaker drifts (record_trade is realized-only, ignores
+            # unrealized PnL and external wallet changes like manual transfers).
+            if balance is not None:
+                self.breaker.sync_balance(balance)
+            # `now` is sim-time in backtest, None in live (uses wall-clock).
+            breaker_status = self.breaker.check(now=now)
+            if not breaker_status.can_trade:
+                log.warning(f"🚨 Breaker {breaker_status.state.value}: {breaker_status.reason}")
+                warnings.append(f"Breaker {breaker_status.state.value}: {breaker_status.reason}")
+            
+            # ═══ STEP 2: Regime Detection ═══
+            regime_analysis = self.regime.analyze(df_entry, df_htf)
+            log.info(f"📊 Regime: {regime_analysis.regime} ({regime_analysis.confidence}%) | "
+                     f"ADX={regime_analysis.adx:.1f} BBW={regime_analysis.bb_width:.2f} "
+                     f"ATR={regime_analysis.atr_ratio:.1f}x")
+            
+            # Volatilite per-symbol regime ile filtreleniyor (regime=VOLATILE → can_open_new_position=False).
+            # Global breaker volatilite-trip'lemiyor: tek sembolün ATR spike'ı tüm portföyü kilitlememeli.
+            
+            # Aşırı volatilite — mevcut pozisyonlarda stop sıkılaştır
+            if regime_analysis.should_tighten_stops:
+                for pos in self.lifecycle.open_positions(symbol):
+                    if not pos.sl_moved_to_be and pos.tp1_hit:
+                        # SL'yi daha agresif yere çek
+                        old_sl = pos.sl
+                        pos.sl = pos.avg_entry_price * (1.005 if pos.direction == "LONG" else 0.995)
+                        log.info(f"🔒 Tightened SL for {pos.id}: {old_sl:.2f} → {pos.sl:.2f} "
+                                 f"(regime={regime_analysis.regime})")
+                        actions.append(f"Tightened SL on {pos.id}")
+            
+            # ═══ STEP 3: Level & SMC analysis (her zaman yap, watch-only için de) ═══
+            all_levels = self.levels.extract_all(
+                df_daily=df_daily if df_daily is not None else df_htf,
+                df_current=df_entry,
+                range_lookback=self.config["structure"]["range_lookback"],
+            )
+            stacked = self.levels.detect_stacked_zones(all_levels)
+            
+            htf_analysis = self.smc.analyze(df_htf)
+            htf_bias = htf_analysis["trend"]
+            rng = htf_analysis["range"]
+            
+            intent_score = self.intent.analyze(df_entry)
+            
+            signals = generate_signals(
+                self.smc, df_htf, df_mtf, df_entry,
+                min_confluence=risk_cfg["min_confluence"],
+                min_rr=risk_cfg["min_rr"],
+                fib_ext=self.config["fibonacci"]["ext_tp2"],
+                recency_bars=risk_cfg.get("recency_bars", 40),
+                df_daily=df_daily,
+                daily_filter_strict=risk_cfg.get("daily_filter_strict", False),
+                symbol=symbol,
+                symbol_confluence_overrides=risk_cfg.get("symbol_confluence_overrides"),
+                levels=all_levels,
+                ai_sentiment=self.sentiment_state,
+                # ── Scalp v3: Fibonacci-aware range TP / min gap ──
+                range_tp1_fib=self.config.get("fibonacci", {}).get("range_tp1_fib", 0.5),
+                range_tp2_fib=self.config.get("fibonacci", {}).get("range_tp2_fib", 1.0),
+                min_tp_gap_r=self.config.get("fibonacci", {}).get("min_tp_gap_r", 0.0),
+                # ── Scalp v3.1: SMC block targeting + blended R:R ──
+                smc_tp_targeting=risk_cfg.get("smc_tp_targeting", False),
+                min_rr_tp1=risk_cfg.get("min_rr_tp1", 0.5),
+                blended_rr_target=risk_cfg.get("blended_rr_target", risk_cfg["min_rr"]),
+            )
+            
+            # ═══ STEP 4: Scenario Planning (per-symbol) ═══
+            planner = self._get_planner(symbol)
+            if not planner.active_scenarios() and htf_bias != "UNDEF":
+                above, below = self.levels.get_nearest_levels(current_price, all_levels)
+                planner.plan_three_scenarios(
+                    current_price=current_price,
+                    htf_bias=htf_bias,
+                    nearest_support=below[0].price if below else current_price * 0.98,
+                    nearest_resistance=above[0].price if above else current_price * 1.02,
+                    stacked_zones=stacked,
+                    range_low=rng.lo, range_high=rng.hi,
+                )
+                actions.append(f"[{symbol}] Planned {len(planner.scenarios)} scenarios")
+            
+            triggered = planner.check_triggers(current_price)
+            planner.invalidate_scenarios(current_price)
+            
+            # ═══ STEP 5: Position Lifecycle Updates ═══
+            price_map = {symbol: current_price}
+            
+            def weakness_check(pos):
+                bias = "BULL" if pos.direction == "LONG" else "BEAR"
+                return self.intent.check_weakness(df_entry, bias)
+            
+            # Trade öncesi mevcut pozisyonları güncelle (SL/TP/weakness)
+            prev_open_count = len(self.lifecycle.open_positions())
+            self.lifecycle.on_tick(price_map, intent_checker=weakness_check)
+            new_open_count = len(self.lifecycle.open_positions())
+            
+            # Kapanan trade'ler varsa breaker'a bildir
+            for p in self.lifecycle.positions:
+                if not p.is_open and p.closed_at and \
+                   not getattr(p, "_reported_to_breaker", False):
+                    self.breaker.record_trade(p.realized_pnl)
+                    p._reported_to_breaker = True
+                    actions.append(f"Recorded PnL ${p.realized_pnl:.2f} to breaker")
+            
+            # M4: re-apply exchange-truth PnL corrections to the breaker's consecutive
+            # -loss counter. A sign-flipped local estimate can wrongly RESET the
+            # counter; audit_realized_pnl corrects pnl_usdt and collects the deltas.
+            # We always drain the list (no leak) but only apply sign-flipped
+            # corrections when breaker_backcorrect_consecutive is enabled (default OFF).
+            # Over-counting is fail-CLOSED (breaker trips earlier, never later).
+            corrections = getattr(self.order_manager, "_last_pnl_corrections", None) if self.order_manager else None
+            if corrections:
+                if self.config.get("safety", {}).get("breaker_backcorrect_consecutive", False):
+                    for _trade_id, old_pnl, new_pnl in corrections:
+                        if (old_pnl >= 0) != (new_pnl >= 0):  # sign flip only
+                            self.breaker.record_trade_correction(old_pnl, new_pnl)
+                            actions.append(f"Breaker corrected PnL ${old_pnl:.2f}→${new_pnl:.2f}")
+                corrections.clear()
+            
+            # Orphan hedge cleanup
+            orphans = cleanup_orphan_hedges(self.lifecycle.positions, log)
+            for o in orphans:
+                warnings.append(f"Orphan hedge {o.id} — consider closing")
+            
+            # Max holding time check
+            for pos in self.lifecycle.open_positions(symbol):
+                hold_check = self.pos_guard.check_holding_time(pos)
+                if not hold_check.allowed:
+                    log.warning(f"⏰ Force-closing {pos.id}: {hold_check.reason}")
+                    # Close the EXCHANGE leg before the logical one — a logical-only
+                    # close leaves the live Binance position untracked → stacking +
+                    # phantom PnL. Keep logical state if the exchange close fails.
+                    if self._force_close_max_hold(pos, current_price):
+                        actions.append(f"Force-closed {pos.id} (max holding time)")
                     else:
-                        # Tradeable → normal akış: pozisyon aç
-                        actual_balance = balance if balance is not None else 10000.0
-
-                        # Position sizing mode selection
-                        if risk_cfg.get("position_size_calculation") == "fixed":
-                            from risk import calc_fixed_position_size
-                            fixed_usdt = risk_cfg.get("fixed_position_usdt", 100)
-                            size = calc_fixed_position_size(
-                                fixed_usdt=fixed_usdt,
-                                entry=latest.entry,
-                                leverage=self.config["exchange"].get("leverage", 1),
-                            )
-                        elif risk_cfg.get("position_size_calculation") == "reverse_from_risk":
-                            from engine.risk.custom_calculator import CustomRiskCalculator
-                            calc = CustomRiskCalculator(
-                                max_loss_usdt=risk_cfg["max_loss_per_trade_usdt"],
-                                leverage=self.config["exchange"].get("leverage", 1),
-                                target_stop_pct=risk_cfg["target_stop_distance_pct"] / 100.0,
-                            )
-                            # calculate_position_size returns MARGIN; convert to
-                            # notional (× leverage) before /entry, else the position
-                            # is leverage-x too small (5x under-risked at lev=5).
-                            size = calc.calculate_contract_size(actual_balance, latest.entry)
+                        warnings.append(
+                            f"⚠️ MAX_HOLD exchange close failed for {pos.symbol} — "
+                            f"position still live, manual intervention required"
+                        )
+                warnings.extend(hold_check.warnings)
+            
+            # ═══ STEP 6: Yeni Trade Decision ═══
+            # C4: a failed balance fetch on a LIVE cycle must NOT fabricate a $10k
+            # balance and size new entries against it (see actual_balance fallback
+            # below). Treat unavailable balance like stale data → existing positions
+            # were already managed in STEP 5, but open NO new entries this cycle.
+            # Dry-run/backtest pass an explicit balance, so None there is exempt.
+            balance_unavailable = (
+                balance is None and not self.config["operation"].get("dry_run", False)
+            )
+            if balance_unavailable:
+                warnings.append(
+                    "Balance unavailable (fetch failed) — skipping new entries this cycle"
+                )
+            can_trade = (
+                breaker_status.can_trade
+                and not stale
+                and not balance_unavailable
+                and regime_analysis.can_open_new_position
+                and not self.config["operation"].get("watch_only", False)
+            )
+            
+            if not can_trade:
+                reasons = []
+                if not breaker_status.can_trade:
+                    reasons.append(f"breaker={breaker_status.state.value}")
+                if stale:
+                    reasons.append("stale_data")
+                if not regime_analysis.can_open_new_position:
+                    reasons.append(f"regime={regime_analysis.regime}")
+                log.info(f"🚫 Trading disabled: {', '.join(reasons)}")
+            
+            elif signals:
+                latest = signals[-1]
+                # === Runtime Agent Team pre-review (canonical A4) ===
+                _agent_veto = False
+                if self.agent_team and self.agent_team.cfg.get("gating", False):
+                    # Run review trade SYNCHRONOUSLY pre-trade and veto on "REJECT"
+                    rr = float(latest.rr1) if latest.rr1 else 0.0
+                    actual_balance = balance if balance is not None else 10000.0
+                    size_notional_pct = self._estimate_size_notional_pct(actual_balance, latest.entry, latest.sl)
+                    htf_slope = self._htf_slope_pct(df_htf) if df_htf is not None else 0.0
+                    ctx = {
+                        "symbol": symbol,
+                        "direction": latest.direction,
+                        "entry": float(latest.entry),
+                        "sl": float(latest.sl),
+                        "tp1": float(latest.tp1),
+                        "confluence": int(latest.confluence),
+                        "htf_bias": htf_bias,
+                        "htf_slope_pct": htf_slope,
+                        "adx": float(regime_analysis.adx) if regime_analysis else 0.0,
+                        "rr": float(rr),
+                        "size_notional_pct": size_notional_pct,
+                    }
+                    try:
+                        review = self.agent_team.review_trade(ctx)
+                        latest.meta["agent_review"] = review
+                        latest.meta["risk_review_was_notional_blind"] = review.get("risk_review_was_notional_blind", False)
+                        verdict = review.get("team_verdict")
+                        if verdict in ("REJECT", "ERROR"):
+                            _agent_veto = True
+                            log.warning(f"🚫 [AgentTeam] Signal vetoed by agent team verdict {verdict}")
+                    except Exception as e:
+                        log.warning(f"Error in synchronous AgentTeam gating review: {e!r}")
+                        _agent_veto = True
+                        log.warning(f"🚫 [AgentTeam] Signal vetoed due to exception in gating review")
+            
+                if _agent_veto:
+                    actions.append(f"[{symbol}] Vetoed by agent team")
+                else:
+            
+                    # Time-windowed dedup: aynı signal 1 saat içinde iki kez açılmasın
+                    # Ama 1 saat sonra aynı sinyal yine üretilirse (ikinci CHoCH) açabilir
+                    import time as _time
+                    now_ts = _time.time()
+                    sig_key = (symbol, latest.direction, round(latest.entry, 2))
+            
+                    # Eski kayıtları temizle (>1 saat)
+                    self._processed_signals = {
+                        k: ts for k, ts in self._processed_signals.items()
+                        if now_ts - ts < 3600
+                    } if isinstance(self._processed_signals, dict) else {}
+            
+                    if sig_key in self._processed_signals:
+                        age_min = (now_ts - self._processed_signals[sig_key]) / 60
+                        log.info(f"🔁 [{symbol}] Signal already processed {age_min:.0f}min ago — skipping")
+                    else:
+                        self._processed_signals[sig_key] = now_ts
+                        # Persist dedup cache immediately so a mid-cycle restart can't
+                        # re-open the same signal (SOL double-open, 2026-05-08).
+                        self._persist_state()
+            
+                        # Sembol tradeable mi? (read-only ise notification gönder, trade etme)
+                        is_tradeable = True
+                        if self.permission_mgr is not None:
+                            is_tradeable = self.permission_mgr.is_tradeable(symbol)
+            
+                        # Task 8 (Edge Measurement Core): first-sight ledger record —
+                        # BOTH tradeable and read-only signals, recorded right after
+                        # the dedup insert and before the is_tradeable split diverges.
+                        # Best-effort + flag-gated: never blocks the trade path.
+                        _ledger_sid = self._ledger_record_signal(
+                            symbol, latest, was_tradeable=is_tradeable,
+                            htf_bias=htf_bias,
+                            regime=getattr(regime_analysis, "regime", ""),
+                        )
+            
+                        if not is_tradeable:
+                            # Read-only sembol → manuel trader'a bildir
+                            if self.notification_mgr:
+                                self.notification_mgr.signal_readonly(
+                                    symbol=symbol, direction=latest.direction,
+                                    entry=latest.entry, sl=latest.sl,
+                                    tp1=latest.tp1, tp2=latest.tp2,
+                                    confluence=latest.confluence,
+                                    reasons=latest.reasons,
+                                )
+                            actions.append(f"[READONLY] Signal {latest.direction} @ {latest.entry:.2f} (notify only)")
+            
                         else:
-                            from risk import calc_position_size
-                            max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
-                            # Choose sizing balance: 'total' (default) or 'available'
-                            sizing_source = risk_cfg.get("sizing_balance_source", "total")
-                            sizing_bal = _sizing_balance(
-                                self.client, sizing_source, actual_balance
-                            )
-                            size = calc_position_size(
-                                sizing_bal, risk_cfg["risk_per_trade_pct"],
-                                latest.entry, latest.sl,
-                                self.config["exchange"].get("leverage", 1),
-                                max_notional_pct=max_notional,
-                            )
-                            if sizing_source == "available" and sizing_bal < actual_balance:
-                                log.info(
-                                    f"sizing: source=available balance=${sizing_bal:.2f} "
-                                    f"(vs total=${actual_balance:.2f}, "
-                                    f"delta=${actual_balance-sizing_bal:.2f} locked)"
+                            # Tradeable → normal akış: pozisyon aç
+                            actual_balance = balance if balance is not None else 10000.0
+            
+                            # Position sizing mode selection
+                            if risk_cfg.get("position_size_calculation") == "fixed":
+                                from risk import calc_fixed_position_size
+                                fixed_usdt = risk_cfg.get("fixed_position_usdt", 100)
+                                size = calc_fixed_position_size(
+                                    fixed_usdt=fixed_usdt,
+                                    entry=latest.entry,
+                                    leverage=self.config["exchange"].get("leverage", 1),
                                 )
-
-                        atr = self.intent._atr(df_entry, 14)
-
-                        # ═══ Leblep Risk-Ops Enforcement (PR #234) ═══
-                        leblep_check = self._check_leblep_limits(
-                            balance=actual_balance,
-                            symbol=symbol,
-                            direction=latest.direction,
-                            entry=latest.entry,
-                            size=size,
-                            existing_positions=self.lifecycle.positions,
-                        )
-                        if not leblep_check.allowed:
-                            log.warning(f"🚫 Leblep risk-ops reject: {leblep_check.reason}")
-                            warnings.append(f"Signal rejected: {leblep_check.reason}")
-                            return SafeCycleResult(
-                                symbol=symbol,
-                                timeframe=tf["entry"],
-                                current_price=current_price,
-                                htf_bias=htf_bias,
-                                can_trade=False,
-                                breaker_state=breaker_status.state.value,
-                                regime=regime_analysis.regime,
-                                stale_data=stale,
-                                warnings=warnings,
-                                levels=all_levels,
-                                stacked_zones=stacked,
-                                intent=intent_score,
-                                signals=signals,
-                                scenarios=planner.active_scenarios(),
-                                report_md="",
-                                actions_taken=actions,
-                            )
-
-                        guard_check = self.pos_guard.can_open_position(
-                            balance=actual_balance,
-                            entry=latest.entry, size=size, sl=latest.sl, atr=atr,
-                            direction=latest.direction, symbol=symbol,
-                            existing_positions=self.lifecycle.positions,
-                            leverage=self.config["exchange"].get("leverage", 1),
-                        )
-
-                        # Reverse-on-profit branch: an opposite-direction position
-                        # blocks can_open_position. Re-evaluate with the live price
-                        # — if currently profitable beyond the buffer threshold,
-                        # close the existing side and let the open flow continue.
-                        # F8 (2026-07-11 spec): pause guard'ı reverse-close'dan ÖNCE
-                        # değerlendir — pause "yalnız YENİ girişleri durdur" sözü verir;
-                        # eski sıra önce mevcut pozisyonu kapatıp sonra girişi bloklayarak
-                        # pozisyonu istemeden flatten ediyordu.
-                        pause_signal = type("PauseSignal", (), {
-                            "symbol": symbol,
-                            "side": latest.direction.lower(),
-                        })()
-                        pause_decision = self.pos_guard.is_new_entry_allowed(pause_signal)
-
-                        reversed_from: Optional[str] = None
-                        if (not guard_check.allowed
-                            and pause_decision.allowed
-                            and guard_check.reason.startswith("OPPOSITE_DIRECTION_EXISTS")):
-                            opposite = next(
-                                (p for p in self.lifecycle.positions
-                                 if p.is_open and p.symbol == symbol
-                                 and p.direction != latest.direction
-                                 and p.scenario_id is None),
-                                None,
-                            )
-                            if opposite is None:
-                                log.warning(
-                                    f"[{symbol}] OPPOSITE_DIRECTION_EXISTS but no "
-                                    f"matching open position — race; rejecting."
+                            elif risk_cfg.get("position_size_calculation") == "reverse_from_risk":
+                                from engine.risk.custom_calculator import CustomRiskCalculator
+                                calc = CustomRiskCalculator(
+                                    max_loss_usdt=risk_cfg["max_loss_per_trade_usdt"],
+                                    leverage=self.config["exchange"].get("leverage", 1),
+                                    target_stop_pct=risk_cfg["target_stop_distance_pct"] / 100.0,
                                 )
+                                # calculate_position_size returns MARGIN; convert to
+                                # notional (× leverage) before /entry, else the position
+                                # is leverage-x too small (5x under-risked at lev=5).
+                                size = calc.calculate_contract_size(actual_balance, latest.entry)
                             else:
-                                reverse_check = self.pos_guard.can_reverse_position(
-                                    opposite, current_price
+                                from risk import calc_position_size
+                                max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
+                                # Choose sizing balance: 'total' (default) or 'available'
+                                sizing_source = risk_cfg.get("sizing_balance_source", "total")
+                                sizing_bal = _sizing_balance(
+                                    self.client, sizing_source, actual_balance
                                 )
-                                if not reverse_check.allowed:
+                                size = calc_position_size(
+                                    sizing_bal, risk_cfg["risk_per_trade_pct"],
+                                    latest.entry, latest.sl,
+                                    self.config["exchange"].get("leverage", 1),
+                                    max_notional_pct=max_notional,
+                                )
+                                if sizing_source == "available" and sizing_bal < actual_balance:
                                     log.info(
-                                        f"🚫 [{symbol}] Reverse rejected: "
-                                        f"{reverse_check.reason}"
+                                        f"sizing: source=available balance=${sizing_bal:.2f} "
+                                        f"(vs total=${actual_balance:.2f}, "
+                                        f"delta=${actual_balance-sizing_bal:.2f} locked)"
                                     )
-                                    warnings.append(
-                                        f"Reverse blocked: {reverse_check.reason}"
+            
+                            atr = self.intent._atr(df_entry, 14)
+            
+                            # ═══ Leblep Risk-Ops Enforcement (PR #234) ═══
+                            leblep_check = self._check_leblep_limits(
+                                balance=actual_balance,
+                                symbol=symbol,
+                                direction=latest.direction,
+                                entry=latest.entry,
+                                size=size,
+                                existing_positions=self.lifecycle.positions,
+                            )
+                            if not leblep_check.allowed:
+                                log.warning(f"🚫 Leblep risk-ops reject: {leblep_check.reason}")
+                                warnings.append(f"Signal rejected: {leblep_check.reason}")
+                                return SafeCycleResult(
+                                    symbol=symbol,
+                                    timeframe=tf["entry"],
+                                    current_price=current_price,
+                                    htf_bias=htf_bias,
+                                    can_trade=False,
+                                    breaker_state=breaker_status.state.value,
+                                    regime=regime_analysis.regime,
+                                    stale_data=stale,
+                                    warnings=warnings,
+                                    levels=all_levels,
+                                    stacked_zones=stacked,
+                                    intent=intent_score,
+                                    signals=signals,
+                                    scenarios=planner.active_scenarios(),
+                                    report_md="",
+                                    actions_taken=actions,
+                                )
+            
+                            guard_check = self.pos_guard.can_open_position(
+                                balance=actual_balance,
+                                entry=latest.entry, size=size, sl=latest.sl, atr=atr,
+                                direction=latest.direction, symbol=symbol,
+                                existing_positions=self.lifecycle.positions,
+                                leverage=self.config["exchange"].get("leverage", 1),
+                            )
+            
+                            # Reverse-on-profit branch: an opposite-direction position
+                            # blocks can_open_position. Re-evaluate with the live price
+                            # — if currently profitable beyond the buffer threshold,
+                            # close the existing side and let the open flow continue.
+                            # F8 (2026-07-11 spec): pause guard'ı reverse-close'dan ÖNCE
+                            # değerlendir — pause "yalnız YENİ girişleri durdur" sözü verir;
+                            # eski sıra önce mevcut pozisyonu kapatıp sonra girişi bloklayarak
+                            # pozisyonu istemeden flatten ediyordu.
+                            pause_signal = type("PauseSignal", (), {
+                                "symbol": symbol,
+                                "side": latest.direction.lower(),
+                            })()
+                            pause_decision = self.pos_guard.is_new_entry_allowed(pause_signal)
+            
+                            reversed_from: Optional[str] = None
+                            if (not guard_check.allowed
+                                and pause_decision.allowed
+                                and guard_check.reason.startswith("OPPOSITE_DIRECTION_EXISTS")):
+                                opposite = next(
+                                    (p for p in self.lifecycle.positions
+                                     if p.is_open and p.symbol == symbol
+                                     and p.direction != latest.direction
+                                     and p.scenario_id is None),
+                                    None,
+                                )
+                                if opposite is None:
+                                    log.warning(
+                                        f"[{symbol}] OPPOSITE_DIRECTION_EXISTS but no "
+                                        f"matching open position — race; rejecting."
                                     )
                                 else:
-                                    log.info(
-                                        f"🔄 [{symbol}] Reverse approved: "
-                                        f"{reverse_check.reason}"
+                                    reverse_check = self.pos_guard.can_reverse_position(
+                                        opposite, current_price
                                     )
-                                    if self._handle_reverse(opposite, symbol, current_price):
-                                        reversed_from = opposite.direction
-                                        actions.append(
-                                            f"Reversed {opposite.direction} → "
-                                            f"{latest.direction} ({reverse_check.reason})"
+                                    if not reverse_check.allowed:
+                                        log.info(
+                                            f"🚫 [{symbol}] Reverse rejected: "
+                                            f"{reverse_check.reason}"
                                         )
-                                        # Re-evaluate the guard now that opposite is gone.
-                                        guard_check = self.pos_guard.can_open_position(
-                                            balance=actual_balance,
-                                            entry=latest.entry, size=size, sl=latest.sl,
-                                            atr=atr,
-                                            direction=latest.direction, symbol=symbol,
-                                            existing_positions=self.lifecycle.positions,
-                                            leverage=self.config["exchange"].get("leverage", 1),
+                                        warnings.append(
+                                            f"Reverse blocked: {reverse_check.reason}"
                                         )
                                     else:
-                                        warnings.append(
-                                            f"Reverse close failed for {symbol} — "
-                                            f"open aborted"
+                                        log.info(
+                                            f"🔄 [{symbol}] Reverse approved: "
+                                            f"{reverse_check.reason}"
                                         )
-                                        # Drop the dedup entry so the next cycle can retry.
-                                        # Persist immediately: a SIGKILL between here and
-                                        # the cycle's natural _persist_state would leave
-                                        # the cache still claiming this signal was processed,
-                                        # blocking the retry on restart.
-                                        self._processed_signals.pop(sig_key, None)
-                                        self._persist_state()
-
-                        if not guard_check.allowed:
-                            log.warning(f"🚫 Position blocked: {guard_check.reason}")
-                            warnings.append(f"Signal rejected: {guard_check.reason}")
-                        else:
-                            # F8: pause_decision yukarıda (reverse'ten önce) hesaplandı.
-                            if not pause_decision.allowed:
-                                log.warning(
-                                    f"🚫 Position blocked: {pause_decision.reason} "
-                                    f"source={pause_decision.source}"
-                                )
-                                warnings.append(f"Signal rejected: {pause_decision.reason}")
-                                # Pause is operator-driven; surface it in actions/telemetry.
-                                # Routine risk-math rejections stay warnings-only.
-                                actions.append(f"Signal rejected: {pause_decision.reason}")
-                            else:
-                                # ── 0) Trace ID for log correlation across orchestrator → DB ──
-                                trace_id = new_trace_id()
-                                set_trace_id(trace_id)
-                                log.info(
-                                    "signal_promoted_to_trade",
-                                    extra={"symbol": symbol, "direction": latest.direction,
-                                           "confluence": latest.confluence},
-                                )
-
-                                # ── 1) Borsaya gerçek emir gönder (varsa) ──
-                                exchange_ok = True
-                                if self.order_manager is not None:
-                                    try:
-                                        # Phase 3.2: build confluence_details for DB warehouse
-                                        _conf_details = {
-                                            "score": latest.confluence,
-                                            "reasons": getattr(latest, "reasons", []),
-                                            "htf_bias": htf_bias,
-                                            "regime": regime_analysis.regime,
-                                            "adx": float(regime_analysis.adx),
-                                            "atr_ratio": float(regime_analysis.atr_ratio),
-                                        } if latest is not None else None
-                                        exchange_pos = self.order_manager.open_position(
-                                            symbol, latest.direction, size,
-                                            latest.entry, latest.sl, latest.tp1, latest.tp2,
-                                            trace_id=trace_id,
-                                            atr_value=float(atr) if atr is not None else None,
-                                            confluence_details=_conf_details,
-                                        )
-                                    except Exception as e:
-                                        log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
-                                        exchange_pos = None
-
-                                    if exchange_pos is None:
-                                        log.warning(
-                                            f"🚫 [{symbol}] Exchange order failed — "
-                                            f"local position NOT opened (no logical state mismatch)"
-                                        )
-                                        if reversed_from is not None:
-                                            # Reverse close succeeded but open failed —
-                                            # the symbol is intentionally flat. Trader
-                                            # must know they're sitting on no exposure
-                                            # so they can decide whether to retry manually.
-                                            flat_msg = (
-                                                f"Reverse close succeeded but open failed "
-                                                f"for {symbol} — symbol flat, awaiting next signal"
+                                        if self._handle_reverse(opposite, symbol, current_price):
+                                            reversed_from = opposite.direction
+                                            actions.append(
+                                                f"Reversed {opposite.direction} → "
+                                                f"{latest.direction} ({reverse_check.reason})"
                                             )
-                                            warnings.append(flat_msg)
-                                            if self.notification_mgr is not None:
-                                                try:
-                                                    self.notification_mgr.alert("WARNING", flat_msg)
-                                                except Exception:
-                                                    pass
+                                            # Re-evaluate the guard now that opposite is gone.
+                                            guard_check = self.pos_guard.can_open_position(
+                                                balance=actual_balance,
+                                                entry=latest.entry, size=size, sl=latest.sl,
+                                                atr=atr,
+                                                direction=latest.direction, symbol=symbol,
+                                                existing_positions=self.lifecycle.positions,
+                                                leverage=self.config["exchange"].get("leverage", 1),
+                                            )
                                         else:
                                             warnings.append(
-                                                f"Order failed for {symbol}: exchange rejected"
+                                                f"Reverse close failed for {symbol} — "
+                                                f"open aborted"
                                             )
-                                        exchange_ok = False
-                                        # F9 (2026-07-11): transient exchange hatası sinyali
-                                        # 1h yutmasın — reverse-fail yolu ile simetrik:
-                                        # dedup kaydını düş ve hemen persist et.
-                                        self._processed_signals.pop(sig_key, None)
-                                        self._persist_state()
-
-                                # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──
-                                if exchange_ok:
-                                    pos = self.lifecycle.open_position(
-                                        symbol, latest.direction, latest.entry, size,
-                                        latest.sl, latest.tp1, latest.tp2
+                                            # Drop the dedup entry so the next cycle can retry.
+                                            # Persist immediately: a SIGKILL between here and
+                                            # the cycle's natural _persist_state would leave
+                                            # the cache still claiming this signal was processed,
+                                            # blocking the retry on restart.
+                                            self._processed_signals.pop(sig_key, None)
+                                            self._persist_state()
+            
+                            if not guard_check.allowed:
+                                log.warning(f"🚫 Position blocked: {guard_check.reason}")
+                                warnings.append(f"Signal rejected: {guard_check.reason}")
+                            else:
+                                # F8: pause_decision yukarıda (reverse'ten önce) hesaplandı.
+                                if not pause_decision.allowed:
+                                    log.warning(
+                                        f"🚫 Position blocked: {pause_decision.reason} "
+                                        f"source={pause_decision.source}"
                                     )
-                                    # Task 8 (Edge Core): link ledger record to live trade
-                                    if _ledger_sid is not None and self.signal_ledger is not None:
+                                    warnings.append(f"Signal rejected: {pause_decision.reason}")
+                                    # Pause is operator-driven; surface it in actions/telemetry.
+                                    # Routine risk-math rejections stay warnings-only.
+                                    actions.append(f"Signal rejected: {pause_decision.reason}")
+                                else:
+                                    # ── 0) Trace ID for log correlation across orchestrator → DB ──
+                                    trace_id = new_trace_id()
+                                    set_trace_id(trace_id)
+                                    log.info(
+                                        "signal_promoted_to_trade",
+                                        extra={"symbol": symbol, "direction": latest.direction,
+                                               "confluence": latest.confluence},
+                                    )
+            
+                                    # ── 1) Borsaya gerçek emir gönder (varsa) ──
+                                    exchange_ok = True
+                                    if self.order_manager is not None:
                                         try:
-                                            self.signal_ledger.set_trade_id(_ledger_sid, trace_id)
-                                        except Exception:
-                                            pass
-                                    # Canonical A7: pass the AgentTeam verdict
-                                    # (attached to the signal in STEP 3.5) so
-                                    # the journal row carries the team's call.
-                                    self._journal_record_entry(
-                                        pos,
-                                        agent_review=(latest.meta.get("agent_review")
-                                                      if isinstance(latest.meta, dict)
-                                                      else None),
-                                        signal_entry_price=latest.entry,
-                                        actual_fill_price=getattr(exchange_pos, "entry", latest.entry) if exchange_pos else latest.entry,
-                                        zone_mid=latest.entry,
-                                        ts_signal=getattr(latest, "timestamp", None) or getattr(latest, "ts", None),
-                                        ts_fill=getattr(exchange_pos, "opened_at", None) or pos.opened_at,
-                                    )
-                                    self._run_agent_review_async(
-                                        pos=pos,
-                                        confluence=latest.confluence,
-                                        htf_bias=htf_bias,
-                                        df_htf=df_htf,
-                                        adx=float(regime_analysis.adx) if regime_analysis else 0.0,
-                                        rr=float(latest.rr1) if latest.rr1 else 0.0,
-                                        size_notional_pct=self._estimate_size_notional_pct(actual_balance, latest.entry, latest.sl),
-                                    )
-                                    log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
-                                             f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
-                                             f"TP2={latest.tp2:.4f} Conf={latest.confluence}")
-                                    if self.notification_mgr:
-                                        self.notification_mgr.position_opened(
-                                            symbol, latest.direction, latest.entry,
-                                            size, latest.sl, latest.tp1, latest.confluence
+                                            # Phase 3.2: build confluence_details for DB warehouse
+                                            _conf_details = {
+                                                "score": latest.confluence,
+                                                "reasons": getattr(latest, "reasons", []),
+                                                "htf_bias": htf_bias,
+                                                "regime": regime_analysis.regime,
+                                                "adx": float(regime_analysis.adx),
+                                                "atr_ratio": float(regime_analysis.atr_ratio),
+                                            } if latest is not None else None
+                                            exchange_pos = self.order_manager.open_position(
+                                                symbol, latest.direction, size,
+                                                latest.entry, latest.sl, latest.tp1, latest.tp2,
+                                                trace_id=trace_id,
+                                                atr_value=float(atr) if atr is not None else None,
+                                                confluence_details=_conf_details,
+                                            )
+                                        except Exception as e:
+                                            log.error(f"⛔ [{symbol}] Exchange order failed: {e}", exc_info=True)
+                                            exchange_pos = None
+            
+                                        if exchange_pos is None:
+                                            log.warning(
+                                                f"🚫 [{symbol}] Exchange order failed — "
+                                                f"local position NOT opened (no logical state mismatch)"
+                                            )
+                                            if reversed_from is not None:
+                                                # Reverse close succeeded but open failed —
+                                                # the symbol is intentionally flat. Trader
+                                                # must know they're sitting on no exposure
+                                                # so they can decide whether to retry manually.
+                                                flat_msg = (
+                                                    f"Reverse close succeeded but open failed "
+                                                    f"for {symbol} — symbol flat, awaiting next signal"
+                                                )
+                                                warnings.append(flat_msg)
+                                                if self.notification_mgr is not None:
+                                                    try:
+                                                        self.notification_mgr.alert("WARNING", flat_msg)
+                                                    except Exception:
+                                                        pass
+                                            else:
+                                                warnings.append(
+                                                    f"Order failed for {symbol}: exchange rejected"
+                                                )
+                                            exchange_ok = False
+                                            # F9 (2026-07-11): transient exchange hatası sinyali
+                                            # 1h yutmasın — reverse-fail yolu ile simetrik:
+                                            # dedup kaydını düş ve hemen persist et.
+                                            self._processed_signals.pop(sig_key, None)
+                                            self._persist_state()
+            
+                                    # ── 2) Logical state'e ekle (sadece exchange başarılıysa) ──
+                                    if exchange_ok:
+                                        pos = self.lifecycle.open_position(
+                                            symbol, latest.direction, latest.entry, size,
+                                            latest.sl, latest.tp1, latest.tp2
                                         )
-                                    actions.append(f"Opened {latest.direction} @ {latest.entry:.2f} "
-                                                   f"(size={size:.4f})")
-                                    warnings.extend(guard_check.warnings)
-
-        # ═══ STEP 7: Scenario-based Piramit ═══
-        if can_trade:
-            for scen in triggered:
-                if scen.kind != "invalidation":
-                    continue
-                existing = self.lifecycle.same_direction_open(symbol, scen.direction)
-                if not existing:
-                    continue
-
-                bias_check = "BULL" if scen.direction == "LONG" else "BEAR"
-                if not self.intent.check_confirmation(df_entry, bias_check, min_score=50):
-                    continue
-
-                from risk import calc_position_size, calc_fixed_position_size
-                balance_now = balance if balance else 10000.0
-                mid = (scen.entry_zone_top + scen.entry_zone_bottom) / 2
-                lev = self.config["exchange"].get("leverage", 1)
-                if risk_cfg.get("position_size_calculation") == "fixed":
-                    fixed_usdt = risk_cfg.get("fixed_position_usdt", 100)
-                    add_size = calc_fixed_position_size(
-                        fixed_usdt=fixed_usdt * 0.5,
-                        entry=mid, leverage=lev,
+                                        # Task 8 (Edge Core): link ledger record to live trade
+                                        if _ledger_sid is not None and self.signal_ledger is not None:
+                                            try:
+                                                self.signal_ledger.set_trade_id(_ledger_sid, trace_id)
+                                            except Exception:
+                                                pass
+                                        # Canonical A7: pass the AgentTeam verdict
+                                        # (attached to the signal in STEP 3.5) so
+                                        # the journal row carries the team's call.
+                                        self._journal_record_entry(
+                                            pos,
+                                            agent_review=(latest.meta.get("agent_review")
+                                                          if isinstance(latest.meta, dict)
+                                                          else None),
+                                            signal_entry_price=latest.entry,
+                                            actual_fill_price=getattr(exchange_pos, "entry", latest.entry) if exchange_pos else latest.entry,
+                                            zone_mid=latest.entry,
+                                            ts_signal=getattr(latest, "timestamp", None) or getattr(latest, "ts", None),
+                                            ts_fill=getattr(exchange_pos, "opened_at", None) or pos.opened_at,
+                                        )
+                                        self._run_agent_review_async(
+                                            pos=pos,
+                                            confluence=latest.confluence,
+                                            htf_bias=htf_bias,
+                                            df_htf=df_htf,
+                                            adx=float(regime_analysis.adx) if regime_analysis else 0.0,
+                                            rr=float(latest.rr1) if latest.rr1 else 0.0,
+                                            size_notional_pct=self._estimate_size_notional_pct(actual_balance, latest.entry, latest.sl),
+                                        )
+                                        log.info(f"✅ [{symbol}] Opened {latest.direction} @ {latest.entry:.4f} "
+                                                 f"size={size:.6f} SL={latest.sl:.4f} TP1={latest.tp1:.4f} "
+                                                 f"TP2={latest.tp2:.4f} Conf={latest.confluence}")
+                                        if self.notification_mgr:
+                                            self.notification_mgr.position_opened(
+                                                symbol, latest.direction, latest.entry,
+                                                size, latest.sl, latest.tp1, latest.confluence
+                                            )
+                                        actions.append(f"Opened {latest.direction} @ {latest.entry:.2f} "
+                                                       f"(size={size:.4f})")
+                                        warnings.extend(guard_check.warnings)
+            
+            # ═══ STEP 7: Scenario-based Piramit ═══
+            if can_trade:
+                for scen in triggered:
+                    if scen.kind != "invalidation":
+                        continue
+                    existing = self.lifecycle.same_direction_open(symbol, scen.direction)
+                    if not existing:
+                        continue
+            
+                    bias_check = "BULL" if scen.direction == "LONG" else "BEAR"
+                    if not self.intent.check_confirmation(df_entry, bias_check, min_score=50):
+                        continue
+            
+                    from risk import calc_position_size, calc_fixed_position_size
+                    balance_now = balance if balance else 10000.0
+                    mid = (scen.entry_zone_top + scen.entry_zone_bottom) / 2
+                    lev = self.config["exchange"].get("leverage", 1)
+                    if risk_cfg.get("position_size_calculation") == "fixed":
+                        fixed_usdt = risk_cfg.get("fixed_position_usdt", 100)
+                        add_size = calc_fixed_position_size(
+                            fixed_usdt=fixed_usdt * 0.5,
+                            entry=mid, leverage=lev,
+                        )
+                    else:
+                        max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
+                        # Choose sizing balance: 'total' (default) or 'available'
+                        sizing_source = risk_cfg.get("sizing_balance_source", "total")
+                        sizing_bal = _sizing_balance(
+                            self.client, sizing_source, balance_now
+                        )
+                        add_size = calc_position_size(
+                            sizing_bal, risk_cfg["risk_per_trade_pct"] * 0.5,
+                            mid, scen.sl, lev,
+                            max_notional_pct=max_notional,
+                        )
+            
+                    # Add guard first so pause_new_entries does not mask real rejection reasons.
+                    add_check = self.pos_guard.can_add_to_position(existing, add_size, current_price)
+                    if not add_check.allowed:
+                        warnings.append(f"Add rejected: {add_check.reason}")
+                        continue
+            
+                    pause_pyramid_decision = self.pos_guard.is_new_entry_allowed(
+                        type("PauseSignal", (), {
+                            "symbol": symbol,
+                            "side": existing.direction.lower(),
+                            "is_pyramid": True,
+                        })()
                     )
-                else:
-                    max_notional = self.config["safety"].get("max_position_notional_pct", 3.0)
-                    # Choose sizing balance: 'total' (default) or 'available'
-                    sizing_source = risk_cfg.get("sizing_balance_source", "total")
-                    sizing_bal = _sizing_balance(
-                        self.client, sizing_source, balance_now
-                    )
-                    add_size = calc_position_size(
-                        sizing_bal, risk_cfg["risk_per_trade_pct"] * 0.5,
-                        mid, scen.sl, lev,
-                        max_notional_pct=max_notional,
-                    )
-
-                # Add guard first so pause_new_entries does not mask real rejection reasons.
-                add_check = self.pos_guard.can_add_to_position(existing, add_size, current_price)
-                if not add_check.allowed:
-                    warnings.append(f"Add rejected: {add_check.reason}")
-                    continue
-
-                pause_pyramid_decision = self.pos_guard.is_new_entry_allowed(
-                    type("PauseSignal", (), {
-                        "symbol": symbol,
-                        "side": existing.direction.lower(),
-                        "is_pyramid": True,
-                    })()
-                )
-                if not pause_pyramid_decision.allowed:
-                    warnings.append(f"Add rejected: {pause_pyramid_decision.reason}")
-                    continue
-
-                # F16 (2026-07-11 spec): canlı modda pyramid add'in exchange emri yok —
-                # lifecycle'a eklemek hayalet boyut yaratır (exposure/PnL/SL-TP sapması).
-                # Gerçek emirli pyramid ayrı iş; şimdilik canlıda atla (paper aynı).
-                if self.order_manager is not None:
-                    log.info(f"[{symbol}] Scenario pyramid SKIPPED in live mode "
-                             f"(no exchange order path for adds yet)")
-                    warnings.append(f"Scenario add skipped (live mode): {scen.id}")
-                    continue
-                self.lifecycle.add_to_position(existing, mid, add_size, "scenario_add")
-                actions.append(f"Added to {existing.id} via scenario {scen.id}")
-                warnings.extend(add_check.warnings)
-
-        # ═══ STEP 8: State Persistence ═══
-        try:
-            self._persist_state()
-        except Exception as e:
-            log.error(f"State persistence failed: {e}")
-
-        # ═══ STEP 9: Report Generation ═══
-        report_md = self.reporter.generate(
-            symbol=symbol, timeframe=tf["entry"],
-            current_price=current_price, htf_bias=htf_bias,
-            levels=all_levels, stacked_zones=stacked,
-            intent=intent_score, signals=signals,
-            scenarios=planner.active_scenarios(),
-            positions=self.lifecycle.positions,
-            range_info=rng,
-        )
-
-        # Safety summary'yi rapora ekle
-        safety_section = self._build_safety_section(breaker_status, regime_analysis,
-                                                       stale, warnings)
-        report_md = report_md.replace("## Öneri", safety_section + "\n## Öneri")
-
-        # SMC v2 — persist setup state if wired (gated, inert when None).
-        # Save errors logged but do NOT abort the cycle — persistence failure
-        # must not break trading.
-        #
-        # MAINTENANCE NOTE: this save() MUST remain ABOVE the return below.
-        # Future early-return branches added above this point would silently
-        # skip persistence and lose a tick's state changes. If you add a new
-        # early-exit branch above, also call self.setup_state_store.save()
-        # within the same gated try/except in that branch.
-        if self.setup_state_store is not None:
+                    if not pause_pyramid_decision.allowed:
+                        warnings.append(f"Add rejected: {pause_pyramid_decision.reason}")
+                        continue
+            
+                    # F16 (2026-07-11 spec): canlı modda pyramid add'in exchange emri yok —
+                    # lifecycle'a eklemek hayalet boyut yaratır (exposure/PnL/SL-TP sapması).
+                    # Gerçek emirli pyramid ayrı iş; şimdilik canlıda atla (paper aynı).
+                    if self.order_manager is not None:
+                        log.info(f"[{symbol}] Scenario pyramid SKIPPED in live mode "
+                                 f"(no exchange order path for adds yet)")
+                        warnings.append(f"Scenario add skipped (live mode): {scen.id}")
+                        continue
+                    self.lifecycle.add_to_position(existing, mid, add_size, "scenario_add")
+                    actions.append(f"Added to {existing.id} via scenario {scen.id}")
+                    warnings.extend(add_check.warnings)
+            
+            # ═══ STEP 8: State Persistence ═══
             try:
-                # Live/shadow (persist=True): prune + atomic disk write, as before.
-                # Backtest (persist=False): in-memory prune only — skips the
-                # per-cycle disk write (~172k writes over a 180d×10-symbol run)
-                # while still bounding the candidate list. Live path unchanged.
-                if self.persist:
-                    self.setup_state_store.save()
-                else:
-                    self.setup_state_store.prune()
+                self._persist_state()
             except Exception as e:
-                log.error(f"setup_state save/prune failed (continuing cycle): {e}")
-
-        # Multi-instance coordination: release symbol lease at cycle end
-        # This must happen after all trading operations are complete
-        if lease_acquired and self.instance_mgr:
-            try:
-                released = self.instance_mgr.sync_release_symbol(symbol)
-                if not released:
-                    log.warning(f"[{symbol}] Failed to release lease - may remain locked until expiry")
-            except Exception as e:
-                log.warning(f"[{symbol}] Exception during lease release: {e}")
+                log.error(f"State persistence failed: {e}")
+            
+            # ═══ STEP 9: Report Generation ═══
+            report_md = self.reporter.generate(
+                symbol=symbol, timeframe=tf["entry"],
+                current_price=current_price, htf_bias=htf_bias,
+                levels=all_levels, stacked_zones=stacked,
+                intent=intent_score, signals=signals,
+                scenarios=planner.active_scenarios(),
+                positions=self.lifecycle.positions,
+                range_info=rng,
+            )
+            
+            # Safety summary'yi rapora ekle
+            safety_section = self._build_safety_section(breaker_status, regime_analysis,
+                                                           stale, warnings)
+            report_md = report_md.replace("## Öneri", safety_section + "\n## Öneri")
+            
+            # SMC v2 — persist setup state if wired (gated, inert when None).
+            # Save errors logged but do NOT abort the cycle — persistence failure
+            # must not break trading.
+            #
+            # MAINTENANCE NOTE: this save() MUST remain ABOVE the return below.
+            # Future early-return branches added above this point would silently
+            # skip persistence and lose a tick's state changes. If you add a new
+            # early-exit branch above, also call self.setup_state_store.save()
+            # within the same gated try/except in that branch.
+            if self.setup_state_store is not None:
+                try:
+                    # Live/shadow (persist=True): prune + atomic disk write, as before.
+                    # Backtest (persist=False): in-memory prune only — skips the
+                    # per-cycle disk write (~172k writes over a 180d×10-symbol run)
+                    # while still bounding the candidate list. Live path unchanged.
+                    if self.persist:
+                        self.setup_state_store.save()
+                    else:
+                        self.setup_state_store.prune()
+                except Exception as e:
+                    log.error(f"setup_state save/prune failed (continuing cycle): {e}")
+            
+            # Multi-instance coordination: release symbol lease at cycle end
+        finally:
+            # Multi-instance coordination: release symbol lease at cycle end
+            # This finally block ensures lease is released even on early return/exception
+            if lease_acquired and self.instance_mgr:
+                try:
+                    released = self.instance_mgr.sync_release_symbol(symbol)
+                    if not released:
+                        log.warning(f"[{symbol}] Failed to release lease - may remain locked until expiry")
+                except Exception as e:
+                    log.warning(f"[{symbol}] Exception during lease release: {e}")
 
         return SafeCycleResult(
             symbol=symbol, timeframe=tf["entry"],

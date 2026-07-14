@@ -249,3 +249,25 @@ class TestLeaseGateEdgeCases:
 
         # Lease should not be released since it was never acquired
         orchestrator.instance_mgr.sync_release_symbol.assert_not_called()
+
+    def test_lease_released_on_exception_in_cycle_body(self, orchestrator, sample_dataframes):
+        """Lease should be released even if an exception occurs in the cycle body (try/finally guarantee)."""
+        orchestrator.instance_mgr.sync_acquire_symbol.return_value = True
+
+        df_htf, df_mtf, df_entry, df_daily = sample_dataframes
+
+        # Mock validate_kline_integrity to raise an exception not caught by its try/except
+        # The try/except catches (StaleDataError, ValueError), so RuntimeError will propagate
+        with patch('engine.safe_orchestrator.validate_kline_integrity', side_effect=RuntimeError("Test exception")):
+            with pytest.raises(RuntimeError, match="Test exception"):
+                orchestrator.run_cycle(
+                    symbol="BTCUSDT",
+                    df_htf=df_htf,
+                    df_mtf=df_mtf,
+                    df_entry=df_entry,
+                    df_daily=df_daily,
+                    balance=10000
+                )
+
+        # Lease should STILL be released despite the exception (try/finally guarantee)
+        orchestrator.instance_mgr.sync_release_symbol.assert_called_once_with("BTCUSDT")
