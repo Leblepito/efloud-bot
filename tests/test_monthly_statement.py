@@ -15,11 +15,6 @@ from pathlib import Path
 
 import pytest
 
-# F2: Python 3.14 + Windows pytest tempfile bug workaround
-# https://github.com/pytest-dev/pytest/issues/13157
-# Skip endpoint tests on Windows + Python 3.14 until pytest fix lands
-PY314_WINDOWS_SKIP = sys.version_info >= (3, 14) and sys.platform == "win32"
-
 from ops.daily_report.monthly import (
     build_monthly_statement,
     main,
@@ -252,7 +247,6 @@ def api_app():
     return app
 
 
-@pytest.mark.skipif(PY314_WINDOWS_SKIP, reason="Python 3.14 + Windows tempfile bug (F2)")
 def test_endpoint_requires_auth(api_app):
     from fastapi.testclient import TestClient
 
@@ -261,7 +255,6 @@ def test_endpoint_requires_auth(api_app):
         assert r.status_code == 401
 
 
-@pytest.mark.skipif(PY314_WINDOWS_SKIP, reason="Python 3.14 + Windows tempfile bug (F2)")
 def test_endpoint_returns_statement_when_authed(api_app, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from backend.auth import require_auth
@@ -280,7 +273,6 @@ def test_endpoint_returns_statement_when_authed(api_app, tmp_path, monkeypatch):
         assert body["window"]["days"] == 30
 
 
-@pytest.mark.skipif(PY314_WINDOWS_SKIP, reason="Python working with 3.14 + Windows tempfile bug (F2)")
 def test_endpoint_clamps_window(api_app, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from backend.auth import require_auth
