@@ -102,6 +102,22 @@ harness (backtest/comparison.py) kullan. Çıktı: mantıksal commit'ler +
 findings tablosu güncellemesi + kısa Türkçe rapor.
 ```
 
+## 4.5 W1 Sonuç Tablosu (2026-07-15)
+
+| Görev | Durum | Kanıt / Commit |
+|-------|-------|----------------|
+| T1 skipif temizliği | ✅ | 7e632bf (origin'de); grep boş |
+| W1.1 / F2 publishing+monthly | ✅ | 1fe31ce (mock fix) + 5f98e43 (T2: fixture gerçek-zamana göreli — sabit NOW=2026-07-10 + '2026-07-' assert'i çift takvim bombasıydı) |
+| W1.2 / B2 lease try/finally | ✅ | 56ec005; test_lease_released_on_exception_in_cycle_body satır 253 doğrulandı |
+| W1.3 / B3 breaker tail-recompute | ✅ | cc30651; RED→GREEN — hafta ledger + fail-closed max(), seri artık kısalamaz |
+| W1.4 / B1 OrderManager RLock | ✅ | b2c40e6; 16 site → 3 yardımcı, tasarım notu docs/dev/2026-07-15-b1-*.md |
+| uv.lock → 3.11 | ✅ | header >=3.11 (dosya stub'dı, paket listesi hiç yoktu) |
+| Hafta gate (Docker) | ⏳ OPERATÖR | `.\scripts\run_tests_docker.ps1` — beklenen: 0 failed, 0 errors |
+
+Ek temizlik: fabrikasyon-artığı backend/tests/test_new_confluence_score.py
+silindi (var olmayan fonksiyona RED test, collection'ı kırıyordu);
+tests/routines/test_runner.py hermetikleştirildi (3e01616).
+
 ## 5. Referanslar
 
 - Bulgular: `docs/reviews/2026-07-11-full-repo-review-findings.md`
