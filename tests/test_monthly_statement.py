@@ -23,7 +23,13 @@ from ops.daily_report.monthly import (
     render_markdown,
 )
 
-NOW = datetime(2026, 7, 10, 12, 0, 0, tzinfo=timezone.utc)  # Near current date (2026-07-13) for 30-day window
+# T2 (W1, 2026-07-15): SABIT takvim tarihi saatli bombaydi — endpoint GERCEK
+# now_utc ile filtreler (exit_ts > now_utc -> gelecekteki trade dislanir; 30g
+# pencere -> eski trade dislanir). Sabit NOW gercek tarihe gore ya gelecekte
+# ya pencere disinda kalinca trade_count=0 (Docker gate 1-failed'inin koku).
+# Gercek-zamana GORELI NOW her tarihte/TZ'de deterministik; unit testler
+# now_utc=NOW'u zaten acikca gectigi icin gorecelilik davranis degistirmez.
+NOW = datetime.now(timezone.utc).replace(microsecond=0)
 
 
 def _journal_line(
@@ -158,7 +164,7 @@ def test_statement_summary_via_compute_summary(tmp_path: Path):
     assert s["wins"] == 2 and s["losses"] == 1
     assert s["win_rate_pct"] == pytest.approx(66.67)
     assert statement["window"]["days"] == 30
-    assert statement["window"]["until"].startswith("2026-07-")  # Matches NOW = 2026-07-10
+    assert statement["window"]["until"].startswith(NOW.strftime("%Y-%m-"))  # until == now_utc ayı (takvim-bağımsız)
 
 
 def test_statement_marks_dbless_equity_explicitly(tmp_path: Path):
