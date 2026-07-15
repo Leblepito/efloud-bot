@@ -9,7 +9,9 @@ $ErrorActionPreference = "Stop"
 
 $ImageName = "efloud-bot:test"
 $Dockerfile = "Dockerfile"
-$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+# $PSScriptRoot = <repo>\scripts -> repo koku BIR seviye yukaridir. Cift
+# -Parent tum Downloads'u (12+GB) build context yapiyordu (2026-07-15 bulgusu).
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
 
 Write-Host "=== Efloud Bot Test Gate (Docker) ===" -ForegroundColor Cyan
 Write-Host "Image: $ImageName"

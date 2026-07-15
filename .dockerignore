@@ -26,3 +26,5 @@ backtest/results/
 **/dist
 .DS_Store
 Thumbs.db
+# OHLCV parquet cache - build context'e girmesin (GB'larca olabilir)
+cache/*
