@@ -3,6 +3,7 @@
 import ccxt
 import json
 import os
+import threading
 import time as _time
 import pandas as pd
 import logging
@@ -440,6 +441,11 @@ class OrderManager:
         self.verify_max_attempts = 3
         self.rollback_on_sl_failure = True
         self.positions: List[Position] = []
+        # B1 (W1.4): positions listesine bot cycle thread'i + backend API tarafı
+        # erişir. Bileşik diziler (kontrol-et-ve-sil, yürü-ve-sil, persist
+        # snapshot'ı) RLock korumalı yardımcılardan geçer; kilit ASLA ağ I/O'su
+        # boyunca tutulmaz. Tasarım: docs/dev/2026-07-15-b1-ordermanager-positions-lock.md
+        self._positions_lock = threading.RLock()
         self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         # M4: per-sweep (trade_id, old_pnl, new_pnl) tuples produced by
         # audit_realized_pnl; drained by SafeOrchestrator STEP5 to back-correct
@@ -741,7 +747,7 @@ class OrderManager:
         3. The order ID is empty (never successfully placed)
         4. tp2 is not None (for TP2 repair; single-target has no TP2)
         """
-        for pos in self.positions[:]:  # F4: _fallback_close listeyi mutasyona uğratır
+        for pos in self._positions_snapshot():  # F4: _fallback_close listeyi mutasyona uğratır
             ccxt_sym = self.client.to_ccxt_symbol(pos.symbol)
             reverse_side = "sell" if pos.direction == "LONG" else "buy"
             is_single_target = pos.tp2 is None
@@ -1056,7 +1062,7 @@ class OrderManager:
                            atr_value=atr_value,
                            funding_rate=funding_rate,
                            confluence_details=confluence_details)
-            self.positions.append(pos)
+            self._positions_add(pos)
             self._persist()
             self._emit("position_opened", pos)
             return pos
@@ -1264,7 +1270,7 @@ class OrderManager:
             funding_rate=funding_rate,
             confluence_details=confluence_details,
         )
-        self.positions.append(pos)
+        self._positions_add(pos)
         # PR B — confirm SL/TP actually landed on the exchange within seconds.
         # May market-close + remove pos from self.positions if SL can't be
         # confirmed (returns rolled_back); return None so callers treat the
@@ -1357,7 +1363,7 @@ class OrderManager:
         # parameters, or accept it. See 2026-05-09 LTC/ADA orphan incident: bot
         # had only 3 of 5 exchange positions in state; manual `state_aggressive/
         # order_manager_positions.json` injection was needed.
-        local_symbols = {p.symbol for p in self.positions}
+        local_symbols = {p.symbol for p in self._positions_snapshot()}
         orphan_symbols = bn_open_symbols - local_symbols
         detected_orphans: list = []
         if orphan_symbols:
@@ -1412,7 +1418,7 @@ class OrderManager:
 
         closed_now: List[Position] = []
 
-        for pos in self.positions[:]:
+        for pos in self._positions_snapshot():
             # Normalization fallback for legacy/mock tests that don't pass 'side' parameter:
             if self.hedge_mode:
                 is_open = (pos.symbol, pos.direction) in bn_open_positions or (pos.symbol, "") in bn_open_positions
@@ -1442,7 +1448,7 @@ class OrderManager:
                     self._cancel_position_siblings(pos, ccxt_sym, reason="RECONCILED")
                 self._record_close(pos, exit_price, reason="RECONCILED")
                 closed_now.append(pos)
-                self.positions.remove(pos)
+                self._positions_discard(pos)
                 continue
 
             # Pozisyon hâlâ açık — TP1 fill kontrolü
@@ -1513,7 +1519,7 @@ class OrderManager:
         # 2. AND no active open position on the exchange for this symbol.
         # Then cancel all open orders for this symbol to prevent orphan leftovers!
         if orders_fetch_ok and not self.dry_run:
-            active_symbols = {pos.symbol for pos in self.positions} | bn_open_symbols
+            active_symbols = {pos.symbol for pos in self._positions_snapshot()} | bn_open_symbols
             # (1) Regular leftover orders. Algo-aware cancel: a leftover whose id
             # is actually an algoId would fail cancel_order(-2011) → _cancel_order_any
             # falls back to the algo endpoint.
@@ -1965,8 +1971,7 @@ class OrderManager:
                     original_error=Exception("SL unconfirmed after post-placement verify"),
                 )
             finally:
-                if pos in self.positions:
-                    self.positions.remove(pos)
+                self._positions_discard(pos)
                 self._persist()
             return {"skipped": False, "sl_ok": False, "rolled_back": True}
 
@@ -2126,7 +2131,7 @@ class OrderManager:
         eğer reconcile() çalışmadıysa veya order'lar yerleşmediyse polling ile
         yedek koruma. Production'da nadiren tetiklenir.
         """
-        for pos in self.positions[:]:
+        for pos in self._positions_snapshot():
             try:
                 price = self.client.get_price(pos.symbol)
             except Exception:
@@ -2191,7 +2196,7 @@ class OrderManager:
             self._cancel_position_siblings(pos, ccxt_sym, reason=f"FALLBACK_{reason}")
 
         self._record_close(pos, price, reason)
-        self.positions.remove(pos)
+        self._positions_discard(pos)
         self._persist()
         return True
 
@@ -2201,7 +2206,7 @@ class OrderManager:
         Returns True if attempted, False if not tracked.
         Used by mobile API for manual position closing.
         """
-        if pos not in self.positions:
+        if pos not in self._positions_snapshot():
             return False
         try:
             price = self.client.get_price(pos.symbol)
@@ -2331,7 +2336,7 @@ class OrderManager:
         Frontend kill switch butonunun çağıracağı endpoint. Returns: kapatılan pozisyon sayısı.
         """
         count = 0
-        for pos in self.positions[:]:
+        for pos in self._positions_snapshot():
             try:
                 price = self.client.get_price(pos.symbol)
             except Exception:
@@ -2355,11 +2360,37 @@ class OrderManager:
 
     @property
     def open_count(self) -> int:
-        return len(self.positions)
+        return len(self._positions_snapshot())
 
     # ─────────────────────────────────────────────────────────────
     # Persistence — opt-in via state_dir
     # ─────────────────────────────────────────────────────────────
+
+    # ── B1 (W1.4): positions kritik-bölge yardımcıları ──────────────────
+    # Tüm liste mutasyonları ve bileşik okumalar bu üçünden geçer; kilit kapsamı
+    # yalnız liste işlemidir (ağ çağrısı / json serialization DIŞARIDA kalır).
+    def _plock(self) -> "threading.RLock":
+        """Kilidi tembel getir: bazı testler OrderManager'ı __init__'siz kurar
+        (OrderManager.__new__) — attribute yoksa burada oluşturulur.
+        dict.setdefault GIL altında atomiktir → tek-lock garantisi."""
+        return self.__dict__.setdefault("_positions_lock", threading.RLock())
+
+    def _positions_add(self, pos: "Position") -> None:
+        with self._plock():
+            self.positions.append(pos)
+
+    def _positions_discard(self, pos: "Position") -> bool:
+        """Atomik kontrol-et-ve-sil; listede yoksa False (çifte-silme yarışına dayanıklı)."""
+        with self._plock():
+            if pos in self.positions:
+                self.positions.remove(pos)
+                return True
+            return False
+
+    def _positions_snapshot(self) -> "List[Position]":
+        """Yürüyüş/serialization/üyelik testi için tutarlı kopya."""
+        with self._plock():
+            return self.positions[:]
 
     def _persist(self) -> None:
         """Atomically write self.positions to disk (no-op if state_dir not set)."""
@@ -2368,7 +2399,7 @@ class OrderManager:
         try:
             self._state_dir.mkdir(parents=True, exist_ok=True)
             tmp = self._state_file.with_suffix(".json.tmp")
-            payload = {"positions": [asdict(p) for p in self.positions]}
+            payload = {"positions": [asdict(p) for p in self._positions_snapshot()]}
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2, default=str)
                 f.flush()
@@ -2391,7 +2422,8 @@ class OrderManager:
                 fields = {f.name for f in Position.__dataclass_fields__.values()}
                 clean = {k: v for k, v in d.items() if k in fields}
                 restored.append(Position(**clean))
-            self.positions = restored
+            with self._plock():
+                self.positions = restored
             if restored:
                 log.info(
                     f"♻️  OrderManager restored {len(restored)} position(s) from "
@@ -2407,4 +2439,5 @@ class OrderManager:
                 self._state_file.rename(bad)
             except Exception:
                 pass
-            self.positions = []
+            with self._plock():
+                self.positions = []
