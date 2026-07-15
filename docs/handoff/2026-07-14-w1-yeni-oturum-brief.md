@@ -7,14 +7,20 @@
 
 ## 1. Mevcut Durum (doğrulanmış — 2026-07-15 Cowork oturumu güncellemesi)
 
-- Branch: `master` @ `3e01616` (lokal). origin/master = `56ec005` → **push
-  bekliyor** (4 yeni commit: 5f98e43 T2, cc30651 T4/B3, b2c40e6 T5/B1,
-  3e01616 runner-hermetik + bu docs commit'i).
+- Branch: `master` @ `4b73b94` = origin/master (2026-07-15 push edildi:
+  5f98e43 T2, cc30651 T4/B3, b2c40e6 T5/B1, 3e01616 runner-hermetik,
+  b3473bc T6-docs, 4b73b94 gate-script fix).
+- **DOCKER GATE İLK KEZ TAMAMEN YEŞİL (2026-07-15, ham satır):**
+  `605 passed, 15 skipped, 1 deselected, 4 warnings in 43.25s` →
+  `=== ALL TESTS PASSED ===`. (Önceki bilinen: 1 failed.)
+- Gate script bug'ı bulundu+düzeltildi (4b73b94): çift Split-Path -Parent tüm
+  Downloads'u (12.17GB) build context yapıyordu; tek -Parent + .dockerignore
+  cache/* → context 963MB-1.27GB, build ~5 dk.
 - Görev durumları (kanıtlı):
   - **T1 ✅** skipif temizliği: 7e632bf origin'de; `grep -rn skipif tests/test_monthly* tests/test_publishing*` boş.
-  - **T2 ✅ (kod)** monthly fixture sabit-tarih bombası söküldü (5f98e43):
-    NOW artık gerçek-zamana göreli; satır-161 takvim assert'i de göreli.
-    Nihai kanıt Docker gate koşusu — OPERATÖRDE.
+  - **T2 ✅** monthly fixture sabit-tarih bombası söküldü (5f98e43): NOW
+    gerçek-zamana göreli; satır-161 takvim assert'i de göreli. Docker gate
+    kanıtı: 0 failed (yukarıdaki ham satır).
   - **T3 ✅** B2 lease try/finally: 56ec005 origin'de;
     `test_lease_released_on_exception_in_cycle_body` gerçekten var
     (tests/test_safe_orchestrator_lease.py:253, grep ile doğrulandı).
@@ -23,9 +29,8 @@
   - **T5 ✅** B1 OrderManager RLock: b2c40e6 + tasarım notu
     docs/dev/2026-07-15-b1-ordermanager-positions-lock.md; ilk sürümün
     kırdığı test_post_placement_verify _plock tembel-init ile düzeltildi (12/12).
-  - **T6 🟡** uv.lock header'ı >=3.11'e yeniden üretildi (dosya 3 satır stub —
-    pyproject'te [project] tablosu yok, paket listesi hiç olmamış); W1 sonuç
-    tablosu prep dokümanına eklendi. KALAN: Docker gate koşusu + push (operatör).
+  - **T6 ✅** uv.lock >=3.11 (3 satır stub); W1 sonuç tablosu prep
+    dokümanında; Docker gate 0-failed koştu; push yapıldı (4b73b94). W1 KAPANDI.
 - Temizlik (2026-07-15): backend/tests/test_new_confluence_score.py SİLİNDİ
   (fabrikasyon-dönemi artığı: var olmayan engine.signals.new_confluence_score
   için RED test — backend collection'ı kırıyordu, hiçbir planda yok);

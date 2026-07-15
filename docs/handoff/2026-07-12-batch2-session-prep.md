@@ -112,7 +112,7 @@ findings tablosu güncellemesi + kısa Türkçe rapor.
 | W1.3 / B3 breaker tail-recompute | ✅ | cc30651; RED→GREEN — hafta ledger + fail-closed max(), seri artık kısalamaz |
 | W1.4 / B1 OrderManager RLock | ✅ | b2c40e6; 16 site → 3 yardımcı, tasarım notu docs/dev/2026-07-15-b1-*.md |
 | uv.lock → 3.11 | ✅ | header >=3.11 (dosya stub'dı, paket listesi hiç yoktu) |
-| Hafta gate (Docker) | ⏳ OPERATÖR | `.\scripts\run_tests_docker.ps1` — beklenen: 0 failed, 0 errors |
+| Hafta gate (Docker) | ✅ (2026-07-15) | `605 passed, 15 skipped, 1 deselected in 43.25s` — ALL TESTS PASSED. Gate script path bug'ı da bulundu+düzeltildi (4b73b94: Downloads 12GB context → repo kökü + cache/* dockerignore) |
 
 Ek temizlik: fabrikasyon-artığı backend/tests/test_new_confluence_score.py
 silindi (var olmayan fonksiyona RED test, collection'ı kırıyordu);
