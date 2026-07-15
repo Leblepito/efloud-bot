@@ -145,9 +145,11 @@ class CircuitBreaker:
         A sign-flipped local estimate (a net-loss trade fed as a WIN) wrongly
         RESETS the consecutive-loss counter, weakening consecutive_loss_limit.
         Here we (1) adjust current_balance by the delta and (2) update the matching
-        most-recent today's trade and RECOMPUTE the consecutive-loss counter from
-        the tail — the canonical "trailing losses" definition record_trade itself
-        maintains. This correctly restores a count the win-reset erased (e.g.
+        most-recent WEEK-ledger trade and RECOMPUTE the consecutive-loss counter
+        from the trailing tail — the canonical "trailing losses" definition
+        record_trade itself maintains. Fail-closed: the walk must SEE a trailing
+        win to shorten the counter; exhausting the ledger without one can only
+        keep or raise it (B3/W1.3 — older losses may have aged out of the ledger). This correctly restores a count the win-reset erased (e.g.
         loss, loss, est-win→0 then corrected to loss → 3), which a naive +1 cannot.
 
         The counter is recomputed PURELY from the corrected exchange-truth ledger:
@@ -159,19 +161,29 @@ class CircuitBreaker:
         self.current_balance += (new_pnl - old_pnl)
         if self.current_balance > self.peak_balance:
             self.peak_balance = self.current_balance
-        # Update the matching (most-recent, by value) today's trade in place. The
-        # same dict object is shared with trades_this_week, so both stay coherent.
-        for trade in reversed(self.trades_today):
+        # B3 (W1.3, 2026-07-15): match + recompute HAFTA ledger'ında (7g).
+        # trades_today 24h ROLLING penceredir: (1) pencereyi aşan seride bugünkü
+        # kuyruk sayımı sayacı KISALTIYORDU (guard zayıflar), (2) >24h önce
+        # kapanmış trade'in düzeltmesi today'de hiç eşleşmiyordu. Dict'ler
+        # today/week arasında paylaşıldığı için week mutasyonu ikisini de günceller.
+        for trade in reversed(self.trades_this_week):
             if abs(trade["pnl"] - old_pnl) < 1e-9:
                 trade["pnl"] = new_pnl
                 break
-        # Recompute trailing-loss count from the corrected ledger.
+        # Recompute trailing-loss count from the corrected week ledger. Yürüyüş
+        # win görmeden ledger'ı tüketirse gerçek seri >= recomputed (daha eski
+        # kayıplar ledger'dan düşmüş olabilir) → sayaç asla AŞAĞI çekilmez.
+        # Görünür trailing win varsa recomputed esastır (loss→win azaltması).
         recomputed = 0
-        for trade in reversed(self.trades_today):
+        saw_win = False
+        for trade in reversed(self.trades_this_week):
             if trade["pnl"] < 0:
                 recomputed += 1
             else:
+                saw_win = True
                 break
+        if not saw_win:
+            recomputed = max(recomputed, self.consecutive_losses)
         if recomputed != self.consecutive_losses:
             log.warning(
                 f"PnL audit corrected (${old_pnl:.2f}→${new_pnl:.2f}); "
