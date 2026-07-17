@@ -1,8 +1,10 @@
 # 2026-07-17 Cowork → VS Code (Claude Code) Handoff
 
 > Cowork cloud oturumu 2026-07-17'de iki turda 27 bug/iyileştirme uyguladı ve
-> **7 commit** üretti (origin/master `d9d4cef`'in önünde, LOKAL — push edilmedi;
-> sandbox'ta credential yok). Bu doküman TEK devir kaydıdır. Kanıt standardı:
+> **7 commit** üretti. İlk 4'ü (d7219cc..4b480c7) operatör oturum sırasında
+> push'ladı; kalan 3 (bf09522/872ee27/b3823ba + bu doküman commit'i) LOKAL —
+> sandbox'ta credential yok. GÜNCEL sayıyı her zaman `git log --oneline
+> origin/master..HEAD` belirler. Bu doküman TEK devir kaydıdır. Kanıt standardı:
 > her iddia `git log` / grep / test çıktısıyla doğrulanabilir durumda.
 
 ## 1. Mevcut Durum (doğrulanmış)
@@ -25,7 +27,7 @@
 
 ### T1 — Push (5 dk)
 ```
-git log --oneline origin/master..HEAD   # 7 commit doğrula
+git log --oneline origin/master..HEAD   # kalan commit'leri doğrula (yazım anında 3)
 git diff --ignore-cr-at-eol HEAD --stat # boş/CRLF-only olmalı — yeni commit ATMA
 git push origin master
 ```
@@ -78,7 +80,7 @@ docs/reviews/2026-07-17-full-repo-review-findings.md (ne değişti).
 Dev sözleşmesi: CLAUDE.md + docs/dev/karpathy-guidelines.md.
 
 GÖREVLER (sırayla, her biri kanıtla raporlanır):
-T1: git log --oneline origin/master..HEAD ile 7 commit'i doğrula;
+T1: git log --oneline origin/master..HEAD ile KALAN commit'leri doğrula;
     git diff --ignore-cr-at-eol HEAD boş mu bak (CRLF artefaktı commit'leme);
     git push origin master.
 T2: .\scripts\run_tests_docker.ps1 koş → HAM özet satırını rapora koy
