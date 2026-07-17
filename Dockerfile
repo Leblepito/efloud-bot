@@ -37,8 +37,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Cache Python deps
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Drift-pinleme (2026-07-17): '-c constraints.txt' — requirements '>=' aralıkları
+# her rebuild'de o günün sürümlerini çekiyordu; ccxt≥4.5 + pandas-3 drift'i canlı
+# bug üretti (bkz. docs/reviews/2026-07-17-full-repo-review-findings.md).
+# constraints.txt tam suite'in yeşil doğrulandığı kapanışı sabitler.
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # App source (excludes dev artifacts via .dockerignore)
 COPY . ./
@@ -50,4 +54,10 @@ COPY --from=frontend-builder /app/frontend/out ./frontend/out
 RUN mkdir -p ./state ./state_micro ./state_1k ./logs ./reports
 
 EXPOSE 8080
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# B-5 fix (2026-07-17): --proxy-headers + --forwarded-allow-ips — Caddy arkasında
+# uvicorn X-Forwarded-For okumuyordu → request.client.host hep proxy IP'si →
+# /api/login per-IP rate limiti TEK global kovaya çöküyordu: internetten herhangi
+# biri 5 yanlış şifreyle 15 dk boyunca OPERATÖRÜN dashboard girişini de
+# kilitleyebiliyordu (kill-switch erişimi dahil). Trusted proxy = compose-içi
+# Caddy; container ağı dışından doğrudan erişim yok, bu yüzden '*' güvenli.
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips '*'"]
