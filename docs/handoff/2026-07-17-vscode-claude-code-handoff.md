@@ -7,6 +7,23 @@
 > origin/master..HEAD` belirler. Bu doküman TEK devir kaydıdır. Kanıt standardı:
 > her iddia `git log` / grep / test çıktısıyla doğrulanabilir durumda.
 
+## 0. ÖNCE BUNU OKU — Doğru repo + doğru dal
+
+**Çalışma dizini:** `C:\Users\utkuc\Downloads\efloud-bot` — BAŞKA klasör/clone değil.
+**Çalışma dalı:** `master`. Repo'daki `main` dalı Nisan 2026'da kalmış tek-commit'lik
+stub'dır (`55a7cbe` "initial commit") ve GitHub'ın default branch'i olabilir — taze
+`git clone` seni ORAYA düşürür ve "commit'ler yok / handoff dokümanı yok / Nisan
+2026 geçmişi" görürsün (2026-07-17'de bir Claude Code oturumu tam bu tuzağa düştü).
+Push'lanmamış commit'ler YALNIZ yukarıdaki working copy'de var; taze clone'da olamazlar.
+Doğrulama üçlüsü:
+```
+git remote -v                    # https://github.com/Leblepito/efloud-bot.git olmalı
+git branch --show-current        # master olmalı (değilse: git checkout master)
+git log --oneline -3             # tepe: 961ab8a / b3823ba / 872ee27 görünmeli
+```
+Operatöre öneri: GitHub'da default branch'i `master` yap (Settings → Branches) —
+bu tuzak kalıcı kapanır. `main` stub'ı istenirse silinebilir.
+
 ## 1. Mevcut Durum (doğrulanmış)
 
 - Branch: `master`, origin/master'ın **7 commit önünde**:
