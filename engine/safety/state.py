@@ -17,6 +17,7 @@ Atomik yazım: önce .tmp'ye yaz, sonra rename (crash-safe).
 import json
 import os
 import tempfile
+import threading
 import shutil
 from pathlib import Path
 from datetime import datetime, timezone
@@ -34,9 +35,18 @@ class StateStore:
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def save(self, key: str, data: Any) -> bool:
-        """Atomik yaz — önce tmp, sonra rename."""
+        """Atomik yaz — önce tmp, sonra rename.
+
+        E-1 fix (2026-07-17): tmp adı yazar-özel (pid+tid). save() hem bot
+        executor thread'inden (orchestrator persist) hem FastAPI loop
+        thread'inden (kill-switch → _persist_state) çağrılıyor; paylaşılan tek
+        tmp adı eşzamanlı iki yazımda birbirinin dosyasını truncate/rename
+        edip bozuk state (breaker.json!) terfi ettirebiliyordu.
+        """
         path = self.dir / f"{key}.json"
-        tmp_path = path.with_suffix(".json.tmp")
+        tmp_path = path.with_suffix(
+            f".json.tmp.{os.getpid()}.{threading.get_ident()}"
+        )
 
         try:
             payload = {

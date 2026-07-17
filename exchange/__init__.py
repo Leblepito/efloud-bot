@@ -68,6 +68,24 @@ class BinanceClient:
             "enableRateLimit": True,
             "options": {"defaultType": ccxt_default_type},
         }
+        if market_type == "futures":
+            # CCXT ≥4.5 drift fix (2026-07-17): symbol-less fetch_open_orders()
+            # (reconcile, post-placement verify, backend/api) no longer honors
+            # defaultType='future' and silently routes to SPOT /api/v3/openOrders
+            # → empty order set → the 2026-05-08 reconcile-blindspot class
+            # (TP/SL "missing" on every cycle). Method-scoped override pins ONLY
+            # fetchOpenOrders to USDM futures. Empirically verified on ccxt
+            # 4.5.66: routes symbol-less fetch_open_orders to /fapi/v1/openOrders
+            # while leaving fetch_ohlcv / fetch_ticker / market() plain-symbol
+            # resolution (→ swap) byte-identical; harmless no-op on older CCXT
+            # (same fapi routing either way). 'warnWithoutSymbol' is the ≥4.5
+            # name of the symbol-less acknowledge flag; the legacy flat key
+            # below stays for older CCXT versions.
+            opts["options"]["fetchOpenOrders"] = {
+                "type": "swap",
+                "subType": "linear",
+                "warnWithoutSymbol": False,
+            }
         if testnet:
             opts["sandbox"] = True
 
@@ -1454,7 +1472,16 @@ class OrderManager:
             # Pozisyon hâlâ açık — TP1 fill kontrolü
             # Only run when the open-orders fetch succeeded; otherwise an empty
             # bn_order_ids (from a failed fetch) would falsely declare TP1 filled.
-            if orders_fetch_ok and self._is_real_oid(pos.tp1_order_id) and not pos.tp1_hit:
+            # B-1 fix (2026-07-17): ALSO gated on algo_fetch_ok — live TP ids are
+            # algoIds (see comment at the fetch above), so a transient algo-fetch
+            # failure empties the algo half of bn_order_ids and every live TP1
+            # would look "missing" → id cleared → same-cycle repair stacks a
+            # duplicate TAKE_PROFIT_MARKET next to the still-live original
+            # (2026-05-08 stacking class; SL path was already gated via
+            # sl_absent_on_exchange, TP paths were not). Cost: TP1-hit/BE-move
+            # detection waits for the next cycle with a clean algo fetch —
+            # same fail-safe tradeoff the SL repair gate accepts.
+            if orders_fetch_ok and algo_fetch_ok and self._is_real_oid(pos.tp1_order_id) and not pos.tp1_hit:
                 if pos.tp1_order_id not in bn_order_ids:
                     # TP1 order is missing from exchange. Verify if it was actually filled.
                     # Find matching exchange position size:
@@ -1497,7 +1524,8 @@ class OrderManager:
                         pos.tp1_order_id = ""
 
             # Pozisyon hâlâ açık — TP2 missing check
-            if orders_fetch_ok and self._is_real_oid(pos.tp2_order_id):
+            # B-1 fix (2026-07-17): algo_fetch_ok gate — see TP1 block above.
+            if orders_fetch_ok and algo_fetch_ok and self._is_real_oid(pos.tp2_order_id):
                 if pos.tp2_order_id not in bn_order_ids:
                     log.warning(
                         f"⚠️ RECONCILE: TP2 order {pos.tp2_order_id} is missing for {pos.symbol} "
@@ -2398,13 +2426,32 @@ class OrderManager:
             return
         try:
             self._state_dir.mkdir(parents=True, exist_ok=True)
-            tmp = self._state_file.with_suffix(".json.tmp")
+            # E-1 fix (2026-07-17): per-writer unique tmp. _persist runs both on
+            # the bot executor thread (reconcile/open) AND on the FastAPI loop
+            # thread (kill-switch, /orders/close → _fallback_close) with no lock
+            # held during I/O (B1 design: no I/O under _plock). A SHARED tmp name
+            # let two concurrent writers truncate/rename each other's file →
+            # corrupt state promoted → next restart quarantines it and boots with
+            # ZERO positions (reconcile blindness, 2026-05-08 class). Unique tmp
+            # keeps every write self-contained; last os.replace wins with a
+            # complete, valid snapshot.
+            tmp = self._state_file.with_suffix(
+                f".json.tmp.{os.getpid()}.{threading.get_ident()}"
+            )
             payload = {"positions": [asdict(p) for p in self._positions_snapshot()]}
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, default=str)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, self._state_file)
+            try:
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=2, default=str)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp, self._state_file)
+            except Exception:
+                # Yarım kalan tmp'yi bırakma (best-effort).
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
         except Exception as e:
             log.error(f"OrderManager state persist failed: {e}")
 

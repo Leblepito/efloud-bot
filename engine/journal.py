@@ -14,6 +14,7 @@ Dosya: trade_journal.jsonl (her satır bir trade)
 import dataclasses
 import json
 import logging
+import os
 import threading
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
@@ -272,11 +273,24 @@ class TradeJournal:
             self._persist(snap)
 
     def _persist(self, snap: TradeSnapshot):
-        """Tüm journal'ı yeniden yaz (append only istenmiyor — lesson güncellemesi için)."""
+        """Tüm journal'ı yeniden yaz (append only istenmiyor — lesson güncellemesi için).
+
+        E-2 fix (2026-07-17): tmp + fsync + os.replace. Önceki truncate-in-place
+        yazım, crash/OOM-kill tam yazım ORTASINA denk gelirse tüm trade
+        geçmişinin kuyruğunu kalıcı siliyordu (F12 satır-dayanıklı _load kalan
+        k satırı kurtarır, sonraki _persist gerisini kalıcı kaybeder). W1'in
+        update_adaptation persist'i rewrite sıklığını artırdığı için pencere
+        büyümüştü. Aynı codebase'deki StateStore.save / OrderManager._persist
+        deseniyle hizalandı.
+        """
         with self._lock:
-            with self.path.open("w", encoding="utf-8") as f:
+            tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+            with tmp.open("w", encoding="utf-8") as f:
                 for s in self._cache:
                     f.write(json.dumps(s.to_dict(), default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self.path)
 
     def get(self, trade_id: str) -> Optional[TradeSnapshot]:
         with self._lock:

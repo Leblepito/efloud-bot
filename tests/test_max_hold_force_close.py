@@ -47,6 +47,9 @@ def test_position_past_max_hold_is_force_closed_exchange_leg_first(tmp_path):
     exchange_pos = MagicMock(symbol="BTC/USDT", direction="LONG")
     om = MagicMock()
     om.positions = [exchange_pos]
+    # E-3 fix (2026-07-17): force-close artik _positions_snapshot() okur
+    # (cross-thread guvenli); mock'u da ona gore besle.
+    om._positions_snapshot.return_value = [exchange_pos]
     orch.order_manager = om
 
     df = _flat_df()
@@ -71,6 +74,7 @@ def test_position_under_max_hold_is_left_open(tmp_path):
     # Well within the 48-hour limit -> must NOT be force-closed.
     om = MagicMock()
     om.positions = []
+    om._positions_snapshot.return_value = []
     orch.order_manager = om
 
     df = _flat_df()
@@ -96,6 +100,7 @@ def test_exchange_close_failure_keeps_logical_position_tracked(tmp_path):
     exchange_pos = MagicMock(symbol="BTC/USDT", direction="LONG")
     om = MagicMock()
     om.positions = [exchange_pos]
+    om._positions_snapshot.return_value = [exchange_pos]
     om._fallback_close.side_effect = RuntimeError("exchange timeout")
     orch.order_manager = om
 

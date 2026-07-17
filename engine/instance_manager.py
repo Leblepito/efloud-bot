@@ -126,6 +126,14 @@ class InstanceManager:
             ok = future.result(timeout=self.release_timeout_sec)
             self._active_leases.pop(symbol, None)
             return ok
+        except asyncio.CancelledError:
+            # E-6 fix (2026-07-17): CancelledError Python ≥3.8'de BaseException —
+            # loop shutdown release coroutine'ini iptal ederse buradaki (ve
+            # run_cycle finally'sindeki) `except Exception` yakalamaz; iptal,
+            # cycle'ın ASIL hatasını maskeleyerek yukarı kaçıyordu. Lease
+            # server-side TTL ile düşer; başarısız release olarak raporla.
+            log.warning(f"Release lease {symbol} cancelled (loop shutdown)")
+            return False
         except Exception as e:
             log.warning(f"Release lease {symbol} failed: {e}")
             return False

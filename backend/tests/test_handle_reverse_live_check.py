@@ -33,6 +33,7 @@ class TestHandleReverseLiveCheck:
     def test_aborts_when_live_opposite_untracked(self):
         om = MagicMock()
         om.positions = []  # order_manager doesn't track it...
+        om._positions_snapshot.return_value = om.positions
         om.client.get_open_positions.return_value = [   # ...but it IS live on Binance
             {"symbol": "BTC/USDT:USDT", "side": "short", "contracts": 0.01},
         ]
@@ -50,6 +51,7 @@ class TestHandleReverseLiveCheck:
     def test_proceeds_when_exchange_flat(self):
         om = MagicMock()
         om.positions = []
+        om._positions_snapshot.return_value = om.positions
         om.client.get_open_positions.return_value = []  # genuinely flat on exchange
         orch = _orch(order_manager=om)
 
@@ -64,6 +66,7 @@ class TestHandleReverseLiveCheck:
     def test_aborts_fail_safe_when_live_check_errors(self):
         om = MagicMock()
         om.positions = []
+        om._positions_snapshot.return_value = om.positions
         om.client.get_open_positions.side_effect = Exception("network")
         orch = _orch(order_manager=om)
 
@@ -76,6 +79,7 @@ class TestHandleReverseLiveCheck:
         ex_pos = MagicMock(symbol="BTC/USDT", direction="SHORT")
         om = MagicMock()
         om.positions = [ex_pos]
+        om._positions_snapshot.return_value = om.positions
         orch = _orch(order_manager=om)
 
         ok = orch._handle_reverse(_opp("SHORT"), "BTC/USDT", 60000.0)
@@ -90,6 +94,7 @@ class TestHandleReverseLiveCheck:
         ex_pos = MagicMock(symbol="BTC/USDT", direction="SHORT")
         om = MagicMock()
         om.positions = [ex_pos]
+        om._positions_snapshot.return_value = om.positions
         om._fallback_close.side_effect = RuntimeError("close fail")
         notif = MagicMock(spec=NotificationManager)
         orch = _orch(order_manager=om, notification_mgr=notif)

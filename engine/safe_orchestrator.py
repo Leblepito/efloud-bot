@@ -793,8 +793,13 @@ class SafeOrchestrator:
         )
         exchange_close_ran = False
         if self.order_manager is not None:
+            # E-3 fix (2026-07-17): _positions_snapshot() — canlı liste üzerinde
+            # generator, API loop-thread'inin eşzamanlı list.remove'uyla
+            # (kill-switch, /orders/close) eleman atlayabilir. B1 tasarım
+            # notundaki "aynı thread read-only" varsayımı cross-thread mutasyonu
+            # kaçırıyordu.
             exchange_pos = next(
-                (p for p in self.order_manager.positions
+                (p for p in self.order_manager._positions_snapshot()
                  if p.symbol == symbol and p.direction == opposite_pos.direction),
                 None,
             )
@@ -882,8 +887,12 @@ class SafeOrchestrator:
         """
         exchange_close_ran = False
         if self.order_manager is not None:
+            # E-3 fix (2026-07-17): _positions_snapshot() — canlı listede
+            # cross-thread list.remove eleman atlatıp canlı pozisyonu
+            # "borsada yok" sanarak logical-only MANUAL close'a düşürebilirdi
+            # (pozisyon Binance'te canlı kalır → duplicate-guard körleşir).
             exchange_pos = next(
-                (p for p in self.order_manager.positions
+                (p for p in self.order_manager._positions_snapshot()
                  if p.symbol == pos.symbol and p.direction == pos.direction),
                 None,
             )
@@ -1262,12 +1271,18 @@ class SafeOrchestrator:
             # Over-counting is fail-CLOSED (breaker trips earlier, never later).
             corrections = getattr(self.order_manager, "_last_pnl_corrections", None) if self.order_manager else None
             if corrections:
-                if self.config.get("safety", {}).get("breaker_backcorrect_consecutive", False):
-                    for _trade_id, old_pnl, new_pnl in corrections:
-                        if (old_pnl >= 0) != (new_pnl >= 0):  # sign flip only
-                            self.breaker.record_trade_correction(old_pnl, new_pnl)
-                            actions.append(f"Breaker corrected PnL ${old_pnl:.2f}→${new_pnl:.2f}")
-                corrections.clear()
+                # E-5 hardening (2026-07-17): drain her koşulda finally'de —
+                # record_trade_correction ortada raise ederse clear() atlanıp
+                # uygulanmış düzeltmeler sonraki cycle'da İKİNCİ kez
+                # uygulanıyordu (çift balance deltası + yanlış ledger eşleşmesi).
+                try:
+                    if self.config.get("safety", {}).get("breaker_backcorrect_consecutive", False):
+                        for _trade_id, old_pnl, new_pnl in corrections:
+                            if (old_pnl >= 0) != (new_pnl >= 0):  # sign flip only
+                                self.breaker.record_trade_correction(old_pnl, new_pnl)
+                                actions.append(f"Breaker corrected PnL ${old_pnl:.2f}→${new_pnl:.2f}")
+                finally:
+                    corrections.clear()
             
             # Orphan hedge cleanup
             orphans = cleanup_orphan_hedges(self.lifecycle.positions, log)
@@ -1469,6 +1484,20 @@ class SafeOrchestrator:
                             if not leblep_check.allowed:
                                 log.warning(f"🚫 Leblep risk-ops reject: {leblep_check.reason}")
                                 warnings.append(f"Signal rejected: {leblep_check.reason}")
+                                # E-4 fix (2026-07-17): MAINTENANCE NOTE (aşağıda,
+                                # setup_state_store.save() üstünde) erken-return
+                                # dallarının persist'i atlamamasını şart koşar —
+                                # bu tick'te ilerletilmiş SMC-v2 candidate state'i
+                                # (bars_waited, IN_ZONE/EXPIRED geçişleri) kaybolup
+                                # restart'ta bayat zone'dan CONFIRM üretebilirdi.
+                                if self.setup_state_store is not None:
+                                    try:
+                                        if self.persist:
+                                            self.setup_state_store.save()
+                                        else:
+                                            self.setup_state_store.prune()
+                                    except Exception as _e:
+                                        log.error(f"setup_state save/prune failed (leblep reject): {_e}")
                                 return SafeCycleResult(
                                     symbol=symbol,
                                     timeframe=tf["entry"],

@@ -39,6 +39,7 @@ class TestForceCloseMaxHold:
         ex_pos = MagicMock(symbol="BTC/USDT", direction="SHORT")
         om = MagicMock()
         om.positions = [ex_pos]
+        om._positions_snapshot.return_value = om.positions
         orch = _orch(order_manager=om)
         pos = _pos()
 
@@ -54,6 +55,7 @@ class TestForceCloseMaxHold:
         ex_pos = MagicMock(symbol="BTC/USDT", direction="SHORT")
         om = MagicMock()
         om.positions = [ex_pos]
+        om._positions_snapshot.return_value = om.positions
         om._fallback_close.side_effect = RuntimeError("network")
         # spec=NotificationManager so a wrong-arity alert() call raises (catches
         # the (level, message) signature, not a silently-swallowed TypeError).
@@ -83,6 +85,7 @@ class TestForceCloseMaxHold:
         # order_manager present but position not tracked there → logical close + journal.
         om = MagicMock()
         om.positions = []  # no match
+        om._positions_snapshot.return_value = om.positions
         orch = _orch(order_manager=om)
         pos = _pos()
         ok = orch._force_close_max_hold(pos, 100.0)
