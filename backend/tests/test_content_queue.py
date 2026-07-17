@@ -278,11 +278,42 @@ async def test_count_by_status():
 
 @pytest.mark.asyncio
 async def test_save_draft_passes_serialized_meta():
+    # B-2 fix (2026-07-17): asyncpg pozisyonel — meta artık 5. pozisyonel arg.
+    # (Eski hali call_args.kwargs["meta"] okuyordu; o API gerçek asyncpg'de
+    # TypeError'dı, mock yüzünden kaçmıştı.)
     pool, conn = _fake_pool_with_conn()
     d = create_draft("ok", "tr", "signal", {"nested": {"deep": 1, "list": [1, 2, 3]}})
     await queue_storage.save_draft(pool, d)
-    params = conn.execute.call_args.kwargs
-    assert isinstance(params["meta"], str)
-    parsed = json.loads(params["meta"])
+    args, kwargs = conn.execute.call_args
+    assert kwargs == {}
+    meta_arg = args[5]
+    assert isinstance(meta_arg, str)
+    parsed = json.loads(meta_arg)
     assert parsed["nested"]["deep"] == 1
     assert parsed["nested"]["list"] == [1, 2, 3]
+
+
+# ── B-2 (2026-07-17): save_draft pozisyonel asyncpg args ────────────────────
+
+@pytest.mark.asyncio
+async def test_save_draft_uses_positional_args_not_named_kwargs():
+    """`$(name)` + execute(**kwargs) gerçek asyncpg'de TypeError'dı; testler
+    AsyncMock'la geçtiği için kaçmıştı. Artık execute pozisyonel $1..$11
+    almalı ve named kwargs GEÇMEMELİ."""
+    from backend.social.queue_storage import save_draft
+
+    draft = create_draft("hi", "en", "promo")
+
+    pool, conn = _fake_pool_with_conn()
+    await save_draft(pool, draft)
+
+    conn.execute.assert_awaited_once()
+    args, kwargs = conn.execute.call_args
+    # named kwargs (draft_id=…) OLMAMALI — asyncpg positional-only
+    assert kwargs == {}
+    # SQL + 11 pozisyonel değer
+    assert len(args) == 12
+    sql = args[0]
+    assert "$1" in sql and "$11" in sql
+    assert "$(draft_id)" not in sql
+    assert args[1] == draft.draft_id  # ilk pozisyonel = draft_id

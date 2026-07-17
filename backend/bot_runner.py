@@ -136,6 +136,23 @@ class BotRunner:
     # ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
+        # B-6 fix (2026-07-17): TOCTOU guard — `running` yalnız startup SONUNDA
+        # set edilir ve gövdede await'ler vardır; eşzamanlı iki /api/bot/start
+        # (çift tıklama) ikisi de idempotency kontrolünü geçip ÇİFT
+        # _run_loop/_run_sentiment_loop task seti başlatabiliyordu → aynı
+        # exchange close'u iki reconcile thread'i görür → çift _record_close →
+        # breaker'a tek SL kaybı İKİ kez sayılır. Bayrak ilk await'ten ÖNCE
+        # (atomik, asyncio kooperatif) set edilir; ikinci çağrı sessiz döner.
+        if getattr(self, "_starting", False):
+            log.info("start() ignored — start already in progress")
+            return
+        self._starting = True
+        try:
+            await self._start_impl()
+        finally:
+            self._starting = False
+
+    async def _start_impl(self) -> None:
         # Aşama 2 Step 3: crash-loop suspension guard.
         # If recent crashes have crossed the threshold, do NOT spin up the
         # trading task. The FastAPI app stays alive so /healthz can return
@@ -685,7 +702,13 @@ class BotRunner:
                     db.record_trade_open(
                         symbol=pos.symbol, direction=pos.direction,
                         entry=pos.entry, sl=pos.sl, tp1=pos.tp1, tp2=pos.tp2,
-                        size=pos.size, binance_order_id=pos.order_id or None,
+                        size=pos.size,
+                        # B-11 fix (2026-07-17): skor confluence_details içinde
+                        # taşınıyordu ama kolon parametresi hiç geçilmiyordu —
+                        # trades.confluence her canlı trade'de NULL kalıyor,
+                        # /api/history ve warehouse sorguları skoru göremiyordu.
+                        confluence=(getattr(pos, "confluence_details", None) or {}).get("score"),
+                        binance_order_id=pos.order_id or None,
                         trace_id=getattr(pos, "trace_id", None),
                         bar_ts_ms=getattr(pos, "bar_ts_ms", None),
                         # SMC v2 telemetry (PR #S5) — defensive getattr so legacy

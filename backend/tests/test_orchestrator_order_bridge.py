@@ -55,15 +55,27 @@ def test_orchestrator_order_manager_defaults_to_none(tmp_path):
     assert orch.order_manager is None
 
 
+def _start_source():
+    """start() + _start_impl() kaynağı birlikte.
+
+    B-6 fix (2026-07-17): start() gövdesi TOCTOU guard'ıyla _start_impl()'e
+    taşındı; wiring artık orada. Smoke test her iki metodu birlikte tarar.
+    """
+    import inspect
+    from backend import bot_runner as runner_mod
+    src = inspect.getsource(runner_mod.BotRunner.start)
+    if hasattr(runner_mod.BotRunner, "_start_impl"):
+        src += inspect.getsource(runner_mod.BotRunner._start_impl)
+    return src
+
+
 def test_bot_runner_wires_order_manager_into_orchestrator():
     """Production wiring: bot_runner.py orchestrator init'inde order_mgr göndermeli.
 
     Bu test source kodu inceler (smoke test) — runtime testi mock heavy
     olur, kod-bazlı assertion daha güvenilir bu satırlar için.
     """
-    import inspect
-    from backend import bot_runner as runner_mod
-    src = inspect.getsource(runner_mod.BotRunner.start)
+    src = _start_source()
     assert "order_manager=self.order_mgr" in src, (
         "bot_runner.start() SafeOrchestrator'a order_mgr göndermeli "
         "— yoksa borsaya emir gitmez (paper-trade bug)"
@@ -72,7 +84,5 @@ def test_bot_runner_wires_order_manager_into_orchestrator():
 
 def test_bot_runner_wires_orphan_protector_into_order_manager():
     """Production wiring: OrderManager orphan_protector almalı."""
-    import inspect
-    from backend import bot_runner as runner_mod
-    src = inspect.getsource(runner_mod.BotRunner.start)
+    src = _start_source()
     assert "orphan_protector=orphan_protector" in src

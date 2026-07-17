@@ -385,3 +385,31 @@ def test_cli_compliance_violation(monkeypatch, capsys):
     out = capsys.readouterr().out
     parsed = json.loads(out)
     assert parsed["ok"] is False
+
+
+# ── B-3 (2026-07-17): post_draft unified interface ──────────────────────────
+
+def test_post_draft_delegates_to_post(monkeypatch):
+    """publishing_worker `client.post_draft(draft)` çağırır — XurlClient'ta
+    bu metod yoktu → default platform 'x' AttributeError'la sonsuz retry'a
+    giriyordu. post_draft, draft.body/lang'i post()'a köprülemeli."""
+    monkeypatch.setenv("X_API_ENABLED", "true")
+    for k in ("X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"):
+        monkeypatch.setenv(k, "x")
+    c = xc.XurlClient()
+    assert hasattr(c, "post_draft")
+
+    captured = {}
+    def fake_post(text, *, dry_run=None, lang="all"):
+        captured["text"] = text
+        captured["lang"] = lang
+        return "SENTINEL"
+    c.post = fake_post
+
+    class _Draft:
+        body = "gm frens"
+        lang = "en"
+    out = c.post_draft(_Draft())
+    assert out == "SENTINEL"
+    assert captured["text"] == "gm frens"
+    assert captured["lang"] == "en"

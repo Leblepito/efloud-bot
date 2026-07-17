@@ -83,8 +83,16 @@ def _draft_to_params(draft: ContentDraft) -> dict[str, Any]:
 
 
 async def save_draft(pool: asyncpg.Pool, draft: ContentDraft) -> None:
-    """UPSERT (varsa güncelle, yoksa ekle)."""
-    params = _draft_to_params(draft)
+    """UPSERT (varsa güncelle, yoksa ekle).
+
+    B-2 fix (2026-07-17): pozisyonel $1..$11 — `$(name)` placeholder sözdizimi
+    asyncpg/Postgres'te yok ve `conn.execute(**params)` da geçersiz (execute
+    positional-only *args alır). Gerçek DB'ye her yazım TypeError'dı (testler
+    AsyncMock'la geçiyordu): approve/reject endpoint'leri 500 dönüyor, publish
+    sonrası status persist edilemeyince aynı draft 60 sn'de bir YENİDEN
+    yayınlanıyordu (duplicate post).
+    """
+    p = _draft_to_params(draft)
     async with pool.acquire() as conn:
         await conn.execute(
             """
@@ -92,8 +100,8 @@ async def save_draft(pool: asyncpg.Pool, draft: ContentDraft) -> None:
                 draft_id, body, lang, post_type, meta, status,
                 created_at, reviewed_at, reviewer_id, rejection_reason, compliance_report
             ) VALUES (
-                $(draft_id), $(body), $(lang), $(post_type), $(meta)::jsonb, $(status),
-                $(created_at), $(reviewed_at), $(reviewer_id), $(rejection_reason), $(compliance_report)::jsonb
+                $1, $2, $3, $4, $5::jsonb, $6,
+                $7, $8, $9, $10, $11::jsonb
             )
             ON CONFLICT (draft_id) DO UPDATE SET
                 body = EXCLUDED.body,
@@ -106,7 +114,9 @@ async def save_draft(pool: asyncpg.Pool, draft: ContentDraft) -> None:
                 rejection_reason = EXCLUDED.rejection_reason,
                 compliance_report = EXCLUDED.compliance_report
             """,
-            **params,
+            p["draft_id"], p["body"], p["lang"], p["post_type"], p["meta"],
+            p["status"], p["created_at"], p["reviewed_at"], p["reviewer_id"],
+            p["rejection_reason"], p["compliance_report"],
         )
 
 

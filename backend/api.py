@@ -814,17 +814,22 @@ async def close_position(body: ClosePositionBody) -> dict:
         _log_mobile_action("close_duplicate", {"idempotency_key": body.idempotency_key})
         return {"ok": True, "dedup": True}
 
-    await db.record_mobile_idempotency(body.idempotency_key)  # best-effort: ignore errors
+    # B-4 fix (2026-07-17): idempotency key'i BAŞARILI close'dan SONRA kaydet
+    # (success return'lerin hemen önünde). Önceden deneme ÖNCESİ kaydediliyordu:
+    # close exception'la düşerse key yanmış oluyor, kullanıcı aynı key'le retry
+    # edince {"ok": true, "dedup": true} dönüyor ama mainnet pozisyonu hâlâ
+    # AÇIK kalıyordu (kapandı sanılan pozisyon).
 
     from exchange import _strip_contract_suffix
     sym = _strip_contract_suffix(body.symbol)
     direction = body.direction.upper()
 
     # 1) tracked -> public close_position (orphan-safe)
+    # (E-3 sınıfı: canlı liste yerine snapshot — bot thread eşzamanlı mutasyonu)
     target = next(
         (
             p
-            for p in runner.order_mgr.positions
+            for p in runner.order_mgr._positions_snapshot()
             if _strip_contract_suffix(p.symbol) == sym and p.direction == direction
         ),
         None,
@@ -833,6 +838,7 @@ async def close_position(body: ClosePositionBody) -> dict:
         if target is not None:
             if not runner.order_mgr.close_position(target, reason="manual_mobile"):
                 raise HTTPException(status_code=404, detail="Position not tracked locally")
+            await db.record_mobile_idempotency(body.idempotency_key)  # best-effort: ignore errors
             _log_mobile_action(
                 "close_tracked", {"symbol": body.symbol, "direction": direction}
             )
@@ -862,6 +868,7 @@ async def close_position(body: ClosePositionBody) -> dict:
         runner.client.exchange.create_order(
             ccxt_sym, "market", close_side, contracts, params=close_params
         )
+        await db.record_mobile_idempotency(body.idempotency_key)  # B-4: başarı sonrası
         _log_mobile_action(
             "close_untracked",
             {"symbol": body.symbol, "direction": direction, "size": contracts},
@@ -875,7 +882,10 @@ async def close_position(body: ClosePositionBody) -> dict:
 
 
 # ── MEDIA ENDPOINTS ──
-@router.get("/media/{filename}")
+# B-8 fix (2026-07-17): require_auth eklendi — tek auth'suz veri endpoint'iydi;
+# cache/ altına düşen her dosya (render'lanmış medya vb.) anonim internete
+# açıktı (path traversal zaten kapalıydı, kapsam cache/ ile sınırlıydı).
+@router.get("/media/{filename}", dependencies=[Depends(require_auth)])
 async def get_media(filename: str):
     base_dir = Path("cache").resolve()
     target = (base_dir / filename).resolve()

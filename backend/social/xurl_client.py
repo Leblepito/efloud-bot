@@ -357,6 +357,17 @@ class XurlClient:
         exit_code, stdout, stderr = self._run_xurl(["post", "--text", text])
         return _parse_xurl_response(exit_code, stdout, stderr, dry_run=False)
 
+    def post_draft(self, draft) -> XurlResponse:
+        """ContentDraft → X post (unified worker interface).
+
+        B-3 fix (2026-07-17): publishing_worker tüm platform client'larını
+        `client.post_draft(draft)` ile çağırır; Instagram/YouTube client'ları
+        bu metodu tanımlarken XurlClient'ta yoktu → default platform "x" için
+        her APPROVED draft AttributeError'la düşüyor, 60 sn'de bir sonsuz
+        retry'a giriyordu (hiçbir şey yayınlanmadan).
+        """
+        return self.post(draft.body, lang=getattr(draft, "lang", "all") or "all")
+
     def thread(
         self,
         texts: list[str],
