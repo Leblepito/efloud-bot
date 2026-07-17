@@ -145,3 +145,24 @@ class TestOperatorPathUntouched:
         from engine.notifications import NotificationManager
         mgr = NotificationManager()
         assert "telegram" not in mgr.channels  # default ['terminal','log']
+
+
+# ── R-11 (2026-07-17): TR render compliance yüzeyi ──────────────────────────
+
+def test_tr_digest_render_has_no_performance_pct_claim(monkeypatch):
+    """Kanala giden TR metin 'Kazanma oranı: %x' + 'Toplam getiri: %x'
+    içeriyordu — CMP-3 performance_pct_claim ihlali (gate yalnız EN metni
+    denetliyordu). Yeni kopya EN'in uyumlu yüzeyini aynalar."""
+    from engine.notifications.telegram_notifier import CustomerChannelNotifier
+    from scripts.content_compliance import _has_performance_pct
+
+    monkeypatch.setenv("EFLOUD_CUSTOMER_TG_TOKEN", "t")
+    monkeypatch.setenv("EFLOUD_CUSTOMER_TG_CHANNEL_ID", "c")
+    n = CustomerChannelNotifier({"enabled": True})
+    digest = {"date": "2026-07-17", "closed_count": 4, "wins": 3, "losses": 1,
+              "win_rate_pct": 75.0, "net_return_pct": 2.1}
+    text = n._format_digest(digest)
+    assert _has_performance_pct(text) is False, f"TR render hala ihlalli: {text!r}"
+    # Sayısal bilgi kaybolmadı, disclaimer duruyor
+    assert "4" in text and "+2.10%" in text
+    assert "yatırım tavsiyesi değildir" in text

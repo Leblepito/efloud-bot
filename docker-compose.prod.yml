@@ -262,6 +262,12 @@ services:
       # get_api default'u localhost:8080 — bu container'da kendisi olur (bot değil).
       # config_drift/proof_export exit-1 kök nedeni (2026-07-06 handoff).
       - EFLOUD_API_BASE_URL=http://efloud-bot:8080
+      # R-1/R-3 fix (2026-07-17): breaker_watch + position_audit canlı botun
+      # state'ini okur — canlı instance ./state_1k'ya yazar (phase2_1k config).
+      # Bu env olmadan rutinler root config'in ./state default'una düşüp
+      # breaker.json/positions.json'ı HİÇ görmüyordu (ölü breaker alarmı +
+      # false position-drift).
+      - EFLOUD_STATE_DIR=/app/state_1k
     volumes:
       - efloud_state:/app/state
       - efloud_state_1k:/app/state_1k    # V1 live state — signal_ledger.jsonl lives here
@@ -281,8 +287,10 @@ services:
       - .env.production
     environment:
       - EFLOUD_API_BASE_URL=http://efloud-bot:8080   # bkz. routines-watcher notu
+      - EFLOUD_STATE_DIR=/app/state_1k               # bkz. routines-watcher notu (R-1/R-3)
     volumes:
       - efloud_state:/app/state
+      - efloud_state_1k:/app/state_1k                # R-1/R-3: canlı state okunur
       - efloud_reports:/app/reports
       - efloud_data:/app/data
       - efloud_logs:/app/logs:ro

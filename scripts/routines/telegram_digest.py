@@ -252,6 +252,22 @@ def run(cfg: Optional[dict] = None,
         notifier = CustomerChannelNotifier(
             (cfg or {}).get("notifications", {}).get("telegram", {})
         )
+
+    # R-11 fix (2026-07-17): gate şimdiye dek yalnız EN metni denetliyordu ama
+    # kanala GİDEN metin notifier'ın TR render'ıydı — denetlenen gönderilmiyor,
+    # gönderilen denetlenmiyordu. Gönderilecek render'ı da performance-pct
+    # kuralından geçir; ihlalde POST ETME (kopya regresyonu canlıya sızamaz).
+    # getattr: render yüzeyi olmayan notifier'lar (test fake'leri) gate'siz
+    # eski akışta kalır — gate gerçek CustomerChannelNotifier yüzeyine bağlanır.
+    try:
+        from scripts.content_compliance import _has_performance_pct
+        render = getattr(notifier, "_format_digest", None)
+        if render is not None and _has_performance_pct(render(digest)):
+            log.warning("telegram_digest: TR render performance-pct ihlali — post edilmedi")
+            return {"posted": False, "reason": "tr_render_performance_pct", "digest": digest}
+    except ImportError:
+        pass  # compliance modülü yoksa eski davranış
+
     posted = notifier.post_daily_digest(digest)
     if not posted:
         log.info("telegram_digest: notifier returned False (disabled or send failed)")

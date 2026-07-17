@@ -307,3 +307,31 @@ def test_persist_uses_upsert_on_trade_id():
     sql = pool._mock_conn.execute.call_args.args[0]
     assert "ON CONFLICT (trade_id)" in sql
     assert "DO UPDATE" in sql
+
+
+# ── B-10 (2026-07-17): fetch_klines event loop'u bloklamaz ──────────────────
+
+def test_fetch_klines_runs_off_the_event_loop():
+    """Senkron requests.get loop üzerinde koşunca her kapanışta 5-10 sn tüm
+    FastAPI/WS/healthz donuyordu — artık executor thread'inde koşmalı."""
+    import threading
+
+    pool = _make_pool(fetch_trade_result=_make_trade_row())
+    engine = AuditEngine(pool)
+    position = _make_position()
+    seen = {}
+
+    def spy_klines(*a, **k):
+        seen["thread"] = threading.get_ident()
+        return _fake_candles()
+
+    with patch("backend.audit.journal.fetch_klines", side_effect=spy_klines):
+        async def scenario():
+            loop_thread = threading.get_ident()
+            verdict = await engine.score_closed_trade(position)
+            return loop_thread, verdict
+        loop_thread, verdict = asyncio.run(scenario())
+
+    assert verdict is not None
+    assert seen.get("thread") is not None
+    assert seen["thread"] != loop_thread, "fetch_klines hâlâ loop thread'inde"

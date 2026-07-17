@@ -32,6 +32,43 @@ def detect_gaps(ts, step_ms):
                 curr += step_ms
     return missing
 
+# Binance USDM IP weight bütçesi (1 dk penceresi) — weight_*_pct eşikleri
+# bunun yüzdesi olarak yorumlanır (M2, _thresholds.derive).
+BINANCE_WEIGHT_BUDGET_PER_MIN = 1200
+
+
+def _weight_breach(weight, thresholds):
+    """R-14 (2026-07-17): used-weight'i M2 eşiklerine karşı değerlendir.
+
+    Türetilen weight_warn/alert/critical_pct hiçbir yerde tüketilmiyordu —
+    ilk belirti canlı -1003 ban oluyordu. weight<=0 (header yok) sessiz geçer.
+    """
+    breaches = []
+    if not weight or weight <= 0:
+        return breaches
+    pct = weight / BINANCE_WEIGHT_BUDGET_PER_MIN * 100.0
+    crit = float(thresholds.get("weight_critical_pct", 95))
+    alert = float(thresholds.get("weight_alert_pct", 90))
+    warn = float(thresholds.get("weight_warn_pct", 75))
+    if pct >= crit:
+        sev, level = "critical", "critical"
+    elif pct >= alert:
+        sev, level = "critical", "alert"
+    elif pct >= warn:
+        sev, level = "warn", "warn"
+    else:
+        return breaches
+    breaches.append({
+        "severity": sev,
+        "key": f"weight:{level}",
+        "title": f"Binance weight {level.upper()}: {pct:.0f}%",
+        "body": (f"Used weight {weight}/{BINANCE_WEIGHT_BUDGET_PER_MIN} "
+                 f"({pct:.1f}%) >= {level} esigi. -1003 ban riski — "
+                 f"cadence/istek sayisini dusur."),
+    })
+    return breaches
+
+
 def score_market(metrics, thresholds):
     breaches = []
     symbol = metrics.get("symbol", "all")
@@ -174,7 +211,22 @@ def run(client=None, alert=None, cfg=None):
                         
         except Exception as e:
             print(f"Error collecting market data for {symbol}: {e}")
-            
+
+    # R-14 fix (2026-07-17): weight_warn/alert/critical_pct eşikleri türetiliyor
+    # ama HİÇBİR yerde değerlendirilmiyordu — bot 1200/dk weight bütçesine
+    # yaklaşırken ilk gözlemlenebilir belirti canlı -1003 ban'dı. Fetch
+    # döngüsünden SONRA en taze used-weight header'ı (bu turun istekleri)
+    # bütçeye oranlanıp breach üretir.
+    fresh_weight = 0
+    fresh_headers = getattr(client, "last_response_headers", {}) or {}
+    for k, v in fresh_headers.items():
+        if "weight" in k.lower():
+            try:
+                fresh_weight = max(fresh_weight, int(v))
+            except (ValueError, TypeError):
+                pass
+    breaches.extend(_weight_breach(fresh_weight, thresholds))
+
     # 2. STORE OHLCV
     parquet_path = "data/market/ohlcv_24h.parquet"
     new_df = pd.DataFrame(new_candles)

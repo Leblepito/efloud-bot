@@ -1,29 +1,70 @@
 from scripts.routines.runner import register
 from scripts.routines._base import RoutineResult
 
-def evaluate(exchange_positions, exchange_open_orders, ledger_positions):
+
+def _norm_sym(s):
+    """Sembol normalizasyonu (R-2/R-3 tamamlama, 2026-07-17).
+
+    Üç kaynak üç format konuşur: ccxt fetch_positions 'ETH/USDT:USDT',
+    bot ledger'ı 'ETH/USDT', Binance raw algo payload'ı 'ETHUSDT'.
+    Normalize edilmeden drift map'leri HİÇ eşleşmiyordu → açık her pozisyon
+    'exchange var / ledger yok' + 'ledger var / exchange yok' olarak İKİ
+    false CRITICAL üretiyordu; bare-position eşleşmesi de algo emirlerini
+    göremiyordu.
+    """
+    return str(s or "").replace("/", "").split(":")[0].upper()
+
+
+def _algo_to_order(a):
+    """Binance raw algo order → evaluate() emir şemasına köprü (R-2, 2026-07-17).
+
+    Botun TP/SL'leri ALGO emirleridir (reconcile'daki fapiPrivateGetOpenAlgoOrders
+    ile aynı gerekçe: ccxt fetch_open_orders algo emirlerini DÖNDÜRMEZ). Audit
+    yalnız regular emirlere bakınca her korumalı pozisyon 'Bare Position'
+    false-CRITICAL'i üretiyordu. reduceOnly default'u True: bot yalnız koruyucu
+    algo emri basar; egzotik bir algo girişini korumalı saymak (false-negative),
+    her pozisyonu çıplak saymaktan (kalıcı false-positive sayfası) daha güvenli.
+    """
+    otype = str(a.get("orderType") or a.get("type") or a.get("strategyType") or "")
+    reduce_raw = a.get("reduceOnly", True)
+    reduce_only = str(reduce_raw).lower() != "false"
+    return {
+        "symbol": a.get("symbol", ""),
+        "type": otype,
+        "side": str(a.get("side", "")),
+        "reduceOnly": reduce_only,
+        "closePosition": str(a.get("closePosition", "false")).lower() == "true",
+    }
+
+
+def evaluate(exchange_positions, exchange_open_orders, ledger_positions,
+             algo_fetch_ok=True):
     breaches = []
     report_lines = [
         "# Position Audit Report",
         "",
         "## Summary",
     ]
-    
+
     # 1. Bare Position Audit (SL/TP check)
+    # algo_fetch_ok=False iken bu bölüm ATLANIR (fail-safe): TP/SL'ler algo
+    # emirleri olduğundan algo fetch'i başarısız bir turda "çıplak" kararı
+    # verilemez — reconcile'daki aynı gate felsefesi.
     bare_count = 0
-    for pos in exchange_positions:
+    bare_skipped = not algo_fetch_ok
+    for pos in (exchange_positions if algo_fetch_ok else []):
         symbol = pos.get("symbol")
         side = (pos.get("side") or "").lower()
         size = abs(float(pos.get("contracts", 0) or pos.get("size", 0) or pos.get("positionAmt", 0) or 0))
         if size == 0:
             continue
-            
+
         has_sl = False
         has_tp = False
-        
+
         for order in exchange_open_orders:
             o_symbol = order.get("symbol", "")
-            if o_symbol != symbol:
+            if _norm_sym(o_symbol) != _norm_sym(symbol):
                 continue
             o_type = str(order.get("type", "")).upper()
             o_side = str(order.get("side", "")).upper()
@@ -58,13 +99,13 @@ def evaluate(exchange_positions, exchange_open_orders, ledger_positions):
             
     # 2. Orphan Orders Audit
     orphan_count = 0
-    open_symbols = {p["symbol"] for p in exchange_positions if abs(float(p.get("contracts", 0) or p.get("size", 0) or p.get("positionAmt", 0) or 0)) > 0}
+    open_symbols = {_norm_sym(p["symbol"]) for p in exchange_positions if abs(float(p.get("contracts", 0) or p.get("size", 0) or p.get("positionAmt", 0) or 0)) > 0}
     for order in exchange_open_orders:
         symbol = order.get("symbol")
         o_reduce = order.get("reduceOnly", False) or order.get("closePosition", False)
         o_type = str(order.get("type", "")).upper()
         is_sl_or_tp = "STOP" in o_type or "PROFIT" in o_type or o_reduce
-        if is_sl_or_tp and symbol not in open_symbols:
+        if is_sl_or_tp and _norm_sym(symbol) not in open_symbols:
             orphan_count += 1
             breaches.append({
                 "severity": "warn",
@@ -74,9 +115,10 @@ def evaluate(exchange_positions, exchange_open_orders, ledger_positions):
             })
             
     # 3. Ledger vs Exchange Reconciliation (Drift Check)
+    # _norm_sym: ccxt 'ETH/USDT:USDT' ↔ ledger 'ETH/USDT' başka türlü eşleşmez.
     drift_count = 0
-    ex_map = {p["symbol"]: p for p in exchange_positions}
-    ld_map = {p["symbol"]: p for p in ledger_positions}
+    ex_map = {_norm_sym(p["symbol"]): p for p in exchange_positions}
+    ld_map = {_norm_sym(p["symbol"]): p for p in ledger_positions}
     
     all_symbols = set(ex_map.keys()) | set(ld_map.keys())
     for symbol in all_symbols:
@@ -108,7 +150,10 @@ def evaluate(exchange_positions, exchange_open_orders, ledger_positions):
                     "body": f"Exchange size ({ex_size}) vs ledger size ({ld_size}) differs by {diff_pct:.2f}% (limit: 1.0%)"
                 })
                 
-    report_lines.append(f"- **Bare Positions (Missing SL/TP):** {bare_count}")
+    if bare_skipped:
+        report_lines.append("- **Bare Positions:** SKIPPED (algo orders fetch failed this run)")
+    else:
+        report_lines.append(f"- **Bare Positions (Missing SL/TP):** {bare_count}")
     report_lines.append(f"- **Orphan Orders:** {orphan_count}")
     report_lines.append(f"- **Position Size Drifts:** {drift_count}")
     report_lines.append("")
@@ -146,8 +191,22 @@ def run(client=None, alert=None, cfg=None):
             if abs(float(p.get("contracts", 0) or p.get("size", 0) or p.get("positionAmt", 0) or 0)) > 0
         ]
         
-        open_orders = client.fetch_open_orders()
-        
+        open_orders = list(client.fetch_open_orders())
+
+        # R-2 tamamlama (2026-07-17): botun TP/SL'leri ALGO emirleri — ccxt
+        # fetch_open_orders bunları DÖNDÜRMEZ (reconcile'daki aynı gerçek).
+        # Algo emirleri de taranmazsa her korumalı pozisyon "Bare Position"
+        # false-CRITICAL üretir. Fetch başarısızsa bare-position bölümü bu
+        # turda atlanır (fail-safe; evaluate algo_fetch_ok=False).
+        algo_fetch_ok = True
+        try:
+            algo_raw = client.fapiPrivateGetOpenAlgoOrders({}) or []
+            open_orders.extend(_algo_to_order(a) for a in algo_raw)
+        except Exception as algo_exc:
+            algo_fetch_ok = False
+            print(f"position_audit: algo orders fetch failed ({algo_exc}) — "
+                  f"bare-position audit skipped this run")
+
         # Load local ledger positions
         # R-3 fix: StateStore zarfını aç ({"saved_at":…, "data":[…]}) — zarfsız
         # okuma listeyi göremeyip ledger'ı hep boş sayıyordu.
@@ -170,7 +229,8 @@ def run(client=None, alert=None, cfg=None):
             error=str(e)
         )
         
-    report_text, breaches = evaluate(active_exchange_positions, open_orders, ledger_positions)
+    report_text, breaches = evaluate(active_exchange_positions, open_orders,
+                                     ledger_positions, algo_fetch_ok=algo_fetch_ok)
     
     write_report(report_path, report_text)
     

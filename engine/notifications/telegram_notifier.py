@@ -121,12 +121,21 @@ class CustomerChannelNotifier:
         return self._send(self._format_digest(digest))
 
     def _format_digest(self, digest: dict) -> str:
-        """Render the aggregate digest. Reads ONLY whitelisted aggregate keys."""
+        """Render the aggregate digest. Reads ONLY whitelisted aggregate keys.
+
+        R-11 fix (2026-07-17): TR kopya EN'in uyumlu yüzeyine hizalandı.
+        compliance gate format_en_digest'i denetliyordu ama kanala GİDEN bu TR
+        metin "Kazanma oranı: %x" + "Toplam getiri: %x" içeriyordu — CMP-3
+        performance_pct_claim'in ('getiri' bir `%`'nin yanında) tam ihlali:
+        denetlenen metin gönderilmiyor, gönderilen metin denetlenmiyordu.
+        EN'le aynı çözüm (bkz. format_en_digest yorumu): win-rate satırı düşer,
+        getiri → 'Net K/Z' (perf-kelimesi değil), sayılar aynen kalır.
+        telegram_digest.run() artık BU render'ı da gate'ler (savunma katmanı).
+        """
         date = digest.get("date", "")
         count = digest.get("closed_count", 0)
         wins = digest.get("wins", 0)
         losses = digest.get("losses", 0)
-        wr = digest.get("win_rate_pct", 0.0)
         ret = digest.get("net_return_pct", 0.0)
         if count == 0:
             return (
@@ -136,8 +145,7 @@ class CustomerChannelNotifier:
         return (
             f"📊 *u2algo — Günlük Özet ({date})*\n"
             f"Kapanan işlem: `{count}`  (✅ {wins} / ❌ {losses})\n"
-            f"Kazanma oranı: `{wr:.1f}%`\n"
-            f"Toplam getiri: `{ret:+.2f}%`\n"
+            f"Net K/Z: `{ret:+.2f}%`\n"
             f"_Gecikmeli, toplulaştırılmış özet — yatırım tavsiyesi değildir._"
         )
 

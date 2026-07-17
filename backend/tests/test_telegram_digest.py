@@ -373,3 +373,61 @@ def test_module_does_not_log_secrets(monkeypatch, caplog, tmp_path):
             f"Secret leaked in log: {record.getMessage()}"
         )
         assert fake_chat not in record.getMessage()
+
+# ─────────────────────────────────────────────────────────────────────
+# R-11 (2026-07-17): GÖNDERİLEN (TR) render da gate'lenir
+# ─────────────────────────────────────────────────────────────────────
+
+class _ViolatingRenderNotifier(_FakeNotifier):
+    """Eski TR kopyasını taklit eder: 'getiri' bir % değerinin yanında."""
+    def _format_digest(self, digest):
+        return "u2algo Günlük Özet\nToplam getiri: `+2.10%`"
+
+
+def test_run_blocks_when_sent_tr_render_violates_perf_pct(monkeypatch, tmp_path):
+    """Gate EN metni denetleyip TR metni gönderiyordu — artık gönderilecek
+    render performance-pct ihlaliyse post edilmez."""
+    journal = tmp_path / "trade_journal.jsonl"
+    journal.write_text(json.dumps({
+        "pnl_usdt": 12.0, "pnl_pct": 0.5,
+        "exit_timestamp": "2026-06-17T10:00:00+00:00",
+    }) + "\n")
+
+    fake = _ViolatingRenderNotifier(enabled=True)
+    d = _import_digest_fresh(
+        monkeypatch,
+        creds_token="TEST_FAKE_TOKEN",
+        creds_channel="-1009999999999",
+    )
+    cfg = {"notifications": {"telegram": {"enabled": True}}}
+    result = d.run(cfg=cfg, notifier=fake, journal_path=str(journal))
+    assert result["posted"] is False
+    assert result["reason"] == "tr_render_performance_pct"
+    assert fake.calls == [], "ihlalli render'a rağmen post edildi"
+
+
+def test_run_posts_when_real_tr_render_is_clean(monkeypatch, tmp_path):
+    """Gerçek notifier'ın YENİ TR kopyası gate'i geçer (R-11 kopya fix'i)."""
+    from engine.notifications.telegram_notifier import CustomerChannelNotifier
+
+    journal = tmp_path / "trade_journal.jsonl"
+    journal.write_text(json.dumps({
+        "pnl_usdt": 12.0, "pnl_pct": 0.5,
+        "exit_timestamp": "2026-06-17T10:00:00+00:00",
+    }) + "\n")
+
+    d = _import_digest_fresh(
+        monkeypatch,
+        creds_token="TEST_FAKE_TOKEN",
+        creds_channel="-1009999999999",
+    )
+
+    sent = []
+    real = CustomerChannelNotifier({"enabled": True})
+    assert real.enabled
+    monkeypatch.setattr(real, "_send", lambda text: (sent.append(text), True)[1])
+
+    cfg = {"notifications": {"telegram": {"enabled": True}}}
+    result = d.run(cfg=cfg, notifier=real, journal_path=str(journal))
+    assert result["posted"] is True, f"temiz TR render bloklandı: {result!r}"
+    assert sent and "Net K/Z" in sent[0]

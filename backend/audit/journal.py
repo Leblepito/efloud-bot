@@ -12,6 +12,7 @@ Failure isolation contract:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -88,7 +89,15 @@ class AuditEngine:
         entry_ms = int(opened_at.timestamp() * 1000)
         start_ms = entry_ms - PRIOR_CANDLES_HOURS * 3600 * 1000
 
-        prior_candles = fetch_klines(symbol_b, "1h", start_ms, entry_ms)
+        # B-10 fix (2026-07-17): fetch_klines senkron requests.get — event loop
+        # ÜZERİNDE çağrılınca yavaş/timeout'lu Binance yanıtı boyunca (5-10 sn)
+        # tüm FastAPI/WS/healthz süreci donuyordu (audit, pozisyon kapanışında
+        # loop'a schedule edilir). Executor'a taşındı; lambda, monkeypatch'li
+        # testlerin modül global'ini çağrı anında çözmesi için.
+        loop = asyncio.get_running_loop()
+        prior_candles = await loop.run_in_executor(
+            None, lambda: fetch_klines(symbol_b, "1h", start_ms, entry_ms)
+        )
         if not prior_candles:
             log.info("audit: no prior klines for %s, skipping", symbol_b)
             return None
