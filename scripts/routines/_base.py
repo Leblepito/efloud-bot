@@ -31,6 +31,18 @@ def make_future_client(client=None):
             # Audit bilinçli olarak TÜM emirleri tek çağrıda tarar (2dk cadence,
             # weight bütçesi yeterli) — uyarıyı bilinçli kabul ediyoruz.
             "warnOnFetchOpenOrdersWithoutSymbol": False,
+            # CCXT ≥4.5 drift fix (2026-07-17): defaultType='future' artık
+            # symbol'süz fetch_open_orders'ı fapi'ye yönlendirmiyor → çağrı
+            # SPOT /api/v3/openOrders'a düşüyor ve audit yanlış marketi tarıyor
+            # (her açık pozisyon "Bare Position" false-critical üretir). Method-
+            # scoped override yalnız fetchOpenOrders'ı USDM'e sabitler; eski
+            # ccxt'te davranış değişmez ('warnWithoutSymbol' ≥4.5 adı; üstteki
+            # düz key eski sürümler için duruyor).
+            "fetchOpenOrders": {
+                "type": "swap",
+                "subType": "linear",
+                "warnWithoutSymbol": False,
+            },
         },
     })
 
@@ -55,6 +67,30 @@ def read_state_json(path):
 
 def read_snapshot(path):
     return read_state_json(path)
+
+def resolve_state_dir(cfg=None):
+    """Canlı instance'ın state dizini (R-1/R-3 fix, 2026-07-17).
+
+    Öncelik: EFLOUD_STATE_DIR env > cfg operation.state_dir > ./state.
+    Canlı bot configs/config.phase2_1k.yaml ile ./state_1k'ya yazar; rutinler
+    root config.yaml'ın ./state'ine bakınca breaker/positions'ı HİÇ görmüyordu
+    (breaker trip alarmı ölü, position_audit boş ledger'a karşı false drift).
+    """
+    env = os.environ.get("EFLOUD_STATE_DIR")
+    if env:
+        return env
+    return ((cfg or {}).get("operation", {}) or {}).get("state_dir", "./state")
+
+def unwrap_state(payload):
+    """StateStore.save zarfını aç: {"saved_at":…, "data":…} → data.
+
+    Bot state dosyaları (breaker.json, positions.json) StateStore ile yazılır;
+    rutinler zarfı açmadan okuyunca `state` gibi alanlar hep default'a
+    düşüyordu (R-1/R-3, 2026-07-17). Düz (zarfısız) format geriye-uyumlu.
+    """
+    if isinstance(payload, dict) and "saved_at" in payload and "data" in payload:
+        return payload.get("data") if payload.get("data") is not None else {}
+    return payload
 
 def write_snapshot(path, data: dict):
     p = Path(path)

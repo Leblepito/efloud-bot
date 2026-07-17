@@ -184,6 +184,9 @@ def test_rules_list_contains_in_scope_rules():
         "breaker.tripped.weekly",
         "breaker.tripped.consecutive",
         "health.crash_loop",
+        # R-1c (2026-07-17): HALTED breaker healthz'te 200+suspended döner ve
+        # hiçbir kural bu imzayı eşlemiyordu — yeni kural sete eklendi.
+        "health.breaker_halted",
         "health.unhealthy_15min",
         "trade.opened",
         "trade.tp1",
@@ -191,3 +194,27 @@ def test_rules_list_contains_in_scope_rules():
         "overseer.heartbeat_stale",
     }
     assert set(keys) == expected, f"got {set(keys)}"
+
+
+# ── R-1c (2026-07-17): HALTED breaker healthz imzası artık eşleniyor ────────
+
+def test_breaker_halted_health_rule_matches_suspended_failures():
+    from ops.alerter.rules import HealthBreakerHaltedRule
+    payload = {"status": "suspended", "checks": {}, "now_ms": 0,
+               "failures": ["breaker_halted"]}
+    out = HealthBreakerHaltedRule().match_health(payload, {})
+    assert out is not None
+    assert "BREAKER" in out.upper()
+
+
+def test_breaker_halted_rule_ignores_healthy_and_crash_loop():
+    from ops.alerter.rules import HealthBreakerHaltedRule
+    r = HealthBreakerHaltedRule()
+    assert r.match_health({"status": "healthy", "failures": []}, {}) is None
+    assert r.match_health({"status": "suspended",
+                           "failures": ["crash_loop_suspended"]}, {}) is None
+
+
+def test_breaker_halted_rule_registered():
+    from ops.alerter.rules import RULES, HealthBreakerHaltedRule
+    assert any(isinstance(r, HealthBreakerHaltedRule) for r in RULES)

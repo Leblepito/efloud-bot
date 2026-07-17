@@ -56,7 +56,13 @@ class OHLCVCache:
         tmp.replace(path)
 
         sha = hash_dataframe(df)
-        # Convert datetime index → ms for manifest
-        idx_ms = (df.index.astype("int64") // 1_000_000).tolist()
+        # Convert datetime index → ms for manifest.
+        # pandas-3 fix (2026-07-17): astype("int64") returns ints in the
+        # index's OWN unit — pandas ≥3.0 defaults datetime64 to microseconds,
+        # so `// 1_000_000` silently produced SECONDS (manifest max_ts ≈ 1970
+        # when read as ms → BT-15 stale-cache false alarm on every load, and
+        # any incremental-prefetch consumer of max_ts breaks). as_unit("ns")
+        # pins the epoch base explicitly; no-op on pandas 2.x (ns default).
+        idx_ms = (df.index.as_unit("ns").astype("int64") // 1_000_000).tolist()
         self.manifest.put(symbol, tf, min_ts=idx_ms[0], max_ts=idx_ms[-1], sha256=sha)
         self.manifest.save()

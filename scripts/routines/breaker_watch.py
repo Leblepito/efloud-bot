@@ -1,5 +1,10 @@
+import os
+
 from scripts.routines.runner import register
-from scripts.routines._base import read_snapshot, write_snapshot, write_report, RoutineResult
+from scripts.routines._base import (
+    read_snapshot, write_snapshot, write_report, RoutineResult,
+    resolve_state_dir, unwrap_state,
+)
 
 def evaluate(prev, cur):
     prev_state = prev.get("state", "OPEN")
@@ -43,12 +48,17 @@ def evaluate(prev, cur):
 
 @register("breaker_watch")
 def run(client=None, alert=None, cfg=None):
+    # R-1 fix (2026-07-17): breaker.json'ı CANLI instance'ın state_dir'inden
+    # oku (env/cfg; canlı prod ./state_1k) ve StateStore zarfını aç — önceki
+    # sabit "state/breaker.json" + zarfsız okuma yüzünden state hep "OPEN"
+    # görünüyor, mainnet breaker trip'i operatöre HİÇ ulaşmıyordu.
+    state_dir = resolve_state_dir(cfg)
     prev_path = "state/breaker_watch_snapshot.json"
-    cur_path = "state/breaker.json"
+    cur_path = os.path.join(state_dir, "breaker.json")
     report_path = "reports/breaker_watch.md"
 
-    prev = read_snapshot(prev_path)
-    cur = read_snapshot(cur_path)
+    prev = unwrap_state(read_snapshot(prev_path))
+    cur = unwrap_state(read_snapshot(cur_path))
 
     # If breaker.json doesn't exist, default to OPEN state
     if not cur:

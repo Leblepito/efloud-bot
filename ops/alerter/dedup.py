@@ -64,6 +64,37 @@ class Dedup:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(_SCHEMA)
 
+    def would_fire(self, alert_key: str, window_sec: int) -> bool:
+        """Read-only kontrol: bu alert şu an ateşlenebilir mi? Kayıt YAPMAZ.
+
+        R-6 fix (2026-07-17): dedup kaydı teslimattan ÖNCE düşülünce, başarısız
+        bir Telegram gönderimi tek-atımlık transition alert'ini (breaker trip)
+        window boyunca kalıcı yutuyordu. Çağıran sıra: would_fire → send →
+        başarılıysa mark_fired.
+        """
+        now = int(time.time())
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT last_fired_ts FROM alerts WHERE alert_key = ?",
+                (alert_key,),
+            ).fetchone()
+        if row is None:
+            return True
+        return now - row[0] >= window_sec
+
+    def mark_fired(self, alert_key: str) -> None:
+        """Başarılı teslimat SONRASI dedup kaydını düş (bkz. would_fire)."""
+        now = int(time.time())
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO alerts (alert_key, last_fired_ts, fire_count) "
+                "VALUES (?, ?, 1) "
+                "ON CONFLICT(alert_key) DO UPDATE SET "
+                "last_fired_ts = excluded.last_fired_ts, "
+                "fire_count = alerts.fire_count + 1",
+                (alert_key, now),
+            )
+
     def should_fire(self, alert_key: str, window_sec: int) -> bool:
         """Return True if this alert is allowed to fire (and record the fire);
         False if it's a duplicate within window_sec.

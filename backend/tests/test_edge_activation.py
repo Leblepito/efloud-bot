@@ -186,3 +186,78 @@ def test_hook_never_raises(tmp_path, monkeypatch):
     orc.signal_ledger = _Boom()
     assert orc._ledger_record_signal("BTC/USDT", _signal(),
                                      was_tradeable=False) is None
+
+
+# ── R-4/R-8 (2026-07-17): genç sinyal kalıcı timeout/unresolved olamaz ──────
+
+class _FlatBarsFetcher:
+    """Fill olur (v1: ilk bar open) ama SL/TP'ye hiç dokunmaz."""
+    def __init__(self, ts_emitted, n=20):
+        self.bars = [
+            {"ts": ts_emitted + (i + 1) * 60_000, "open": 100.5,
+             "high": 100.8, "low": 100.2, "close": 100.5}
+            for i in range(n)
+        ]
+
+    def fetch_bars(self, symbol, tf, since_ms, until_ms):
+        return [b for b in self.bars if b["ts"] <= until_ms]
+
+    def funding_sum(self, symbol, since_ms, until_ms):
+        return 0.0
+
+
+class _RaisingFetcher:
+    def fetch_bars(self, *a, **k):
+        raise RuntimeError("transient 429")
+
+    def funding_sum(self, *a, **k):
+        return 0.0
+
+
+def test_young_filled_signal_not_finalized_as_timeout(tmp_path):
+    """48h ufuklu sinyal fill'den dakikalar sonra 'timeout' TERMİNALİNE
+    yazılıyordu (bar akışı now'da bitince race 'doldu' sanıyordu) —
+    edge örneklemi ~%100 timeout'a çökerdi."""
+    from scripts.routines.resolve_signals import resolve_open_signals
+    ledger = SignalLedger(tmp_path / "ledger.jsonl")
+    now_ms = int(time.time() * 1000)
+    emitted = now_ms - 10 * 60_000  # 10 dk önce; horizon 48h → genç
+    _record(ledger, emitted)
+    counters = resolve_open_signals(
+        ledger, _FlatBarsFetcher(emitted), _cfg(tmp_path))
+    assert counters["timed_out"] == 0
+    assert counters["still_open"] == 1
+    assert len(ledger.open_signals()) == 1, "genç filled sinyal açık kalmalı"
+
+
+def test_expired_horizon_still_finalizes_timeout(tmp_path):
+    from scripts.routines.resolve_signals import resolve_open_signals
+    ledger = SignalLedger(tmp_path / "ledger.jsonl")
+    now_ms = int(time.time() * 1000)
+    emitted = now_ms - 49 * 3600 * 1000  # horizon (48h) dolmuş
+    _record(ledger, emitted)
+    counters = resolve_open_signals(
+        ledger, _FlatBarsFetcher(emitted), _cfg(tmp_path))
+    assert counters["timed_out"] == 1
+    assert len(ledger.open_signals()) == 0
+
+
+def test_transient_fetch_failure_keeps_signal_open(tmp_path):
+    """Tek geçici fetch hatası kalıcı 'unresolved_data' yapmasın (R-8)."""
+    from scripts.routines.resolve_signals import resolve_open_signals
+    ledger = SignalLedger(tmp_path / "ledger.jsonl")
+    now_ms = int(time.time() * 1000)
+    _record(ledger, now_ms - 10 * 60_000)
+    counters = resolve_open_signals(ledger, _RaisingFetcher(), _cfg(tmp_path))
+    assert counters["fetch_failed"] == 1
+    assert len(ledger.open_signals()) == 1, "geçici hata sinyali terminal yaptı"
+
+
+def test_fetch_failure_after_horizon_finalizes(tmp_path):
+    from scripts.routines.resolve_signals import resolve_open_signals
+    ledger = SignalLedger(tmp_path / "ledger.jsonl")
+    now_ms = int(time.time() * 1000)
+    _record(ledger, now_ms - 49 * 3600 * 1000)
+    counters = resolve_open_signals(ledger, _RaisingFetcher(), _cfg(tmp_path))
+    assert counters["fetch_failed"] == 1
+    assert len(ledger.open_signals()) == 0

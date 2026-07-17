@@ -135,7 +135,13 @@ def resolve_open_signals(ledger, fetcher, cfg):
             bars = fetcher.fetch_bars(rec.symbol, tf, rec.brk_ts, until)
         except Exception as exc:
             log.warning("resolver fetch failed %s: %s", rec.symbol, exc)
-            ledger.update_resolution(rec.signal_id, status="unresolved_data")
+            # R-8 fix (2026-07-17): tek geçici fetch hatası sinyali kalıcı
+            # 'unresolved_data' TERMİNAL statüsüne düşürmesin (open_signals bir
+            # daha görmez → volatil/outage dönemleriyle korele survivorship
+            # bias). Horizon dolana kadar açık kalır ve sonraki pass yeniden
+            # dener; ancak horizon dolduysa terminal işaretlenir.
+            if int(time.time() * 1000) >= rec.ts_emitted + horizon_ms:
+                ledger.update_resolution(rec.signal_id, status="unresolved_data")
             counters["fetch_failed"] += 1
             continue
         patch = resolve_signal(rec, bars, cfg["smc_version"], horizon_h, cfg["fill_window_bars"])
@@ -147,6 +153,17 @@ def resolve_open_signals(ledger, fetcher, cfg):
             deadline = rec.ts_emitted + cfg["fill_window_bars"] * _tf_to_ms(tf)
             if int(time.time() * 1000) < deadline:
                 counters["awaiting_fill"] += 1
+                continue  # not finalized — retried next pass
+        if patch["status"] == "timeout":
+            # R-4 fix (2026-07-17): 'timeout' TERMİNAL statüsü ancak horizon
+            # GERÇEKTEN dolunca yazılabilir. `until = min(now, ts_emitted +
+            # horizon)` genç sinyalde bar akışını now'da keser; race dokunuşsuz
+            # biter ve "dolmuş" gibi görünür — 48h ufuklu bir sinyal fill'den
+            # 10 dk sonra kalıcı timeout oluyordu (unfilled dalındaki wall-clock
+            # guard'ın simetriği burada eksikti; edge örneklemi ~%100 timeout'a
+            # çökerdi).
+            if int(time.time() * 1000) < rec.ts_emitted + horizon_ms:
+                counters["still_open"] += 1
                 continue  # not finalized — retried next pass
         if patch.get("hypo_r_gross") is not None:
             ts_res = patch.get("ts_resolved", until)
@@ -185,7 +202,10 @@ def _maybe_alert(cfg, counters):
     if fail_pct >= cfg["fetch_fail_alert_pct"]:
         try:
             from scripts.routines._alert import AlertRouter
-            AlertRouter().send("WARNING", "signal_resolver_fetchfail",
+            # R-9 fix (2026-07-17): AlertRouter() tg=None kuruyordu — alert
+            # Telegram'a hiç çıkmadan dedup tüketiliyordu. from_env() gerçek
+            # transport'u bağlar (env yoksa davranış eskisiyle aynı).
+            AlertRouter.from_env().send("WARNING", "signal_resolver_fetchfail",
                                "signal_resolver fetch-fail",
                                f"{fail_pct:.0f}% >= {cfg['fetch_fail_alert_pct']}% fetch failures this pass")
         except Exception:

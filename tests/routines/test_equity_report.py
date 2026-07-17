@@ -10,3 +10,13 @@ def test_report_has_core_metrics():
 def test_handles_empty():
     md = build_report([], [], {"status": "ok"})
     assert "No" in md or "0" in md
+
+
+# ── R-10 (2026-07-17): DB şeması {ts, balance} normalize edilir ─────────────
+
+def test_db_shaped_rows_not_rendered_as_zero():
+    eq = [{"ts": "2026-06-01T00:00:00", "balance": 1000.0},
+          {"ts": "2026-06-02T00:00:00", "balance": 1030.0}]
+    md = build_report(eq, [], {"status": "ok"})
+    assert "$1030.00" in md, "balance/ts satırları 0.00'a çöktü (R-10 regresyonu)"
+    assert "2026-06-02" in md

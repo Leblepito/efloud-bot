@@ -150,7 +150,11 @@ class Alerter:
                 self._maybe_fire(rule, text)
 
     def _maybe_fire(self, rule: Rule, text: str) -> None:
-        if not self.dedup.should_fire(rule.alert_key, rule.dedup_window_sec):
+        # R-6 fix (2026-07-17): dedup kaydı teslimat BAŞARILI olunca düşülür.
+        # Önceki sıra (should_fire önce), rate-limit düşüşünde veya Telegram
+        # hata/timeout'unda alert'i pencere boyunca (BreakerDailyRule: 24h!)
+        # kalıcı yutuyordu — bir sonraki değerlendirme turu yeniden dener.
+        if not self.dedup.would_fire(rule.alert_key, rule.dedup_window_sec):
             self.stat_alerts_deduped += 1
             return
         # Rate limit: drop if 50 already sent in last 60s
@@ -167,6 +171,7 @@ class Alerter:
         formatted_text = format_alert_with_ai(text, rule.severity, rule.alert_key)
         ok = send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, formatted_text)
         if ok:
+            self.dedup.mark_fired(rule.alert_key)
             self.send_timestamps.append(now)
             self.stat_alerts_fired += 1
             log.info(f"alert fired: {rule.alert_key}")

@@ -63,3 +63,26 @@ def test_corrupted_db_is_recreated(tmp_path: Path):
     d = Dedup(db_path=str(db_path))
     # Fresh DB — first fire is allowed
     assert d.should_fire("any.key", window_sec=1800) is True
+
+
+# ── R-6 (2026-07-17): would_fire/mark_fired ayrımı ──────────────────────────
+
+def test_would_fire_is_read_only(tmp_path):
+    from ops.alerter.dedup import Dedup
+    d = Dedup(str(tmp_path / "d.sqlite"))
+    assert d.would_fire("k", 3600) is True
+    # Kayıt düşülmedi → hâlâ ateşlenebilir
+    assert d.would_fire("k", 3600) is True
+    d.mark_fired("k")
+    assert d.would_fire("k", 3600) is False
+
+
+def test_mark_fired_increments_count(tmp_path):
+    import sqlite3
+    from ops.alerter.dedup import Dedup
+    d = Dedup(str(tmp_path / "d.sqlite"))
+    d.mark_fired("k")
+    d.mark_fired("k")
+    with sqlite3.connect(d.db_path) as conn:
+        row = conn.execute("SELECT fire_count FROM alerts WHERE alert_key='k'").fetchone()
+    assert row[0] == 2

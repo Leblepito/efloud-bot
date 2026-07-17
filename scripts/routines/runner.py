@@ -21,45 +21,35 @@ def register(name):
         return func
     return decorator
 
-# Import routines to register them
-try:
-    from scripts.routines import breaker_watch
-except ImportError:
-    pass
-try:
-    from scripts.routines import margin_watch
-except ImportError:
-    pass
-try:
-    from scripts.routines import position_audit
-except ImportError:
-    pass
-try:
-    from scripts.routines import config_drift
-except ImportError:
-    pass
-try:
-    from scripts.routines import equity_report
-except ImportError:
-    pass
-try:
-    from scripts.routines import market_collect
-except ImportError:
-    pass
-try:
-    from scripts.routines import proof_export
-except ImportError:
-    pass
+# Import routines to register them.
+# R-12 fix (2026-07-17): sessiz `except ImportError: pass` — pinlenmemiş
+# bağımlılık (requirements '>=') yeni build'de bir modül importunu kırarsa
+# rutin REGISTRY'den sessizce düşüyor, watch-loop "Unknown routine" ile devam
+# ediyor ve operatör o izleme kanalını süresiz kaybediyordu. Artık her import
+# hatası traceback'iyle YÜKSEK SESLE loglanır (ImportError dışındakiler —
+# örn. SyntaxError — de yakalanır ki tek bozuk modül tüm watcher'ı düşürmesin);
+# kalan rutinler çalışmaya devam eder.
+IMPORT_FAILURES: dict = {}
+
+def _import_routine(_modname):
+    import importlib
+    import traceback
+    try:
+        importlib.import_module(f"scripts.routines.{_modname}")
+    except Exception as e:
+        IMPORT_FAILURES[_modname] = f"{type(e).__name__}: {e}"
+        print(f"[routines] IMPORT FAILED: {_modname}: {type(e).__name__}: {e}",
+              file=sys.stderr)
+        traceback.print_exc()
+
 # Edge Measurement Core (activation item A): self-registering routines must be
 # imported here or the watch-loop scheduler never sees them.
-try:
-    from scripts.routines import resolve_signals
-except ImportError:
-    pass
-try:
-    from scripts.routines import edge_report
-except ImportError:
-    pass
+for _modname in (
+    "breaker_watch", "margin_watch", "position_audit", "config_drift",
+    "equity_report", "market_collect", "proof_export",
+    "resolve_signals", "edge_report",
+):
+    _import_routine(_modname)
 
 
 def run_one(name, client=None, alert=None, cfg=None) -> int:

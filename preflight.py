@@ -113,7 +113,21 @@ def main():
         "apiKey": KEY,
         "secret": SEC,
         "enableRateLimit": True,
-        "options": {"defaultType": "future"},
+        "options": {
+            "defaultType": "future",
+            # CCXT ≥4.5 drift fix (2026-07-17): symbol'süz fetch_open_orders
+            # (count_open_book) hem acknowledge hatası fırlatıyor hem de
+            # SPOT'a yönleniyordu → flat-book gate'i kalıcı "sorgulanamadı"
+            # düşüp mode-change korumasını devre dışı bırakıyordu. Method-
+            # scoped override USDM routing + yeni acknowledge adı; eski
+            # ccxt'te no-op.
+            "warnOnFetchOpenOrdersWithoutSymbol": False,
+            "fetchOpenOrders": {
+                "type": "swap",
+                "subType": "linear",
+                "warnWithoutSymbol": False,
+            },
+        },
     })
 
     # 1. Public ping

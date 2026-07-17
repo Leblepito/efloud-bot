@@ -139,6 +139,29 @@ class HealthCrashLoopRule(Rule):
 
 
 @dataclass
+class HealthBreakerHaltedRule(Rule):
+    """R-1 fix (2026-07-17): HALTED breaker healthz'te 200 + status:'suspended'
+    + failures:['breaker_halted'] döner (backend/healthz.py) — hiçbir kural bu
+    imzayı eşlemediği için mainnet trading halt'ı operatöre hiç ulaşmıyordu
+    (log-tabanlı breaker kuralları prod'da yazılmayan dosyayı tail'liyor,
+    breaker_watch rutini de yanlış path/format okuyordu; üç kanal da ölüydü)."""
+    alert_key: str = "health.breaker_halted"
+    severity: str = "CRITICAL"
+    dedup_window_sec: int = 6 * 60 * 60  # HALT sürerken 6 saatte bir hatırlat
+
+    def match_health(self, payload: dict, history: dict) -> Optional[str]:
+        if payload.get("status") == "suspended" and \
+           "breaker_halted" in payload.get("failures", []):
+            return (
+                "🚨 <b>CIRCUIT BREAKER HALTED — trading suspended</b>\n"
+                "healthz failures = ['breaker_halted']\n"
+                "Bot yeni giriş açmıyor; mevcut pozisyon korumaları aktif.\n"
+                "Kontrol: /api/breaker durumu + state/breaker.json reason."
+            )
+        return None
+
+
+@dataclass
 class HealthUnhealthy15MinRule(Rule):
     """Fires when /healthz has returned 503 (status:'unhealthy') continuously
     for at least UNHEALTHY_15MIN_THRESHOLD_SEC.
@@ -358,6 +381,7 @@ RULES: list[Rule] = [
     BreakerWeeklyRule(),
     BreakerConsecutiveRule(),
     HealthCrashLoopRule(),
+    HealthBreakerHaltedRule(),
     HealthUnhealthy15MinRule(),
     TradeOpenedRule(),
     TP1HitRule(),

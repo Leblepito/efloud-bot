@@ -52,14 +52,29 @@ def run(client=None, alert=None, cfg=None):
     # configs/config.phase2_*_1k.yaml kullanır; root config.yaml baseline'ı
     # onlar için sistematik false-positive drift üretir).
     repo_cfg = load_config(os.environ.get("EFLOUD_CONFIG_PATH", "config.yaml"))
-    
+
+    # R-7 fix (2026-07-17): watch key'leri /api/config'in GERÇEK şemasına
+    # hizalandı. Eskiler: "min_confluence" top-level'da iki tarafta da yok
+    # (None==None → canlı-para eşiği drift'i HİÇ yakalanamaz), "safety.
+    # daily_loss_pct_limit" gerçek adı daily_loss_limit_pct (aynı körlük),
+    # "risk.max_position_notional_pct" API'de yok (None != repo → her saat
+    # kalıcı false drift). Symbols normalizasyonu aşağıda.
     watch_keys = [
-        "min_confluence",
-        "symbols",
-        "risk.max_position_notional_pct",
+        "risk.min_confluence",
+        "risk.risk_per_trade_pct",
+        "risk.max_open_positions",
+        "risk.min_rr",
+        "safety.daily_loss_limit_pct",
         "safety.weekly_drawdown_limit_pct",
-        "safety.daily_loss_pct_limit"
+        "safety.emergency_balance_threshold",
+        "operation.dry_run",
+        "symbols",
     ]
+
+    # API "symbols"ü fixed_core listesi olarak döner; repo config'te dict —
+    # normalize edilmezse her saat kalıcı false drift üretir.
+    if isinstance(repo_cfg.get("symbols"), dict):
+        repo_cfg = {**repo_cfg, "symbols": repo_cfg["symbols"].get("fixed_core", [])}
     
     try:
         live_cfg = get_api("/api/config")

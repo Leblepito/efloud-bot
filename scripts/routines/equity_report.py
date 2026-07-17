@@ -4,6 +4,17 @@ from scripts.routines.runner import register
 from scripts.routines._base import RoutineResult
 
 def build_report(equity_series, closed_trades, healthz):
+    # R-10 fix (2026-07-17): DB'li /api/equity satırları {ts, balance, …}
+    # döner (backend/db.fetch_equity_history); rapor {t, equity} okuyordu →
+    # canlı DB varken tüm metrikler sessizce 0.00'a çöküyordu (yalnız
+    # journal-fallback şekli çalışıyordu). İki şemayı da normalize et.
+    equity_series = [
+        {
+            "equity": float(e.get("equity", e.get("balance", 0) or 0) or 0),
+            "t": e.get("t", e.get("ts", "N/A")),
+        }
+        for e in (equity_series or [])
+    ]
     realized_pnl = sum(float(t.get("realized_pnl", 0) or t.get("pnl", 0) or 0) for t in closed_trades)
 
     daily_return = 0.0

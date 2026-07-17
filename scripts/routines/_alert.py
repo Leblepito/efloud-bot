@@ -1,3 +1,4 @@
+import html
 import os
 from ops.alerter.dedup import Dedup
 from ops.alerter.telegram_client import send_message
@@ -9,12 +10,26 @@ class AlertRouter:
         self.ttl_sec = ttl_sec
 
     def send(self, severity, dedup_key, title, body):
-        text = f"[{severity.upper()}] {title}\n{body}"
-        if self.dedup.should_fire(dedup_key, self.ttl_sec):
-            if self.tg:
-                return self.tg.send(text)
-            return True
-        return False
+        # R-6 fix (2026-07-17):
+        # 1) Dedup kaydı teslimat BAŞARILI olunca düşülür — başarısız gönderim
+        #    tek-atımlık transition alert'ini (breaker trip) window boyunca
+        #    yutmasın.
+        # 2) html.escape: telegram_client parse_mode=HTML kullanır; breach
+        #    gövdeleri ham '<' içerebiliyor (örn. breaker "balance $X <
+        #    threshold $Y") → Telegram 400 "can't parse entities" ile TAM DA o
+        #    kritik alert'i düşürüyordu. Rutin alert'leri düz metindir; kasıtlı
+        #    HTML yok.
+        text = html.escape(f"[{severity.upper()}] {title}\n{body}")
+        if not self.dedup.would_fire(dedup_key, self.ttl_sec):
+            return False
+        if self.tg:
+            ok = bool(self.tg.send(text))
+            if ok:
+                self.dedup.mark_fired(dedup_key)
+            return ok
+        # tg yok (dry ortam): eski davranış — teslim edilmiş say ve kaydet.
+        self.dedup.mark_fired(dedup_key)
+        return True
 
     @classmethod
     def from_env(cls, dedup_db="state/routines_dedup.sqlite", ttl_sec=3600):

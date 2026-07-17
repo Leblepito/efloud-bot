@@ -125,10 +125,16 @@ def evaluate(exchange_positions, exchange_open_orders, ledger_positions):
 
 @register("position_audit")
 def run(client=None, alert=None, cfg=None):
-    from scripts.routines._base import read_snapshot, write_snapshot, write_report, RoutineResult
+    from scripts.routines._base import (
+        read_snapshot, write_snapshot, write_report, RoutineResult,
+        resolve_state_dir, unwrap_state,
+    )
     import os
-    
-    ledger_path = os.path.join(cfg.get("operation", {}).get("state_dir", "./state"), "positions.json") if cfg else "./state/positions.json"
+
+    # R-3 fix (2026-07-17): env override'lı state_dir — canlı prod ./state_1k'ya
+    # yazar; root config baseline'ıyla ./state okumak boş ledger → her açık
+    # pozisyonda kalıcı false "Position Drift" CRITICAL üretiyordu.
+    ledger_path = os.path.join(resolve_state_dir(cfg), "positions.json")
     report_path = "reports/position_audit.md"
     snapshot_path = "state/position_audit_snapshot.json"
     
@@ -143,7 +149,9 @@ def run(client=None, alert=None, cfg=None):
         open_orders = client.fetch_open_orders()
         
         # Load local ledger positions
-        ledger_data = read_snapshot(ledger_path)
+        # R-3 fix: StateStore zarfını aç ({"saved_at":…, "data":[…]}) — zarfsız
+        # okuma listeyi göremeyip ledger'ı hep boş sayıyordu.
+        ledger_data = unwrap_state(read_snapshot(ledger_path))
         # Handle positions.json which could be a list or a dict
         if isinstance(ledger_data, dict) and "positions" in ledger_data:
             ledger_positions = ledger_data["positions"]
