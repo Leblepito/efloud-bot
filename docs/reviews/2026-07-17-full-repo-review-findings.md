@@ -62,9 +62,27 @@ tree == HEAD (fark yalnız CRLF). Guard/breaker/orphan koruması zayıflatılmad
 yeni davranış toggle'ı eklenmedi (hepsi bug-fix). `requirements.txt` hâlâ
 pinlenmemiş — ayrı bir sertleştirme kalemi olarak önerilir.
 
-## Sonraki adımlar (operatör)
+## Tur 2 (aynı gün, ek 7 fix)
 
-1. Windows'tan `git push` (3 commit).
-2. VPS `docker compose up -d` — canlı etki için container recreate.
-3. Push sonrası ilk 24h: breaker alarmı artık gerçekten geliyor mu, position_audit
-   false-drift durdu mu, X publish çalışıyor mu izle.
+| # | Yer | Bulgu | Fix |
+|---|-----|-------|-----|
+| R-2+ | routines/position_audit | (a) Botun TP/SL'leri ALGO emirleri — audit yalnız regular emirlere bakıyordu → her korumalı pozisyon false "Bare Position" CRITICAL; (b) sembol formatları (ccxt `X/Y:Y` ↔ ledger `X/Y` ↔ raw `XY`) normalize edilmeden drift map'leri HİÇ eşleşmiyordu → pozisyon başına 2 false CRITICAL daha | `fapiPrivateGetOpenAlgoOrders` merge (+fail-safe skip) + `_norm_sym` |
+| B-9 | backend/events EventBus | asyncio.Queue thread-safe değil; bot-thread publish loop'u uyandırmıyordu → WS event'i 30 sn'ye dek gecikir, iptal yarışında sessiz düşer | loop-dışı publish `call_soon_threadsafe` ile teslim |
+| B-10 | backend/audit/journal | senkron `requests.get` event loop ÜZERİNDE → her kapanışta 5-10 sn tüm FastAPI/WS/healthz donması | `run_in_executor` |
+| R-11 | telegram_notifier + telegram_digest | Gate EN metni denetliyor, kanala TR metin gidiyordu; TR kopya `getiri %` ile CMP-3 ihlaliydi | TR kopya EN'in uyumlu yüzeyine ("Net K/Z") + gönderilen render'a gate |
+| R-14 | routines/market_collect | weight_warn/alert/critical eşikleri türetilip hiç değerlendirilmiyordu → ilk belirti canlı -1003 ban | `_weight_breach` (1200/dk bütçesi) |
+| B-5 | Dockerfile CMD | uvicorn proxy-headers'sız → login rate-limit tek global kovaya çöküyor, anonim biri operatörü dashboard'dan kilitleyebiliyordu | `--proxy-headers --forwarded-allow-ips '*'` |
+| deps | constraints.txt + Dockerfile | `>=` aralıkları her rebuild'de drift çekiyordu (bu review'un 2 bug'ının kökü) | Pinlenmiş kapanış; temiz venv'de tam suite ile doğrulandı |
+| ops | docker-compose.prod.yml | routines container'ları `EFLOUD_STATE_DIR` bilmiyordu → R-1/R-3 fix'i prod'da etkisiz kalırdı | `/app/state_1k` env (watcher + scheduled) |
+
+Tur-2 sonrası: `tests/` **628** / `backend/tests` **1550**, 0 failed — hem
+serbest sürümlerle hem constraints.txt pinleriyle (temiz venv) birebir.
+
+## Sonraki adımlar (operatör / Claude Code)
+
+Devir listesi + yapıştır-kullan prompt:
+`docs/handoff/2026-07-17-vscode-claude-code-handoff.md`.
+Kısaca: (1) push — 7 commit; (2) Docker gate + backend/tests; (3) VPS'te
+**build + up -d** (Dockerfile değişti — rebuild zorunlu) + 24h gözlem;
+(4) kalan tasarım işleri: B-7 pubsub gate, R-13 overseer kuralları, E-5
+breaker id-match, W2 backtest-gate kalemleri, W5 güvenlik.
