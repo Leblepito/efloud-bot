@@ -47,7 +47,7 @@ def _import_routine(_modname):
 for _modname in (
     "breaker_watch", "margin_watch", "position_audit", "config_drift",
     "equity_report", "market_collect", "proof_export",
-    "resolve_signals", "edge_report",
+    "resolve_signals", "edge_report", "social_content",
 ):
     _import_routine(_modname)
 
@@ -97,6 +97,9 @@ CADENCES = {
     # cheap no-ops while signal_ledger is disabled (flag/env gate in main()).
     "signal_resolver": 300,
     "edge_report": 3600,
+    # P-Kronos-Social: 4 saatte bir içerik üretimi. SOCIAL_CONTENT_ENABLED
+    # kapalıyken (default) no-op — slot-dedup rutin içinde.
+    "social_content": 14400,
 }
 
 
