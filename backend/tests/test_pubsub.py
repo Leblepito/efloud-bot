@@ -51,12 +51,18 @@ def _make_received_msg(data: dict, msg_id: str = "msg-1") -> MagicMock:
 
 
 def _valid_signal_data(**overrides) -> dict:
+    # B-7 (2026-07-18): geçerli-dispatchable bir sinyal artık size TAŞIR. Eski
+    # fixture size'sızdı ve "size-less sinyal execute olur" bug'lı varsayımını
+    # kodluyordu (mock olduğu için Binance'in 0-qty reddini görmüyordu). Pre-trade
+    # guard size<=0'ı kalıcı reddettiği için base'e gerçekçi size eklendi; size-
+    # less/zero reddi ayrı testte (test_dispatch_rejects_nonpositive_size).
     base = {
         "symbol": "BTC/USDT",
         "direction": "LONG",
         "entry": 60000.0,
         "sl": 58000.0,
         "tp1": 63000.0,
+        "size": 0.01,
     }
     base.update(overrides)
     return base
@@ -292,3 +298,99 @@ async def test_stop_exits_run_loop():
         await asyncio.wait_for(task, timeout=3.0)  # must finish promptly
 
     assert not consumer._running
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B-7 (2026-07-18): pre-trade guard — breaker + size (gate-bypass fix)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _Breaker:
+    def __init__(self, can_trade=True, state="OPEN", reason="", raises=False):
+        self._can, self._state, self._reason, self._raises = can_trade, state, reason, raises
+    def check(self, now=None):
+        if self._raises:
+            raise RuntimeError("breaker read boom")
+        return SimpleNamespace(
+            can_trade=self._can,
+            state=SimpleNamespace(value=self._state),
+            reason=self._reason,
+        )
+
+
+def _orch(breaker):
+    return SimpleNamespace(breaker=breaker)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_rejected_when_breaker_halted():
+    """Breaker HALTED iken pubsub sinyali canlı emir AÇMAMALI (baypas fix).
+    Kalıcı-red → True (ACK-discard), open_position çağrılmaz."""
+    order_mgr = MagicMock()
+    consumer = PubSubConsumer(
+        cfg=_make_cfg(), order_manager=order_mgr,
+        orchestrator=_orch(_Breaker(can_trade=False, state="HALTED", reason="weekly_dd")),
+    )
+    Signal = consumer._PubSubSignal
+    sig = Signal(symbol="BTC/USDT", direction="LONG", entry=60000.0, sl=58000.0,
+                 tp1=63000.0, size=0.01)
+    ok = await consumer._dispatch_signal(sig, {})
+    assert ok is True                       # ACK-discard, NACK/retry döngüsü yok
+    order_mgr.open_position.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_proceeds_when_breaker_open_and_sized():
+    order_mgr = MagicMock()
+    order_mgr.open_position.return_value = MagicMock()
+    consumer = PubSubConsumer(
+        cfg=_make_cfg(), order_manager=order_mgr,
+        orchestrator=_orch(_Breaker(can_trade=True, state="OPEN")),
+    )
+    Signal = consumer._PubSubSignal
+    sig = Signal(symbol="BTC/USDT", direction="LONG", entry=60000.0, sl=58000.0,
+                 tp1=63000.0, size=0.01)
+    ok = await consumer._dispatch_signal(sig, {})
+    assert ok is True
+    order_mgr.open_position.assert_called_once()
+    assert order_mgr.open_position.call_args.kwargs["size"] == 0.01
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_size", [None, 0, 0.0, -1.0])
+async def test_dispatch_rejects_nonpositive_size(bad_size):
+    """size<=0/None: 'auto-sizing' yok → 0-qty Binance reddi → sonsuz redeliver.
+    Artık kalıcı reddedilir (open_position çağrılmaz, tek ACK)."""
+    order_mgr = MagicMock()
+    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr)  # orchestrator yok
+    Signal = consumer._PubSubSignal
+    sig = Signal(symbol="BTC/USDT", direction="LONG", entry=60000.0, sl=58000.0,
+                 tp1=63000.0, size=bad_size)
+    ok = await consumer._dispatch_signal(sig, {})
+    assert ok is True
+    order_mgr.open_position.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_fail_closed_when_breaker_read_raises():
+    """Breaker durumu okunamıyorsa fail-closed: emir açılmaz."""
+    order_mgr = MagicMock()
+    consumer = PubSubConsumer(
+        cfg=_make_cfg(), order_manager=order_mgr,
+        orchestrator=_orch(_Breaker(raises=True)),
+    )
+    Signal = consumer._PubSubSignal
+    sig = Signal(symbol="BTC/USDT", direction="LONG", entry=60000.0, sl=58000.0,
+                 tp1=63000.0, size=0.01)
+    ok = await consumer._dispatch_signal(sig, {})
+    assert ok is True
+    order_mgr.open_position.assert_not_called()
+
+
+def test_pretrade_guard_no_orchestrator_only_size_gate():
+    """orchestrator yokken: size>0 geçer (breaker kontrolü atlanır), size<=0 reddedilir."""
+    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=MagicMock())
+    Signal = consumer._PubSubSignal
+    good = Signal(symbol="BTC/USDT", direction="LONG", entry=1.0, sl=0.9, tp1=1.1, size=0.5)
+    bad = Signal(symbol="BTC/USDT", direction="LONG", entry=1.0, sl=0.9, tp1=1.1)
+    assert consumer._pretrade_guard(good) is None
+    assert consumer._pretrade_guard(bad) is not None
