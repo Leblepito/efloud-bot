@@ -52,6 +52,28 @@ for _modname in (
     _import_routine(_modname)
 
 
+def emit_import_failure_alerts(alert_router) -> int:
+    """R-12+ (2026-07-18): IMPORT_FAILURES'daki her modül için bir kez Telegram
+    alert'i at. Rutin import'u yeni build'de (dep-drift) kırılırsa REGISTRY'den
+    sessizce düşüyordu; loud-log container'da kalıyor, operatöre ulaşmıyordu.
+    Watcher açılışında çağrılır. Kaç alert denendiğini döndürür (test için)."""
+    if not IMPORT_FAILURES:
+        return 0
+    sent = 0
+    for _mod, _err in IMPORT_FAILURES.items():
+        try:
+            alert_router.send(
+                "critical", f"routine_import_fail:{_mod}",
+                f"Rutin import HATASI: {_mod}",
+                f"{_err} — bu rutin REGISTRY'de yok, izleme kanalı düştü. "
+                f"Yeni build'de dep-drift olabilir; requirements/constraints kontrol et.",
+            )
+            sent += 1
+        except Exception as _e:
+            print(f"startup import-fail alert gönderilemedi ({_mod}): {_e}")
+    return sent
+
+
 def run_one(name, client=None, alert=None, cfg=None) -> int:
     if name not in REGISTRY:
         print(f"Unknown routine: {name}")
@@ -113,6 +135,9 @@ async def watch_loop(client=None, alert=None, cfg=None):
 
     last_run = {name: 0.0 for name in CADENCES}
     heartbeat_path = "state/routines_watcher_heartbeat.json"
+
+    # R-12+ (2026-07-18): watcher açılışında import-hatası alert'i (helper üstte).
+    emit_import_failure_alerts(a)
 
     print("Starting routines-watcher loop...")
     while True:
