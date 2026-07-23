@@ -135,7 +135,10 @@ async def test_valid_signal_dispatched_and_acked():
     order_mgr = MagicMock()
     order_mgr.open_position.return_value = mock_pos
 
-    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr)
+    # B-7h: dispatch artık orchestrator'sız TAM fail-closed → success-path
+    # testleri prod kablolamasını (bot_runner orchestrator geçirir) yansıtır.
+    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr,
+                              orchestrator=_orch(_Breaker()))
 
     received = [_make_received_msg(_valid_signal_data())]
     subscriber = _make_subscriber(received)
@@ -162,7 +165,8 @@ async def test_valid_signal_with_tp2_dispatched():
     order_mgr = MagicMock()
     order_mgr.open_position.return_value = MagicMock()
 
-    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr)
+    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr,
+                              orchestrator=_orch(_Breaker()))  # B-7h: prod kablolaması
     received = [_make_received_msg(_valid_signal_data(tp2=66000.0, size=0.01))]
     subscriber = _make_subscriber(received)
 
@@ -236,7 +240,8 @@ async def test_duplicate_message_id_acked_without_redispatch():
     order_mgr = MagicMock()
     order_mgr.open_position.return_value = MagicMock()
 
-    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr)
+    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr,
+                              orchestrator=_orch(_Breaker()))  # B-7h: prod kablolaması
     subscriber = _make_subscriber([])
     sub_path = "proj/sub"
 
@@ -262,7 +267,8 @@ async def test_transient_dispatch_error_causes_nack():
     order_mgr = MagicMock()
     order_mgr.open_position.side_effect = ConnectionError("exchange timeout")
 
-    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr)
+    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr,
+                              orchestrator=_orch(_Breaker()))  # B-7h: prod kablolaması
     subscriber = _make_subscriber([])
 
     rm = _make_received_msg(_valid_signal_data(), msg_id="transient")
@@ -386,11 +392,28 @@ async def test_dispatch_fail_closed_when_breaker_read_raises():
     order_mgr.open_position.assert_not_called()
 
 
-def test_pretrade_guard_no_orchestrator_only_size_gate():
-    """orchestrator yokken: size>0 geçer (breaker kontrolü atlanır), size<=0 reddedilir."""
+def test_pretrade_guard_no_orchestrator_fail_closed():
+    """B-7h (2026-07-18): orchestrator yokken TAM fail-closed — size>0 olsa bile
+    reddedilir. Breaker durumu DOĞRULANAMAYAN bir yoldan canlı emir açılmaz
+    (eski davranış: size geçerse breaker'sız geçiyordu — koruma boşluğu)."""
     consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=MagicMock())
     Signal = consumer._PubSubSignal
-    good = Signal(symbol="BTC/USDT", direction="LONG", entry=1.0, sl=0.9, tp1=1.1, size=0.5)
-    bad = Signal(symbol="BTC/USDT", direction="LONG", entry=1.0, sl=0.9, tp1=1.1)
-    assert consumer._pretrade_guard(good) is None
-    assert consumer._pretrade_guard(bad) is not None
+    sized = Signal(symbol="BTC/USDT", direction="LONG", entry=1.0, sl=0.9, tp1=1.1, size=0.5)
+    sizeless = Signal(symbol="BTC/USDT", direction="LONG", entry=1.0, sl=0.9, tp1=1.1)
+    assert consumer._pretrade_guard(sized) is not None, \
+        "orchestrator=None → breaker doğrulanamaz → fail-closed reject"
+    assert consumer._pretrade_guard(sizeless) is not None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_no_orchestrator_rejects_and_acks():
+    """B-7h dispatch seviyesi: orchestrator'sız consumer'da geçerli+size'lı
+    sinyal bile emir AÇMAZ; kalıcı-red → True (ACK-discard, NACK döngüsü yok)."""
+    order_mgr = MagicMock()
+    consumer = PubSubConsumer(cfg=_make_cfg(), order_manager=order_mgr)
+    Signal = consumer._PubSubSignal
+    sig = Signal(symbol="BTC/USDT", direction="LONG", entry=60000.0, sl=58000.0,
+                 tp1=63000.0, size=0.01)
+    ok = await consumer._dispatch_signal(sig, {})
+    assert ok is True
+    order_mgr.open_position.assert_not_called()

@@ -302,22 +302,27 @@ class PubSubConsumer:
            kullanır (auto-sizing yok), 0-qty emri Binance reddeder → exception →
            NACK → aynı mesaj sonsuz redeliver döngüsüne girer. Sizesiz sinyal
            artık kalıcı reddedilir (döngü yerine tek ACK-discard).
-        2. **Breaker gate.** orchestrator bağlıysa, breaker OPEN değilken
-           (HALTED/TRIPPED) canlı emir AÇMA — orchestrator'ın run_cycle'da
-           yaptığı `breaker.check().can_trade` kontrolünün birebir aynısı.
-           Breaker okunamazsa fail-closed (açma). orchestrator bağlı DEĞİLSE
-           breaker kontrolü atlanır (mevcut davranış korunur; not: bu config'de
-           pubsub emirleri breaker korumasızdır — operatör kararı)."""
+        2. **Breaker gate.** Breaker OPEN değilken (HALTED/TRIPPED) canlı emir
+           AÇMA — orchestrator'ın run_cycle'da yaptığı `breaker.check().can_trade`
+           kontrolünün birebir aynısı. Breaker okunamazsa fail-closed (açma).
+
+        3. **orchestrator=None → TAM fail-closed** (B-7h, 2026-07-18). Eski
+           davranış size geçen sinyali breaker'sız geçiriyordu — breaker durumu
+           DOĞRULANAMAYAN bir yoldan canlı emir açılabiliyordu (koruma boşluğu).
+           Prod'da bot_runner orchestrator'ı HER ZAMAN geçirir; None yalnız
+           yanlış kablolama / erken-init demektir → emir açılmaz, ACK-discard."""
         size = getattr(signal, "size", None)
         if size is None or size <= 0:
             return f"size<=0 ({size!r}) — auto-sizing yok, 0-qty emir reddedilir/döngü yapar"
-        if self.orchestrator is not None:
-            try:
-                st = self.orchestrator.breaker.check()
-                if not st.can_trade:
-                    return f"breaker {st.state.value}: {getattr(st, 'reason', '')}"
-            except Exception as e:  # breaker okunamadı → fail-closed
-                return f"breaker durumu okunamadı ({e}) — fail-closed, emir açılmadı"
+        if self.orchestrator is None:
+            return ("orchestrator bağlı değil — breaker durumu doğrulanamıyor, "
+                    "fail-closed: canlı emir açılmadı (kablolama hatası olabilir)")
+        try:
+            st = self.orchestrator.breaker.check()
+            if not st.can_trade:
+                return f"breaker {st.state.value}: {getattr(st, 'reason', '')}"
+        except Exception as e:  # breaker okunamadı → fail-closed
+            return f"breaker durumu okunamadı ({e}) — fail-closed, emir açılmadı"
         return None
 
     async def _dispatch_signal(self, signal, raw: dict) -> bool:
