@@ -1148,11 +1148,16 @@ class SafeOrchestrator:
                 # Build htf_bars from df_htf rows (ordinal axis for swing_anchor).
                 # HtfBar dataclass hoisted to engine.smc_v2.triggers to keep
                 # run_cycle hot-path clean (avoid re-defining the class each tick).
-                from engine.smc_v2.triggers import HtfBar
+                from engine.smc_v2.triggers import HtfBar, _bar_ts_to_ms
             
+                # W2/C1: ts_ms eklendi — anchor_time_axis toggle'ı LTF kırılım
+                # zamanını HTF eksenine haritalayabilsin (toggle OFF iken
+                # ts_ms taşımak zararsızdır; legacy yol kullanmaz).
                 htf_bars = [
-                    HtfBar(ordinal=i, high=float(row["high"]), low=float(row["low"]))
-                    for i, (_, row) in enumerate(df_htf.iterrows())
+                    HtfBar(ordinal=i, high=float(row["high"]),
+                           low=float(row["low"]),
+                           ts_ms=_bar_ts_to_ms(idx_ts))
+                    for i, (idx_ts, row) in enumerate(df_htf.iterrows())
                 ]
             
                 # Recency cutoff: only consider LTF breaks in last N bars
@@ -1928,8 +1933,13 @@ class SafeOrchestrator:
         # v2 is not active. Matches the existing pattern in
         # _advance_setup_state_tick.
         from engine.smc_v2.confirmation import confirm_entry as _confirm
+        # W2/C2 (2026-07-18): default False — operatör NET-cost gate sonrası
+        # config'te açar (`smc_v2.confirm_last_bar_only: true`).
+        last_bar_only = self.config.get("smc_v2", {}).get(
+            "confirm_last_bar_only", False)
         return _confirm(
             df_15m=df_15m, zone=zone, direction=direction, since_ts=since_ts,
+            last_bar_only=last_bar_only,
         )
 
     def _advance_setup_state_tick(
@@ -2166,6 +2176,10 @@ class SafeOrchestrator:
             htf_fvgs=htf_fvgs,
             ote_band=ote_band,
             ltf_trigger_idx_min=ltf_trigger_idx_min,
+            # W2/C1 (2026-07-18): default False — operatör NET-cost gate
+            # sonrası config'te açar (`smc_v2.anchor_time_axis: true`).
+            anchor_time_axis=self.config.get("smc_v2", {}).get(
+                "anchor_time_axis", False),
         )
         for cand in new_candidates:
             # add() returns False if per-symbol cap reached — silently dropped
