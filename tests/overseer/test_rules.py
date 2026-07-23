@@ -282,3 +282,73 @@ def test_rules_are_pure_state_not_mutated():
     for r in OVERSEER_RULES:
         r.check(s)
     assert s == snapshot
+
+
+# ─────────────────────────────────────────────────────────────────────
+# R-13 (2026-07-18): ts artık ISO-8601 string de olabilir.
+# JsonFormatter "ts"yi ISO yazar (utils/logging.py); kurallar int(line["ts"])
+# ile parse edip ISO'da her tick ValueError üretiyordu (kural fiilen ölü).
+# _ts_epoch: int/float epoch VE ISO string kabul eder; bozuksa satır atlanır.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _iso(epoch: int) -> str:
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+
+
+def test_rule_cycle_gap_fires_with_iso_ts():
+    """JsonFormatter'ın yazdığı ISO ts ile kural ÇALIŞMALI (eski kod ValueError)."""
+    from ops.overseer.rules import rule_cycle_gap
+    s = _state(log_lines=[{"event": "cycle_start", "ts": _iso(NOW - 6 * 60)}])
+    alert = rule_cycle_gap(s)
+    assert alert is not None
+    assert alert.severity == "WARN"
+
+
+def test_rule_cycle_gap_silent_with_fresh_iso_ts():
+    from ops.overseer.rules import rule_cycle_gap
+    s = _state(log_lines=[{"event": "cycle_start", "ts": _iso(NOW - 30)}])
+    assert rule_cycle_gap(s) is None
+
+
+def test_rule_cycle_gap_skips_unparseable_ts_no_crash():
+    """Bozuk ts satırı sessizce atlanır — tek çürük satır kuralı öldürmemeli.
+    Yalnız bozuk satır varsa kural sessiz kalır (karşılaştırılacak veri yok)."""
+    from ops.overseer.rules import rule_cycle_gap
+    s = _state(log_lines=[{"event": "cycle_start", "ts": "not-a-time"}])
+    assert rule_cycle_gap(s) is None
+
+
+def test_rule_cycle_gap_mixed_epoch_and_iso():
+    """Epoch + ISO karışık gelirse en YENİSİ esas alınır (fresh ISO → sessiz)."""
+    from ops.overseer.rules import rule_cycle_gap
+    s = _state(log_lines=[
+        {"event": "cycle_start", "ts": NOW - 6 * 60},
+        {"event": "cycle_start", "ts": _iso(NOW - 30)},
+    ])
+    assert rule_cycle_gap(s) is None
+
+
+def test_rule_regime_flipflop_fires_with_iso_ts():
+    from ops.overseer.rules import rule_regime_flipflop
+    log = [
+        {"event": "regime_change", "symbol": "BTC/USDT", "ts": _iso(NOW - 500)},
+        {"event": "regime_change", "symbol": "BTC/USDT", "ts": _iso(NOW - 400)},
+        {"event": "regime_change", "symbol": "BTC/USDT", "ts": _iso(NOW - 300)},
+        {"event": "regime_change", "symbol": "BTC/USDT", "ts": _iso(NOW - 60)},
+    ]
+    alert = rule_regime_flipflop(_state(log_lines=log))
+    assert alert is not None
+    assert "BTC/USDT" in alert.text
+
+
+def test_rule_reverse_block_streak_fires_with_iso_ts():
+    from ops.overseer.rules import rule_reverse_block_streak
+    log = [
+        {"event": "REVERSE_BLOCKED_NOT_PROFITABLE", "ts": _iso(NOW - 1500)},
+        {"event": "REVERSE_BLOCKED_NOT_PROFITABLE", "ts": _iso(NOW - 900)},
+        {"event": "REVERSE_BLOCKED_NOT_PROFITABLE", "ts": _iso(NOW - 60)},
+    ]
+    alert = rule_reverse_block_streak(_state(log_lines=log))
+    assert alert is not None

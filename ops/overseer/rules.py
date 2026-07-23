@@ -36,6 +36,39 @@ from statistics import median
 from typing import Any, Callable, Optional
 
 
+def _ts_epoch(value: Any) -> Optional[int]:
+    """R-13 (2026-07-18): log satırındaki "ts"yi epoch saniyeye çevir.
+
+    Kurallar `int(line["ts"])` varsayıyordu ama gerçek log yüzeyi
+    JsonFormatter (utils/logging.py) ve o "ts"yi ISO-8601 STRING yazar —
+    her tick ValueError → kural fiilen ölüydü. Kabul edilenler:
+      * int/float epoch (testler + olası eski üreticiler),
+      * sayısal string ("1700000000"),
+      * ISO-8601 ("2026-07-18T09:30:00+00:00", 'Z' son eki dahil).
+    Parse edilemeyen → None; çağıran satırı ATLAR (tek çürük satır kuralı
+    öldürmez — JsonLogTail'in invalid-JSON-skip politikasının devamı)."""
+    if isinstance(value, bool):  # bool int'in alt tipi — ts olarak anlamsız
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        s = value.strip()
+        try:
+            return int(float(s))
+        except ValueError:
+            pass
+        try:
+            if s.endswith(("Z", "z")):
+                s = s[:-1] + "+00:00"
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return int(dt.timestamp())
+        except ValueError:
+            return None
+    return None
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Dataclasses
 # ─────────────────────────────────────────────────────────────────────
@@ -102,13 +135,18 @@ def rule_cycle_gap(state: dict[str, Any]) -> Optional[Alert]:
     """Fires WARN when the most recent cycle_start log line is older than
     CYCLE_GAP_MAX_SEC — bot loop appears stalled even if healthz hasn't
     flipped yet (e.g. orchestrator stuck inside an exchange call)."""
-    cycle_lines = [
-        line for line in state.get("log_lines", [])
-        if line.get("event") == "cycle_start" and "ts" in line
+    # R-13: ts ISO string de olabilir (_ts_epoch); parse edilemeyen atlanır.
+    cycle_ts = [
+        ts for ts in (
+            _ts_epoch(line.get("ts"))
+            for line in state.get("log_lines", [])
+            if line.get("event") == "cycle_start" and "ts" in line
+        )
+        if ts is not None
     ]
-    if not cycle_lines:
+    if not cycle_ts:
         return None
-    last_ts = max(int(line["ts"]) for line in cycle_lines)
+    last_ts = max(cycle_ts)
     now = int(state["now_ts"])
     if now - last_ts <= CYCLE_GAP_MAX_SEC:
         return None
@@ -194,13 +232,13 @@ def rule_regime_flipflop(state: dict[str, Any]) -> Optional[Alert]:
     for line in state.get("log_lines", []):
         if line.get("event") != "regime_change":
             continue
-        ts = line.get("ts")
+        ts = _ts_epoch(line.get("ts"))  # R-13: ISO ts desteği
         symbol = line.get("symbol")
         if ts is None or symbol is None:
             continue
-        if int(ts) < cutoff:
+        if ts < cutoff:
             continue
-        by_symbol.setdefault(symbol, []).append(int(ts))
+        by_symbol.setdefault(symbol, []).append(ts)
 
     # First symbol that crosses the threshold wins this tick — if two symbols
     # flap simultaneously the others surface on the next eval cycle (their
@@ -233,11 +271,14 @@ def rule_reverse_block_streak(state: dict[str, Any]) -> Optional[Alert]:
     Dedup key buckets by the 30-min window."""
     now = int(state["now_ts"])
     cutoff = now - REVERSE_BLOCK_WINDOW_SEC
+    # R-13: ISO ts desteği — parse edilemeyen satır atlanır.
     matches = [
-        int(line["ts"]) for line in state.get("log_lines", [])
-        if line.get("event") == REVERSE_BLOCK_EVENT
-        and "ts" in line
-        and int(line["ts"]) >= cutoff
+        ts for ts in (
+            _ts_epoch(line.get("ts"))
+            for line in state.get("log_lines", [])
+            if line.get("event") == REVERSE_BLOCK_EVENT and "ts" in line
+        )
+        if ts is not None and ts >= cutoff
     ]
     if len(matches) < REVERSE_BLOCK_THRESHOLD:
         return None

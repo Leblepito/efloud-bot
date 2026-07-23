@@ -40,9 +40,35 @@ from .safety import (
     validate_kline_freshness, validate_kline_integrity,
     StaleDataError, cleanup_orphan_hedges
 )
-from utils.logging import new_trace_id, set_trace_id
+from utils.logging import new_trace_id, set_trace_id, log_event
 
 log = logging.getLogger("efloud.safe_orch")
+
+
+def _emit_regime_change(last_regimes: dict, symbol: str, regime: str) -> None:
+    """R-13 (2026-07-18): per-symbol rejim DEĞİŞİMİNİ yapısal event olarak yay.
+
+    Overseer'ın rule_regime_flipflop'u `event == "regime_change"` satırı
+    bekliyordu ama bot bu event'i HİÇ üretmiyordu (kural ölüydü). Salt log
+    emisyonu — trade kararlarına dokunmaz. İlk gözlem değişim sayılmaz
+    (cold-boot'ta flipflop false-positive olmasın); helper son rejimi
+    `last_regimes`'e yazar (çağıran orchestrator'ın self._last_regimes'i)."""
+    prev = last_regimes.get(symbol)
+    last_regimes[symbol] = regime
+    if prev is not None and prev != regime:
+        log_event(log, "regime_change", symbol=symbol, old=prev, new=regime)
+
+
+def _emit_reverse_block(symbol: str, reason: str) -> None:
+    """R-13 (2026-07-18): profit-gate reverse reddini yapısal event olarak yay.
+
+    Marker yalnız düz-metin reason içinde geçiyordu (PositionCheckResult →
+    log.info); overseer `line.get("event")` ile eşleştiğinden
+    rule_reverse_block_streak ölüydü. Yalnız NOT_PROFITABLE sebebi event
+    üretir — başka reverse redleri (cooldown vb.) bu kuralın sinyalini
+    kirletmez. Salt log emisyonu."""
+    if "REVERSE_BLOCKED_NOT_PROFITABLE" in reason:
+        log_event(log, "REVERSE_BLOCKED_NOT_PROFITABLE", symbol=symbol)
 
 
 @dataclass
@@ -259,6 +285,10 @@ class SafeOrchestrator:
 
         # Machine Learning Regime Auto-Training Pipeline Integration
         self.last_regime_training_time = None
+
+        # R-13 (2026-07-18): per-symbol son rejim — regime_change yapısal
+        # event emisyonu için (overseer rule_regime_flipflop yüzeyi).
+        self._last_regimes: dict = {}
 
         # Runtime Agent Team (canonical Part A.4 — additive advisory layer).
         # ``enabled: false`` (the default) is a no-op; ``gating: false`` keeps
@@ -1172,6 +1202,8 @@ class SafeOrchestrator:
             
             # ═══ STEP 2: Regime Detection ═══
             regime_analysis = self.regime.analyze(df_entry, df_htf)
+            # R-13: rejim değişimini yapısal event olarak yay (salt log).
+            _emit_regime_change(self._last_regimes, symbol, regime_analysis.regime)
             log.info(f"📊 Regime: {regime_analysis.regime} ({regime_analysis.confidence}%) | "
                      f"ADX={regime_analysis.adx:.1f} BBW={regime_analysis.bb_width:.2f} "
                      f"ATR={regime_analysis.atr_ratio:.1f}x")
@@ -1568,6 +1600,10 @@ class SafeOrchestrator:
                                             f"🚫 [{symbol}] Reverse rejected: "
                                             f"{reverse_check.reason}"
                                         )
+                                        # R-13: overseer streak kuralı için
+                                        # yapısal event (salt log).
+                                        _emit_reverse_block(
+                                            symbol, reverse_check.reason)
                                         warnings.append(
                                             f"Reverse blocked: {reverse_check.reason}"
                                         )

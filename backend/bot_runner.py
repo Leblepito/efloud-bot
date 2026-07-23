@@ -23,6 +23,7 @@ from backend.events import bus
 from backend.notifications import TelegramNotifier
 from engine import SafeOrchestrator
 from engine.instance_manager import InstanceManager
+from utils.logging import log_event
 from engine.journal import TradeJournal
 from engine.notifications import NotificationManager
 from engine.content_jobs import ContentJobEmitter
@@ -457,6 +458,9 @@ class BotRunner:
             self.cycle_count += 1
             try:
                 bus.publish("cycle_start", cycle_n=self.cycle_count)
+                # R-13 (2026-07-18): bus.publish yalnız WS'e gider — overseer'ın
+                # rule_cycle_gap'i log DOSYASINDAN okur; yapısal satırı da yay.
+                log_event(log, "cycle_start", cycle_n=self.cycle_count)
 
                 # Reconcile first (sync ccxt — run in thread)
                 if self.order_mgr and not self.cfg["operation"]["dry_run"]:
