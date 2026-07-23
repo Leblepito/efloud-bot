@@ -75,8 +75,10 @@ def _run_cycle_with_correction(tmp_path, monkeypatch, flag):
     om._last_pnl_corrections = [("X1", 1.0, -0.40)]  # a win→loss sign flip
     orch.order_manager = om
     calls = []
+    # E-5: drain artık trade_id'yi de iletir (ledger id-match). İmza uyumu için
+    # keyword kabul eden stub; assert id'nin THREAD edildiğini doğrular.
     monkeypatch.setattr(orch.breaker, "record_trade_correction",
-                        lambda o, n: calls.append((o, n)))
+                        lambda o, n, trade_id=None: calls.append((o, n, trade_id)))
     df = _flat_df()
     orch.run_cycle("BTC/USDT", df, df, df, df, balance=2000.0)
     return calls, om._last_pnl_corrections
@@ -91,8 +93,9 @@ def test_orchestrator_drain_off_by_default(tmp_path, monkeypatch):
 
 
 def test_orchestrator_drain_applies_when_enabled(tmp_path, monkeypatch):
-    """Flag ON: the sign-flipped correction is re-fed to the breaker, and the
-    list is drained."""
+    """Flag ON: the sign-flipped correction is re-fed to the breaker WITH its
+    trade_id (E-5 id-match), and the list is drained."""
     calls, drained = _run_cycle_with_correction(tmp_path, monkeypatch, flag=True)
-    assert calls == [(1.0, -0.40)]
+    assert calls == [(1.0, -0.40, "X1")], \
+        "E-5: audit'in ürettiği trade_id breaker'a threadlenmeli (id-match)"
     assert drained == []

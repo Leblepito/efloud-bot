@@ -1277,9 +1277,13 @@ class SafeOrchestrator:
                 # uygulanıyordu (çift balance deltası + yanlış ledger eşleşmesi).
                 try:
                     if self.config.get("safety", {}).get("breaker_backcorrect_consecutive", False):
-                        for _trade_id, old_pnl, new_pnl in corrections:
+                        # E-5 (2026-07-18): audit'in ürettiği trade_id artık
+                        # breaker'a threadlenir — ledger eşleşmesi id-first
+                        # (değer-ikizi kayıtlarda yanlış-kayıt mutasyonu biter).
+                        for trade_id, old_pnl, new_pnl in corrections:
                             if (old_pnl >= 0) != (new_pnl >= 0):  # sign flip only
-                                self.breaker.record_trade_correction(old_pnl, new_pnl)
+                                self.breaker.record_trade_correction(
+                                    old_pnl, new_pnl, trade_id=trade_id)
                                 actions.append(f"Breaker corrected PnL ${old_pnl:.2f}→${new_pnl:.2f}")
                 finally:
                     corrections.clear()

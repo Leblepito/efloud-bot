@@ -49,13 +49,19 @@ from backend.bot_runner import BotRunner
 
 @dataclass
 class FakeExchangePos:
-    """Mirrors the exchange-side `exchange.Position` fields the helper reads."""
+    """Mirrors the exchange-side `exchange.Position` fields the helper reads.
+
+    E-5: order_id + opened_at eklendi — helper artık breaker'a trade_id
+    threadler (`order_id or f"{symbol}-{opened_at}"`, audit producer'la AYNI
+    ifade — exchange/__init__.py audit_realized_pnl)."""
     symbol: str = "BTC/USDT"
     direction: str = "LONG"
     entry: float = 100.0
     exit_price: float = 95.0
     exit_reason: str = "SL"
     pnl_usdt: float = -12.5
+    order_id: str = "ORD-1"
+    opened_at: str = "2026-07-18T00:00:00+00:00"
     _reported_to_breaker: bool = field(default=False)
 
 
@@ -81,8 +87,26 @@ def test_reconciled_close_records_pnl_when_logical_open():
 
     orch.lifecycle.close_position.assert_called_once_with(logical, 2000.0, "TP1")
     orch._journal_record_exit.assert_called_once_with(logical, 2000.0, "TP1")
-    orch.breaker.record_trade.assert_called_once_with(33.3)
+    # E-5: exchange pos'un order_id'si trade_id olarak threadlenir — audit'in
+    # correction id'siyle AYNI anahtar → ledger'da id-match mümkün olur.
+    orch.breaker.record_trade.assert_called_once_with(33.3, trade_id="ORD-1")
     assert logical._reported_to_breaker is True
+
+
+def test_reconciled_close_trade_id_fallback_when_no_order_id():
+    """E-5: order_id boş ("" — dry-run/legacy) → producer'la aynı fallback
+    anahtarı `f"{symbol}-{opened_at}"` kullanılmalı ki audit correction'ı
+    ledger kaydını id ile bulabilsin."""
+    logical = MagicMock()
+    logical._reported_to_breaker = False
+    runner, orch = _make_runner_with_orch(logical=logical)
+    pos = FakeExchangePos(symbol="SOL/USDT", pnl_usdt=-2.0, order_id="",
+                          opened_at="2026-07-18T09:30:00+00:00")
+
+    runner._sync_reconciled_close_to_logical(pos)
+
+    orch.breaker.record_trade.assert_called_once_with(
+        -2.0, trade_id="SOL/USDT-2026-07-18T09:30:00+00:00")
 
 
 def test_no_record_when_no_logical_match():

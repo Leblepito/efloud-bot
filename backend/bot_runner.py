@@ -825,7 +825,12 @@ class BotRunner:
             if logical is not None and not getattr(logical, "_reported_to_breaker", False):
                 self.orch.lifecycle.close_position(logical, pos.exit_price, pos.exit_reason)
                 self.orch._journal_record_exit(logical, pos.exit_price, pos.exit_reason)
-                self.orch.breaker.record_trade(pos.pnl_usdt)
+                # E-5 (2026-07-18): trade_id threadlenir — audit producer'la
+                # (exchange/__init__.py audit_realized_pnl) AYNI anahtar ifadesi,
+                # böylece PnL düzeltmesi ledger'da id ile TAM kaydı bulur.
+                self.orch.breaker.record_trade(
+                    pos.pnl_usdt,
+                    trade_id=pos.order_id or f"{pos.symbol}-{pos.opened_at}")
                 logical._reported_to_breaker = True
                 log.info(
                     f"Reconcile→breaker sync: {pos.symbol} {pos.direction} "
