@@ -72,16 +72,6 @@ engine:
                    "BNB/USDT", "TRX/USDT", "LINK/USDT", "BCH/USDT", "ADA/USDT"]
   smc_v2_shadow: false          # LIVE (operatör onayı 2026-07-07): gerçek emir
 
-# ── SMC v2 davranış anahtarları (W2/C1+C2, 2026-07-18) ──
-# İkisi de default-OFF: kod hazır + testli; NET-cost 1000-bar backtest gate
-# Windows'ta koşulup SONUÇ ONAYLANINCA operatör true yapar. false = birebir
-# eski canlı davranış (bu commit canlı mantığı DEĞİŞTİRMEZ).
-smc_v2:
-  anchor_time_axis: false       # C1: SL çapası seçiminde LTF kırılım zamanı
-                                #     HTF eksenine haritalanır (lookahead fix)
-  confirm_last_bar_only: false  # C2: yalnız son kapanmış bar engulfing onayı
-                                #     (stale onay biter)
-
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:
   mode: fixed

@@ -10,11 +10,6 @@ services:
       - autoheal=true
     env_file:
       - .env.production
-    environment:
-      # R-13: overseer bu dosyayı taill'ler — yazan taraf BU servistir
-      # (backend/main.py env set ise JSON rotating file handler kurar;
-      # stdout formatı değişmez, dosya her zaman JSON).
-      - EFLOUD_LOG_FILE=/app/logs/efloud_bot.log
     expose:
       - "8080"  # internal-only; Caddy reverse-proxies via docker network
     volumes:
@@ -199,18 +194,14 @@ services:
       - EFLOUD_HEALTHZ_URL=http://efloud-bot:8080/healthz
       - EFLOUD_OVERSEER_DEDUP_DB=/app/state/overseer_dedup.sqlite
       - EFLOUD_OVERSEER_HEARTBEAT_FILE=/app/state/overseer_heartbeat.json
-      # R-13: journal path CANLI instance'a bakar — bot state_1k'ya yazar
-      # (bot_runner: TradeJournal(state_dir/trade_journal.jsonl), config
-      # phase2_1k). Eski değer emekli aggressive instance'ın dosyasıydı →
-      # rule_consecutive_losses hep boş journal görüyordu.
-      - EFLOUD_OVERSEER_JOURNAL_PATH=/app/state_1k/trade_journal.jsonl
+      - EFLOUD_OVERSEER_JOURNAL_PATH=/app/state_aggressive/trade_journal.jsonl
       - EFLOUD_OVERSEER_STATE_DB=/app/state/overseer_state.sqlite
       - EFLOUD_OVERSEER_LLM_DAILY_CAP=500
       - EFLOUD_OVERSEER_DRY_RUN=1     # Week 1: log-only; Week 2+ Hermes flips to 0
       - ANTHROPIC_MODEL=claude-haiku-4-5-20251001
     volumes:
       - efloud_logs:/app/logs:ro
-      - efloud_state_1k:/app/state_1k:ro
+      - efloud_state_aggressive:/app/state_aggressive:ro
       - efloud_state:/app/state
     depends_on:
       efloud-bot:
@@ -309,33 +300,6 @@ services:
         max-size: "2m"
         max-file: "3"
 
-  # ─────────────────────────────────────────────────────────────────
-  # P-Kronos-Social: Kronos cascade runner. Cron 4 saatte bir tetikler:
-  #   0 */4 * * * cd /opt/efloud-bot && docker compose -f docker-compose.prod.yml run --rm kronos-runner
-  # Çıktı: efloud_data volume'unda data/market/kronos_cascade.json —
-  # routines-watcher'daki social_content rutini okur. Trade path'e
-  # sıfır dokunuş; başarısız koşu eski JSON'u EZMEZ (bayat-ama-geçerli).
-  # ─────────────────────────────────────────────────────────────────
-  kronos-runner:
-    build:
-      context: .
-      dockerfile: Dockerfile.kronos
-    image: efloud-kronos:latest
-    container_name: efloud-kronos-runner
-    profiles: [scheduled]             # NOT started by `up -d`; cron triggers via `run`
-    env_file:
-      - .env.production
-    environment:
-      - KRONOS_OUTPUT_PATH=/app/data/market/kronos_cascade.json
-    volumes:
-      - efloud_data:/app/data
-      - kronos_hf_cache:/app/hf_cache   # model ağırlıkları (~500MB) kalıcı
-    logging:
-      driver: json-file
-      options:
-        max-size: "2m"
-        max-file: "3"
-
 volumes:
   efloud_state:
   efloud_state_1k:
@@ -350,6 +314,5 @@ volumes:
   efloud_state_scalp:     # V3 scalp-bot isolated state (breaker/positions/journal)
   efloud_logs_scalp:      # V3 scalp-bot isolated logs
   efloud_reports_scalp:   # V3 scalp-bot isolated reports
-  kronos_hf_cache:        # P-Kronos-Social — HuggingFace model cache (~500MB)
   caddy_data:
   caddy_config:

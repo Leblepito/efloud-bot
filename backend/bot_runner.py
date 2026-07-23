@@ -23,7 +23,6 @@ from backend.events import bus
 from backend.notifications import TelegramNotifier
 from engine import SafeOrchestrator
 from engine.instance_manager import InstanceManager
-from utils.logging import log_event
 from engine.journal import TradeJournal
 from engine.notifications import NotificationManager
 from engine.content_jobs import ContentJobEmitter
@@ -458,9 +457,6 @@ class BotRunner:
             self.cycle_count += 1
             try:
                 bus.publish("cycle_start", cycle_n=self.cycle_count)
-                # R-13 (2026-07-18): bus.publish yalnız WS'e gider — overseer'ın
-                # rule_cycle_gap'i log DOSYASINDAN okur; yapısal satırı da yay.
-                log_event(log, "cycle_start", cycle_n=self.cycle_count)
 
                 # Reconcile first (sync ccxt — run in thread)
                 if self.order_mgr and not self.cfg["operation"]["dry_run"]:
@@ -829,12 +825,7 @@ class BotRunner:
             if logical is not None and not getattr(logical, "_reported_to_breaker", False):
                 self.orch.lifecycle.close_position(logical, pos.exit_price, pos.exit_reason)
                 self.orch._journal_record_exit(logical, pos.exit_price, pos.exit_reason)
-                # E-5 (2026-07-18): trade_id threadlenir — audit producer'la
-                # (exchange/__init__.py audit_realized_pnl) AYNI anahtar ifadesi,
-                # böylece PnL düzeltmesi ledger'da id ile TAM kaydı bulur.
-                self.orch.breaker.record_trade(
-                    pos.pnl_usdt,
-                    trade_id=pos.order_id or f"{pos.symbol}-{pos.opened_at}")
+                self.orch.breaker.record_trade(pos.pnl_usdt)
                 logical._reported_to_breaker = True
                 log.info(
                     f"Reconcile→breaker sync: {pos.symbol} {pos.direction} "
