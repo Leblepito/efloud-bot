@@ -18,16 +18,29 @@
 # "fixed" sizing modu balance'ı hiç kullanmadığı için bu ayar bu bot için İNERT;
 # yine de zararsız, "legacy" moda geçilirse hazır bekler.
 #
-# Risk profili — LONG KONSERVATİF (operatör onayı 2026-06-21; SENKRON tut):
-#   Cüzdan:           ~$582 (2026-07-09 düzeltme; kendi izole Binance sub-account'ı)
-#   Kaldıraç:         3x (exchange.leverage; V1=5x — long uzun tutuş → düşük likidasyon riski)
-#   Sizing modu:      FIXED — $50 margin/coin × 3x = $150 notional/pozisyon (bakiyeden bağımsız)
-#   Eşzamanlı max:    5 pozisyon (max_open_positions; long horizon konsantrasyon kontrolü)
+# Risk profili — LONG (operatör onayı 2026-06-21; SENKRON tut):
+#   Cüzdan:           ~$582 (2026-07-09 düzeltme; kendi izole Binance sub-account'ı) — YENİDEN DOĞRULA
+#   Kaldıraç:         5x (exchange.leverage; 2026-07-24 operatör talebi, WAS 3x konservatif)
+#   Sizing modu:      FIXED — $50 margin/coin × 5x = $250 notional/pozisyon (2026-07-24, WAS $150 @ 3x)
+#   Eşzamanlı max:    10 pozisyon (max_open_positions; 2026-07-04'te 5→10 yükseltilmişti, bu satırdaki
+#                     "5 pozisyon" yorumu STALE'di — 2026-07-24'te düzeltildi, bkz. risk: bloğu altta)
 #   Seçicilik:        min_confluence 60, min_rr 2.2 (V1=50/1.8 — long daha seçici)
 #   Daily loss:       %10 ≈ $58 → breaker TRIPS (daily_loss_limit_pct)
 #   Weekly DD:        %20 ≈ $116 → breaker HALTS (weekly_drawdown_limit_pct; V1'den sıkı)
 #   Acil halt:        bakiye $524 altına düşünce (emergency_balance_threshold; 2026-07-09 düzeltme)
 #   ⚠️ Long profili backtest-EDİLMEDİ; judgment-based konservatif başlangıç.
+#
+# 2026-07-24 (operatör talebi): kaldıraç 3x→5x. Orijinal 3x seçimi TAM OLARAK
+# "long uzun tutuş + geniş SL → likidasyon riski az" gerekçesiyle konservatif
+# tutulmuştu (bkz. yukarı); likidasyon mesafesi ~%33'ten ~%20'ye düşer — operatörün
+# net talebi, kabul edilmiş trade-off olarak kaydediliyor. fixed_position_usdt
+# ($50) DEĞİŞMEDİ → notional $150→$250. TÜRETİLMİŞ guard güncellemesi: aşağıdaki
+# safety.max_total_exposure 4.0→6.0 (10×$250=$2500 ≈ cüzdanın 4.3x'i; eski 4.0
+# cap ~9. pozisyonda keserdi). max_position_notional_pct (35.0) DEĞİŞMEDİ — o
+# guard margin($50)'a bakar, kaldıraçtan etkilenmez. ÖNEMLİ: mevcut açık pozisyon
+# varken restart+Start yapılırsa set_leverage YENİDEN gönderilir, pozisyonun
+# likidasyon fiyatı yeni kaldıraca göre yeniden hesaplanır — restart öncesi
+# dashboard'da Positions'ın boş (flat) olduğunu doğrula.
 #
 # Önkoşullar (preflight.py ile YENİ cüzdan key'iyle doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi) — DOĞRULANDI 2026-06-21
@@ -54,7 +67,7 @@ exchange:
   api_key: ""              # VPS env: BINANCE_API_KEY (YENİ cüzdan key)
   api_secret: ""           # VPS env: BINANCE_API_SECRET (YENİ cüzdan secret)
   testnet: false           # MAINNET
-  leverage: 3              # 3x — LONG konservatif (uzun tutuş + geniş SL → likidasyon riski az). V1=5x.
+  leverage: 5              # 2026-07-24 operatör talebi: 3x→5x (WAS 3x "LONG konservatif — uzun tutuş + geniş SL → likidasyon riski az")
   margin_mode: ISOLATED    # per-symbol risk isolation (V1 ile aynı)
   hedge_mode: false        # ONE-WAY; Binance blocks long+short on one symbol
 
@@ -179,11 +192,15 @@ safety:
   # C3 (default OFF) — V1 ile aynı
   regime_ml_can_override_gate: false
 
-  # $50 marjin × 3x = $150 notional per trade (~$582 cüzdanın %25.8'i).
-  # NOT: "fixed" sizing modunda bu iki % alanı İNERT (calc_fixed_position_size
-  # balance/max_notional_pct kullanmaz) — sadece "legacy" moda geçilirse devreye girer.
-  max_position_notional_pct: 35.0     # $150 notional / $582 balance ≈ %25.8 (+tampon)
-  max_total_exposure: 4.0             # 5 × $150 = $750 / $582 ≈ 1.3x (max_open_positions=5)
+  # max_position_notional_pct: position_guard.can_open_position içinde MARGIN cap'i
+  # (margin=$50 ≤ balance×pct/100) — calc_fixed_position_size bu alanı kullanmaz
+  # ama guard HER modda uygular, İNERT değil (bkz. dosya başı 2026-07-24 notu).
+  # $50 marjin / ~$582 bakiye ≈ %8.6 — 35.0 geniş tampon, kaldıraçtan etkilenmez.
+  max_position_notional_pct: 35.0     # guard margin-cap tamponu (gerçek kullanım ~%8.6)
+  # 2026-07-24: 4.0→6.0 — kaldıraç 3x→5x ile notional $150→$250 oldu:
+  # 10 × $250 = $2500 / $582 ≈ 4.3x. Eski 4.0 cap (+ zaten stale "max_open_
+  # positions=5" varsayımı) 5x'te ~9. pozisyonda yeni girişi keserdi.
+  max_total_exposure: 6.0             # 10×$250 (5x) desteklemek için yükseltildi (WAS 4.0)
   # max_holding_hours: long horizon (1h entry / 1w htf) → 24h erken çıkışa neden olur.
   # 168h (7 gün) long-horizon trade'lerin gelişmesine izin verir (operatör-tunable).
   max_holding_hours: 168

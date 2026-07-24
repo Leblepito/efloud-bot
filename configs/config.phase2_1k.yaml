@@ -18,11 +18,33 @@
 # ilgisi yok — yine de faydalı bir sizing iyileştirmesi, korunuyor.
 # Not: multiAssetsMargin=False → BNB margin sayılmaz, sizing USDT totalMarginBalance.
 #
+# 2026-07-24 (operatör talebi): sizing legacy (%risk-bazlı) → FIXED, V2/V3 ile aynı
+# model. Sembol başı sabit $50 marjin × 10x kaldıraç = $500 notional (bakiyeden
+# bağımsız). Kaldıraç 5x→10x: likidasyon mesafesi ~%20'den ~%10'a düşer (ISOLATED
+# margin, ani %10 ters harekette pozisyon likide olabilir) — operatörün net talebi
+# buydu, kabul edilmiş risk trade-off'u olarak kaydediliyor.
+# TÜRETİLMİŞ değişiklikler (operatör bunları açıkça istemedi ama fixed+10x'in
+# ÇALIŞMASI için ZORUNLU — yoksa aşağıdaki iki guard TÜM emirleri sessizce
+# reddeder, bkz. [[efloud-incident-2026-07-23]] tarzı "işlem yok" bug'ı):
+#   (a) safety.max_position_notional_pct 2.0→35.0 — engine/safety/position_guard.py
+#       can_open_position HER sizing modunda margin($50) ≤ balance×pct kontrolü
+#       yapar (calc_fixed_position_size bu alanı KULLANMAZ ama guard onu görmez,
+#       yine de reddeder). Eski %2 ~$27 marjine izin verirdi (<$50 → her emir red).
+#   (b) safety.max_total_exposure 1.0→6.0 — 10 pozisyon × $500 = $5000 notional ≈
+#       cüzdanın (~$1363) 3.7x'i; eski 1.0x cap 2-3 pozisyondan sonra yeni girişi
+#       keserdi, max_open_positions=10 hedefine fiilen ulaşılamazdı.
+# ÖNEMLİ — restart öncesi kontrol: mevcut açık pozisyon varken restart+Start
+# yapılırsa set_leverage o sembol için Binance'a YENİDEN gönderilir (backend/
+# bot_runner.py _enforce_margin_setup, her Start'ta tüm sembollerde çalışır) —
+# mevcut pozisyonun boyutu DEĞİŞMEZ ama marjini/likidasyon fiyatı YENİ kaldıraca
+# göre yeniden hesaplanır (likidasyon mesafesi daralır). Önerilen: Start'a
+# basmadan önce dashboard → Positions'ın boş (flat) olduğunu doğrula.
+#
 # Risk profili (safety: bloğuyla SENKRON — değiştirirsen İKİSİNİ birlikte güncelle):
-#   Cüzdan:           ~$1363 (2026-07-09 düzeltme; kendi izole Binance sub-account'ı)
-#   Kaldıraç:         5x (exchange.leverage)
-#   Sembol başı max:  ~$136 notional (max_position_notional_pct 2% × $1363 × 5)
-#   Eşzamanlı max:    10 pozisyon (max_total_exposure 1.0)
+#   Cüzdan:           ~$1363 (2026-07-09 düzeltme; kendi izole Binance sub-account'ı) — YENİDEN DOĞRULA
+#   Kaldıraç:         10x (exchange.leverage; 2026-07-24 operatör talebi, WAS 5x)
+#   Sizing modu:      FIXED — $50 margin/coin × 10x = $500 notional/pozisyon (2026-07-24, WAS legacy %risk-bazlı)
+#   Eşzamanlı max:    10 pozisyon (max_total_exposure 1.0→6.0, 10×$500 desteklemek için)
 #   Daily loss:       %10 ≈ $136 → breaker TRIPS (daily_loss_limit_pct)
 #   Weekly DD:        %25 ≈ $341 → breaker HALTS (weekly_drawdown_limit_pct)
 #   Acil halt:        bakiye $1216 altına düşünce (emergency_balance_threshold)
@@ -46,7 +68,7 @@ exchange:
   api_key: ""              # Railway env: BINANCE_API_KEY
   api_secret: ""           # Railway env: BINANCE_API_SECRET
   testnet: false           # MAINNET
-  leverage: 5              # 5x kaldıraç (orta-agresif, $2000 cüzdan için) — unchanged
+  leverage: 10             # 2026-07-24 operatör talebi: 5x→10x (WAS 5x "orta-agresif, $2000 cüzdan için")
   margin_mode: ISOLATED    # PR A ACTIVE (2026-06-02): flat-book deploy — per-symbol risk isolation
   hedge_mode: false        # PR A ACTIVE: ONE-WAY; Binance blocks long+short on one symbol
 
@@ -71,6 +93,16 @@ engine:
   smc_v2_symbols: ["BTC/USDT", "ETH/USDT", "XRP/USDT", "DOGE/USDT", "SOL/USDT",
                    "BNB/USDT", "TRX/USDT", "LINK/USDT", "BCH/USDT", "ADA/USDT"]
   smc_v2_shadow: false          # LIVE (operatör onayı 2026-07-07): gerçek emir
+
+# ── SMC v2 davranış anahtarları (W2/C1+C2, 2026-07-18) ──
+# İkisi de default-OFF: kod hazır + testli; NET-cost 1000-bar backtest gate
+# Windows'ta koşulup SONUÇ ONAYLANINCA operatör true yapar. false = birebir
+# eski canlı davranış (bu commit canlı mantığı DEĞİŞTİRMEZ).
+smc_v2:
+  anchor_time_axis: false       # C1: SL çapası seçiminde LTF kırılım zamanı
+                                #     HTF eksenine haritalanır (lookahead fix)
+  confirm_last_bar_only: false  # C2: yalnız son kapanmış bar engulfing onayı
+                                #     (stale onay biter)
 
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:
@@ -135,9 +167,10 @@ risk:
   sl_atr_buffer: 0.5
   daily_filter_strict: false
 
-  # Opt-in reverse-from-risk (legacy default, mevcut SMC sizing)
-  position_size_calculation: legacy
-  max_loss_per_trade_usdt: 10
+  # 2026-07-24 operatör talebi: legacy (%risk-bazlı) → fixed (V2/V3 ile aynı model).
+  position_size_calculation: fixed
+  fixed_position_usdt: 50             # $50 marjin × 10x = $500 notional/pozisyon — AKTİF
+  max_loss_per_trade_usdt: 10         # (legacy sizing kalıntısı — fixed modda kullanılmaz)
   target_stop_distance_pct: 5
 
   # 2026-07-09 (düzeltildi): V1/V2/V3'ün TEK ortak cüzdanı paylaştığı varsayımı
@@ -207,11 +240,18 @@ safety:
   # NET-PnL backtest (the model is circular-trained on rule labels today).
   regime_ml_can_override_gate: false
 
-  # max_position_notional_pct: kod içinde "margin cap" olarak kullanılıyor (notional/leverage)
-  # 2000 × 2.0% × 5 = $200 notional max → 10% of available balance per trade
-  # 10 sembol × $200 = $2000 toplam notional (cüzdanın tamamı, 1x net leverage cap)
-  max_position_notional_pct: 2.0      # her trade max $200 notional (cüzdanın %10'u)
-  max_total_exposure: 1.0             # Toplam notional max $2000 (cüzdan tamamı, 1x net leverage)
+  # max_position_notional_pct: engine/safety/position_guard.py can_open_position
+  # içinde MARGIN cap'i olarak kullanılır (full_notional/leverage ≤ balance×pct/100).
+  # "fixed" sizing modunda calc_fixed_position_size (risk/__init__.py) bu alanı
+  # OKUMAZ, ama position_guard HER modda bu kontrolü uygular — İNERT DEĞİL.
+  # 2026-07-24: 2.0→35.0 (V2/V3 ile aynı tampon) — $50 marjin / ~$1363 bakiye ≈
+  # %3.7; eski %2 cap'i (~$27 marjin) altında kalıp HER emri reddederdi.
+  max_position_notional_pct: 35.0     # guard margin-cap tamponu (fixed modda gerçek kullanım ~%3.7, WAS 2.0)
+  # max_total_exposure: 10 pozisyon × $500 notional = $5000 ≈ cüzdanın (~$1363) 3.7x'i.
+  # 2026-07-24: 1.0→6.0 — eski 1.0x cap ~2-3 pozisyondan sonra yeni girişi keserdi,
+  # max_open_positions=10 hedefine fiilen ulaşılamazdı. 6.0, emergency_balance_
+  # threshold ($1216) altına inmeden bind ETMEZ (6.0×1216=$7296 > $5000).
+  max_total_exposure: 6.0             # 10×$500 desteklemek için yükseltildi (WAS 1.0)
   max_holding_hours: 24
   max_pyramid_adds: 0                  # Pyramid kapalı (basit tut)
   min_sl_atr: 0.5
