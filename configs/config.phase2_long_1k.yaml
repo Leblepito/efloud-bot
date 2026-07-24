@@ -27,7 +27,7 @@
 #   Seçicilik:        min_confluence 60, min_rr 2.2 (V1=50/1.8 — long daha seçici)
 #   Daily loss:       %10 ≈ $58 → breaker TRIPS (daily_loss_limit_pct)
 #   Weekly DD:        %20 ≈ $116 → breaker HALTS (weekly_drawdown_limit_pct; V1'den sıkı)
-#   Acil halt:        bakiye $524 altına düşünce (emergency_balance_threshold; 2026-07-09 düzeltme)
+#   Acil halt:        bakiye $472 altına düşünce (emergency_balance_threshold; 2026-07-09 düzeltme)
 #   ⚠️ Long profili backtest-EDİLMEDİ; judgment-based konservatif başlangıç.
 #
 # 2026-07-24 (operatör talebi): kaldıraç 3x→5x. Orijinal 3x seçimi TAM OLARAK
@@ -46,7 +46,7 @@
 #   ✓ canTrade = true (futures yetkisi) — DOĞRULANDI 2026-06-21
 #   ✓ Position mode = ONE-WAY (hedge_mode:false; bot startup'ta zorlar — set_position_mode)
 #   ✓ Hesap FLAT (pozisyon/order yok — margin/position-mode değişimi flat-book ister)
-#   ✓ Bakiye ≥ $582 Futures cüzdanında (emergency_balance_threshold $524 üstü; 2026-07-09 düzeltme)
+#   ✓ Bakiye ≥ $525 Futures cüzdanında (emergency_balance_threshold $472 üstü; 2026-07-09 düzeltme)
 #   ✓ EFLOUD_ALLOW_MAINNET=1
 #   ✓ VPS IP (<VPS_IP>) API IP-whitelist'inde — DOĞRULANDI
 #
@@ -210,7 +210,7 @@ safety:
   # H3 (default OFF) — V1 ile aynı
   reject_wide_sl: false
 
-  emergency_balance_threshold: 524    # Bakiye $524 altı → HALT (~10% kayıp, $582 cüzdana göre). 2026-07-09 düzeltme.
+  emergency_balance_threshold: 472    # Bakiye $472 alti -> HALT (~%10 kayip, $525 cuzdana gore). 2026-07-24: 524->472 — cuzdan 582->525 dusmustu, esik bakiyenin $1.12 dibinde kalip 23 Tem 19:00 trip etmisti (operator onayi sohbette).
   reserve_balance: 0
 
   min_seconds_between_symbol_fetches: 0.5

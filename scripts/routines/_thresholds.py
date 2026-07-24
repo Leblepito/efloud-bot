@@ -8,7 +8,11 @@ def derive(config: dict) -> dict:
         "dd_critical_pct": round(wk * 0.95, 2),
         # R2 margin / liquidation distance (% from mark to liq price)
         "liq_distance_warn_pct": 20,
-        "liq_distance_alert_pct": 10,
+        # 2026-07-24: 10 -> 7 (operator onayi, sohbet). 10x pozisyon dogumda
+        # liq'e ~%9.3-9.5 mesafede dogar (1/kaldirac - maintenance) -> esik 10
+        # iken her 10x pozisyon acilistan itibaren omur boyu WARN uretiyordu.
+        # 7 = ~%2.5+ aleyhte hareket sonrasi oter; critical=5 katmani ayni.
+        "liq_distance_alert_pct": 7,
         "liq_distance_critical_pct": 5,
         "margin_ratio_warn": 0.5,
         "margin_ratio_critical": 0.75,

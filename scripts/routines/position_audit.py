@@ -37,6 +37,25 @@ def _algo_to_order(a):
     }
 
 
+def _ledger_open_size(rec):
+    """Ledger kaydindan ACIK pozisyon boyutu (sema fix, 2026-07-24).
+
+    Bot ledger'i (state_1k/positions.json) engine.lifecycle.Position semasidir:
+    boyut top-level contracts/size/positionAmt alanlarinda DEGIL,
+    entries[]/exits[] listelerindedir. Eski kod o alanlari arayip HER ledger
+    kaydini 0 sayiyordu -> her acik pozisyon "Exchange var / Ledger 0.0"
+    false CRITICAL drift uretiyordu (2026-07-24 canli: LINK/ETH/BCH; uc
+    pozisyon da botca biliniyor ve positions.json'a taze yaziliyordu).
+    Acik boyut = sum(entries.size) - sum(exits.size); exchange-semali kayit
+    gelirse (geriye uyum / test fikstürleri) eski alanlar okunur.
+    """
+    if any(k in rec for k in ("contracts", "size", "positionAmt")):
+        return abs(float(rec.get("contracts", 0) or rec.get("size", 0) or rec.get("positionAmt", 0) or 0))
+    entered = sum(abs(float(e.get("size", 0) or 0)) for e in (rec.get("entries") or []))
+    exited = sum(abs(float(x.get("size", 0) or 0)) for x in (rec.get("exits") or []))
+    return max(0.0, entered - exited)
+
+
 def evaluate(exchange_positions, exchange_open_orders, ledger_positions,
              algo_fetch_ok=True):
     breaches = []
@@ -118,6 +137,9 @@ def evaluate(exchange_positions, exchange_open_orders, ledger_positions,
     # _norm_sym: ccxt 'ETH/USDT:USDT' ↔ ledger 'ETH/USDT' başka türlü eşleşmez.
     drift_count = 0
     ex_map = {_norm_sym(p["symbol"]): p for p in exchange_positions}
+    # Ayni sembol eski-kapali + yeni-acik kayitlarla birden fazla gelebilir;
+    # comprehension SON kaydi tutar = kronolojik en yeni (bot sembol basina
+    # tek acik pozisyon calistigi icin guvenli).
     ld_map = {_norm_sym(p["symbol"]): p for p in ledger_positions}
     
     all_symbols = set(ex_map.keys()) | set(ld_map.keys())
@@ -126,7 +148,8 @@ def evaluate(exchange_positions, exchange_open_orders, ledger_positions,
         ld_pos = ld_map.get(symbol)
         
         ex_size = abs(float(ex_pos.get("contracts", 0) or ex_pos.get("size", 0) or ex_pos.get("positionAmt", 0) or 0)) if ex_pos else 0.0
-        ld_size = abs(float(ld_pos.get("contracts", 0) or ld_pos.get("size", 0) or ld_pos.get("positionAmt", 0) or 0)) if ld_pos else 0.0
+        # 2026-07-24 sema fix: ledger Position semasi (entries/exits) -> helper.
+        ld_size = _ledger_open_size(ld_pos) if ld_pos else 0.0
         
         if ex_size == 0 and ld_size == 0:
             continue
