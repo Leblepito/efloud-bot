@@ -95,6 +95,27 @@ def _resolve_deviation_tp2(raw_tp2, tp1, min_tp, price, risk, is_long):
     return tp2
 
 
+def _level_price(lvl) -> float:
+    """Injected level'dan fiyatı güvenle çıkar (HOTFIX 2026-07-23).
+
+    Eski inline ifade `getattr(lvl, "price", lvl.get("price", 0))` idi —
+    getattr'ın DEFAULT argümanı eager değerlendirildiğinden Level dataclass'ı
+    gelince `lvl.get` daha fallback'e gerek kalmadan AttributeError atıyordu
+    (price attr'ı VAR olsa bile). LevelEngine canlıda dolu liste enjekte
+    ettiği için generate_signals her sembol/cycle'da çöküyordu → V1 sinyal
+    yolu tamamen ölü, hiç pozisyon açılamıyordu (2026-07-23 incident'i).
+    Dict / dataclass / bozuk girdi hepsi desteklenir; çıkaramazsa 0.0
+    (çağıran `if p` ile atlar — tek çürük seviye cycle'ı öldürmez)."""
+    if isinstance(lvl, dict):
+        p = lvl.get("price", 0)
+    else:
+        p = getattr(lvl, "price", 0)
+    try:
+        return float(p) if p else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _collect_smc_blocks(
     is_long: bool,
     entry_price: float,
@@ -155,9 +176,9 @@ def _collect_smc_blocks(
         # ── Injected levels (resistance) ──
         if levels:
             for lvl in levels:
-                p = getattr(lvl, "price", lvl.get("price", 0)) if isinstance(lvl, (dict, object)) else 0
+                p = _level_price(lvl)  # HOTFIX 2026-07-23: eager-default bug
                 if p and p > entry_price:
-                    blocks.append((float(p), "LEVEL"))
+                    blocks.append((p, "LEVEL"))
     else:
         # SHORT — mirror
         for s in htf.get("swing_lows", []):
@@ -187,9 +208,9 @@ def _collect_smc_blocks(
             blocks.append((e_range.lo, "RANGE_LO"))
         if levels:
             for lvl in levels:
-                p = getattr(lvl, "price", lvl.get("price", 0)) if isinstance(lvl, (dict, object)) else 0
+                p = _level_price(lvl)  # HOTFIX 2026-07-23: eager-default bug
                 if p and p < entry_price:
-                    blocks.append((float(p), "LEVEL"))
+                    blocks.append((p, "LEVEL"))
 
     # Fiyata göre sırala: LONG = artan (en yakın önce), SHORT = azalan
     blocks.sort(key=lambda b: b[0], reverse=not is_long)
