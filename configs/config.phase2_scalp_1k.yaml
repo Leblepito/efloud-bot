@@ -32,25 +32,14 @@
 #     6. TP1 hit → SL entry'ye taşınır (breakeven), eski SL silinir (mevcut)
 #
 # Risk profili — SCALP AGRESIF-KONTROLLÜ:
-#   Cüzdan:           ~$525 (2026-07-09 düzeltme; kendi izole Binance sub-account'ı) — YENİDEN DOĞRULA
-#   Kaldıraç:         5x (exchange.leverage; 2026-07-24 operatör talebi, WAS 3x)
-#   Sizing modu:      FIXED — $50 margin/coin × 5x = $250 notional/pozisyon (2026-07-24, WAS $150 @ 3x)
+#   Cüzdan:           ~$525 (2026-07-09 düzeltme; kendi izole Binance sub-account'ı)
+#   Kaldıraç:         3x (exchange.leverage)
+#   Sizing modu:      FIXED — $50 margin/coin × 3x = $150 notional/pozisyon (bakiyeden bağımsız)
 #   Eşzamanlı max:    10 pozisyon
 #   min_rr:           1.0 (scalp hızlı kar alır)
 #   min_confluence:   55
 #   Max tutuş:        4 saat (scalp = kısa tutuş)
 #   ⚠️ Scalp profili backtest-EDİLMEDİ; judgment-based başlangıç.
-#
-# 2026-07-24 (operatör talebi): kaldıraç 3x→5x. fixed_position_usdt ($50)
-# DEĞİŞMEDİ → notional $150→$250. TÜRETİLMİŞ guard güncellemesi: aşağıdaki
-# safety.max_total_exposure 4.0→6.0 (10×$250=$2500 ≈ cüzdanın 4.76x'i; eski 4.0
-# cap ~8. pozisyonda keserdi). max_position_notional_pct (35.0) DEĞİŞMEDİ (guard
-# margin $50'ye bakar, kaldıraçtan etkilenmez). Scalp'in kısa tutuşu (max_holding_
-# hours=4, max_sl_atr=3.0 — en sıkı üç profil arasında) likidasyon-mesafesi
-# daralmasını (~%33→~%20) kısmen telafi eder ama ortadan kaldırmaz. ÖNEMLİ:
-# mevcut açık pozisyon varken restart+Start yapılırsa set_leverage YENİDEN
-# gönderilir, pozisyonun likidasyon fiyatı yeniden hesaplanır — restart öncesi
-# dashboard'da Positions'ın boş (flat) olduğunu doğrula.
 #
 # Çalıştırmak için (lokal test):
 #   python main.py configs/config.phase2_scalp_1k.yaml
@@ -67,7 +56,7 @@ exchange:
   api_key: ""              # VPS env: BINANCE_API_KEY (scalp cüzdan key)
   api_secret: ""           # VPS env: BINANCE_API_SECRET (scalp cüzdan secret)
   testnet: false           # MAINNET
-  leverage: 5              # 2026-07-24 operatör talebi: 3x→5x (WAS 3x "kademeli sizing (düşük-risk scalp)")
+  leverage: 3              # 3x — kademeli sizing (düşük-risk scalp)
   margin_mode: ISOLATED    # per-symbol risk isolation
   hedge_mode: false        # ONE-WAY (operatör kararı 2026-07-04): V1/V2 duruşuyla tutarlı,
                            # test edilmiş yol. Branch tasarımı hedge idi; scalp cüzdanı yeni
@@ -142,7 +131,7 @@ risk:
                                       # (2026-07-09 VPS→GitHub sync, commit 9ff0624); docker
                                       # loglarında "✅ fixed sizing active: margin=$50 per coin,
                                       # leverage=3x, notional=$150.00 per position" ile doğrulandı.
-  fixed_position_usdt: 50             # $50 margin × 3x = $150 notional/pozisyon — AKTİF
+  fixed_position_usdt: 50             # $50 margin × 5x = $250 notional/pozisyon — AKTİF (2026-07-24: kaldıraç 3x→5x, WAS $150 @ 3x)
   max_loss_per_trade_usdt: 10
   target_stop_distance_pct: 3
 
@@ -203,15 +192,11 @@ safety:
   volatile_atr_mult: 2.5
   regime_ml_can_override_gate: false
 
-  # max_position_notional_pct: position_guard.can_open_position içinde MARGIN cap'i
-  # (margin=$50 ≤ balance×pct/100) — calc_fixed_position_size bu alanı kullanmaz
-  # ama guard HER modda uygular, İNERT değil (bkz. dosya başı 2026-07-24 notu).
-  # $50 marjin / ~$525 bakiye ≈ %9.5 — 35.0 geniş tampon, kaldıraçtan etkilenmez.
-  max_position_notional_pct: 35.0     # guard margin-cap tamponu (gerçek kullanım ~%9.5)
-  # 2026-07-24: 4.0→6.0 — kaldıraç 3x→5x ile notional $150→$250 oldu:
-  # 10 × $250 = $2500 / $525 ≈ 4.76x. Eski 4.0/2.9x tamponu artık yetersizdi
-  # (~8. pozisyonda yeni girişi keserdi).
-  max_total_exposure: 6.0             # 10×$250 (5x) desteklemek için yükseltildi (WAS 4.0)
+  # 3x leverage + $50 margin = $150 notional per position (~$525 cüzdanın %28.6'sı).
+  # NOT: "fixed" sizing modunda bu iki % alanı İNERT (calc_fixed_position_size
+  # balance/max_notional_pct kullanmaz) — sadece "legacy" moda geçilirse devreye girer.
+  max_position_notional_pct: 35.0     # $150 notional / $525 balance ≈ %28.6 (+tampon)
+  max_total_exposure: 4.0             # 10 × $150 = $1500 / $525 ≈ 2.9x (+tampon)
   max_holding_hours: 4                # SCALP: max 4 saat tutuş (V1=24, V2=168)
   max_pyramid_adds: 0
   min_sl_atr: 0.3                     # Scalp: daha sıkı min SL (0.3 vs 0.5)
