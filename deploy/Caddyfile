@@ -8,7 +8,9 @@
     # Global options
     email utkucanuysall@gmail.com  # used by ACME (LE) for cert expiry warnings
 }
-bot.u2algo.com, bot.ualgotrade.com, 178-104-122-91.nip.io {
+# NOT (2026-07-24): bot.u2algo.com artik BIRLESIK PANELE gidiyor (asagida).
+# V1 dashboard bu iki adreste kalir.
+bot.ualgotrade.com, 178-104-122-91.nip.io {
     encode gzip zstd
     reverse_proxy efloud-bot:8080 {
         header_up X-Real-IP {remote_host}
@@ -86,7 +88,7 @@ line.178-104-122-91.nip.io {
 # ── Birleşik çoklu-bot izleme paneli (Faz 1, 2026-07-24) ───────────
 # 3 botun API'lerini server-side aggregate eden panel (efloud-panel:8090).
 # Basic auth panelin kendisinde (DASHBOARD_PASSWORD); TLS Caddy'de.
-panel.178-104-122-91.nip.io {
+bot.u2algo.com, panel.178-104-122-91.nip.io {
     encode gzip zstd
     reverse_proxy efloud-panel:8090 {
         header_up X-Real-IP {remote_host}
