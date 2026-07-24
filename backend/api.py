@@ -414,6 +414,20 @@ async def breaker_reset(reason: str = "manual via dashboard") -> dict:
     prior_state = runner.orch.breaker.status.state.value
     prior_reason = runner.orch.breaker.status.reason
     runner.orch.breaker.manual_reset(reason)
+    # 2026-07-24: OPEN state'i DISKE de hemen persist et (kill_switch'teki
+    # hardening'in aynasi). manual_reset yalniz in-memory status degistirir;
+    # disk restore'da otoritedir. Cycle-sonu persist'i (STEP 8) bir sonraki
+    # cycle'a kadar gelmez — uzun entry-TF'li instance'ta (V2/long: 1h) bu
+    # pencere DAKIKALARCA acik kalir; icinde restart olursa diskteki bayat
+    # HALTED geri yuklenir ve reset sessizce kaybolur (2026-07-24 canli:
+    # reset 200 dondu, disk 20+ dk HALTED kaldi). Persist hatasi reset'i
+    # 500'lememeli — dashboard'a disk_persisted ile gorunur kalir.
+    disk_persisted = False
+    try:
+        runner.orch._persist_state()
+        disk_persisted = True
+    except Exception as e:
+        log.error(f"breaker-reset: OPEN disk persist failed: {e}", exc_info=True)
     # Mirror the now-OPEN state to the DB immediately (best-effort). manual_reset
     # happens outside the trading cycle, so without this the breaker_state mirror
     # would stay HALTED until the next ~30s cycle — and a restart-with-file-loss
@@ -421,13 +435,15 @@ async def breaker_reset(reason: str = "manual via dashboard") -> dict:
     await db.upsert_breaker_state(runner.orch.breaker.to_dict())
     await db.log_audit(
         "breaker_reset",
-        {"prior_state": prior_state, "prior_reason": prior_reason, "reset_reason": reason},
+        {"prior_state": prior_state, "prior_reason": prior_reason, "reset_reason": reason,
+         "disk_persisted": disk_persisted},
     )
     return {
         "ok": True,
         "prior_state": prior_state,
         "prior_reason": prior_reason,
         "current_state": runner.orch.breaker.status.state.value,
+        "disk_persisted": disk_persisted,
     }
 
 
