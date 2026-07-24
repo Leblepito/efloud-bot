@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────────────────────────────
+# Birlesik cok-bot izleme paneli (Faz 1, 2026-07-24).
+# AYRI dosya cunku docker-compose.prod.yml'de commit'lenmemis yerel/staged
+# degisiklikler var — panel deploy'u onlara dokunmamali.
+#
+# Deploy (VPS):
+#   docker compose -f docker-compose.prod.yml -f docker-compose.panel.yml \
+#     up -d --no-deps panel
+#   docker exec efloud-caddy caddy reload --config /etc/caddy/Caddyfile
+#
+# Ayni image'i kullanir (efloud-bot:latest) — panel/ kodu image'a
+# Dockerfile'daki `COPY . ./` ile girer; yeni panel kodu icin image
+# rebuild gerekir ama BOT konteynerlerine dokunmak gerekmez.
+# ─────────────────────────────────────────────────────────────────────
+services:
+  panel:
+    image: efloud-bot:latest
+    container_name: efloud-panel
+    restart: unless-stopped
+    command: python -m uvicorn panel.main:app --host 0.0.0.0 --port 8090
+    env_file:
+      - .env.production            # DASHBOARD_PASSWORD (panel Basic auth + bot login'leri)
+    expose:
+      - "8090"                     # internal-only; Caddy panel.…nip.io'yu proxy'ler
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8090/healthz', timeout=5).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "3"
