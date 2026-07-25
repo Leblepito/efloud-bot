@@ -249,3 +249,11 @@ signal_ledger:
   resolver_cadence_sec: 300
   max_symbols: 25
   fetch_fail_alert_pct: 20
+
+# S2 (2026-07-25): NET-cost backtest. Bu blok yokken backtest/engine.py:324
+# default 0.0'a duser ve TUM backtestler BRUT kosar -> gate'in "NET" kismi hic
+# calismaz. W2 A/B kosusu tam bu yuzden gecersizdi: brutte +0.045R, nette
+# -0.015R (komisyon+funding avantajin tamamini yiyor).
+backtest:
+  commission_pct: 0.04        # Binance USD-M taker, TEK bacak (round-trip 0.08%)
+  funding_pct_per_8h: 0.01    # ortalama simetrik drag (metrics.apply_funding_costs)

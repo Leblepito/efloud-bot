@@ -103,6 +103,7 @@ def run_backtest(
     smc_version: Literal["v1", "v2"] = "v1",
     commission_pct: float | None = None,
     funding_pct_per_8h: float | None = None,
+    max_holding_hours: float | None = None,
 ) -> dict[str, Any]:
     """Run a walk-forward backtest. No I/O.
 
@@ -161,6 +162,20 @@ def run_backtest(
         # S2b: sim-time open/close per position id → funding holding duration.
         sim_open_ts: dict = {}
         sim_close_ts: dict = {}
+        # BT-16 (2026-07-25): canli safe_orchestrator her cycle'da
+        # pos_guard.check_holding_time() calistirip safety.max_holding_hours'i
+        # asan pozisyonu market'ten zorla kapatiyor (_force_close_max_hold,
+        # logical reason "MANUAL"). Backtest bu kurali hic modellemiyordu ->
+        # max_holding_hours: 4 olan scalp configinde 95 SAATLIK trade'ler
+        # simule ediliyor, sonuc canliyla alakasiz cikiyordu (W2 A/B kosusunda
+        # 19 trade'in 14'u 8h+ surdu; canlida hicbiri o sekilde kapanamazdi).
+        # Resolution order: param -> config["safety"]["max_holding_hours"] -> 0
+        # (0/yok = kapali, eski baseline'lar birebir korunur).
+        mh = (
+            max_holding_hours if max_holding_hours is not None
+            else float(config.get("safety", {}).get("max_holding_hours", 0) or 0)
+        )
+        max_hold_exits = 0
 
         # Use the first symbol's entry-TF index as the master clock
         entry_tf_name = config["timeframes"]["entry"]
@@ -276,6 +291,33 @@ def run_backtest(
                     )
                     level, raw_price = resolve_fill(view, bar)
                     if level is None:
+                        # BT-16: SL/TP dolmadi -> max holding suresi doldu mu?
+                        # SL/TP ONCELIKLI: gercekte de borsadaki SL/TP emri
+                        # orchestrator'un force-close'undan once dolar, o yuzden
+                        # bu kontrol yalnizca level is None dalinda.
+                        if mh <= 0:
+                            continue
+                        opened_ts = sim_open_ts.get(pos.id)
+                        if opened_ts is None:
+                            # Bu cycle'da acildi; sim_open_ts damgasi cycle
+                            # sonunda vuruluyor (asagidaki stamp blogu).
+                            opened_ts = current_ts
+                        age_h = (symbol_df.index[j] - opened_ts).total_seconds() / 3600.0
+                        if age_h < mh:
+                            continue
+                        # Market close: SL bacagiyla ayni taker slippage'i
+                        # (yon de dogru — LONG kapanis = sell = adverse-down).
+                        slipped_mh = adverse_fill(
+                            float(bar.close), pos.direction, "SL", slippage_cfg)
+                        pnl_before_mh = pos.realized_pnl
+                        # Canli logical close "MANUAL" reason kullaniyor
+                        # (safe_orchestrator.py:959) — birebir ayni tutuluyor ki
+                        # backtest trade'leri canli ledger'la karsilastirilabilsin.
+                        orch.lifecycle.close_position(pos, slipped_mh, "MANUAL")
+                        balance += (pos.realized_pnl - pnl_before_mh)
+                        peak_balance = max(peak_balance, balance)
+                        sim_close_ts[pos.id] = symbol_df.index[j]
+                        max_hold_exits += 1
                         continue
                     # resolve_fill returns "SL" or "TP1"; slippage expects leg in {"entry","SL","TP"}.
                     slip_leg = "SL" if level == "SL" else "TP"
@@ -360,6 +402,8 @@ def run_backtest(
             "total_commission": round(total_commission, 4),
             "funding_pct_per_8h": fp,
             "total_funding": round(total_funding, 4),
+            "max_holding_hours": mh,
+            "max_hold_exits": max_hold_exits,
             **agg,
         }
 
