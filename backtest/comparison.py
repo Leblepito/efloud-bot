@@ -177,7 +177,12 @@ def run_v1_v2_comparison(
     v2_cfg = copy.deepcopy(config)
     v2_cfg.setdefault("engine", {})["smc_version"] = "v2"
     v2_cfg["engine"]["smc_v2_shadow"] = False
-    v2_cfg["engine"]["smc_v2_symbols"] = ["*"]
+    # 2026-07-24 harness fix: wildcard "*" canli-guard tarafindan reddediliyor
+    # (dry_run:false configlerde "wildcard '*' whitelist not allowed for LIVE
+    # execution") -> v2 bacagi TUM sembollerde 0 trade uretiyordu ve A/B
+    # karsilastirmasi olcusuz kaliyordu. Guard'in istedigi gibi kosunun sembol
+    # listesi ACIKCA verilir; davranis niyeti ayni ("bu kosudaki tum semboller").
+    v2_cfg["engine"]["smc_v2_symbols"] = list(symbols)
     v2_cfg.setdefault("risk", {})["min_confluence"] = 999
 
     v1 = run_backtest(
