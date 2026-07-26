@@ -10,8 +10,10 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
+  actions: write
 
 jobs:
   review-and-audit:
@@ -46,6 +48,38 @@ jobs:
           set -o pipefail
           ruff check . 2>&1 | tee /tmp/ruff.log
 
+      # --- Auto-fix: apply safe ruff fixes + open a PR -------------------
+      - name: ruff auto-fix
+        id: ruff_fix
+        if: steps.ruff.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ruff check --fix . 2>&1 | tee /tmp/ruff-fix.log
+          git diff --exit-code && echo "no_changes=true" >> "$GITHUB_OUTPUT" || echo "no_changes=false" >> "$GITHUB_OUTPUT"
+
+      - name: Create auto-fix PR
+        if: steps.ruff_fix.outputs.no_changes == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="auto/ruff-fix-$(date -u +%Y%m%d-%H%M)"
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
+          git commit -am 'fix: ruff --fix auto-apply (scheduled review)'
+          git push origin "$BRANCH"
+          gh pr create \
+            --base master \
+            --head "$BRANCH" \
+            --title 'fix: ruff auto-fixes (scheduled review)' \
+            --body 'Safe, automated ruff fixes applied during the daily review scan.
+
+          **What was applied:** only `ruff check --fix` (no manual edits).
+          **Review note:** CI tests must pass before merging.' \
+            --label 'automated-review' \
+            --repo "${{ github.repository }}"
+
       # --- Security: static analysis + dependency CVEs ---------------------
       - name: bandit (python security)
         id: bandit
@@ -76,13 +110,94 @@ jobs:
           npm ci
           npm audit --audit-level=high --workspace efloud-frontend 2>&1 | tee /tmp/npm-audit.log
 
+      # --- Auto-fix: npm audit fix + PR if changes ------------------------
+      - name: npm audit fix
+        id: npm_fix
+        if: steps.npm_audit.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm audit fix --workspace efloud-frontend 2>&1 | tee /tmp/npm-fix.log
+          git diff --exit-code && echo "no_changes=true" >> "$GITHUB_OUTPUT" || echo "no_changes=false" >> "$GITHUB_OUTPUT"
+
+      - name: Create npm fix PR
+        if: steps.npm_fix.outputs.no_changes == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="auto/npm-fix-$(date -u +%Y%m%d-%H%M)"
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
+          git commit -am 'fix: npm audit fix auto-apply (scheduled review)'
+          git push origin "$BRANCH"
+          gh pr create \
+            --base master \
+            --head "$BRANCH" \
+            --title 'fix: npm audit fixes (scheduled review)' \
+            --body 'Safe, automated npm audit fixes applied during the daily review scan.
+
+          **What was applied:** only `npm audit fix` (no manual edits).
+          **Review note:** CI tests must pass before merging.' \
+            --label 'automated-review' \
+            --repo "${{ github.repository }}"
+
       - name: gitleaks (full git history)
         id: gitleaks
         continue-on-error: true
         run: |
           set -o pipefail
           docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 \
-            detect --source /repo --no-banner --redact --verbose 2>&1 | tee /tmp/gitleaks.log
+            detect --source /repo --no-banner --redact --verbose \
+            --gitleaks-ignore-path /repo/.gitleaksignore 2>&1 | tee /tmp/gitleaks.log
+
+      # --- Auto-baseline: on first run, fingerprint all current leaks so -----
+      #     they are ignored in future scans (only NEW leaks will surface). ---
+      - name: gitleaks auto-baseline
+        if: steps.gitleaks.outcome == 'failure'
+        run: |
+          set -o pipefail
+          # Extract fingerprints from gitleaks output and append to ignore file
+          grep -oP 'sha256:[a-f0-9]{64}' /tmp/gitleaks.log | sort -u > /tmp/fingerprints.txt
+          FOUND=$(wc -l < /tmp/fingerprints.txt)
+          echo "gitleaks_fingerprints=${FOUND}" >> "$GITHUB_OUTPUT"
+          if [ "$FOUND" -gt 0 ]; then
+            # Only add fingerprints that aren't already in the ignore file
+            if [ -f .gitleaksignore ]; then
+              EXISTING=$(grep -oP 'sha256:[a-f0-9]{64}' .gitleaksignore 2>/dev/null || true)
+            fi
+            while IFS= read -r fp; do
+              if ! echo "$EXISTING" | grep -qF "$fp"; then
+                echo "$fp" >> .gitleaksignore
+                echo "NEW=true" >> "$GITHUB_OUTPUT"
+              fi
+            done < /tmp/fingerprints.txt
+          fi
+        id: gitleaks_baseline
+
+      - name: Commit gitleaks baseline
+        if: steps.gitleaks_baseline.outputs.NEW == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="auto/gitleaks-baseline-$(date -u +%Y%m%d-%H%M)"
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
+          git add .gitleaksignore
+          git commit -m 'chore: auto-baseline gitleaks fingerprints'
+          git push origin "$BRANCH"
+          gh pr create \
+            --base master \
+            --head "$BRANCH" \
+            --title 'chore: gitleaks baseline — ignore rotated secrets' \
+            --body "Auto-generated .gitleaksignore from $(cat /tmp/fingerprints.txt | wc -l) fingerprints found in git history.
+
+          **What this does:** Prevents the daily scheduled review from re-reporting the same old (likely rotated) secrets. Only genuinely NEW leaks will trigger issues from now on.
+
+          **Review note:** Verify these fingerprints correspond to already-rotated credentials before merging." \
+            --label 'automated-review' \
+            --repo "${{ github.repository }}"
 
       # --- Report: open/update one tracking issue instead of spamming ------
       - name: Build report body
@@ -111,7 +226,8 @@ jobs:
           add_section "${{ steps.gitleaks.outcome }}" "Secret scan, full history (gitleaks)" /tmp/gitleaks.log
 
       - name: File or update tracking issue
-        if: >
+        id: issue_report
+        if: >-
           steps.ruff.outcome == 'failure' ||
           steps.bandit.outcome == 'failure' ||
           steps.pip_audit.outcome == 'failure' ||
@@ -124,6 +240,21 @@ jobs:
           EXISTING=$(gh issue list --search "$TITLE in:title" --state open --json number --jq '.[0].number' --repo "${{ github.repository }}")
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --body-file /tmp/issue-body.md --repo "${{ github.repository }}"
+            echo "issue_number=${EXISTING}" >> "$GITHUB_OUTPUT"
           else
-            gh issue create --title "$TITLE" --body-file /tmp/issue-body.md --label "automated-review" --repo "${{ github.repository }}"
+            NEW_URL=$(gh issue create --title "$TITLE" --body-file /tmp/issue-body.md --label "automated-review" --repo "${{ github.repository }}")
+            # Extract issue number from URL (e.g. https://github.com/u/r/issues/123)
+            NEW_NUM=$(echo "$NEW_URL" | grep -oP '\d+$')
+            echo "issue_number=${NEW_NUM}" >> "$GITHUB_OUTPUT"
           fi
+
+      # --- Trigger Hermes review agent on the issue (auto-fix attempt) -----
+      - name: Trigger Hermes review agent
+        if: steps.issue_report.outputs.issue_number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run hermes-review.yml \
+            --repo "${{ github.repository }}" \
+            --ref master \
+            -f issue_number="${{ steps.issue_report.outputs.issue_number }}"

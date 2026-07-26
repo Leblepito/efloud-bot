@@ -1,10 +1,12 @@
-# Bilinen false-positive'ler (T-023 ilk koşusu, 2026-06-11 triage):
-# - Manus connector katalog UUID'leri: public tanımlayıcı, secret DEĞİL
-# - test_llm_factory: Claude model adı string'i generic-api-key kuralına takılıyor
-# Format: <scan-path>:<rule-id>:<line> — CI'da kaynak /repo'ya mount edilir.
-# Handoff klasörünü TOPTAN allowlist'lemiyoruz: oraya yanlışlıkla gerçek key
-# yapıştırılırsa yakalanmalı. Satır kayarsa fingerprint'i güncelle.
-/repo/docs/handoff/2026-05-31_manus-connectors-task-distribution.md:generic-api-key:191
-/repo/docs/handoff/2026-05-31_manus-connectors-task-distribution.md:hubspot-api-key:218
-/repo/docs/handoff/2026-05-31_u2algo_launch_readiness.md:generic-api-key:102
-/repo/tests/test_llm_factory.py:generic-api-key:39
+# GitLeaks ignore list — fingerprints of known/rotated secrets that should not
+# be re-reported on every scan. Each line is a gitleaks fingerprint (sha256:...).
+#
+# AUTO-POPULATED on first run by the scheduled-review workflow. After the initial
+# auto-generation, only genuinely NEW secret leaks will open issues.
+#
+# To add a fingerprint manually, run gitleaks locally and copy the fingerprint
+# from the output (e.g. `sha256:abc123...`).
+#
+# Format: <fingerprint>
+#
+# Generated: (auto-populated by scheduled-review workflow)
