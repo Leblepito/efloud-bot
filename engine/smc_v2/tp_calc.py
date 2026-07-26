@@ -25,6 +25,14 @@ from engine.smc_v2.exceptions import InsufficientTPDistanceError
 class RiskConfigLike(Protocol):
     min_rr: float
     fib_ext: float
+    # BT-19 (2026-07-26, OPTIONAL — read via getattr, default 0.0 = OFF):
+    #   max_tp_gap_r: ceiling on the TP1->TP2 distance in R multiples.
+    # There has always been an implicit FLOOR (TP2 must lie beyond TP1) and no
+    # CEILING, so TP2 lands wherever fib_ext puts it regardless of whether the
+    # position can live long enough to get there. Measured on the 30d/10sym
+    # scalp run (report 90143864): TP2 at 2.618R = 5.925% of price, median MFE
+    # over the entire 4h max-hold window 0.478%. TP2 was attached to 28/28
+    # trades and filled on 0 of them.
 
 
 # Explicit source precedence — guards against float-equality misattribution.
@@ -48,6 +56,9 @@ def calc_tp_targets(
     risk = abs(entry_price - sl_price)
     min_rr = config.min_rr
     min_dist = min_rr * risk
+    # BT-19: optional TP2 reachability ceiling. 0.0 / missing attr = OFF, which
+    # is byte-identical to pre-BT-19 behaviour for every existing caller.
+    max_tp_gap_r = float(getattr(config, "max_tp_gap_r", 0.0) or 0.0)
 
     if direction == "LONG":
         # Liquidity ABOVE entry
@@ -123,5 +134,16 @@ def calc_tp_targets(
                 tp2, tp2_source = fib_tp2, "FIB_EXT"
             else:
                 tp2, tp2_source = None, "NONE"
+
+    # ── BT-19: drop an unreachable TP2 ──
+    # A TP2 further than max_tp_gap_r * risk beyond TP1 is not a target, it is
+    # decoration: it never fills, it holds half the position hostage until the
+    # max-hold force-close, and it inflates any blended-R:R gate that averages
+    # TP1 and TP2. Dropping it returns tp2=None = single-target mode, which the
+    # lifecycle already supports end-to-end (PR #S5 / #S5.5 / #S5.6): TP1 takes
+    # full size, partial_close full-closes, orphan SL is cancelled.
+    if max_tp_gap_r > 0 and tp2 is not None:
+        if abs(tp2 - tp1) > max_tp_gap_r * risk:
+            tp2, tp2_source = None, "DROPPED_UNREACHABLE"
 
     return tp1, tp2, {"tp1_source": tp1_source, "tp2_source": tp2_source}

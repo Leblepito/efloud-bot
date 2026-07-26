@@ -40,9 +40,35 @@ from .safety import (
     validate_kline_freshness, validate_kline_integrity,
     StaleDataError, cleanup_orphan_hedges
 )
-from utils.logging import new_trace_id, set_trace_id
+from utils.logging import new_trace_id, set_trace_id, log_event
 
 log = logging.getLogger("efloud.safe_orch")
+
+
+def _emit_regime_change(last_regimes: dict, symbol: str, regime: str) -> None:
+    """R-13 (2026-07-18): per-symbol rejim DEĞİŞİMİNİ yapısal event olarak yay.
+
+    Overseer'ın rule_regime_flipflop'u `event == "regime_change"` satırı
+    bekliyordu ama bot bu event'i HİÇ üretmiyordu (kural ölüydü). Salt log
+    emisyonu — trade kararlarına dokunmaz. İlk gözlem değişim sayılmaz
+    (cold-boot'ta flipflop false-positive olmasın); helper son rejimi
+    `last_regimes`'e yazar (çağıran orchestrator'ın self._last_regimes'i)."""
+    prev = last_regimes.get(symbol)
+    last_regimes[symbol] = regime
+    if prev is not None and prev != regime:
+        log_event(log, "regime_change", symbol=symbol, old=prev, new=regime)
+
+
+def _emit_reverse_block(symbol: str, reason: str) -> None:
+    """R-13 (2026-07-18): profit-gate reverse reddini yapısal event olarak yay.
+
+    Marker yalnız düz-metin reason içinde geçiyordu (PositionCheckResult →
+    log.info); overseer `line.get("event")` ile eşleştiğinden
+    rule_reverse_block_streak ölüydü. Yalnız NOT_PROFITABLE sebebi event
+    üretir — başka reverse redleri (cooldown vb.) bu kuralın sinyalini
+    kirletmez. Salt log emisyonu."""
+    if "REVERSE_BLOCKED_NOT_PROFITABLE" in reason:
+        log_event(log, "REVERSE_BLOCKED_NOT_PROFITABLE", symbol=symbol)
 
 
 @dataclass
@@ -259,6 +285,10 @@ class SafeOrchestrator:
 
         # Machine Learning Regime Auto-Training Pipeline Integration
         self.last_regime_training_time = None
+
+        # R-13 (2026-07-18): per-symbol son rejim — regime_change yapısal
+        # event emisyonu için (overseer rule_regime_flipflop yüzeyi).
+        self._last_regimes: dict = {}
 
         # Runtime Agent Team (canonical Part A.4 — additive advisory layer).
         # ``enabled: false`` (the default) is a no-op; ``gating: false`` keeps
@@ -1118,11 +1148,16 @@ class SafeOrchestrator:
                 # Build htf_bars from df_htf rows (ordinal axis for swing_anchor).
                 # HtfBar dataclass hoisted to engine.smc_v2.triggers to keep
                 # run_cycle hot-path clean (avoid re-defining the class each tick).
-                from engine.smc_v2.triggers import HtfBar
+                from engine.smc_v2.triggers import HtfBar, _bar_ts_to_ms
             
+                # W2/C1: ts_ms eklendi — anchor_time_axis toggle'ı LTF kırılım
+                # zamanını HTF eksenine haritalayabilsin (toggle OFF iken
+                # ts_ms taşımak zararsızdır; legacy yol kullanmaz).
                 htf_bars = [
-                    HtfBar(ordinal=i, high=float(row["high"]), low=float(row["low"]))
-                    for i, (_, row) in enumerate(df_htf.iterrows())
+                    HtfBar(ordinal=i, high=float(row["high"]),
+                           low=float(row["low"]),
+                           ts_ms=_bar_ts_to_ms(idx_ts))
+                    for i, (idx_ts, row) in enumerate(df_htf.iterrows())
                 ]
             
                 # Recency cutoff: only consider LTF breaks in last N bars
@@ -1172,6 +1207,8 @@ class SafeOrchestrator:
             
             # ═══ STEP 2: Regime Detection ═══
             regime_analysis = self.regime.analyze(df_entry, df_htf)
+            # R-13: rejim değişimini yapısal event olarak yay (salt log).
+            _emit_regime_change(self._last_regimes, symbol, regime_analysis.regime)
             log.info(f"📊 Regime: {regime_analysis.regime} ({regime_analysis.confidence}%) | "
                      f"ADX={regime_analysis.adx:.1f} BBW={regime_analysis.bb_width:.2f} "
                      f"ATR={regime_analysis.atr_ratio:.1f}x")
@@ -1224,6 +1261,9 @@ class SafeOrchestrator:
                 smc_tp_targeting=risk_cfg.get("smc_tp_targeting", False),
                 min_rr_tp1=risk_cfg.get("min_rr_tp1", 0.5),
                 blended_rr_target=risk_cfg.get("blended_rr_target", risk_cfg["min_rr"]),
+                # ── BT-18: TP2 reachability (both default 0.0 = OFF) ──
+                max_tp_gap_r=risk_cfg.get("max_tp_gap_r", 0.0),
+                min_rr_tp1_hard=risk_cfg.get("min_rr_tp1_hard", 0.0),
             )
             
             # ═══ STEP 4: Scenario Planning (per-symbol) ═══
@@ -1277,9 +1317,13 @@ class SafeOrchestrator:
                 # uygulanıyordu (çift balance deltası + yanlış ledger eşleşmesi).
                 try:
                     if self.config.get("safety", {}).get("breaker_backcorrect_consecutive", False):
-                        for _trade_id, old_pnl, new_pnl in corrections:
+                        # E-5 (2026-07-18): audit'in ürettiği trade_id artık
+                        # breaker'a threadlenir — ledger eşleşmesi id-first
+                        # (değer-ikizi kayıtlarda yanlış-kayıt mutasyonu biter).
+                        for trade_id, old_pnl, new_pnl in corrections:
                             if (old_pnl >= 0) != (new_pnl >= 0):  # sign flip only
-                                self.breaker.record_trade_correction(old_pnl, new_pnl)
+                                self.breaker.record_trade_correction(
+                                    old_pnl, new_pnl, trade_id=trade_id)
                                 actions.append(f"Breaker corrected PnL ${old_pnl:.2f}→${new_pnl:.2f}")
                 finally:
                     corrections.clear()
@@ -1564,6 +1608,10 @@ class SafeOrchestrator:
                                             f"🚫 [{symbol}] Reverse rejected: "
                                             f"{reverse_check.reason}"
                                         )
+                                        # R-13: overseer streak kuralı için
+                                        # yapısal event (salt log).
+                                        _emit_reverse_block(
+                                            symbol, reverse_check.reason)
                                         warnings.append(
                                             f"Reverse blocked: {reverse_check.reason}"
                                         )
@@ -1888,8 +1936,13 @@ class SafeOrchestrator:
         # v2 is not active. Matches the existing pattern in
         # _advance_setup_state_tick.
         from engine.smc_v2.confirmation import confirm_entry as _confirm
+        # W2/C2 (2026-07-18): default False — operatör NET-cost gate sonrası
+        # config'te açar (`smc_v2.confirm_last_bar_only: true`).
+        last_bar_only = self.config.get("smc_v2", {}).get(
+            "confirm_last_bar_only", False)
         return _confirm(
             df_15m=df_15m, zone=zone, direction=direction, since_ts=since_ts,
+            last_bar_only=last_bar_only,
         )
 
     def _advance_setup_state_tick(
@@ -2126,6 +2179,10 @@ class SafeOrchestrator:
             htf_fvgs=htf_fvgs,
             ote_band=ote_band,
             ltf_trigger_idx_min=ltf_trigger_idx_min,
+            # W2/C1 (2026-07-18): default False — operatör NET-cost gate
+            # sonrası config'te açar (`smc_v2.anchor_time_axis: true`).
+            anchor_time_axis=self.config.get("smc_v2", {}).get(
+                "anchor_time_axis", False),
         )
         for cand in new_candidates:
             # add() returns False if per-symbol cap reached — silently dropped
@@ -2220,7 +2277,18 @@ class SafeOrchestrator:
         exchange_cfg = self.config.get("exchange", {})
 
         # ATR proxy — see DELIBERATE SIMPLIFICATIONS in docstring.
-        atr_15m = max(entry_price * 0.01,
+        # BT-21 (2026-07-26): the 1% floor is a MID-timeframe number. On the
+        # scalp bot (5m entry, safety.max_holding_hours=4) real ATR(5m) on the
+        # majors is ~0.05-0.15% of price, so this floor inflates the ATR proxy
+        # by roughly an order of magnitude, and every downstream distance with
+        # it: SL buffer = sl_atr_buffer*ATR, min/max SL clamp = min/max_sl_atr
+        # *ATR, then TP1 = min_rr*risk and TP2 = fib_ext*risk. Measured chain on
+        # report 90143864: median SL 2.332% -> TP1 2.232% -> TP2 5.925%, while
+        # the median trade's best excursion in the whole 4h window was 0.478%.
+        # Now configurable; default 1.0 keeps V1/V2/V3 byte-identical until an
+        # operator sets engine.v2_atr_proxy_floor_pct.
+        _atr_floor_pct = float(engine_cfg.get("v2_atr_proxy_floor_pct", 1.0))
+        atr_15m = max(entry_price * _atr_floor_pct / 100.0,
                       abs(cand.target_zone.high - cand.target_zone.low))
 
         try:
@@ -2231,7 +2299,15 @@ class SafeOrchestrator:
                 htf_swing_anchor=cand.htf_swing_anchor,
                 atr_15m=atr_15m,
                 config=SimpleNamespace(
-                    sl_atr_buffer=safety_cfg.get("sl_atr_buffer", 0.5),
+                    # BT-20 (2026-07-26): all three live configs declare
+                    # sl_atr_buffer under `risk:`, never under `safety:`, so
+                    # this read always missed and fell back to 0.5. V1/V2 set
+                    # 0.5 anyway (no visible effect); V3 set 0.3 ("makas
+                    # daraltildi", 2026-07-06) and that change NEVER took
+                    # effect on the live v2 path. safety: still wins if present
+                    # so no existing deployment can shift under an operator.
+                    sl_atr_buffer=safety_cfg.get(
+                        "sl_atr_buffer", risk_cfg.get("sl_atr_buffer", 0.5)),
                     min_sl_atr=safety_cfg.get("min_sl_atr", 0.5),
                     max_sl_atr=safety_cfg.get("max_sl_atr", 5.0),
                 ),
@@ -2251,6 +2327,8 @@ class SafeOrchestrator:
                 config=SimpleNamespace(
                     min_rr=risk_cfg.get("min_rr", 1.8),
                     fib_ext=self.config.get("fibonacci", {}).get("ext_tp2", 1.618),
+                    # BT-19: 0.0 (default) = OFF, identical to previous behaviour.
+                    max_tp_gap_r=risk_cfg.get("max_tp_gap_r", 0.0),
                 ),
             )
         except InsufficientTPDistanceError as e:

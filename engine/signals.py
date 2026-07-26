@@ -472,6 +472,12 @@ def generate_signals(
     range_tp1_fib: float = 0.5,      # Range TP1 at this fib level (default: EQ=0.5; scalp: 0.618)
     range_tp2_fib: float = 1.0,      # Range TP2 at this fib level (default: extreme=1.0)
     min_tp_gap_r: float = 0.0,       # Minimum TP1→TP2 gap in R multiples (0=disabled; scalp: 0.5)
+    # ── BT-18 (2026-07-26): TP2 reachability. Both default 0.0 = OFF → zero
+    #    behaviour change for V1/V2/V3 until an operator sets them in config.
+    max_tp_gap_r: float = 0.0,       # Maximum TP1→TP2 gap in R (0=disabled). Exceeded
+                                     # → TP2 dropped (single-TP), gate re-applies to TP1 alone.
+    min_rr_tp1_hard: float = 0.0,    # Hard floor on TP1_R alone (0=disabled). Blocks a far
+                                     # unreachable TP2 from carrying a sub-1R TP1 through the blend.
     # ── Scalp v3.1: SMC block targeting + blended R:R ──
     smc_tp_targeting: bool = False,  # true = use _collect_smc_blocks for TP1/TP2 (v3.1+)
     min_rr_tp1: float = 0.5,         # TP1 minimum R:R (lower than target → forces TP2 hold)
@@ -595,6 +601,8 @@ def generate_signals(
     reject_confluence = 0
     reject_rr = 0
     reject_tp_wrong_side = 0
+    demote_tp2_far = 0          # BT-18: TP2 dropped for being past max_tp_gap_r
+    reject_tp1_hard = 0         # BT-18: TP1_R below min_rr_tp1_hard
     reject_no_target = 0  # H7: strict_target_reject rejects instead of clamping
     max_seen_score = 0
     max_seen_rr = 0.0
@@ -956,6 +964,26 @@ def generate_signals(
                     tp2, tp1, price, risk, is_long, min_gap_r=min_tp_gap_r,
                 )
 
+        # ═══ BT-18: TP2 REACHABILITY ═══
+        # min_tp_gap_r has always enforced a FLOOR on the TP1→TP2 distance and
+        # there has never been a CEILING. That asymmetry is what makes the
+        # blended gate dishonest: blended_rr = 0.5*rr1 + 0.5*rr2 has no upper
+        # bound on rr2, so an unreachable TP2 can drag a sub-1R TP1 through the
+        # gate. Measured on the 30d/10sym scalp run (2026-07-25, report
+        # 90143864): median SL 2.332%, TP1 2.232% (rr1 ~0.96), TP2 5.925%
+        # (rr2 ~2.54) → blended 1.75 PASSES the 1.5 target, but median MFE over
+        # the whole 4h hold is only 0.478%. TP2 was carried on 28/28 trades and
+        # filled on 0. Realised avg RR came out -0.0034.
+        #
+        # Fix: if TP1→TP2 exceeds max_tp_gap_r * risk, TP2 is not a target, it
+        # is decoration → drop it. The signal then has to clear the gate on TP1
+        # alone (rr1 >= blended_rr_target), which is the honest question.
+        if max_tp_gap_r > 0 and tp2 is not None:
+            if abs(tp2 - tp1) > max_tp_gap_r * risk:
+                tp2 = None
+                _tp2_source = "DROPPED_UNREACHABLE"
+                demote_tp2_far += 1
+
         rr1 = round(abs(tp1 - price) / risk, 2)
         rr2 = round(abs(tp2 - price) / risk, 2) if tp2 is not None else 0.0
 
@@ -971,6 +999,12 @@ def generate_signals(
             max_seen_rr = rr1
 
         # ── R:R Gate ──
+        # BT-18 hard floor: TP1 must stand on its own feet before any blend.
+        # 0.0 = disabled (default) → identical to pre-BT-18 behaviour.
+        if min_rr_tp1_hard > 0 and rr1 < min_rr_tp1_hard:
+            reject_tp1_hard += 1
+            continue
+
         if smc_tp_targeting:
             # Blended R:R: (0.5 × TP1_R + 0.5 × TP2_R) >= blended_rr_target
             # Single-TP (tp2=None): TP1_R must individually >= blended_rr_target
@@ -1072,6 +1106,10 @@ def generate_signals(
             reasons.append(f"TP wrong side ({reject_tp_wrong_side}×)")
         if reject_rr > 0:
             reasons.append(f"R:R<{min_rr} ({reject_rr}×, max seen: {max_seen_rr:.2f})")
+        if reject_tp1_hard > 0:
+            reasons.append(f"TP1_R<{min_rr_tp1_hard} hard ({reject_tp1_hard}×)")
+        if demote_tp2_far > 0:
+            reasons.append(f"TP2 unreachable, dropped ({demote_tp2_far}×)")
         if reject_no_target > 0:
             reasons.append(f"no real target, strict_target_reject ({reject_no_target}×)")
         log.info(f"📉 {prefix}{aligned_triggers} triggers, 0 signals. Rejects: {' | '.join(reasons)}")
