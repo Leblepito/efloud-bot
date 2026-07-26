@@ -52,6 +52,22 @@ def _cfg(**over):
                  "max_open_positions": 10, "min_rr": 1.0, "min_confluence": 55},
         "safety": {"max_total_exposure": 6.0, "max_position_notional_pct": 35.0},
         "engine": {"smc_version": "v1"},
+        # SafeOrchestrator.__init__ reads config["structure"] and
+        # config["fibonacci"] as BARE keys (no .get) to build SMCEngine, and
+        # run_cycle reads config["operation"] the same way on the balance /
+        # watch_only gate. Omitting any of the three is a KeyError before the
+        # backtest loop ever starts, so they are part of the minimum viable
+        # config -- not optional decoration. Values mirror
+        # configs/config.phase2_scalp_1k.yaml so the fixture stays a realistic
+        # shape rather than a synthetic one.
+        "structure": {"swing_lookback": 4, "ob_sequential": 5, "body_mode": True,
+                      "eq_threshold_pct": 0.1, "range_lookback": 50},
+        "fibonacci": {"ote_lower": 0.618, "ote_upper": 0.786, "ext_tp2": 2.618},
+        # dry_run: True -> balance is supplied by the backtest loop, so the
+        # "balance fetch failed" guard must not fire. watch_only: False -> the
+        # entry path stays live; the flat price series is what keeps trade
+        # count at 0, not a config switch.
+        "operation": {"dry_run": True, "watch_only": False, "log_level": "WARNING"},
     }
     for k, v in over.items():
         cfg.setdefault(k, {})

@@ -143,7 +143,17 @@ def calc_tp_targets(
     # lifecycle already supports end-to-end (PR #S5 / #S5.5 / #S5.6): TP1 takes
     # full size, partial_close full-closes, orphan SL is cancelled.
     if max_tp_gap_r > 0 and tp2 is not None:
-        if abs(tp2 - tp1) > max_tp_gap_r * risk:
+        gap = abs(tp2 - tp1)
+        ceiling = max_tp_gap_r * risk
+        # THE BOUNDARY IS INCLUSIVE: gap == ceiling is KEPT, only a strictly
+        # larger gap is dropped. Both sides are float products of operator
+        # config, so an exactly-on-the-line case is decided by representation
+        # noise, not by intent -- entry 100 / sl 98 / max_tp_gap_r 1.618 gives
+        # gap 3.2360000000000042 against ceiling 3.236 and a bare `>` would
+        # drop a TP2 the operator explicitly sized to be allowed. The 1e-9
+        # relative tolerance is several orders of magnitude below the smallest
+        # exchange tick, so it can never flip a real drop/keep decision.
+        if gap - ceiling > abs(ceiling) * 1e-9:
             tp2, tp2_source = None, "DROPPED_UNREACHABLE"
 
     return tp1, tp2, {"tp1_source": tp1_source, "tp2_source": tp2_source}

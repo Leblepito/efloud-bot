@@ -116,11 +116,33 @@ def test_generous_ceiling_keeps_tp2():
     assert tags["tp2_source"] == "FIB_EXT"
 
 
-def test_boundary_is_inclusive():
-    """gap == ceiling is KEPT (strict > drops). Pins the comparison operator."""
-    _, tp2, tags = _call("LONG", 100.0, 98.0, _cfg(max_tp_gap_r=1.618))
+@pytest.mark.parametrize("direction,sl", [("LONG", 98.0), ("SHORT", 102.0)])
+def test_boundary_is_inclusive(direction, sl):
+    """gap == ceiling is KEPT, on BOTH sides. Pins the comparison operator.
+
+    This case is exactly on the line and is therefore decided by float
+    representation, not by arithmetic: entry 100 / sl 98 / fib_ext 2.618 gives
+    gap 3.236000000000004 while max_tp_gap_r 1.618 * risk 2.0 gives 3.236, a
+    4e-15 overshoot. A bare `gap > ceiling` drops a TP2 the operator sized to
+    be allowed, so tp_calc compares with a 1e-9 RELATIVE tolerance. If someone
+    "simplifies" that back to a strict `>`, this test is the tripwire.
+    """
+    _, tp2, tags = _call(direction, 100.0, sl, _cfg(max_tp_gap_r=1.618))
     assert tp2 is not None
     assert tags["tp2_source"] == "FIB_EXT"
+
+
+def test_epsilon_is_tight_enough_to_still_drop():
+    """The inclusivity tolerance must not become a free pass.
+
+    Guards the other side of the same operator: a ceiling only a hair below the
+    real gap (1.6 vs the 1.618 needed) still drops. 1e-9 relative is ~6 orders
+    of magnitude below the smallest exchange tick, so no real config lands
+    inside it.
+    """
+    _, tp2, tags = _call("LONG", 100.0, 98.0, _cfg(max_tp_gap_r=1.6))
+    assert tp2 is None
+    assert tags["tp2_source"] == "DROPPED_UNREACHABLE"
 
 
 @pytest.mark.parametrize("direction,sl", [("LONG", 98.0), ("SHORT", 102.0)])

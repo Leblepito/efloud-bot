@@ -979,7 +979,13 @@ def generate_signals(
         # is decoration → drop it. The signal then has to clear the gate on TP1
         # alone (rr1 >= blended_rr_target), which is the honest question.
         if max_tp_gap_r > 0 and tp2 is not None:
-            if abs(tp2 - tp1) > max_tp_gap_r * risk:
+            _gap = abs(tp2 - tp1)
+            _ceiling = max_tp_gap_r * risk
+            # Inclusive boundary, 1e-9 relative tolerance -- identical rule and
+            # identical rationale as engine/smc_v2/tp_calc.py. Kept byte-for-byte
+            # equivalent on purpose: v1 and v2 must not disagree about whether a
+            # TP2 sitting exactly on the ceiling survives.
+            if _gap - _ceiling > abs(_ceiling) * 1e-9:
                 tp2 = None
                 _tp2_source = "DROPPED_UNREACHABLE"
                 demote_tp2_far += 1
