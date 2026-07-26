@@ -16,14 +16,19 @@ class Bar:
     close: float
 
 
-def resolve_fill(pos, bar: Bar) -> Tuple[Optional[str], Optional[float]]:
+def resolve_fill(
+    pos, bar: Bar, tie_break: str = "pessimistic",
+) -> Tuple[Optional[str], Optional[float]]:
     """Return (level, fill_price) for the position, or (None, None) if no level hit.
 
     ``pos`` must expose: .direction ("LONG"|"SHORT"), .entry, .sl, .tp1
 
-    Tie-break when both SL and TP are touched in the same bar:
-      LONG:  bar.open < entry → SL fired first; bar.open >= entry → TP fired first.
-      SHORT: bar.open > entry → SL fired first; bar.open <= entry → TP fired first.
+    Tie-break when both SL and TP are touched in the same bar (BT-17):
+      "pessimistic" (DEFAULT) → SL wins. OHLC cannot tell us which came first.
+      "open_heuristic"        → legacy: bar.open side of entry decides. OPTIMISTIC,
+                                inflates win_rate when both levels fit inside one
+                                bar's range. Kept only to reproduce old reports.
+      "optimistic"            → TP always wins. Upper bound of the uncertainty band.
 
     Fill formula (pessimistic / realistic gap handling):
       SL fill: min(bar.open, sl)  for LONG   — gap-down worsens fill
@@ -49,15 +54,35 @@ def resolve_fill(pos, bar: Bar) -> Tuple[Optional[str], Optional[float]]:
     if tp_hit and not sl_hit:
         return ("TP1", _adverse_fill(bar.open, pos.tp1, pos.direction, "TP"))
 
-    # Both hit — tie-break by bar.open proximity to entry
-    if pos.direction == "LONG":
-        if bar.open < pos.entry:
-            return ("SL", _adverse_fill(bar.open, pos.sl, pos.direction, "SL"))
-        return ("TP1", _adverse_fill(bar.open, pos.tp1, pos.direction, "TP"))
-    else:  # SHORT
+    # ---- Both hit in the SAME bar: order is UNKNOWABLE from OHLC ----
+    # BT-17 (2026-07-25): the old rule was "LONG + bar.open >= entry -> TP won".
+    # That is an OPTIMISTIC guess, and it is catastrophic exactly where it is
+    # used most: when SL and TP are both narrower than one bar's range, EVERY
+    # trade resolves on the first bar and roughly half the ambiguous ones are
+    # handed to TP for free. Measured on 2026-07-25 (scalp config, smc v1 leg):
+    # median SL 0.15% / TP1 0.297% -> 252 TP1 vs 29 SL, win_rate 84.3%,
+    # PF 7.22, median hold ONE 5m bar, median MAE 0.0%. None of that is real;
+    # it is this tie-break. The smc v2 leg (SL 2.33% / TP1 2.23%, far wider
+    # than a 5m bar) was unaffected, so the comparison gate was scoring an
+    # honest strategy against a fabricated baseline and REJECTing everything.
+    #
+    # Convention now: SL wins ties (pessimistic). Standard for OHLC backtests
+    # and the only choice that cannot flatter a strategy. Pass
+    # tie_break="open_heuristic" to reproduce the old behaviour; the spread
+    # between the two IS the intrabar uncertainty of the result.
+    if tie_break == "open_heuristic":
+        if pos.direction == "LONG":
+            if bar.open < pos.entry:
+                return ("SL", _adverse_fill(bar.open, pos.sl, pos.direction, "SL"))
+            return ("TP1", _adverse_fill(bar.open, pos.tp1, pos.direction, "TP"))
         if bar.open > pos.entry:
             return ("SL", _adverse_fill(bar.open, pos.sl, pos.direction, "SL"))
         return ("TP1", _adverse_fill(bar.open, pos.tp1, pos.direction, "TP"))
+
+    if tie_break == "optimistic":
+        return ("TP1", _adverse_fill(bar.open, pos.tp1, pos.direction, "TP"))
+
+    return ("SL", _adverse_fill(bar.open, pos.sl, pos.direction, "SL"))
 
 
 def _adverse_fill(bar_open: float, trigger: float, direction: str, kind: str) -> float:
