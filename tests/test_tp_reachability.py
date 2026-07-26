@@ -146,3 +146,43 @@ def test_scalp_production_numbers_are_dropped_at_1r():
         "LONG", entry, sl, _cfg(min_rr=1.0, fib_ext=2.618, max_tp_gap_r=1.0))
     assert tp2_on is None
     assert tags["tp2_source"] == "DROPPED_UNREACHABLE"
+
+
+# ── V1 / V2 live geometry: TP2 never exists at all ───────────────────────────
+# Both also run engine.smc_version: v2 with an explicit 10-symbol whitelist and
+# smc_v2_shadow: false, so they take the same empty-structure projection path.
+# There min_rr > fib_ext, and the FIB_EXT fallback is only accepted when it
+# lies strictly BEYOND tp1 -- which it never does. Result: permanent
+# single-target mode. The "TP1 partial + TP2 runner" design does not run on
+# V1 or V2 today. These tests pin that so a min_rr/ext_tp2 edit is visible.
+
+@pytest.mark.parametrize("name,min_rr,fib_ext", [
+    ("V1-mid",  1.8, 1.618),      # configs/config.phase2_1k.yaml
+    ("V2-long", 2.2, 1.618),      # configs/config.phase2_long_1k.yaml
+])
+def test_v1_v2_are_permanently_single_target(name, min_rr, fib_ext):
+    tp1, tp2, tags = _call("LONG", 100.0, 98.0, _cfg(min_rr=min_rr, fib_ext=fib_ext))
+    assert tp1 == pytest.approx(100.0 + min_rr * 2.0), name
+    assert tp2 is None, f"{name}: expected single-target, got TP2={tp2}"
+    assert tags["tp2_source"] == "NONE", name
+
+
+@pytest.mark.parametrize("name,min_rr,fib_ext", [
+    ("V1-mid",  1.8, 1.618),
+    ("V2-long", 2.2, 1.618),
+])
+def test_v1_v2_short_side_also_single_target(name, min_rr, fib_ext):
+    tp1, tp2, tags = _call("SHORT", 100.0, 102.0, _cfg(min_rr=min_rr, fib_ext=fib_ext))
+    assert tp1 == pytest.approx(100.0 - min_rr * 2.0), name
+    assert tp2 is None, name
+    assert tags["tp2_source"] == "NONE", name
+
+
+def test_v3_is_the_only_bot_with_a_live_tp2():
+    """V3 alone has fib_ext (2.618) > min_rr (1.0), so it alone gets a TP2 --
+    and that TP2 sits at 2.618R, which on the measured scalp geometry is 6.1%
+    of price against a 0.478% median 4h excursion."""
+    _, tp2_v3, _ = _call("LONG", 100.0, 98.0, _cfg(min_rr=1.0, fib_ext=2.618))
+    _, tp2_v1, _ = _call("LONG", 100.0, 98.0, _cfg(min_rr=1.8, fib_ext=1.618))
+    assert tp2_v3 is not None
+    assert tp2_v1 is None
