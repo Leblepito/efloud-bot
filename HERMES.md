@@ -1,7 +1,8 @@
 # HERMES.md — Efloud-bot Operatör Kılavuzu
 
 > Operatör/insan onay zinciri (Hermes) için. Yönetim kılavuzu.
-> Tarih: 2026-05-28 | Master HEAD: `6d784a2` | Branch: `fix/sltp-delivery-reliability` (PR bekliyor) | Bot durumu: **CANLI**
+> Tarih: 2026-07-26 | Master HEAD: `5378f24` | Bot durumu: **CANLI**
+> Son güncelleme: Social publishing pipeline eklendi (§13)
 
 ---
 
@@ -381,5 +382,65 @@ docker logs efloud-bot --since 4h > emergency_$(date +%s).log
 - Her PR plan: `docs/superpowers/plans/2026-05-2X-smc-v2-*.md`.
 - `CLAUDE.md`: Proje bellek, kural, mimari.
 - `HERMES.md`: Operatör kılavuzu.
+- `skills/social-publishing/SKILL.md`: Sosyal medya pipeline'ı — tüm AI modellerinin okuyabileceği kalıcı doküman.
+
+## 13. Sosyal Medya Yayın Pipeline'ı (YENİ — 2026-07-26)
+
+Bot sinyallerini otomatik chart + video + caption olarak X, Instagram, YouTube'da
+paylaşmaya hazırlar. **Varsayılan duruş: hiçbir şey yayınlanmaz.** Üç bağımsız
+güvenlik kapısı var.
+
+### Tek komutla çalıştırma
+
+```bash
+cd /opt/efloud-bot
+python -m scripts.daily_social_run --date "$(date -u +%F)"
+```
+
+### Pipeline Zinciri
+
+```
+Lane A (bot)  → ContentJobEmitter (JSONL)            engine/content_jobs.py
+Lane B        → analiz artifact                       scripts/lane_b_consumer.py
+Lane C        → compliance-gated caption + levels      scripts/lane_c_copywriter.py
+Lane D        → markalı chart PNG (ENTRY/SL/TP)       scripts/chart_render.py
+Lane G        → per-platform bundle + MP4 klip        scripts/lane_g_social.py
+Lane G pub    → onaylı bundle → platform dispatch      scripts/lane_g_publish.py
+```
+
+### Üç güvenlik kapısı (hepsi default KAPALI)
+
+1. **Onay kapısı** — `--auto-approve` verilmezse tüm bundle'lar `pending_review`
+2. **Live kapısı** — `--live` verilmezse yayın dry-run
+3. **Platform flag'leri** — `X_API_ENABLED`, `INSTAGRAM_ENABLED`, `YOUTUBE_ENABLED`
+
+Üçü de açılmadan dışarıya TEK BİT veri çıkmaz.
+
+### Medya formatları
+
+| Platform | Medya | Geometri |
+|---|---|---|
+| X | Still PNG | 1080×1350 |
+| Instagram | Still PNG | 1080×1350 |
+| Reels | Vertical MP4 | 1080×1920 |
+| YouTube Shorts | Vertical MP4 | 1080×1920 |
+
+Video backend: **ffmpeg** (default, pixel-exact, ücretsiz). Higgsfield opt-in
+ama fiyat etiketlerini bozduğu için sinyal chart'larında KULLANILMAZ.
+
+### Cron (sadece üretim, yayın yok)
+
+```
+0 * * * * cd /opt/efloud-bot && python -m scripts.daily_social_run --date "$(date -u +%F)" >> /app/logs/social.log 2>&1
+```
+
+### Bug fix'ler (bu güncelleme ile)
+
+- Instagram: `render_promo_card` import hatası → her paylaşım ImportError (düzeltildi)
+- YouTube: `video_path=None` hardcoded → Shorts'a video yüklenemiyordu (düzeltildi)
+
+### Detaylı doküman
+
+`skills/social-publishing/SKILL.md` — tüm modüller, API'ler, testler, cron pattern'leri.
 
 **Bot canlı, kararlı, kod %100 hazır. Acele yok, risk yok.**

@@ -65,9 +65,20 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
 - pandas tabanlı look-ahead hesaplar → Pine'da repaint riskine dikkat (sadece kapanmış bar `[1]` veya barstate.isconfirmed kullanılmalı).
 
 
-## 🚀 Son Durum & Güncel Gelişmeler (2026-05-31)
+## 🚀 Son Durum & Güncel Gelişmeler (2026-07-26)
 
-1. **u2algo-site & Railway Servisi**:
+1. **Social Publishing Pipeline (YENİ)**:
+   - Bot sinyallerinden otomatik chart + video + caption üretimi: `scripts/daily_social_run.py`
+   - Chart renderer: `scripts/chart_render.py` (OHLCV cache → markalı PNG, ENTRY/SL/TP seviyeli)
+   - Video renderer: `scripts/video_render.py` (chart PNG → MP4, ffmpeg default)
+   - Platform bundle'lar: `scripts/lane_g_social.py` (X/IG/Reels/YT)
+   - Yayın dispatch: `scripts/lane_g_publish.py` (3-gate safety)
+   - Higgsfield adapter: `scripts/higgsfield_adapter.py` (opt-in, ⚠️ fiyat etiketlerini bozuyor)
+   - Kalıcı doküman: `skills/social-publishing/SKILL.md` — tüm AI modelleri için
+   - Bug fix: Instagram `render_promo_card` import hatası, YouTube `video_path=None`
+   - Test: 229 test, sıfır regresyon
+
+2. **u2algo-site & Railway Servisi**:
    - Next.js 15 ve Node.js 20 tabanlı pazarlama sayfası Railway üzerinde `considerate-intuition` projesi (`u2algo-site` servisi) altında yayındadır.
    - Canlı URL: `https://u2algo-site-production.up.railway.app`
 
