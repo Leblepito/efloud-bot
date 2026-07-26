@@ -19,6 +19,8 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
+  issues: write
+  issues: write
 
 jobs:
   tests:
@@ -99,6 +101,31 @@ jobs:
             echo '```'
           } > /tmp/comment.md
           gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/comment.md --repo "${{ github.repository }}"
+
+      # master has no PR to comment on, so a broken build there would
+      # otherwise go unnoticed until someone happens to check Actions.
+      # File/refresh one tracking issue instead.
+      - name: Report failure to issue (master push)
+        if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="CI broken on master"
+          {
+            echo "## ❌ CI failure — pytest (py3.11) @ ${GITHUB_SHA:0:7}"
+            echo ""
+            echo "Tail of the build/test log (last 80 lines):"
+            echo ""
+            echo '```'
+            tail -n 80 /tmp/ci.log 2>/dev/null || echo "(no log captured — failure was before any logged step)"
+            echo '```'
+          } > /tmp/issue.md
+          EXISTING=$(gh issue list --search "$TITLE in:title" --state open --json number --jq '.[0].number' --repo "${{ github.repository }}")
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body-file /tmp/issue.md --repo "${{ github.repository }}"
+          else
+            gh issue create --title "$TITLE" --body-file /tmp/issue.md --label "ci-broken" --repo "${{ github.repository }}"
+          fi
 
   # T-023 (P-003 W-R): secret scanning on the working tree. Uses `detect
   # --no-git` deliberately — full-history scans would permanently flag

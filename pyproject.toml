@@ -35,3 +35,21 @@ addopts = [
     "--ignore=test_real_backtest.py",
     "--ignore=test_real_data.py",
 ]
+
+# Shared excludes for the scheduled review/security automations
+# (.github/workflows/scheduled-review.yml). Mirrors norecursedirs above.
+[tool.ruff]
+extend-exclude = [
+    ".venv", "venv", ".venv311", "node_modules", "frontend", "data", "logs",
+    "reports", "state", "state_1k", "deploy", "scripts", "ops", "docs",
+    "external_repos", ".claude", ".hermes", "u2algo-site", "backup_rollout",
+    "scratch", "_to_delete", "backup",
+]
+
+[tool.bandit]
+exclude_dirs = [
+    ".venv", "venv", ".venv311", "node_modules", "frontend", "data", "logs",
+    "reports", "state", "state_1k", "deploy", "docs", "external_repos",
+    ".claude", ".hermes", "u2algo-site", "backup_rollout", "scratch",
+    "_to_delete", "tests",
+]
