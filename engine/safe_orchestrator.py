@@ -2026,6 +2026,7 @@ class SafeOrchestrator:
                                 cand,
                                 current_price=current_price,
                                 entry_price=clamped_entry_price,
+                                df_entry=df_15m,
                             )
                             continue
                         else:
@@ -2050,6 +2051,7 @@ class SafeOrchestrator:
                             cand,
                             current_price=current_price,
                             entry_price=clamped_entry_price,
+                            df_entry=df_15m,
                         )
                         continue
                     # else: Still first entry, wait for leave
@@ -2070,6 +2072,7 @@ class SafeOrchestrator:
                         cand,
                         current_price=current_price,
                         entry_price=entry_px,
+                        df_entry=df_15m,
                     )
 
             # === AWAITING_REENTRY state (new for pullback detection) ===
@@ -2083,6 +2086,7 @@ class SafeOrchestrator:
                             cand,
                             current_price=current_price,
                             entry_price=clamped_entry_price,
+                            df_entry=df_15m,
                         )
                         continue
                     else:
@@ -2195,6 +2199,7 @@ class SafeOrchestrator:
         cand,
         current_price: float,
         entry_price: float,
+        df_entry=None,
     ):
         """Place entry order for a CONFIRMED SetupCandidate.
 
@@ -2270,6 +2275,7 @@ class SafeOrchestrator:
         from engine.smc_v2.sl_calc import calc_sl
         from engine.smc_v2.tp_calc import calc_tp_targets
         from engine.smc_v2.exceptions import SLTooFarError, InsufficientTPDistanceError
+        from engine.smc_v2.atr import wilder_atr
         from types import SimpleNamespace
 
         safety_cfg = self.config.get("safety", {})
@@ -2290,6 +2296,91 @@ class SafeOrchestrator:
         _atr_floor_pct = float(engine_cfg.get("v2_atr_proxy_floor_pct", 1.0))
         atr_15m = max(entry_price * _atr_floor_pct / 100.0,
                       abs(cand.target_zone.high - cand.target_zone.low))
+
+        # BT-22 (2026-07-26): use the real Wilder ATR(14) on the entry
+        # timeframe -- the number sl_calc's own docstring asks for -- instead
+        # of the percentage-of-price proxy computed just above.
+        #
+        # EVIDENCE. 694 live orders (state_1k/trade_journal.jsonl,
+        # 2026-05-15 13:23 .. 2026-06-01 13:55). 336 of them closed with
+        # usable geometry AND a resolvable ATR. For each one the symbol's real
+        # Wilder ATR(14) was read off the last CLOSED 15m bar before entry
+        # (cache/ohlcv/<sym>/15m.parquet) and the stop the bot actually placed
+        # was expressed in those real ATR units -- per trade, per bar, not a
+        # portfolio average:
+        #
+        #   sl_atr    n    win%    sum_pnl    avg_pnl
+        #    0-2     54   100.0    +218.20     +4.041
+        #    2-4    113    87.6    +326.65     +2.891
+        #    4-5     56    66.1     +50.81     +0.907
+        #    5-6     36    33.3     -37.65     -1.046
+        #    6-8     37    35.1     -47.64     -1.288
+        #    8-12    32    28.1     -67.51     -2.110
+        #     >12     8     0.0     -39.12     -4.890
+        #
+        # Monotone in win% and avg_pnl, with the sign flip landing between the
+        # 4-5 and 5-6 buckets. Distribution: median 4.02 ATR, p75 5.72, p90
+        # 8.29, max 16.69 -- i.e. the bot routinely placed stops 8-17 real ATRs
+        # away, which is the operator's complaint stated numerically.
+        #
+        # The operator's EXISTING safety.max_sl_atr: 5.0 is therefore already
+        # the right ceiling; it simply never binds, because it is multiplied by
+        # the proxy above. Over this same window the real 15m ATR(14) median is
+        # 0.305% of price trade-weighted (0.346% unweighted across the 11
+        # symbols), so 5 real ATRs is ~1.5-1.7% of price -- while 5 x the 1%
+        # proxy is 5% of price. This introduces no new tuning constant; it
+        # makes max_sl_atr mean what it already says.
+        #
+        # CONSEQUENCE THE OPERATOR MUST EXPECT: calc_sl raises SLTooFarError
+        # whenever stop_dist > max_sl_atr * atr, so a correct (smaller) ATR
+        # REJECTS setups that previously traded. Replaying the cap over the
+        # same 336 trades -- max_sl_atr 5.0 is the argmax, not a fitted value:
+        #
+        #   cap   kept  dropped  kept_pnl  kept_win%  dropped_pnl
+        #   3.0    113      223   +399.41       96.5        +4.33
+        #   4.0    167      169   +544.85       91.6      -141.11
+        #   5.0    223      113   +595.66       85.2      -191.92
+        #   6.0    259       77   +558.01       78.0      -154.27
+        #   8.0    296       40   +510.37       72.6      -106.63
+        #   none   336        0   +403.74       66.7         0.00
+        #
+        # +403.74 -> +595.66 USDT (+47.5%) and win 66.7% -> 85.2%, on 33.6%
+        # FEWER entries. A third fewer trades is the intended outcome, not a
+        # regression.
+        #
+        # SCOPE CAVEAT, stated because it bounds the claim: both the v1 and the
+        # v2 entry paths run live on config.phase2_1k.yaml, and
+        # _journal_record_entry is shared by both and hardcodes timeframe,
+        # htf_bias, confluence_score and intent_label_entry to empty. The
+        # journal cannot attribute a trade to a path. Read the table as "this
+        # bot", not "this code path". The v1 side has its own lever for the
+        # same defect -- safety.reject_wide_sl, which turns position_guard's
+        # existing wide-SL warning into a reject and needs no code change.
+        #
+        # NOT floored by zone_width on purpose. Doing so would re-inflate the
+        # ATR exactly on the wide-zone setups this is meant to reject, and it
+        # is unnecessary for stop placement: calc_sl anchors the stop at
+        # min(zone.low, htf_swing_anchor) - buffer, so the stop is already
+        # outside the zone by construction whatever the ATR.
+        #
+        # DEFAULT OFF. engine.v2_use_real_atr is absent from all three live
+        # configs, so this branch does not execute and every existing
+        # deployment stays byte-identical until an operator opts in.
+        if bool(engine_cfg.get("v2_use_real_atr", False)):
+            _real_atr = wilder_atr(df_entry, period=14)
+            if _real_atr is not None:
+                atr_15m = _real_atr
+            else:
+                # wilder_atr returns None only when it cannot answer honestly
+                # (no frame, <15 bars, non-finite OHLC). Keep the proxy rather
+                # than blocking the trade: falling back is the pre-BT-22
+                # behaviour, which is a known quantity.
+                log.warning(
+                    f"[v2 atr] {cand.symbol}: v2_use_real_atr is ON but real "
+                    f"ATR(14) is unavailable (df_entry="
+                    f"{'None' if df_entry is None else str(len(df_entry)) + ' bars'}"
+                    f"); falling back to proxy {atr_15m:.8f}"
+                )
 
         try:
             sl = calc_sl(
