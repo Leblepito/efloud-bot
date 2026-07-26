@@ -1183,6 +1183,8 @@ class SafeOrchestrator:
                     htf_fvgs=htf_analysis.get("active_fvgs", []),
                     ote_band=(ote_low, ote_high),
                     ltf_trigger_idx_min=ltf_trigger_idx_min,
+                    current_price=current_price,
+                    df_entry=df_entry,
                 )
             
             # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
@@ -2159,6 +2161,8 @@ class SafeOrchestrator:
         htf_fvgs: list,
         ote_band: tuple,
         ltf_trigger_idx_min: int,
+        current_price: float = None,
+        df_entry=None,
     ) -> None:
         """Trigger phase: detect new CHoCH events and emit SetupCandidates.
 
@@ -2188,7 +2192,50 @@ class SafeOrchestrator:
             anchor_time_axis=self.config.get("smc_v2", {}).get(
                 "anchor_time_axis", False),
         )
+        # ── BT-23 ENTRY-DISTANCE GATE (2026-07-26) ──
+        # Measured on a 30d / 10-symbol full-pipeline replay (2401 emitted
+        # setups): NOT ONE setup whose target zone was further than 4.0x the
+        # 15m Wilder ATR(14) from the live price at emit time ever reached
+        # CONFIRMED. 1400 of 2401 setups (58.3%) were born dead, and because
+        # SetupStateStore caps pending candidates per symbol they evicted
+        # reachable setups (cap_dropped 3256 -> 1010 with the gate at 6.0).
+        # Replay result, gate 6.0: added 2401 -> 1188, EXPIRED 1804 -> 588,
+        # CONFIRMED 594 -> 597. Strictly non-negative on every symbol.
+        #
+        # Fail-open by design: default 0.0 disables the gate, and a None /
+        # non-positive ATR skips it, so an un-tuned config or a short frame
+        # never silently starves the book.
+        _max_dist_atr = float(
+            self.config.get("smc_v2", {}).get("max_entry_dist_atr", 0.0) or 0.0
+        )
+        _atr_now = None
+        if _max_dist_atr > 0.0 and current_price is not None and df_entry is not None:
+            from engine.smc_v2.atr import wilder_atr
+            _atr_now = wilder_atr(df_entry, period=14)
+
         for cand in new_candidates:
+            if (
+                _max_dist_atr > 0.0
+                and _atr_now is not None
+                and _atr_now > 0.0
+                and current_price is not None
+            ):
+                _z = cand.target_zone
+                _zl, _zh = min(_z.low, _z.high), max(_z.low, _z.high)
+                # near edge = the edge price reaches first coming from here
+                _near = (
+                    (current_price - _zh) if cand.direction == "LONG"
+                    else (_zl - current_price)
+                )
+                _dist_atr = _near / _atr_now
+                if _dist_atr > _max_dist_atr:
+                    self._v2_gate_rejects = getattr(self, "_v2_gate_rejects", 0) + 1
+                    log.info(
+                        f"[v2 gate] {symbol} {cand.direction} setup dropped at emit: "
+                        f"zone {_dist_atr:.1f} ATR away > max_entry_dist_atr "
+                        f"{_max_dist_atr:.1f} (src={_z.source})"
+                    )
+                    continue
             # add() returns False if per-symbol cap reached — silently dropped
             # (matches spec §6 setup_cap rejection counter; orchestrator
             # could log this in a future patch if operator visibility wanted)

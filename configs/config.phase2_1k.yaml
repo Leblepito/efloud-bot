@@ -112,6 +112,16 @@ smc_v2:
   confirm_last_bar_only: false  # C2: yalnız son kapanmış bar engulfing onayı
                                 #     (stale onay biter)
 
+  # BT-23 (2026-07-26): emit anında hedef bölgenin YAKIN kenarı 15m Wilder
+  # ATR(14)'ün bu katından uzaksa setup hiç açılmaz. 30g/10 sembol tam pipeline
+  # replay: 4.0 ATR ötesinde 2401 setup'ın HİÇBİRİ CONFIRMED olmadı (1400 ölü
+  # setup = %58.3). Ölü setuplar per-symbol cap'i doldurup ulaşılabilir
+  # setupları eliyordu. Kapı 6.0 ile: added 2401->1188, EXPIRED 1804->588,
+  # cap_dropped 3256->1010, CONFIRMED 594->597 (hiçbir sembolde kayıp yok).
+  # 6.0 seçildi (4.0 değil): uçurum 4.0'da ölçüldü, 1.5x pay bırakıldı.
+  # 0.0 = kapalı (diğer configlerin varsayılanı — ölçülmediler).
+  max_entry_dist_atr: 6.0
+
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:
   mode: fixed
