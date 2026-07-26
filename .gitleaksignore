@@ -1,11 +1,15 @@
 # GitLeaks ignore list — fingerprints of known/rotated secrets that should not
-# be re-reported on every scan. Each line is a gitleaks fingerprint (sha256:...).
+# be re-reported on every scan.
+#
+# Real gitleaks fingerprint format is `<commit>:<file>:<rule-id>:<line>`
+# (as printed on the "Fingerprint:" line of `gitleaks detect --verbose`
+# output) — NOT `sha256:...`.
 #
 # AUTO-POPULATED on first run by the scheduled-review workflow. After the initial
 # auto-generation, only genuinely NEW secret leaks will open issues.
 #
-# To add a fingerprint manually, run gitleaks locally and copy the fingerprint
-# from the output (e.g. `sha256:abc123...`).
+# To add a fingerprint manually, run gitleaks locally and copy the value from
+# the "Fingerprint:" line of the output.
 #
 # Format: <fingerprint>
 #

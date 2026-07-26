@@ -1,12 +1,14 @@
 name: Hermes Review Agent
 
-# On-demand review + auto-fix pipeline. Triggered manually, by the scheduled
-# review workflow when findings are detected, or when an issue is labeled
-# "automated-review".
-#
-# This is the CI-resident counterpart to the Hermes cron job
-# (efloud-review-triage, runs daily at 04:30 UTC+3).
+# On-demand + scheduled review/auto-fix/triage pipeline for the Hermes agent.
+# Triggered manually, by the scheduled review workflow when findings are
+# detected, when an issue is labeled "automated-review", or daily on its own
+# cron (the actual daily triage pass — there is no separate VPS/local cron;
+# this schedule trigger IS "efloud-review-triage").
 on:
+  schedule:
+    # 01:30 UTC daily = 04:30 UTC+3 (Europe/Istanbul).
+    - cron: '30 1 * * *'
   workflow_dispatch:
     inputs:
       issue_number:
@@ -38,6 +40,39 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # On the daily cron there is no explicit issue_number input — look up
+      # the open tracking issue the scheduled-review workflow files/updates.
+      - name: Resolve target issue
+        id: target_issue
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NUM=$(gh issue list --search "Scheduled review/security findings in:title" --state open --json number --jq '.[0].number' --repo "${{ github.repository }}")
+          echo "issue_number=${NUM}" >> "$GITHUB_OUTPUT"
+
+      # On the daily cron there is no explicit issue_number input — look up
+      # the open tracking issue the scheduled-review workflow files/updates.
+      - name: Resolve target issue
+        id: target_issue
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NUM=$(gh issue list --search "Scheduled review/security findings in:title" --state open --json number --jq '.[0].number' --repo "${{ github.repository }}")
+          echo "issue_number=${NUM}" >> "$GITHUB_OUTPUT"
+
+      # On the daily cron there is no explicit issue_number input — look up
+      # the open tracking issue the scheduled-review workflow files/updates.
+      - name: Resolve target issue
+        id: target_issue
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NUM=$(gh issue list --search "Scheduled review/security findings in:title" --state open --json number --jq '.[0].number' --repo "${{ github.repository }}")
+          echo "issue_number=${NUM}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -105,11 +140,11 @@ jobs:
       - name: Report to issue
         if: |
           (steps.ruff_fix.outputs.changed == 'true' || steps.bandit.outcome == 'failure') &&
-          (github.event.inputs.issue_number != '' || github.event.issue.number != '')
+          (github.event.inputs.issue_number != '' || github.event.issue.number != '' || steps.target_issue.outputs.issue_number != '')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ISSUE_NUM="${{ github.event.inputs.issue_number || github.event.issue.number }}"
+          ISSUE_NUM="${{ github.event.inputs.issue_number || github.event.issue.number || steps.target_issue.outputs.issue_number }}"
           if [ -z "$ISSUE_NUM" ]; then
             echo "No issue number provided — skipping comment."
             exit 0
@@ -135,4 +170,20 @@ jobs:
               echo '```'
             fi
           } > /tmp/report.md
+
+      # ── Daily triage only: close the tracking issue once both ruff and
+      #    bandit are clean and there's nothing left for a PR to fix.
+      - name: Close resolved tracking issue
+        if: |
+          github.event_name == 'schedule' &&
+          steps.target_issue.outputs.issue_number != '' &&
+          steps.ruff_check.outcome == 'success' &&
+          steps.bandit.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ steps.target_issue.outputs.issue_number }}" \
+            --body "✅ Daily triage: ruff and bandit are both clean — closing." \
+            --repo "${{ github.repository }}"
+          gh issue close "${{ steps.target_issue.outputs.issue_number }}" --repo "${{ github.repository }}"
           gh issue comment "$ISSUE_NUM" --body-file /tmp/report.md --repo "${{ github.repository }}"

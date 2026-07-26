@@ -155,25 +155,28 @@ jobs:
       #     they are ignored in future scans (only NEW leaks will surface). ---
       - name: gitleaks auto-baseline
         if: steps.gitleaks.outcome == 'failure'
+        id: gitleaks_baseline
         run: |
           set -o pipefail
-          # Extract fingerprints from gitleaks output and append to ignore file
-          grep -oP 'sha256:[a-f0-9]{64}' /tmp/gitleaks.log | sort -u > /tmp/fingerprints.txt
+          # Real gitleaks fingerprint format is `commit:file:rule:line` (verified
+          # against actual `--verbose` output), NOT `sha256:...` — the previous
+          # regex here never matched anything, so .gitleaksignore was never
+          # populated and the same old leaks kept re-opening the issue daily.
+          grep '^Fingerprint:' /tmp/gitleaks.log | sed 's/^Fingerprint:[[:space:]]*//' | sort -u > /tmp/fingerprints.txt
           FOUND=$(wc -l < /tmp/fingerprints.txt)
           echo "gitleaks_fingerprints=${FOUND}" >> "$GITHUB_OUTPUT"
+          EXISTING=""
+          if [ -f .gitleaksignore ]; then
+            EXISTING=$(grep -v '^#' .gitleaksignore || true)
+          fi
           if [ "$FOUND" -gt 0 ]; then
-            # Only add fingerprints that aren't already in the ignore file
-            if [ -f .gitleaksignore ]; then
-              EXISTING=$(grep -oP 'sha256:[a-f0-9]{64}' .gitleaksignore 2>/dev/null || true)
-            fi
             while IFS= read -r fp; do
-              if ! echo "$EXISTING" | grep -qF "$fp"; then
+              if ! printf '%s\n' "$EXISTING" | grep -qF "$fp"; then
                 echo "$fp" >> .gitleaksignore
                 echo "NEW=true" >> "$GITHUB_OUTPUT"
               fi
             done < /tmp/fingerprints.txt
           fi
-        id: gitleaks_baseline
 
       - name: Commit gitleaks baseline
         if: steps.gitleaks_baseline.outputs.NEW == 'true'
