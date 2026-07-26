@@ -1,0 +1,88 @@
+name: Claude Code Review (risk/safety + SMC strategy)
+
+# CI-resident counterpart to the interactive Claude Code subagents in
+# .claude/agents/{risk-safety-auditor,smc-strategy-reviewer}.md. Read-only —
+# posts a review comment, never pushes commits or auto-merges. Mainnet/risk
+# config changes still require a human merge decision; this only automates
+# producing the review, not the approval.
+on:
+  pull_request:
+    paths:
+      - 'engine/safety.py'
+      - 'engine/risk/**'
+      - 'engine/lifecycle.py'
+      - 'exchange/**'
+      - 'config.yaml'
+      - 'engine/smc.py'
+      - 'engine/signals.py'
+      - 'engine/confluence.py'
+      - 'engine/smc_v2/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  detect-scope:
+    name: Detect which agent(s) apply
+    runs-on: ubuntu-latest
+    outputs:
+      risk_safety: ${{ steps.filter.outputs.risk_safety }}
+      smc_strategy: ${{ steps.filter.outputs.smc_strategy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            risk_safety:
+              - 'engine/safety.py'
+              - 'engine/risk/**'
+              - 'engine/lifecycle.py'
+              - 'exchange/**'
+              - 'config.yaml'
+            smc_strategy:
+              - 'engine/smc.py'
+              - 'engine/signals.py'
+              - 'engine/confluence.py'
+              - 'engine/smc_v2/**'
+
+  risk-safety-review:
+    name: risk-safety-auditor
+    needs: detect-scope
+    if: needs.detect-scope.outputs.risk_safety == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install anthropic
+      - env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/claude_review.py risk-safety-auditor "${{ github.event.pull_request.number }}"
+
+  smc-strategy-review:
+    name: smc-strategy-reviewer
+    needs: detect-scope
+    if: needs.detect-scope.outputs.smc_strategy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install anthropic
+      - env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/claude_review.py smc-strategy-reviewer "${{ github.event.pull_request.number }}"
