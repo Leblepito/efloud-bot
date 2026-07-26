@@ -9,7 +9,31 @@
       "Bash(git --no-pager diff --stat 2>&1\necho DONE)",
       "Bash(echo hello)",
       "Bash(git --no-pager diff --stat > diff_stat.txt 2>&1\necho done)",
-      "Bash(echo test123)"
+      "Bash(echo test123)",
+      "Bash(rg *)",
+      "Bash(git *)",
+      "Bash(powershell *)",
+      "Bash(wc *)",
+      "Bash(cd /c/Users/utkuc/Downloads/efloud-bot)",
+      "Bash(dir *)",
+      "Bash(python *)",
+      "Bash(del *)",
+      "Bash(gh label create *)",
+      "Bash(gh label list *)",
+      "Bash(gh label list *)",
+      "Bash(gh repo view *)",
+      "Bash(gh workflow list *)",
+      "Bash(gh workflow run *)",
+      "Bash(gh run view *)",
+      "Bash(findstr *)",
+      "Bash(gh issue list *)",
+      "Bash(type *)",
+      "Bash(docker run *)",
+      "Bash(for *)",
+      "Bash(gh secret list *)",
+      "Bash(gh auth status *)",
+      "Bash(gh secret set *)",
+      "Bash(gh api repos/Leblepito/efloud-bot/actions/secrets/ANTHROPIC_API_KEY *)"
     ]
   }
 }

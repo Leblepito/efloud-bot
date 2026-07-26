@@ -52,7 +52,11 @@ class SetupCandidate:
     - has_left_zone=false: Price has NOT yet left the zone after first entry
     - has_left_zone=true: Price left the zone, now waiting for re-entry (pullback)
 
-    `bars_waited` increments each tick regardless of price in/out of zone.
+    `bars_waited` increments once per CLOSED LTF bar (BT-24, 2026-07-26),
+    regardless of price in/out of zone. Ticks that land on a bar already
+    counted do not increment it — the orchestrator polls far faster than the
+    entry timeframe (check_interval_sec=30 vs a 15m bar), so counting ticks
+    made an 8-bar timeout expire in 4 minutes.
     Setup expires only when bars_waited > pullback_timeout_bars.
     """
     symbol: str
@@ -62,7 +66,7 @@ class SetupCandidate:
     htf_bias: str                                  # "BULL" | "BEAR" | "UNDEF"
     target_zone: ZoneSpec
     htf_swing_anchor: float                        # HTF swing for structural SL
-    bars_waited: int                               # incremented per orchestrator tick
+    bars_waited: int                               # incremented per CLOSED LTF bar (BT-24)
     state: Literal["AWAITING_PULLBACK", "IN_ZONE", "AWAITING_REENTRY", "CONFIRMED", "EXPIRED"]
     confluence_score: int
     reasons: List[str] = field(default_factory=list)

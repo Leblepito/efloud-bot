@@ -1959,7 +1959,9 @@ class SafeOrchestrator:
 
         Per spec §4.3 step 2 (advance phase only — trigger phase is PR #S3c):
           For each pending candidate matching symbol:
-            1. bars_waited += 1
+            1. bars_waited += 1, but ONLY when current_bar_ts differs from the
+               last one seen for this symbol (BT-24 — one increment per closed
+               LTF bar, not per orchestrator tick)
             2. If bars_waited > pullback_timeout_bars → state = EXPIRED
             3. Elif state == AWAITING_PULLBACK and price ∈ zone → state = IN_ZONE
             4. If state == IN_ZONE → call confirm_entry; if True → state = CONFIRMED
@@ -1995,6 +1997,26 @@ class SafeOrchestrator:
         from engine.smc_v2.zones import is_price_in_zone
         from engine.smc_v2.setup_state import PERSISTED_STATES
 
+        # ── BT-24 (2026-07-26): bars_waited counts CLOSED LTF BARS, not ticks ──
+        # It used to increment on every orchestrator tick. With
+        # check_interval_sec=30 the default pullback_timeout_bars=8 expired a
+        # candidate after 8 * 30s = 4 MINUTES — before the 15m bar its CHoCH
+        # fired on had even closed. Intended lifetime is 8 * 15m = 2 hours, and
+        # every measurement (BT-23 replay, spec §4.3) assumes bars.
+        #
+        # current_bar_ts is computed at the call site (run_cycle) for exactly
+        # this purpose and was never read. Now it gates the increment.
+        #
+        # State is per-symbol and in-memory only: SetupCandidate's dataclass and
+        # the on-disk schema are unchanged, so old state files load as before.
+        # After a restart the map is empty, so the first tick of each symbol
+        # counts as a new bar — at worst one extra increment per symbol per
+        # restart. It can never shorten the timeout below the bar count.
+        if not hasattr(self, "_v2_last_bar_ts"):
+            self._v2_last_bar_ts = {}
+        is_new_bar = self._v2_last_bar_ts.get(symbol) != current_bar_ts
+        self._v2_last_bar_ts[symbol] = current_bar_ts
+
         for cand in self.setup_state_store.candidates:
             if cand.symbol != symbol:
                 continue
@@ -2002,8 +2024,11 @@ class SafeOrchestrator:
                 # CONFIRMED or EXPIRED — terminal, skip
                 continue
 
-            cand.bars_waited += 1
+            if is_new_bar:
+                cand.bars_waited += 1
 
+            # Checked on every tick, not just new bars: bars_waited only grows
+            # on a new bar, so this fires on the same tick it crosses the limit.
             if cand.bars_waited > effective_pullback_timeout_bars:
                 cand.state = "EXPIRED"
                 continue
