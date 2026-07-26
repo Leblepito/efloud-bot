@@ -260,10 +260,10 @@ safety:
   # max_open_positions=10 hedefine fiilen ulaşılamazdı. 6.0, emergency_balance_
   # threshold ($1216) altına inmeden bind ETMEZ (6.0×1216=$7296 > $5000).
   max_total_exposure: 6.0             # 10×$500 desteklemek için yükseltildi (WAS 1.0)
-  max_holding_hours: 24
+  max_holding_hours: 36           # 2026-07-26 BT-sweep5: 24h->36h. Ayni islemler, secim degismiyor. v1 -18.9R->-1.1R, v2 -43.5R->-19.8R. 48h daha kotu.
   max_pyramid_adds: 0                  # Pyramid kapalı (basit tut)
-  min_sl_atr: 0.5
-  max_sl_atr: 5.0
+  min_sl_atr: 2.0                 # 2026-07-26 BT-sweep5: 0.5->2.0. v2 R/trade -0.363->-0.257 (floor 2.5 daha kotu). fixed sizing: min risk 0.86 USD -> 3.45 USD. v1 yolunda <2.0 ATR yapisal stoplu setuplar REDDEDILIR (~%16).
+  max_sl_atr: 5.0                 # 2026-07-26 DOGRULANDI (degistirme): gercek journal TP seviyeleriyle cap5 > cap6 > cap99, her iki yolda da. REJECT semantigi (clamp degil).
   # H3: true → a wide SL (sl_atr_mult > max_sl_atr) is a HARD REJECT
   # (matches v2 SLTooFarError) instead of warn-only.
   # 2026-07-26 (operatör onayı, BT-22): false→true. V1 yolu zaten GERÇEK ATR
