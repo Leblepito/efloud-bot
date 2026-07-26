@@ -313,8 +313,19 @@ class YouTubeClient:
         """ContentDraft -> YouTube Short.
 
         Uses same interface as XurlClient for worker compatibility.
+
+        Media resolution (2026-07-26 fix): the clip comes from the draft's own
+        ``meta['media']`` — the vertical MP4 rendered by Lane G
+        (``scripts/video_render.py``). Previously ``video_path`` was hardcoded
+        to ``None``, so a Shorts upload could never carry a video.
         """
-        return self.post(text=draft.body, video_path=None)
+        media = draft.meta.get("media") or []
+        if isinstance(media, str):
+            media = [media]
+        video_path = next((m for m in media if str(m).lower().endswith(
+            (".mp4", ".mov", ".webm"))), None)
+
+        return self.post(text=draft.body, video_path=video_path)
 
 
 # Singleton instance

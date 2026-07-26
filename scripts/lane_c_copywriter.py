@@ -48,6 +48,40 @@ def _rr_and_risk(a: dict) -> tuple[Optional[float], Optional[float]]:
     return rr, risk_pct
 
 
+def _levels_block(item: dict) -> Optional[dict]:
+    """Numeric trade levels for the chart renderer, or None when incomplete.
+
+    Lane D's ``chart_renderer`` needs the raw prices (entry/SL/TP1/TP2) to draw
+    the annotated levels; the copy *text* stays ratio-only (decision #5), so the
+    numbers travel in this separate block rather than in the caption. Shaped like
+    a Lane A ``signal`` so ``TradeLevels.from_signal`` consumes it directly.
+    """
+    try:
+        entry = float(item["entry"]); sl = float(item["sl"]); tp1 = float(item["tp1"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    tp2_raw = item.get("tp2")
+    try:
+        tp2 = float(tp2_raw) if tp2_raw not in (None, "", 0, 0.0) else None
+    except (TypeError, ValueError):
+        tp2 = None
+    conf_raw = item.get("confluence")
+    try:
+        confluence = int(conf_raw) if conf_raw is not None else None
+    except (TypeError, ValueError):
+        confluence = None
+    return {
+        "symbol": item.get("symbol"),
+        "timeframe": item.get("timeframe"),
+        "direction": item.get("direction"),
+        "entry": entry,
+        "sl": sl,
+        "tp1": tp1,
+        "tp2": tp2,
+        "confluence": confluence,
+    }
+
+
 def _zones_str(analysis: dict) -> str:
     zones = analysis.get("smc_zones") or []
     parts = []
@@ -101,6 +135,9 @@ def build_copy(item: dict, *, lang: str = "tr") -> dict:
         "thread": thread,
         "alt_text": alt_text,
         "source_confidence": analysis.get("confidence"),
+        # Numeric trade levels, carried through for Lane D's chart renderer
+        # (annotated entry/SL/TP overlay). Copy text itself stays ratio-only.
+        "levels": _levels_block(item),
     }
 
 

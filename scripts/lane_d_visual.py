@@ -65,7 +65,7 @@ def build_visual_spec(copy: dict, chart_path: Optional[str] = None) -> dict:
         "footer": footer,
         "alt": copy.get("alt_text", ""),
     }
-    return {
+    spec = {
         "event_id": copy.get("event_id"),
         "symbol": symbol,
         "chart_path": chart_path,
@@ -73,6 +73,13 @@ def build_visual_spec(copy: dict, chart_path: Optional[str] = None) -> dict:
         "formats": list(VISUAL_FORMATS),
         "palette": PALETTE,
     }
+    # Trade levels (entry/SL/TP1/TP2) travel with the copy draft so the chart
+    # renderer can draw the annotated price levels. Absent for non-signal copy
+    # (educational / recap posts) — chart_renderer then falls back to a manifest.
+    levels = copy.get("levels")
+    if levels:
+        spec["levels"] = levels
+    return spec
 
 
 def manifest_renderer(spec: dict, fmt: str, base: Path) -> Path:
@@ -174,9 +181,17 @@ def main(argv: Optional[list[str]] = None) -> dict:
     ap.add_argument("--out", default=os.environ.get("EFLOUD_LANE_D_OUT", "/tmp/lane-d"))
     ap.add_argument("--date", required=True, help="UTC date YYYY-MM-DD")
     ap.add_argument("--pillow", action="store_true", help="rasterise with Pillow if available")
+    ap.add_argument("--chart", action="store_true",
+                    help="render annotated entry/SL/TP charts (scripts.chart_render)")
     args = ap.parse_args(argv)
 
-    renderer = pillow_renderer if args.pillow else manifest_renderer
+    if args.chart:
+        from scripts.chart_render import chart_renderer
+        renderer = chart_renderer
+    elif args.pillow:
+        renderer = pillow_renderer
+    else:
+        renderer = manifest_renderer
     summary = LaneDVisual(copy_dir=args.copy, out_dir=args.out, renderer=renderer).run(date=args.date)
     print(json.dumps(summary, ensure_ascii=False))
     return summary

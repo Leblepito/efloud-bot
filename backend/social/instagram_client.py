@@ -198,14 +198,22 @@ class InstagramClient:
         """ContentDraft -> Instagram post.
 
         Uses same interface as XurlClient for worker compatibility.
-        """
-        # Generate image using tier2 renderer
-        from backend.social.tier2_renderers import render_promo_card
 
-        image_path = None
-        if "chart_url" in draft.meta:
-            # Render image based on draft type
-            image_path = render_promo_card(draft)
+        Media resolution (2026-07-26 fix): the media is taken from the draft's
+        own ``meta['media']`` — the rendered chart/clip paths that Lane D
+        (``scripts/chart_render.py``) and Lane G (``scripts/lane_g_social.py``)
+        already produced. The previous implementation imported a
+        ``render_promo_card`` helper from ``tier2_renderers`` that does not
+        exist in that module, so every Instagram publish raised ImportError
+        before reaching the Graph API.
+        """
+        media = draft.meta.get("media") or []
+        if isinstance(media, str):
+            media = [media]
+        image_path = next((m for m in media if str(m).lower().endswith(
+            (".png", ".jpg", ".jpeg"))), None)
+        if image_path is None and media:
+            image_path = media[0]
 
         return self.post(text=draft.body, image_path=image_path)
 
