@@ -94,6 +94,14 @@ engine:
                    "BNB/USDT", "TRX/USDT", "LINK/USDT", "BCH/USDT", "ADA/USDT"]
   smc_v2_shadow: false          # LIVE (operatör onayı 2026-07-07): gerçek emir
 
+  # BT-22 (operatör onayı 2026-07-26): SL/TP geometrisi artık %1-of-price
+  # proxy'si yerine GERÇEK Wilder ATR(14) kullanıyor. Bu satır olmadan
+  # safety.max_sl_atr: 5.0 fiilen "fiyatın %5'i" demek ve hiç bağlamıyordu;
+  # 336 canlı işlemde medyan atılan stop 4.02 gerçek ATR, p90 8.29, max 16.69.
+  # 5 ATR tavanı gerçek ATR ile: 223 işlem kalır / 113 elenir, PnL +403.74 ->
+  # +595.66 USDT, kazanç %66.7 -> %85.2. Daha az giriş İSTENEN sonuç.
+  v2_use_real_atr: true
+
 # ── SMC v2 davranış anahtarları (W2/C1+C2, 2026-07-18) ──
 # İkisi de default-OFF: kod hazır + testli; NET-cost 1000-bar backtest gate
 # Windows'ta koşulup SONUÇ ONAYLANINCA operatör true yapar. false = birebir
@@ -256,10 +264,15 @@ safety:
   max_pyramid_adds: 0                  # Pyramid kapalı (basit tut)
   min_sl_atr: 0.5
   max_sl_atr: 5.0
-  # H3 (default OFF): true → a wide SL (sl_atr_mult > max_sl_atr) is a HARD REJECT
-  # (matches v2 SLTooFarError) instead of warn-only. Flip true only after risk-ops
-  # verifies the live rejection rate.
-  reject_wide_sl: false
+  # H3: true → a wide SL (sl_atr_mult > max_sl_atr) is a HARD REJECT
+  # (matches v2 SLTooFarError) instead of warn-only.
+  # 2026-07-26 (operatör onayı, BT-22): false→true. V1 yolu zaten GERÇEK ATR
+  # kullanıyor (safe_orchestrator.py:1517, intent._atr — Wilder'ın 0.96-0.99
+  # katı), yani tavan doğru ölçekteydi ama sadece UYARI üretiyordu. V2 tarafını
+  # v2_use_real_atr kapatıyor; bu satır aynı deliği V1 tarafında kapatıyor.
+  # Beklenen: girişlerin ~1/3'ü reddedilecek. Rejection oranı ilk 48 saatte
+  # izlenecek — "SL too wide" log satırı say.
+  reject_wide_sl: true
 
   emergency_balance_threshold: 1216   # Bakiye $1216 altı → HALT (~%10.8 kayıp, $1363 cüzdana göre). 2026-07-09 düzeltme.
   reserve_balance: 0                   # Tüm bakiye kullanılabilir

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status --porcelain=v1)",
+      "Bash(dir .abacusai 2>&1\n)",
+      "Bash(type .abacusai\\config.json)",
+      "Bash(git diff --stat)",
+      "Bash(git --no-pager diff --stat)",
+      "Bash(git --no-pager diff --stat 2>&1\necho DONE)",
+      "Bash(echo hello)",
+      "Bash(git --no-pager diff --stat > diff_stat.txt 2>&1\necho done)",
+      "Bash(echo test123)"
+    ]
+  }
+}
