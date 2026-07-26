@@ -2363,9 +2363,11 @@ class SafeOrchestrator:
         # min(zone.low, htf_swing_anchor) - buffer, so the stop is already
         # outside the zone by construction whatever the ATR.
         #
-        # DEFAULT OFF. engine.v2_use_real_atr is absent from all three live
-        # configs, so this branch does not execute and every existing
-        # deployment stays byte-identical until an operator opts in.
+        # OPT-IN. Default False. Enabled 2026-07-26 (operator approval) in
+        # configs/config.phase2_1k.yaml only -- the 15m mid bot. It stays
+        # absent, and therefore OFF, in the long and scalp configs, so those
+        # deployments remain byte-identical. Turning it off again is a
+        # one-line config revert; no code change is involved.
         if bool(engine_cfg.get("v2_use_real_atr", False)):
             _real_atr = wilder_atr(df_entry, period=14)
             if _real_atr is not None:
