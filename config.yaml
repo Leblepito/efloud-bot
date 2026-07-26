@@ -38,6 +38,16 @@ smc_v2:
   require_confirmation: true    # 15m CHoCH/engulfing inside zone before entry
   max_pending_per_symbol: 3     # SetupCandidate cap per symbol
 
+  # ── MPA filtreleri (2026-07-26) — Efloud kanal analizinden turetildi ──
+  # DORDU DE VARSAYILAN KAPALI. NET-cost backtest gate'inden gecmeden ve
+  # operator onayi olmadan ACILMAZ. Kapali iken ilgili modul hic cagrilmaz,
+  # V1/V2/V3 canli davranisi birebir korunur.
+  # Regresyon guard: tests/engine/test_mpa_filters.py::test_mpa_toggles_default_off_in_config
+  po3_gate: false               # MPA/1 manipulation fazinda giris bloklanir (hard gate G1)
+  liquidity_class: false        # MPA/2 SWEEP vs GRAB ayrimi + rejim esdegerligi
+  v_recovery: false             # MPA/3 V-type recovery ek confirmation yolu
+  bias_ledger: false            # MPA/4 BCEL: 3-5 ardisik emare olmadan HTF bias degismez
+
 # ── Symbol universe ──
 # 20 coin SABIT liste — bot hep aynı coinler üzerinde öğrensin
 # Dinamik refresh kapalı, stabil karakter için.
