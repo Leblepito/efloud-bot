@@ -47,9 +47,31 @@ def _import_routine(_modname):
 for _modname in (
     "breaker_watch", "margin_watch", "position_audit", "config_drift",
     "equity_report", "market_collect", "proof_export",
-    "resolve_signals", "edge_report",
+    "resolve_signals", "edge_report", "social_content",
 ):
     _import_routine(_modname)
+
+
+def emit_import_failure_alerts(alert_router) -> int:
+    """R-12+ (2026-07-18): IMPORT_FAILURES'daki her modül için bir kez Telegram
+    alert'i at. Rutin import'u yeni build'de (dep-drift) kırılırsa REGISTRY'den
+    sessizce düşüyordu; loud-log container'da kalıyor, operatöre ulaşmıyordu.
+    Watcher açılışında çağrılır. Kaç alert denendiğini döndürür (test için)."""
+    if not IMPORT_FAILURES:
+        return 0
+    sent = 0
+    for _mod, _err in IMPORT_FAILURES.items():
+        try:
+            alert_router.send(
+                "critical", f"routine_import_fail:{_mod}",
+                f"Rutin import HATASI: {_mod}",
+                f"{_err} — bu rutin REGISTRY'de yok, izleme kanalı düştü. "
+                f"Yeni build'de dep-drift olabilir; requirements/constraints kontrol et.",
+            )
+            sent += 1
+        except Exception as _e:
+            print(f"startup import-fail alert gönderilemedi ({_mod}): {_e}")
+    return sent
 
 
 def run_one(name, client=None, alert=None, cfg=None) -> int:
@@ -97,6 +119,9 @@ CADENCES = {
     # cheap no-ops while signal_ledger is disabled (flag/env gate in main()).
     "signal_resolver": 300,
     "edge_report": 3600,
+    # P-Kronos-Social: 4 saatte bir içerik üretimi. SOCIAL_CONTENT_ENABLED
+    # kapalıyken (default) no-op — slot-dedup rutin içinde.
+    "social_content": 14400,
 }
 
 
@@ -110,6 +135,9 @@ async def watch_loop(client=None, alert=None, cfg=None):
 
     last_run = {name: 0.0 for name in CADENCES}
     heartbeat_path = "state/routines_watcher_heartbeat.json"
+
+    # R-12+ (2026-07-18): watcher açılışında import-hatası alert'i (helper üstte).
+    emit_import_failure_alerts(a)
 
     print("Starting routines-watcher loop...")
     while True:

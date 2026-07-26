@@ -25,6 +25,7 @@ def confirm_entry(
     zone: ZoneSpec,
     direction: str,
     since_ts: int,
+    last_bar_only: bool = False,
 ) -> Tuple[bool, Optional[float]]:
     """Detect LTF entry confirmation inside a zone.
 
@@ -35,6 +36,15 @@ def confirm_entry(
         direction: "SHORT" or "LONG"
         since_ts: int (ms epoch) — only consider bars with index timestamp
             strictly > since_ts.
+        last_bar_only: W2/C2 (2026-07-18, default False). True iken YALNIZ
+            son kapanmış (prior, current) çifti değerlendirilir — onay "şu an
+            tazedir" semantiği. Eski davranış since_ts'ten beri TÜM barları
+            tarayıp İLK engulfing'de onaylıyordu; onay barı çok eski (stale)
+            olabiliyor, canlı emir ise ŞİMDİKİ fiyattan açıldığından onay
+            fiyatı ile giriş fiyatı arasında keyfi sapma doğuyordu. False →
+            birebir eski davranış; NET-cost gate Windows'ta koşulup operatör
+            config'te (`smc_v2.confirm_last_bar_only: true`) açana kadar
+            canlı değişmez.
 
     Returns:
         (True, entry_price) on first confirmation found;
@@ -56,7 +66,10 @@ def confirm_entry(
     # < 500 bars per setup), so the Python-loop overhead is negligible.
     timestamps_ms = [int(t.timestamp() * 1000) for t in df_15m.index]
 
-    for i in range(1, len(df_15m)):
+    # W2/C2: last_bar_only → yalnız son kapanmış çift (stale onay biter);
+    # default False → tarama aralığı birebir eski (tüm çiftler).
+    start_i = len(df_15m) - 1 if last_bar_only else 1
+    for i in range(start_i, len(df_15m)):
         cur_ts = timestamps_ms[i]
         if cur_ts <= since_ts:
             continue

@@ -118,10 +118,18 @@ class CircuitBreaker:
         if self.current_balance > self.peak_balance:
             self.peak_balance = self.current_balance
 
-    def record_trade(self, pnl: float, timestamp: Optional[datetime] = None):
-        """Kapanan trade kaydı."""
+    def record_trade(self, pnl: float, timestamp: Optional[datetime] = None,
+                     trade_id: Optional[str] = None):
+        """Kapanan trade kaydı.
+
+        E-5 (2026-07-18): opsiyonel `trade_id` ledger dict'ine yazılır ki
+        record_trade_correction float-değer yerine id ile eşleşebilsin (aynı
+        pnl'li ikizlerde yanlış kaydın mutasyonu önlenir). Anahtar, audit
+        producer'la AYNI ifadedir: `pos.order_id or f"{symbol}-{opened_at}"`
+        (exchange/__init__.py audit_realized_pnl). id'siz çağrılar (orchestrator
+        STEP5 logical yolu, eski call-site'lar) None taşır — davranış değişmez."""
         ts = timestamp or datetime.now(timezone.utc).replace(tzinfo=None)
-        trade = {"pnl": pnl, "ts": ts}
+        trade = {"pnl": pnl, "ts": ts, "trade_id": trade_id}
         self.trades_today.append(trade)
         self.trades_this_week.append(trade)
         self.current_balance += pnl
@@ -138,7 +146,8 @@ class CircuitBreaker:
                          f"(was {self.consecutive_losses})")
             self.consecutive_losses = 0
 
-    def record_trade_correction(self, old_pnl: float, new_pnl: float):
+    def record_trade_correction(self, old_pnl: float, new_pnl: float,
+                                trade_id: Optional[str] = None):
         """M4: re-apply an exchange-truth PnL correction (from the audit sweep) to
         the breaker after a trade was already recorded with an estimate.
 
@@ -166,10 +175,26 @@ class CircuitBreaker:
         # kuyruk sayımı sayacı KISALTIYORDU (guard zayıflar), (2) >24h önce
         # kapanmış trade'in düzeltmesi today'de hiç eşleşmiyordu. Dict'ler
         # today/week arasında paylaşıldığı için week mutasyonu ikisini de günceller.
-        for trade in reversed(self.trades_this_week):
-            if abs(trade["pnl"] - old_pnl) < 1e-9:
-                trade["pnl"] = new_pnl
-                break
+        #
+        # E-5 (2026-07-18): eşleşme ÖNCE trade_id ile (audit'in ürettiği anahtar),
+        # id yoksa/bulunamazsa ESKİ float-değer eşleşmesine düşülür. Değer-ikizi
+        # kayıtlarda (iki BE 0.0, aynı tahminli iki trade) değer-eşleşmesi en
+        # YENİ kaydı mutasyonluyordu; loss→win düzeltmesi yanlış kayda inince
+        # tail-recompute gerçek seriden KISA sayabiliyordu (guard zayıflaması).
+        # Fallback korunur: id'siz eski ledger kayıtları (.get — KeyError yok)
+        # ve STEP5 logical yolu (id üretmiyor) birebir eski davranışta kalır.
+        matched = False
+        if trade_id is not None:
+            for trade in reversed(self.trades_this_week):
+                if trade.get("trade_id") == trade_id:
+                    trade["pnl"] = new_pnl
+                    matched = True
+                    break
+        if not matched:
+            for trade in reversed(self.trades_this_week):
+                if abs(trade["pnl"] - old_pnl) < 1e-9:
+                    trade["pnl"] = new_pnl
+                    break
         # Recompute trailing-loss count from the corrected week ledger. Yürüyüş
         # win görmeden ledger'ı tüketirse gerçek seri >= recomputed (daha eski
         # kayıplar ledger'dan düşmüş olabilir) → sayaç asla AŞAĞI çekilmez.

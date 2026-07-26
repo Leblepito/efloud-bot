@@ -291,6 +291,40 @@ class PubSubConsumer:
             self._seen_ids[msg_id] = time.monotonic()
             self._ack(subscriber, sub_path, [received_msg.ack_id])
 
+    def _pretrade_guard(self, signal) -> Optional[str]:
+        """B-7 (2026-07-18): pubsub dispatch SafeOrchestrator'ın gate zincirini
+        (breaker/max-pos/confluence) TAMAMEN baypas ediyordu. Minimal fail-closed
+        guard — reddedilirse sebep string'i döner (kalıcı-red → ACK-discard),
+        None = geçebilir:
+
+        1. **size>0 zorunlu.** Eski kod `size or 0.0` gönderiyordu ve "0 triggers
+           auto-sizing fallback" yorumu ASILSIZDI: open_position size'ı doğrudan
+           kullanır (auto-sizing yok), 0-qty emri Binance reddeder → exception →
+           NACK → aynı mesaj sonsuz redeliver döngüsüne girer. Sizesiz sinyal
+           artık kalıcı reddedilir (döngü yerine tek ACK-discard).
+        2. **Breaker gate.** Breaker OPEN değilken (HALTED/TRIPPED) canlı emir
+           AÇMA — orchestrator'ın run_cycle'da yaptığı `breaker.check().can_trade`
+           kontrolünün birebir aynısı. Breaker okunamazsa fail-closed (açma).
+
+        3. **orchestrator=None → TAM fail-closed** (B-7h, 2026-07-18). Eski
+           davranış size geçen sinyali breaker'sız geçiriyordu — breaker durumu
+           DOĞRULANAMAYAN bir yoldan canlı emir açılabiliyordu (koruma boşluğu).
+           Prod'da bot_runner orchestrator'ı HER ZAMAN geçirir; None yalnız
+           yanlış kablolama / erken-init demektir → emir açılmaz, ACK-discard."""
+        size = getattr(signal, "size", None)
+        if size is None or size <= 0:
+            return f"size<=0 ({size!r}) — auto-sizing yok, 0-qty emir reddedilir/döngü yapar"
+        if self.orchestrator is None:
+            return ("orchestrator bağlı değil — breaker durumu doğrulanamıyor, "
+                    "fail-closed: canlı emir açılmadı (kablolama hatası olabilir)")
+        try:
+            st = self.orchestrator.breaker.check()
+            if not st.can_trade:
+                return f"breaker {st.state.value}: {getattr(st, 'reason', '')}"
+        except Exception as e:  # breaker okunamadı → fail-closed
+            return f"breaker durumu okunamadı ({e}) — fail-closed, emir açılmadı"
+        return None
+
     async def _dispatch_signal(self, signal, raw: dict) -> bool:
         """Forward validated signal to OrderManager.
 
@@ -300,16 +334,27 @@ class PubSubConsumer:
         if self.order_manager is None:
             return False
 
+        # B-7: gate zinciri baypası — dispatch ÖNCESİ breaker + size guard.
+        # Kalıcı-red = ACK-discard (True döner): geçersiz sinyal NACK/redeliver
+        # döngüsüne girmez.
+        reject = self._pretrade_guard(signal)
+        if reject is not None:
+            log.warning(
+                f"[PubSub] Signal REJECTED (pre-trade guard): "
+                f"{getattr(signal, 'symbol', '?')} — {reject}"
+            )
+            return True
+
         loop = asyncio.get_running_loop()
 
-        # Map PubSubSignal to open_position kwargs
+        # Map PubSubSignal to open_position kwargs (size guard yukarıda geçti)
         try:
             pos = await loop.run_in_executor(
                 None,
                 lambda: self.order_manager.open_position(
                     symbol=signal.symbol,
                     direction=signal.direction,
-                    size=signal.size or 0.0,   # 0 triggers auto-sizing fallback
+                    size=signal.size,
                     entry=signal.entry,
                     sl=signal.sl,
                     tp1=signal.tp1,

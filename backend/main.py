@@ -40,6 +40,21 @@ else:
         level=os.environ.get("LOG_LEVEL", "INFO"),
         format="%(asctime)s | %(name)-22s | %(levelname)-5s | %(message)s",
     )
+
+# R-13 (2026-07-18): overseer/alerter'ın taill'lediği log DOSYASI backend
+# yolunda hiç yazılmıyordu (yukarıdaki iki dal da stdout-only) — compose'taki
+# EFLOUD_LOG_FILE'ın okuyanı vardı, yazanı yoktu. Env set ise dosyaya HER
+# ZAMAN JSON yazan rotating handler eklenir (stdout formatı değişmez);
+# env yoksa davranış birebir eski (default-OFF).
+_log_file = os.environ.get("EFLOUD_LOG_FILE", "").strip()
+if _log_file:
+    try:
+        from utils.logging import attach_json_file_handler
+        attach_json_file_handler(_log_file)
+    except Exception as _e:  # dosya açılamazsa app yine ayağa kalkmalı
+        logging.getLogger("efloud.app").error(
+            f"EFLOUD_LOG_FILE handler kurulamadı ({_log_file}): {_e}")
+
 log = logging.getLogger("efloud.app")
 
 

@@ -25,3 +25,52 @@ def test_run_one_swallows_exception_returns_1():
         raise RuntimeError("boom!")
     runner.REGISTRY["boom"] = boom
     assert runner.run_one("boom", client=object(), alert=_StubAlert(), cfg={}) == 1
+
+
+# ── R-12+ (2026-07-18): import-hatası startup alert'i ───────────────────────
+
+def test_emit_import_failure_alerts_sends_per_module(monkeypatch):
+    """IMPORT_FAILURES doluysa her modül için bir alert atılır (dep-drift'te
+    rutin sessizce düşerse operatör haberdar olsun)."""
+    from scripts.routines import runner
+
+    class FakeRouter:
+        def __init__(self): self.calls = []
+        def send(self, severity, key, title, body):
+            self.calls.append((severity, key, title, body)); return True
+
+    monkeypatch.setattr(runner, "IMPORT_FAILURES",
+                        {"market_collect": "ImportError: No module named pandas",
+                         "resolve_signals": "SyntaxError: bad"})
+    r = FakeRouter()
+    n = runner.emit_import_failure_alerts(r)
+    assert n == 2
+    keys = [c[1] for c in r.calls]
+    assert "routine_import_fail:market_collect" in keys
+    assert "routine_import_fail:resolve_signals" in keys
+    assert all(c[0] == "critical" for c in r.calls)
+
+
+def test_emit_import_failure_alerts_noop_when_clean(monkeypatch):
+    from scripts.routines import runner
+
+    class FakeRouter:
+        def __init__(self): self.calls = []
+        def send(self, *a): self.calls.append(a); return True
+
+    monkeypatch.setattr(runner, "IMPORT_FAILURES", {})
+    r = FakeRouter()
+    assert runner.emit_import_failure_alerts(r) == 0
+    assert r.calls == []
+
+
+def test_emit_import_failure_alerts_swallows_send_error(monkeypatch):
+    """Alert transport patlarsa watcher açılışı çökmemeli."""
+    from scripts.routines import runner
+
+    class BoomRouter:
+        def send(self, *a): raise RuntimeError("telegram down")
+
+    monkeypatch.setattr(runner, "IMPORT_FAILURES", {"x": "err"})
+    # raise etmemeli
+    assert runner.emit_import_failure_alerts(BoomRouter()) == 0
