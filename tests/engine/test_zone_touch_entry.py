@@ -45,6 +45,26 @@ def make_orc(tmp_path):
         return orc, store
     return _make
 
+
+def _assert_entry_placed(mock_place, cand, price):
+    """Assert the v2 entry order fired once, for `cand`, at `price`.
+
+    Deliberately NOT assert_called_once_with. `_place_v2_entry_order` also
+    takes `df_entry` -- the 15m frame `wilder_atr` needs when
+    `v2_use_real_atr` is on -- and all four production call sites pass
+    `df_entry=df_15m`. These ticks pass no `df_15m`, so it arrives as
+    `df_entry=None`. An exact-kwargs assertion fails on that argument even
+    though the state machine behaved correctly, and would break again the
+    next time an optional argument is added. Pin what the test is actually
+    about: which candidate entered, and at what price.
+    """
+    mock_place.assert_called_once()
+    args, kwargs = mock_place.call_args
+    assert args[0] is cand
+    assert kwargs["current_price"] == price
+    assert kwargs["entry_price"] == price
+
+
 def test_pullback_flow_entry_when_require_confirmation_false(make_orc):
     """Pullback detection (d03378e): first zone touch does NOT enter.
     Price must leave the zone and re-enter (pullback) before entry fires,
@@ -89,11 +109,7 @@ def test_pullback_flow_entry_when_require_confirmation_false(make_orc):
             current_bar_ts=1700000180000,
         )
         assert cand.state == "CONFIRMED"
-        mock_place.assert_called_once_with(
-            cand,
-            current_price=96500.0,
-            entry_price=96500.0
-        )
+        _assert_entry_placed(mock_place, cand, 96500.0)
 
 def test_no_immediate_entry_when_require_confirmation_true(make_orc):
     orc, store = make_orc(require_confirmation=True)
@@ -157,8 +173,4 @@ def test_in_zone_leave_then_reentry_confirms_on_require_confirmation_false(make_
 
         # Re-entry completes the pullback: CONFIRMED, entry fires at 96500.0
         assert cand.state == "CONFIRMED"
-        mock_place.assert_called_once_with(
-            cand,
-            current_price=96500.0,
-            entry_price=96500.0
-        )
+        _assert_entry_placed(mock_place, cand, 96500.0)
