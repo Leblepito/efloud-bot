@@ -21,6 +21,16 @@ The funnel mirrors engine/smc_v2/triggers.py:120-200 one-for-one:
       -> zone         drop: zone.source == "OTE" and zone.low == zone.high
       -> EMIT
       -> gate         drop: near-edge distance > smc_v2.max_entry_dist_atr
+      -> overshoot    drop: price is more than smc_v2.max_zone_overshoot_atr
+                            ATR PAST the zone's far edge (BT-25, 2026-07-27)
+
+Both emit-time gates are mirrored in production order: a candidate rejected by
+max_entry_dist_atr is NOT also counted against max_zone_overshoot_atr, because
+safe_orchestrator._emit_setup_candidates `continue`s on the first rejection.
+
+max_zone_overshoot_atr is OFF when the key is ABSENT, not when it is 0.0 —
+0.0 is a live setting there meaning "reject the instant price passes the far
+edge". This tool therefore reads it as None-or-float, never as `or 0.0`.
 
 Whole-symbol short circuit: htf_bias == "UNDEF" returns [] before the loop.
 
@@ -140,7 +150,8 @@ def fetch(ex, symbol: str, tf: str, limit: int) -> pd.DataFrame:
 
 
 def probe(smc: SMCEngine, symbol: str, df_entry, df_htf, recency: int,
-          max_dist_atr: float, anchor_time_axis: bool) -> dict:
+          max_dist_atr: float, anchor_time_axis: bool,
+          max_overshoot: float | None = None) -> dict:
     """Count survivors at every funnel stage for one symbol."""
     analysis = smc.analyze(df_htf)
     bias = analysis.get("trend", "UNDEF")
@@ -201,26 +212,47 @@ def probe(smc: SMCEngine, symbol: str, df_entry, df_htf, recency: int,
     price = float(df_entry["close"].iloc[-1])
     atr = wilder_atr(df_entry, period=14)
     dists = []
+    overs = []
     for cand in emitted:
         zl = min(cand.target_zone.low, cand.target_zone.high)
         zh = max(cand.target_zone.low, cand.target_zone.high)
+        # near edge = the edge price would ENTER through; far edge = the edge it
+        # would EXIT through. Measuring the far edge makes the overshoot
+        # threshold independent of how wide the zone happens to be.
         near = (price - zh) if cand.direction == "LONG" else (zl - price)
+        far = (price - zl) if cand.direction == "LONG" else (zh - price)
         dists.append(near / atr if atr else float("nan"))
-    gated = sum(1 for d in dists if max_dist_atr > 0 and d > max_dist_atr)
+        overs.append(-(far / atr) if atr else float("nan"))
+
+    # Production order, mirrored: max_entry_dist_atr rejects first and the
+    # orchestrator `continue`s, so an already-rejected candidate never reaches
+    # the overshoot gate. Counting it twice would overstate the second gate.
+    # `d == d` / `o == o` filter NaN (atr None -> fail-open, gate skipped).
+    gated = 0
+    gated_over = 0
+    for d, o in zip(dists, overs):
+        if max_dist_atr > 0 and d == d and d > max_dist_atr:
+            gated += 1
+            continue
+        if max_overshoot is not None and o == o and o > max_overshoot:
+            gated_over += 1
 
     print(
         f"{symbol:10} bias={bias:5} brks={len(breaks):3d} CHoCH={n['choch']:3d} "
         f"aligned={n['aligned']:3d} recent={n['recent']:2d} anchor={n['anchor']:2d} "
         f"zone={n['zone']:2d} EMIT={len(emitted):2d} gate_drop={gated:2d} "
+        f"over_drop={gated_over:2d} "
         f"ote={'Y' if ote is not None else 'N'} fvg={len(fvgs)} "
-        f"atr={atr} dist_atr={[round(d, 1) for d in dists]}",
+        f"atr={atr} dist_atr={[round(d, 1) for d in dists]} "
+        f"over_atr={[round(o, 1) for o in overs]}",
         flush=True,
     )
     return dict(symbol=symbol, bias=bias, breaks=len(breaks),
-                emit=len(emitted), gated=gated, **n)
+                emit=len(emitted), gated=gated, gated_over=gated_over, **n)
 
 
-def verdict(rows: list[dict], max_dist_atr: float) -> None:
+def verdict(rows: list[dict], max_dist_atr: float,
+            max_overshoot: float | None = None) -> None:
     """Name the dominant bottleneck instead of leaving the operator to eyeball."""
     if not rows:
         print("\nno symbols probed — nothing to diagnose")
@@ -229,13 +261,14 @@ def verdict(rows: list[dict], max_dist_atr: float) -> None:
     undef = sum(1 for r in rows if r["bias"] == "UNDEF")
     tot = {k: sum(r[k] for r in rows)
            for k in ("breaks", "choch", "aligned", "recent", "anchor", "zone",
-                     "emit", "gated")}
+                     "emit", "gated", "gated_over")}
 
     print("\n" + "-" * 78)
     print(f"TOTAL  breaks={tot['breaks']} CHoCH={tot['choch']} "
           f"aligned={tot['aligned']} recent={tot['recent']} "
           f"anchor={tot['anchor']} zone={tot['zone']} EMIT={tot['emit']} "
-          f"gate_drop={tot['gated']}  (bias=UNDEF symbols: {undef}/{len(rows)})")
+          f"gate_drop={tot['gated']} over_drop={tot['gated_over']}  "
+          f"(bias=UNDEF symbols: {undef}/{len(rows)})")
 
     # BOS breaks are not a defect — they are simply not the v2 trigger, so that
     # row is printed for context but excluded from the "dominant" pick.
@@ -245,6 +278,11 @@ def verdict(rows: list[dict], max_dist_atr: float) -> None:
         ("anchor", "no unbroken HTF swing anchor", tot["recent"] - tot["anchor"]),
         ("zone", "degenerate OTE zone (ote_band=0,0)", tot["anchor"] - tot["zone"]),
         ("gate", f"entry too far (> {max_dist_atr} ATR)", tot["gated"]),
+        ("overshoot",
+         (f"price past zone far edge (> {max_overshoot} ATR)"
+          if max_overshoot is not None
+          else "price past zone far edge (gate OFF — key absent)"),
+         tot["gated_over"]),
     ]
     worst_key, _, worst_n = max(stages, key=lambda s: s[2])
 
@@ -256,8 +294,13 @@ def verdict(rows: list[dict], max_dist_atr: float) -> None:
         print(f"   {count:5d}  {name}{mark}")
 
     if tot["emit"] > 0:
+        survivors = tot["emit"] - tot["gated"] - tot["gated_over"]
+        over_txt = (f"{tot['gated_over']} by max_zone_overshoot_atr"
+                    if max_overshoot is not None
+                    else "max_zone_overshoot_atr is OFF (key absent)")
         print(f"\nVERDICT: emit works — {tot['emit']} candidate(s) this instant. "
-              f"{tot['gated']} would be dropped by the max_entry_dist_atr gate.")
+              f"{tot['gated']} would be dropped by max_entry_dist_atr, "
+              f"{over_txt}. {survivors} would survive both gates.")
         return
 
     print("\nVERDICT: nothing emitted right now.")
@@ -291,6 +334,12 @@ def verdict(rows: list[dict], max_dist_atr: float) -> None:
     elif worst_key == "gate":
         print("  Setups are emitted but every one is beyond max_entry_dist_atr.\n"
               "  The gate is doing its job; nothing is broken upstream.")
+    elif worst_key == "overshoot":
+        print("  Setups are emitted but price has already blown through the\n"
+              "  zone — the pullback is behind us, so these could never have\n"
+              "  transitioned. max_zone_overshoot_atr is doing its job. If this\n"
+              "  stage dominates run after run, the CHoCH is firing too late\n"
+              "  relative to the move, not the gate being too tight.")
 
 
 def main() -> int:
@@ -313,6 +362,11 @@ def main() -> int:
     recency = (cfg.get("risk", {}) or {}).get("recency_bars", 40)
     v2 = cfg.get("smc_v2", {}) or {}
     max_dist_atr = float(v2.get("max_entry_dist_atr", 0.0) or 0.0)
+    # ABSENT = off. 0.0 is a live setting ("reject as soon as price is past the
+    # far edge"), so `or 0.0` would silently turn the strictest setting into
+    # the disabled one. Same contract as safe_orchestrator.
+    _over_raw = v2.get("max_zone_overshoot_atr", None)
+    max_overshoot = None if _over_raw is None else float(_over_raw)
     anchor_time_axis = bool(v2.get("anchor_time_axis", False))
     syms = ([s.strip() for s in args.symbols.split(",") if s.strip()]
             or symbols_of(cfg))
@@ -324,6 +378,8 @@ def main() -> int:
     print(f"recency_bars    {recency}   -> trigger must land in the last {recency} "
           f"{tfs['entry']} bars")
     print(f"max_entry_dist  {max_dist_atr} ATR   anchor_time_axis={anchor_time_axis}")
+    print(f"max_overshoot   "
+          f"{'OFF (key absent)' if max_overshoot is None else f'{max_overshoot} ATR'}")
     print(f"symbols         {len(syms)}\n")
 
     import ccxt  # imported late so --help works without the dep
@@ -337,11 +393,11 @@ def main() -> int:
             df_entry = fetch(ex, sym, tfs["entry"], limit)
             df_htf = fetch(ex, sym, tfs["htf"], limit)
             rows.append(probe(smc, sym, df_entry, df_htf, recency,
-                              max_dist_atr, anchor_time_axis))
+                              max_dist_atr, anchor_time_axis, max_overshoot))
         except Exception as exc:
             print(f"{sym:10} ERROR {exc!r}", flush=True)
 
-    verdict(rows, max_dist_atr)
+    verdict(rows, max_dist_atr, max_overshoot)
     return 0
 
 
