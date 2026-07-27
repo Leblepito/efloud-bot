@@ -122,6 +122,26 @@ smc_v2:
   # 0.0 = kapalı (diğer configlerin varsayılanı — ölçülmediler).
   max_entry_dist_atr: 6.0
 
+  # BT-25 adim 1 (2026-07-27): pullback bekleme suresi 8 -> 24 bar (6 saat).
+  # Kod varsayilani 8 bar; config'te bu anahtar YOKTU, yani canli bot 2 saatte
+  # bir adayi EXPIRED yapiyordu. EXPIRED -> prune() -> ayni CHoCH hala
+  # recency_bars: 40 penceresinde oldugu icin YENI SetupCandidate olarak tekrar
+  # emit ediliyor ve has_left_zone=False'a sifirlaniyor. Yani "bolgeye girdi,
+  # cikti" ilerlemesi her 8 barda cope gidiyordu; giris zinciri (bolgeye gir ->
+  # cik -> tekrar gir -> engulfing onayi = 4 olay) 2 saate sigmiyor. 24 bar
+  # recency_bars: 40'in altinda kalir, yani aday CHoCH hala gecerliyken yasar.
+  pullback_timeout_bars: 24
+
+  # BT-25 adim 2 (2026-07-27): max_entry_dist_atr TEK TARAFLI -- sadece "bolge
+  # cok ILERIDE" durumunu eler. Fiyatin coktan ICINDEN GECTIGI bolge negatif
+  # mesafe verir ve kapidan sorunsuz gecer. v2_doctor canlida tam bunu yakaladi:
+  # BNB/USDT bias=BEAR, SHORT adayi, bolge fiyatin 4.2 ATR ALTINDA -- pullback'in
+  # yanlis tarafi. Boyle bir aday hic ilerleyemez, sadece per-symbol slot'u
+  # doldurup expire olur. Bu anahtar bolgenin UZAK kenarini olcer (bolge
+  # genisliginden bagimsiz): fiyat uzak kenari bu kadar ATR'den fazla gectiyse
+  # setup acilmaz. 0.5 = yarim ATR tolerans. Anahtar YOKSA kapi kapali.
+  max_zone_overshoot_atr: 0.5
+
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:
   mode: fixed

@@ -15,6 +15,15 @@ These tests pin the four behaviours that matter:
   2. knob 6.0                     -> far candidate dropped, near one kept
   3. ATR uncomputable (short df)  -> fail-open, every candidate added
   4. SHORT direction              -> distance sign measured from the LOW edge
+
+BT-25 (2026-07-27) adds a SECOND, independent gate in the same loop:
+`smc_v2.max_zone_overshoot_atr`. BT-23 is one-sided -- it only rejects a zone
+too far AHEAD of price, so a zone price has already blown straight through
+produces a NEGATIVE near-edge distance and sails through. v2_doctor caught that
+live: BNB/USDT bias=BEAR emitted a SHORT whose zone sat 4.2 ATR BELOW price.
+The overshoot gate measures the FAR edge instead (width-independent), and its
+absence -- not 0.0 -- is the OFF value, because 0.0 means "reject the instant
+price is past the far edge". See TestZoneOvershootGate below.
 """
 import pandas as pd
 import pytest
@@ -66,14 +75,22 @@ def _cand(direction: str, low: float, high: float) -> SetupCandidate:
     )
 
 
-def _orch(monkeypatch, candidates, max_entry_dist_atr=None):
-    """Bare orchestrator carrying only what the gate reads."""
+def _orch(monkeypatch, candidates, max_entry_dist_atr=None,
+          max_zone_overshoot_atr=None):
+    """Bare orchestrator carrying only what the gates read.
+
+    Passing None for either knob leaves the key ABSENT from the config dict,
+    which is the OFF state for both. That distinction matters for BT-25: 0.0
+    is a live setting there, not a disable.
+    """
     from engine.safe_orchestrator import SafeOrchestrator
     import engine.smc_v2.triggers as triggers
 
     smc_v2 = {}
     if max_entry_dist_atr is not None:
         smc_v2["max_entry_dist_atr"] = max_entry_dist_atr
+    if max_zone_overshoot_atr is not None:
+        smc_v2["max_zone_overshoot_atr"] = max_zone_overshoot_atr
 
     orch = SafeOrchestrator.__new__(SafeOrchestrator)
     orch.config = {"smc_v2": smc_v2}
@@ -144,7 +161,14 @@ class TestEmitDistanceGate:
         assert _emit(orch, df_entry=_flat_df(30)) == [at]
 
     def test_price_inside_or_past_zone_never_dropped(self, monkeypatch):
-        """Negative distance (price already at/past the zone) must survive."""
+        """Negative distance (price already at/past the zone) must survive.
+
+        BT-25 note: this stays true and is NOT a regression -- it is the exact
+        hole BT-25 documents. `max_entry_dist_atr` alone can never reject an
+        overshot zone, by construction. This test never sets
+        `max_zone_overshoot_atr`, so it pins the BT-23 gate in isolation;
+        TestZoneOvershootGate covers the other side.
+        """
         inside = _cand("LONG", 9_900.0, 10_100.0)   # near edge above price
         orch = _orch(monkeypatch, [inside], max_entry_dist_atr=6.0)
         assert _emit(orch, df_entry=_flat_df(30)) == [inside]
@@ -178,6 +202,125 @@ class TestEmitDistanceGate:
             htf_fvgs=[], ote_band=(9_000.0, 9_500.0), ltf_trigger_idx_min=0,
             current_price=10_000.0, df_entry=_flat_df(30),
         )  # must not raise
+
+
+class TestZoneOvershootGate:
+    """BT-25: reject zones price has already travelled PAST.
+
+    Geometry, with ATR == 100 and current_price == 10_000 throughout:
+
+      LONG  -> zone sits BELOW price, price falls in, far edge = zone LOW.
+               overshoot = (zone_low - price) / atr
+               zone_low ABOVE price  => positive => price fell through the zone
+      SHORT -> zone sits ABOVE price, price rises in, far edge = zone HIGH.
+               overshoot = (price - zone_high) / atr
+               zone_high BELOW price => positive => price rose past the zone
+
+    The far edge is used rather than the near edge on purpose: a near-edge
+    rule would be zone-width sensitive and would falsely reject price sitting
+    legitimately inside a wide (1-3 ATR) OTE band.
+    """
+
+    def test_knob_absent_gate_is_inert(self, monkeypatch):
+        """No max_zone_overshoot_atr -> an overshot zone still gets added.
+
+        This is the pre-BT-25 live behaviour and must be what an un-migrated
+        config keeps doing.
+        """
+        past = _cand("LONG", 10_200.0, 10_300.0)     # overshoot +2.0
+        orch = _orch(monkeypatch, [past], max_entry_dist_atr=6.0)
+        assert _emit(orch, df_entry=_flat_df(30)) == [past]
+
+    def test_long_overshot_zone_dropped(self, monkeypatch):
+        """LONG whose zone is entirely above price: price already fell past."""
+        normal = _cand("LONG", 9_600.0, 9_700.0)     # overshoot (9600-10000)/100 = -4.0
+        past = _cand("LONG", 10_200.0, 10_300.0)     # overshoot (10200-10000)/100 = +2.0
+        orch = _orch(monkeypatch, [normal, past], max_zone_overshoot_atr=0.5)
+        assert _emit(orch, df_entry=_flat_df(30)) == [normal]
+        assert orch._v2_gate_rejects == 1
+
+    def test_short_overshot_zone_dropped(self, monkeypatch):
+        """SHORT whose zone is entirely below price -- the live BNB/USDT case.
+
+        v2_doctor logged BNB bias=BEAR, EMIT=1, dist_atr=[-4.2]: the SHORT
+        target zone was 4.2 ATR BELOW price. BT-23 measures -4.2 and lets it
+        through; here it is rejected.
+        """
+        normal = _cand("SHORT", 10_300.0, 10_400.0)  # overshoot (10000-10400)/100 = -4.0
+        past = _cand("SHORT", 9_580.0, 9_620.0)      # overshoot (10000-9620)/100 = +3.8
+        orch = _orch(monkeypatch, [normal, past], max_zone_overshoot_atr=0.5)
+        assert _emit(orch, df_entry=_flat_df(30)) == [normal]
+        assert orch._v2_gate_rejects == 1
+
+    def test_price_inside_zone_is_kept(self, monkeypatch):
+        """Price straddled by a WIDE zone must survive -- the reason the far
+        edge is measured instead of the near one. Zone is 2 ATR wide and
+        contains the price; a near-edge rule would have rejected it."""
+        wide = _cand("LONG", 9_900.0, 10_100.0)      # overshoot (9900-10000)/100 = -1.0
+        orch = _orch(monkeypatch, [wide], max_zone_overshoot_atr=0.5)
+        assert _emit(orch, df_entry=_flat_df(30)) == [wide]
+
+    def test_price_exactly_on_far_edge_is_kept(self, monkeypatch):
+        """overshoot == 0.0 with the knob at 0.0 -> strictly-greater-than keeps it."""
+        touching = _cand("LONG", 10_000.0, 10_100.0)  # overshoot exactly 0.0
+        orch = _orch(monkeypatch, [touching], max_zone_overshoot_atr=0.0)
+        assert _emit(orch, df_entry=_flat_df(30)) == [touching]
+
+    def test_zero_is_a_live_setting_not_off(self, monkeypatch):
+        """0.0 must NOT read as disabled -- that is why absence is the OFF value.
+
+        One tick past the far edge is enough to reject when the knob is 0.0.
+        """
+        one_tick_past = _cand("LONG", 10_001.0, 10_100.0)   # overshoot +0.01
+        orch = _orch(monkeypatch, [one_tick_past], max_zone_overshoot_atr=0.0)
+        assert _emit(orch, df_entry=_flat_df(30)) == []
+        assert orch._v2_gate_rejects == 1
+
+    def test_boundary_is_inclusive(self, monkeypatch):
+        """Exactly at the allowance passes; a hair over is dropped."""
+        at = _cand("LONG", 10_050.0, 10_200.0)       # overshoot exactly 0.5
+        just_over = _cand("LONG", 10_051.0, 10_200.0)  # overshoot 0.51
+        orch = _orch(monkeypatch, [at, just_over], max_zone_overshoot_atr=0.5)
+        assert _emit(orch, df_entry=_flat_df(30)) == [at]
+        assert orch._v2_gate_rejects == 1
+
+    def test_gate_runs_when_only_overshoot_knob_is_set(self, monkeypatch):
+        """ATR must be computed when EITHER gate is on.
+
+        Pre-BT-25 the ATR call was guarded by `max_entry_dist_atr > 0.0`
+        alone, so a config that set only the overshoot knob would compute no
+        ATR and the new gate would never fire. Pins the structural change.
+        """
+        past = _cand("LONG", 10_200.0, 10_300.0)
+        orch = _orch(monkeypatch, [past], max_zone_overshoot_atr=0.5)
+        assert "max_entry_dist_atr" not in orch.config["smc_v2"]
+        assert _emit(orch, df_entry=_flat_df(30)) == []
+
+    def test_both_gates_active_each_drops_its_own(self, monkeypatch):
+        """Far-ahead zone -> BT-23; overshot zone -> BT-25; reachable -> kept."""
+        too_far = _cand("LONG", 7_900.0, 8_000.0)    # near edge 20.0 ATR ahead
+        overshot = _cand("LONG", 10_200.0, 10_300.0)  # overshoot +2.0
+        good = _cand("LONG", 9_600.0, 9_700.0)       # 3.0 ahead, overshoot -4.0
+        orch = _orch(monkeypatch, [too_far, overshot, good],
+                     max_entry_dist_atr=6.0, max_zone_overshoot_atr=0.5)
+        assert _emit(orch, df_entry=_flat_df(30)) == [good]
+        assert orch._v2_gate_rejects == 2
+
+    def test_atr_uncomputable_fails_open(self, monkeypatch):
+        """Short frame -> wilder_atr None -> overshot candidate survives."""
+        past = _cand("LONG", 10_200.0, 10_300.0)
+        orch = _orch(monkeypatch, [past], max_zone_overshoot_atr=0.5)
+        assert _emit(orch, df_entry=_flat_df(5)) == [past]
+
+    def test_no_df_entry_fails_open(self, monkeypatch):
+        past = _cand("LONG", 10_200.0, 10_300.0)
+        orch = _orch(monkeypatch, [past], max_zone_overshoot_atr=0.5)
+        assert _emit(orch, df_entry=None) == [past]
+
+    def test_no_current_price_fails_open(self, monkeypatch):
+        past = _cand("LONG", 10_200.0, 10_300.0)
+        orch = _orch(monkeypatch, [past], max_zone_overshoot_atr=0.5)
+        assert _emit(orch, current_price=None, df_entry=_flat_df(30)) == [past]
 
 
 class TestFlatFrameSanity:

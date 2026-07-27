@@ -2233,15 +2233,49 @@ class SafeOrchestrator:
         _max_dist_atr = float(
             self.config.get("smc_v2", {}).get("max_entry_dist_atr", 0.0) or 0.0
         )
+
+        # BT-25 OVERSHOOT GATE (2026-07-27)
+        # The BT-23 gate above is ONE-SIDED: it only rejects a zone that is too
+        # far AHEAD of price. A zone price has already blown straight through
+        # yields a negative near-edge distance and sails through untouched.
+        # tools/v2_doctor.py caught exactly that on live data: BNB/USDT with a
+        # BEAR bias emitted a SHORT whose zone sat 4.2 ATR BELOW price -- the
+        # wrong side of the pullback entirely. Such a candidate cannot
+        # transition (price would have to travel back across the whole move),
+        # so it occupies a per-symbol pending slot for its full lifetime and
+        # then expires. After BT-24 raised that lifetime from 4 minutes to
+        # 8 bars, the slot cost is real. This gate measures the FAR edge, not
+        # the near one, so the threshold is independent of how wide the zone
+        # happens to be:
+        #
+        #   overshoot = how far price has travelled PAST the far edge, in ATR
+        #     LONG  (zone below price, price falls in): far edge = zone LOW
+        #     SHORT (zone above price, price rises in): far edge = zone HIGH
+        #
+        #   overshoot <= 0  -> price has not passed the zone (normal case)
+        #   overshoot  > 0  -> price is beyond the zone; the pullback is behind us
+        #
+        # Absent key = OFF, and absence must read as None rather than 0.0
+        # because 0.0 is itself a meaningful setting here ("reject the instant
+        # price is past the far edge"). Same fail-open contract as BT-23: no
+        # ATR, no price, or no frame -> gate skipped, never starves the book.
+        _overshoot_raw = self.config.get("smc_v2", {}).get(
+            "max_zone_overshoot_atr", None
+        )
+        _max_overshoot = None if _overshoot_raw is None else float(_overshoot_raw)
+
         _atr_now = None
-        if _max_dist_atr > 0.0 and current_price is not None and df_entry is not None:
+        if (
+            (_max_dist_atr > 0.0 or _max_overshoot is not None)
+            and current_price is not None
+            and df_entry is not None
+        ):
             from engine.smc_v2.atr import wilder_atr
             _atr_now = wilder_atr(df_entry, period=14)
 
         for cand in new_candidates:
             if (
-                _max_dist_atr > 0.0
-                and _atr_now is not None
+                _atr_now is not None
                 and _atr_now > 0.0
                 and current_price is not None
             ):
@@ -2253,7 +2287,7 @@ class SafeOrchestrator:
                     else (_zl - current_price)
                 )
                 _dist_atr = _near / _atr_now
-                if _dist_atr > _max_dist_atr:
+                if _max_dist_atr > 0.0 and _dist_atr > _max_dist_atr:
                     self._v2_gate_rejects = getattr(self, "_v2_gate_rejects", 0) + 1
                     log.info(
                         f"[v2 gate] {symbol} {cand.direction} setup dropped at emit: "
@@ -2261,6 +2295,22 @@ class SafeOrchestrator:
                         f"{_max_dist_atr:.1f} (src={_z.source})"
                     )
                     continue
+                if _max_overshoot is not None:
+                    # far edge = the edge price would exit through
+                    _far = (
+                        (current_price - _zl) if cand.direction == "LONG"
+                        else (_zh - current_price)
+                    )
+                    _overshoot_atr = -(_far / _atr_now)
+                    if _overshoot_atr > _max_overshoot:
+                        self._v2_gate_rejects = getattr(self, "_v2_gate_rejects", 0) + 1
+                        log.info(
+                            f"[v2 gate] {symbol} {cand.direction} setup dropped at "
+                            f"emit: price is {_overshoot_atr:.1f} ATR PAST the zone "
+                            f"far edge > max_zone_overshoot_atr {_max_overshoot:.1f} "
+                            f"(near_edge={_dist_atr:.1f} ATR, src={_z.source})"
+                        )
+                        continue
             # add() returns False if per-symbol cap reached — silently dropped
             # (matches spec §6 setup_cap rejection counter; orchestrator
             # could log this in a future patch if operator visibility wanted)
