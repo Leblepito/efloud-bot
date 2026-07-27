@@ -73,10 +73,16 @@ async def lifespan(app: FastAPI):
             log.error(f"Auto-migrate failed: {e}", exc_info=True)
 
     # Autostart bot — opt-out via EFLOUD_AUTOSTART=0 (Railway: manual control)
+    # _autostart_failed is read by _trading_started() below: a start that was
+    # ASKED for and then blew up is a fault autoheal can genuinely retry, unlike
+    # "operator hasn't pressed Start yet". Mutable dict because the getter is a
+    # closure defined further down and must observe later writes.
+    _autostart_failed = {"v": False}
     if os.environ.get("EFLOUD_AUTOSTART", "1") == "1":
         try:
             await runner.start()
         except Exception as e:
+            _autostart_failed["v"] = True
             log.error(f"Bot runner startup failed: {e}", exc_info=True)
     else:
         log.info("Autostart disabled (EFLOUD_AUTOSTART=0) — start bot via /api/bot/start")
@@ -99,11 +105,42 @@ async def lifespan(app: FastAPI):
         try:
             from engine.safety.breaker import BreakerState
             if runner.orch is None:
-                return False  # bot idle (not yet started); loop_tick_never will mark unhealthy anyway
+                return False  # bot idle (not yet started); breaker can't be HALTED yet
             return runner.orch.breaker.status.state == BreakerState.HALTED
         except Exception:
             return False
-    configure_healthz(runner.runtime_state, _breaker_halted)
+
+    def _trading_started() -> bool:
+        """Is the trading loop meant to be running right now?
+
+        False in exactly two situations, both of them deliberate: the container
+        came up with EFLOUD_AUTOSTART=0 and nobody has pressed Start yet, or the
+        operator pressed Stop. Neither is fixable by restarting the container,
+        so healthz answers 200 "suspended" and autoheal stands down.
+
+        NOT False when the bot dies mid-run: BotRunner sets `running` True at the
+        end of a successful start and clears it only inside stop(); _run_loop's
+        except clause records fatal_exception_state and keeps looping without
+        touching the flag. A crashed bot therefore still reports True here, still
+        has a stale tick, and still gets its 503 + autoheal restart.
+
+        NOT False either when autostart was requested and raised. There
+        `running` and `stopped` are both still at their constructor value False,
+        which is indistinguishable from "never asked to start" — so the explicit
+        _autostart_failed flag carries that case, and a boot-time transient
+        (exchange unreachable, DB not up yet) keeps its old 503 + retry path.
+        """
+        try:
+            if bool(runner.stopped):
+                return False  # operator pressed Stop — deliberate
+            if bool(runner.running):
+                return True
+            # running=False, stopped=False → start never completed.
+            return bool(_autostart_failed["v"])
+        except Exception:
+            return True  # fail-safe: unknown state must not disarm autoheal
+
+    configure_healthz(runner.runtime_state, _breaker_halted, _trading_started)
 
     # Step 3: Aşama 2 Step 2 crash-loop counter
     rs = runner.runtime_state

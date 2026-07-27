@@ -9,6 +9,7 @@ suspended (breaker HALTED or crash-loop suspended):
 Returns 200 with status "suspended" and a failures list when:
   - crash-loop suspension is active (too many rapid restarts)
   - breaker is in HALTED state (operator must manually reset)
+  - the trading loop was never started, or was deliberately stopped
 
 Returns 503 (truly unhealthy) only for transient failures — things autoheal
 can actually fix by restarting (stale loop tick, stale exchange ping, fatal exception).
@@ -17,6 +18,21 @@ HALTED is intentional state, not a transient fault — returning 503 would cause
 autoheal to restart-loop the container even though restarts can't clear the HALTED
 condition (weekly DD threshold still exceeded). The alerter keys off the failures
 field to notify the operator.
+
+"Not started" is the same category, and was measured on production 2026-07-27.
+Under EFLOUD_AUTOSTART=0 the container comes up with no trading loop until the
+operator presses Start. Before this branch existed, last_loop_tick_ms stayed None
+past the 600s healthcheck start_period, healthz answered 503, autoheal restarted
+the container, and the 600s clock reset — an indefinite ~12-minute cycle in which
+the bot never trades. docker logs efloud-autoheal recorded efloud-bot-scalp
+restarted at 08:00:30, 08:12:41, 08:24:52 and 08:37:02, and efloud-bot at 09:08:14.
+Restarting cannot press Start, so 503 was never the right answer.
+
+runner.running is set True only at the end of a successful start and set False
+only inside stop(). A cycle exception does NOT clear it — _run_loop catches
+Exception, sets fatal_exception_state and keeps looping — so a bot that died
+mid-run still reports running=True with a stale tick and still gets its 503.
+This branch narrows autoheal's mandate, it does not remove it.
 
 Reads in-memory only — no disk I/O on the hot path.
 Latency target: <50ms even on a slow disk.
@@ -47,6 +63,7 @@ def evaluate_healthz(
     state: RuntimeState,
     breaker_halted: bool,
     now_ms: int,
+    trading_started: bool = True,
 ) -> Tuple[int, dict]:
     """Pure function: evaluate healthz conditions, return (status_code, payload).
 
@@ -56,17 +73,24 @@ def evaluate_healthz(
                                     — crash-loop suspension active; autoheal must NOT restart
       - (200, {status:"suspended", failures:["breaker_halted"]})
                                     — breaker HALTED; requires operator manual_reset; autoheal must NOT restart
+      - (200, {status:"suspended", failures:["trading_not_started"]})
+                                    — operator has not pressed Start (or pressed Stop);
+                                      autoheal must NOT restart, a restart cannot press Start
       - (503, {status:"unhealthy"}) — transient fault autoheal can fix by restarting
 
     Args:
         state: RuntimeState instance (read-only — caller takes a snapshot inside).
         breaker_halted: True if CircuitBreaker is in HALTED state.
         now_ms: current epoch ms (passed in for testability — never call time.time() here).
+        trading_started: True when the trading loop is meant to be running
+            (BotRunner.running and not BotRunner.stopped). Defaults to True so
+            every pre-existing caller and test keeps its exact old behaviour;
+            only backend/main.py passes the real value.
     """
     snap = state.snapshot()
 
     # Suspension branches — return 200 so autoheal does NOT restart.
-    # Autoheal can't fix these; only operator action (manual_reset / wait) can.
+    # Autoheal can't fix these; only operator action (manual_reset / wait / Start) can.
     if state.is_in_crash_loop():
         return (200, {
             "status": "suspended",
@@ -81,6 +105,17 @@ def evaluate_healthz(
             "checks": snap,
             "now_ms": now_ms,
             "failures": ["breaker_halted"],
+        })
+
+    # Checked BEFORE the transient block on purpose: a not-yet-started bot has
+    # last_loop_tick_ms=None, which the transient block would score as
+    # "loop_tick_never" -> 503 -> autoheal restart -> start_period resets -> repeat.
+    if not trading_started:
+        return (200, {
+            "status": "suspended",
+            "checks": snap,
+            "now_ms": now_ms,
+            "failures": ["trading_not_started"],
         })
 
     # Transient-fault checks — these autoheal CAN fix by restarting.
@@ -122,13 +157,21 @@ health_router = APIRouter()
 # Stub set here so import-order issues don't blow up before wire-up.
 _runtime_state: RuntimeState | None = None
 _breaker_state_getter = None  # callable returning bool: True if HALTED
+_trading_started_getter = None  # callable returning bool: True if the trading loop is meant to run
 
 
-def configure(runtime_state: RuntimeState, breaker_state_getter) -> None:
-    """Wire dependencies. Called once during FastAPI app startup."""
-    global _runtime_state, _breaker_state_getter
+def configure(runtime_state: RuntimeState, breaker_state_getter,
+              trading_started_getter=None) -> None:
+    """Wire dependencies. Called once during FastAPI app startup.
+
+    trading_started_getter is optional and defaults to None, which is read as
+    "always started" — i.e. exactly the pre-2026-07-27 behaviour. Callers that
+    do not supply it (tests, any embedder) see no change at all.
+    """
+    global _runtime_state, _breaker_state_getter, _trading_started_getter
     _runtime_state = runtime_state
     _breaker_state_getter = breaker_state_getter
+    _trading_started_getter = trading_started_getter
 
 
 @health_router.get("/healthz")
@@ -141,6 +184,17 @@ async def healthz_endpoint() -> JSONResponse:
             content={"status": "unhealthy", "failures": ["healthz_not_configured"]},
         )
     breaker_halted = bool(_breaker_state_getter()) if _breaker_state_getter else False
+    # Fail-safe direction: a getter that raises must NOT be able to suspend the
+    # probe, because "suspended" disables autoheal. Any error means we fall back
+    # to True (= started) and the transient checks below decide, exactly as before.
+    trading_started = True
+    if _trading_started_getter is not None:
+        try:
+            trading_started = bool(_trading_started_getter())
+        except Exception:
+            trading_started = True
     now_ms = int(time.time() * 1000)
-    code, payload = evaluate_healthz(_runtime_state, breaker_halted, now_ms)
+    code, payload = evaluate_healthz(
+        _runtime_state, breaker_halted, now_ms, trading_started=trading_started
+    )
     return JSONResponse(status_code=code, content=payload)
