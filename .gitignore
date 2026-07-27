@@ -99,5 +99,10 @@ graphify-out/
 node_modules
 
 # F17 (2026-07-11): production secrets asla repo'ya girmemeli
+# 2026-07-27: '.env.production' yalnizca TAM adi eslestirir. VPS'te
+# .env.production.long ve .env.production.scalp untracked duruyordu
+# (git status -> '?? .env.production.long'), yani tek bir 'git add -A'
+# canli Binance API anahtarlarini repo'ya sokabilirdi.
 .env.production
+.env.production.*
 .env.*.local
