@@ -14,3 +14,22 @@
 # Format: <fingerprint>
 #
 # Generated: (auto-populated by scheduled-review workflow)
+36c2d843ca3e5cefdb82104d9033929a843a04d3:.claude/.agents/skills/api-design/SKILL.md:generic-api-key:305
+36c2d843ca3e5cefdb82104d9033929a843a04d3:.claude/skills/ecc/api-design/SKILL.md:generic-api-key:307
+542bfde64723555e619479bcc07e216231d6143d:u2algo_publisher.py:generic-api-key:39
+542bfde64723555e619479bcc07e216231d6143d:u2algo_publisher.py:generic-api-key:45
+542bfde64723555e619479bcc07e216231d6143d:u2algo_publisher.py:generic-api-key:51
+7efb5aef424038d15d90986e3b0fd2e9a2d13d94:backend/tests/test_manus_client.py:generic-api-key:245
+7efb5aef424038d15d90986e3b0fd2e9a2d13d94:backend/tests/test_manus_client.py:generic-api-key:254
+7efb5aef424038d15d90986e3b0fd2e9a2d13d94:backend/tests/test_manus_client.py:generic-api-key:261
+7efb5aef424038d15d90986e3b0fd2e9a2d13d94:backend/tests/test_manus_client.py:generic-api-key:276
+7efb5aef424038d15d90986e3b0fd2e9a2d13d94:backend/tests/test_manus_client.py:generic-api-key:290
+7efb5aef424038d15d90986e3b0fd2e9a2d13d94:backend/tests/test_manus_client.py:generic-api-key:305
+7efb5aef424038d15d90986e3b0fd2e9a2d13d94:backend/tests/test_manus_client.py:generic-api-key:321
+7efb5aef424038d15d90986e3b0fd2e9a2d13d94:backend/tests/test_manus_client.py:generic-api-key:80
+7f70961cd79fa982bc570cc93db0d49cad913a8e:docs/deployment_guide.md:private-key:47
+c3104854db615a4387e24569f68cf79e8d9f708e:tests/test_llm_factory.py:generic-api-key:21
+c3e84ed8aeafa182adc2fd1bcb9214c7e860ed66:backend/tests/test_xurl_client.py:generic-api-key:328
+e25f922471f1bddc8d99a3d080551483ba493310:docs/handoff/2026-05-31_manus-connectors-task-distribution.md:generic-api-key:191
+e25f922471f1bddc8d99a3d080551483ba493310:docs/handoff/2026-05-31_manus-connectors-task-distribution.md:hubspot-api-key:218
+e25f922471f1bddc8d99a3d080551483ba493310:docs/handoff/2026-05-31_u2algo_launch_readiness.md:generic-api-key:102
