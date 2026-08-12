@@ -39,9 +39,13 @@ smc_v2:
   max_pending_per_symbol: 3     # SetupCandidate cap per symbol
 
   # ── MPA filtreleri (2026-07-26) — Efloud kanal analizinden turetildi ──
-  # DORDU DE VARSAYILAN KAPALI. NET-cost backtest gate'inden gecmeden ve
-  # operator onayi olmadan ACILMAZ. Kapali iken ilgili modul hic cagrilmaz,
-  # V1/V2/V3 canli davranisi birebir korunur.
+  # ⚠️ HENUZ KABLOLANMADI (2026-08-12 audit): moduller (engine/smc_v2/po3.py,
+  # liquidity.py, v_recovery.py, bias_ledger.py) mevcut ama safe_orchestrator
+  # HICBIRINI cagirmiyor — bu toggle'lari true yapmak SESSIZ NO-OP'tur, canli
+  # davranis degismez. Kablolama ayri bir is: TDD + backtest gate + risk-ops
+  # review + operator onayi gerektirir. Su an sadece research script'leri
+  # (scripts/report_doctrine_engine_gap.py) ve testler kullaniyor.
+  # DORDU DE VARSAYILAN KAPALI.
   # Regresyon guard: tests/engine/test_mpa_filters.py::test_mpa_toggles_default_off_in_config
   po3_gate: false               # MPA/1 manipulation fazinda giris bloklanir (hard gate G1)
   liquidity_class: false        # MPA/2 SWEEP vs GRAB ayrimi + rejim esdegerligi

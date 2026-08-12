@@ -51,6 +51,16 @@ def test_stale_attempts_fully_pruned(monkeypatch):
     assert "10.9.9.9" not in auth._login_attempts
 
 
+def test_env_unset_is_treated_as_production(monkeypatch):
+    """ENV hiç set edilmemişse dev fallback secret'ına DÜŞMEMELİ (fail-closed).
+    issue_session_cookie'nin Secure flag'i unset'i zaten prod sayıyordu;
+    serializer dev sayıyordu — bilinen secret'la imza = oturum sahteciliği."""
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    with pytest.raises(RuntimeError, match="SESSION_SECRET"):
+        auth._get_serializer()
+
+
 def test_successful_login_clears_failed_counter(monkeypatch):
     """Meşru operatör yanlış şifre denemelerinden sonra doğru girince sayaç
     sıfırlanmalı — yoksa kilitlenmeye 1 deneme mesafede yaşar."""

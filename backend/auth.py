@@ -48,7 +48,10 @@ def _prune_stale_attempts(now: float) -> None:
 
 def _get_serializer() -> URLSafeTimedSerializer:
     secret = os.environ.get("SESSION_SECRET")
-    is_dev = os.environ.get("ENV", "dev") == "dev"
+    # Fail-closed: ENV set edilmemişse PROD varsay. issue_session_cookie'nin
+    # Secure flag'i unset'i zaten prod sayıyordu; burası dev sayıp bilinen
+    # fallback secret'la imzalıyordu → oturum sahteciliği (2026-08-12 audit).
+    is_dev = os.environ.get("ENV", "") == "dev"
     if not is_dev:
         if not secret or secret == "dev-only-secret-do-not-use-in-prod":
             raise RuntimeError("SESSION_SECRET must be set to a secure value in production mode")
