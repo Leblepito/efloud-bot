@@ -26,14 +26,32 @@ COOKIE_NAME = "efloud_session"
 COOKIE_MAX_AGE = 30 * 24 * 3600  # 30 days
 
 # Login rate limiting (in-memory, single-user → simple dict)
+# Sertleştirme (2026-08-12): uvicorn --forwarded-allow-ips '*' (B-5) ile
+# X-Forwarded-For spoof'lanabilir → her deneme farklı "IP" görünüp per-IP
+# limitini baypas edebilir ve dict'i sınırsız büyütebilirdi. Global pencere
+# tavanı + izlenen IP sayısı tavanı bu iki açığı kapatır.
 _login_attempts: dict[str, list[float]] = {}
 _MAX_ATTEMPTS = 5
 _LOCKOUT_WINDOW = 900  # 15 min
+_GLOBAL_MAX_ATTEMPTS = 25   # pencere içi TÜM IP'lerin toplam başarısız denemesi
+_MAX_TRACKED_IPS = 1000     # bellek tavanı (spoof'lanmış benzersiz IP seli)
+
+
+def _prune_stale_attempts(now: float) -> None:
+    """Pencere dışı kayıtları hem listelerden hem dict'ten düş (bellek)."""
+    for ip in list(_login_attempts):
+        attempts = _login_attempts[ip]
+        attempts[:] = [t for t in attempts if now - t < _LOCKOUT_WINDOW]
+        if not attempts:
+            del _login_attempts[ip]
 
 
 def _get_serializer() -> URLSafeTimedSerializer:
     secret = os.environ.get("SESSION_SECRET")
-    is_dev = os.environ.get("ENV", "dev") == "dev"
+    # Fail-closed: ENV set edilmemişse PROD varsay. issue_session_cookie'nin
+    # Secure flag'i unset'i zaten prod sayıyordu; burası dev sayıp bilinen
+    # fallback secret'la imzalıyordu → oturum sahteciliği (2026-08-12 audit).
+    is_dev = os.environ.get("ENV", "") == "dev"
     if not is_dev:
         if not secret or secret == "dev-only-secret-do-not-use-in-prod":
             raise RuntimeError("SESSION_SECRET must be set to a secure value in production mode")
@@ -46,19 +64,31 @@ def _get_serializer() -> URLSafeTimedSerializer:
 
 def _check_rate_limit(client_ip: str) -> None:
     now = time.time()
-    attempts = _login_attempts.setdefault(client_ip, [])
-    # Prune old attempts
-    attempts[:] = [t for t in attempts if now - t < _LOCKOUT_WINDOW]
+    _prune_stale_attempts(now)
+    attempts = _login_attempts.get(client_ip, [])
     if len(attempts) >= _MAX_ATTEMPTS:
         retry_in = int(_LOCKOUT_WINDOW - (now - attempts[0]))
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many login attempts. Try again in {retry_in}s.",
         )
+    # Global tavan: IP başına değil toplam — spoof'lanmış XFF ile her deneme
+    # "yeni IP"den gelse bile brute-force pencere içinde durdurulur.
+    total = sum(len(v) for v in _login_attempts.values())
+    if total >= _GLOBAL_MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Try again later.",
+        )
 
 
 def _record_failed_attempt(client_ip: str) -> None:
     _login_attempts.setdefault(client_ip, []).append(time.time())
+    if len(_login_attempts) > _MAX_TRACKED_IPS:
+        # En eski son-denemesi olan IP'leri at (bellek tavanı)
+        overflow = len(_login_attempts) - _MAX_TRACKED_IPS
+        for ip in sorted(_login_attempts, key=lambda k: _login_attempts[k][-1])[:overflow]:
+            del _login_attempts[ip]
 
 
 def verify_password(password: str) -> bool:
@@ -92,6 +122,9 @@ def login(request: Request, response: Response, password: str) -> bool:
         _record_failed_attempt(client_ip)
         return False
 
+    # Başarılı login geçmiş başarısız denemeleri affeder — meşru operatör
+    # kilitlenmeye 1 deneme mesafede yaşamasın.
+    _login_attempts.pop(client_ip, None)
     issue_session_cookie(response)
     return True
 

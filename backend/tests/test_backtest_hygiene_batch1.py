@@ -24,7 +24,13 @@ from engine import SafeOrchestrator
 @pytest.fixture
 def base_config():
     with open("configs/config.phase2_1k.yaml", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    # BT-16 (af4c5a7): prod config'in max_holding_hours'u (24→36, canlı sweep
+    # parametresi) 42.5h'lik SL senaryolarını MANUAL force-close'a çevirir.
+    # Bu dosya fill-wiring test eder; max-hold davranışı
+    # tests/test_backtest_max_hold.py'de kilitli. 0 = kapalı.
+    cfg["safety"]["max_holding_hours"] = 0
+    return cfg
 
 
 def _flat_df(n=400, lows=None, highs=None, price=100.0):

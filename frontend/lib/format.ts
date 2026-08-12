@@ -59,3 +59,14 @@ export function shortDate(iso: string | null | undefined): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
+
+/**
+ * CCXT/journal sembollerini Binance stream formuna indirger:
+ * "FIL/USDT:USDT" → "FILUSDT", "BTC/USDT" → "BTCUSDT", "ETHUSDT" → "ETHUSDT".
+ * NOT: `.replace(":", "")` kalıbı kontrat suffix'ini SİLMEZ ("FILUSDTUSDT"
+ * üretir) — /api/orders sembolleri ccxt suffix'i taşıdığından eşleşme hep
+ * boşa düşüyordu (2026-08-12 audit).
+ */
+export function normalizeSymbol(sym: string): string {
+  return sym.split(":")[0].replace("/", "");
+}

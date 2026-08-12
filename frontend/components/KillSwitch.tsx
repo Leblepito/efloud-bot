@@ -13,6 +13,9 @@ export function KillSwitch() {
   const [busy, setBusy] = useState(false);
   const [closed, setClosed] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Backend'in persisted:false uyarısı: HALT sadece bellekte — restart öncesi
+  // disk araştırılmadan bot yeniden başlatılırsa trade'e DEVAM eder.
+  const [persistWarning, setPersistWarning] = useState(false);
   const startedAt = useRef<number | null>(null);
   const rafId = useRef<number | null>(null);
 
@@ -41,8 +44,11 @@ export function KillSwitch() {
     setBusy(true);
     setError(null);
     try {
-      const r = await postJson<{ ok: boolean; closed: number }>("/api/kill-switch");
+      const r = await postJson<{ ok: boolean; closed: number; persisted?: boolean }>(
+        "/api/kill-switch"
+      );
       setClosed(r.closed);
+      setPersistWarning(r.persisted === false);
       mutate("/api/positions");
       mutate("/api/status");
     } catch (e) {
@@ -118,6 +124,15 @@ export function KillSwitch() {
           className="text-[10px] tracking-widest text-accent-amber font-mono"
         >
           KILL FAILED: {error}
+        </span>
+      )}
+      {persistWarning && (
+        <span
+          role="alert"
+          aria-live="assertive"
+          className="text-[10px] tracking-widest text-accent-amber font-mono"
+        >
+          ⚠ HALT NOT PERSISTED — restart resumes trading, investigate disk first
         </span>
       )}
       <button

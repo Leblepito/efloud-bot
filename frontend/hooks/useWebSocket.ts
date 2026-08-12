@@ -20,13 +20,17 @@ export type WsEvent = {
 };
 
 type Listener = (evt: WsEvent) => void;
+type StatusListener = (open: boolean) => void;
 
-export function useWebSocket(onEvent: Listener) {
+export function useWebSocket(onEvent: Listener, onStatus?: StatusListener) {
   const handlerRef = useRef(onEvent);
   handlerRef.current = onEvent;
+  const statusRef = useRef(onStatus);
+  statusRef.current = onStatus;
 
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem("efloud_demo_mode") === "true") {
+      statusRef.current?.(true);
       // Mock event loop for demo mode
       const onMockEvent = (e: Event) => {
         const customEvt = e as CustomEvent<WsEvent>;
@@ -132,6 +136,7 @@ export function useWebSocket(onEvent: Listener) {
 
       socket.onopen = () => {
         reconnectDelay = 1000;
+        statusRef.current?.(true);
       };
 
       socket.onmessage = (msg) => {
@@ -145,6 +150,7 @@ export function useWebSocket(onEvent: Listener) {
 
       socket.onclose = () => {
         if (cancelled) return;
+        statusRef.current?.(false);
         setTimeout(connect, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 1.6, 15000);
       };

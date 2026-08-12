@@ -8,7 +8,7 @@ import { useOrders } from "@/hooks/useOrders";
 import { useConfig } from "@/hooks/useConfig";
 import { useHistory } from "@/hooks/useHistory";
 import { useSmcSignals } from "@/hooks/useSmcSignals";
-import { n } from "@/lib/format";
+import { n, normalizeSymbol } from "@/lib/format";
 import { terminal } from "@efloud/tokens";
 
 // TradingView-style Long/Short Position Drawing Overlay Primitive
@@ -330,6 +330,10 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
 
   const [activeSymbol, setActiveSymbol] = useState("BTCUSDT");
   const [timeframe, setTimeframe] = useState("15m");
+  // Retry, ana chart effect'ini yeniden tetiklemek için ayrı bir anahtar
+  // kullanır — setActiveSymbol(s => s) aynı değerle React bail-out'una
+  // takılıyordu, buton hiçbir şey yapmıyordu (2026-08-12 audit).
+  const [retryKey, setRetryKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showFundingRate, setShowFundingRate] = useState(true);
@@ -348,7 +352,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
   // Sync with external selected symbol from page/table selection
   useEffect(() => {
     if (selectedSymbol) {
-      const normalized = selectedSymbol.replace("/", "").replace(":", "");
+      const normalized = normalizeSymbol(selectedSymbol);
       setActiveSymbol(normalized);
     }
   }, [selectedSymbol]);
@@ -356,7 +360,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
   // Sync with external selected trade from history table selection
   useEffect(() => {
     if (selectedTrade) {
-      const normalized = selectedTrade.symbol.replace("/", "").replace(":", "");
+      const normalized = normalizeSymbol(selectedTrade.symbol);
       setActiveSymbol(normalized);
       setTimeframe("15m"); // Default to 15m for historical SMC trades
 
@@ -516,7 +520,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
       try {
         let url = `https://fapi.binance.com/fapi/v1/klines?symbol=${activeSymbol}&interval=${timeframe}&limit=1000`;
         
-        if (selectedTrade && selectedTrade.symbol.replace("/", "").replace(":", "") === activeSymbol) {
+        if (selectedTrade && normalizeSymbol(selectedTrade.symbol) === activeSymbol) {
           const openedMs = new Date(selectedTrade.opened_at).getTime();
           let candleDurationMs = 15 * 60000; // default 15m
           if (timeframe === "1m") candleDurationMs = 60000;
@@ -754,7 +758,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
       predictedFundingSeriesRef.current = null;
       markersPluginRef.current = null;
     };
-  }, [activeSymbol, timeframe, showFundingRate]);
+  }, [activeSymbol, timeframe, showFundingRate, retryKey]);
 
   // 8. Render position pricing overlays (Entry, TP, SL)
   useEffect(() => {
@@ -765,10 +769,10 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     let positionPrimitive: any = null;
 
     const activePos = positions?.find(
-      (p) => p.symbol.replace("/", "").replace(":", "") === activeSymbol
+      (p) => normalizeSymbol(p.symbol) === activeSymbol
     );
 
-    const histTrade = selectedTrade && selectedTrade.symbol.replace("/", "").replace(":", "") === activeSymbol ? selectedTrade : null;
+    const histTrade = selectedTrade && normalizeSymbol(selectedTrade.symbol) === activeSymbol ? selectedTrade : null;
     const displayPos = activePos || histTrade;
 
     if (displayPos) {
@@ -795,7 +799,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     }
 
     const activeOrders = orders?.filter(
-      (o) => o.symbol.replace("/", "").replace(":", "") === activeSymbol && o.price
+      (o) => normalizeSymbol(o.symbol) === activeSymbol && o.price
     );
 
     activeOrders?.forEach((order) => {
@@ -858,7 +862,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
 
     const markers: any[] = [];
     const symbolTrades = history.filter(
-      (t) => t.symbol.replace("/", "").replace(":", "") === activeSymbol
+      (t) => normalizeSymbol(t.symbol) === activeSymbol
     );
 
     symbolTrades.forEach((t) => {
@@ -1054,7 +1058,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
             <button
               onClick={() => {
                 setError(null);
-                setActiveSymbol((s) => s); // Force reload
+                setRetryKey((k) => k + 1); // Chart effect'ini gerçekten yeniden tetikle
               }}
               className="mt-4 border border-border hover:border-text-secondary text-text-primary px-4 py-2 text-xs font-mono transition-colors"
             >

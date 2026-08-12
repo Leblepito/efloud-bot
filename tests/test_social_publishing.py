@@ -12,6 +12,7 @@ cleanly where the binary is absent (CI containers without ffmpeg).
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -119,6 +120,11 @@ class TestTradeLevels:
         ).tp2 is None
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("matplotlib") is None,
+    reason="matplotlib kurulu değil — chart render opsiyonel bağımlılık "
+           "(requirements.txt'te yok; sosyal pipeline'ı çalıştıran ortamlar kurar)",
+)
 class TestRenderTradeChart:
     def test_renders_both_formats_as_real_pngs(self, tmp_path):
         candles = _candles()
