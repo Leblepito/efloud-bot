@@ -28,27 +28,37 @@ from telegram.ext import (
 )
 
 # ─── Yapılandırma ─────────────────────────────────────────────────────────────
+# GÜVENLİK (2026-08-12 audit): canlı Telegram token'ı ve üç botun production
+# DASHBOARD_PASSWORD'leri bu dosyada HARDCODED'dı ve commit'lenmişti. Hepsi
+# env'e taşındı. Sızan değerler git geçmişinde duruyor — operatör aksiyonu:
+#   1. Telegram token'ını BotFather'dan REVOKE edip yenisini üret,
+#   2. ./deploy/rotate-credentials.sh ile dashboard şifrelerini rotasyona sok,
+#   3. (opsiyonel) geçmişi BFG/filter-repo ile temizle.
 
-TELEGRAM_TOKEN   = "8953010285:AAGNUH8-jcPSYaaHR63Vi_zqVunjDkwcazo"
-TELEGRAM_CHAT_ID = "6756699467"
+TELEGRAM_TOKEN   = os.environ.get("U2ALGO_TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("U2ALGO_TELEGRAM_CHAT_ID", "")
+
+# Panel'le aynı sözleşme: üç bot da TEK DASHBOARD_PASSWORD kullanır
+# (rotate-credentials.sh senkron tutar). Bot bazında URL override edilebilir.
+_DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
 
 BOTS = {
     "MID": {
         "label": "MID Bot",
-        "base_url": "https://178-104-122-91.nip.io",
-        "password": "qK4DHZfbC-8DrXAPsFpAU6jdJTMQPyRK",
+        "base_url": os.environ.get("U2ALGO_MID_URL", "https://178-104-122-91.nip.io"),
+        "password": _DASHBOARD_PASSWORD,
         "timeframes": "15m / 4h / 12h",
     },
     "LONG": {
         "label": "LONG Bot",
-        "base_url": "https://v2.178-104-122-91.nip.io",
-        "password": "qK4DHZfbC-8DrXAPsFpAU6jdJTMQPyRK",
+        "base_url": os.environ.get("U2ALGO_LONG_URL", "https://v2.178-104-122-91.nip.io"),
+        "password": _DASHBOARD_PASSWORD,
         "timeframes": "1h / 8h / 1d",
     },
     "SCALP": {
         "label": "SCALP Bot",
-        "base_url": "https://v3.178-104-122-91.nip.io",
-        "password": "c4c24cadcd602739014457f3c66b7626",
+        "base_url": os.environ.get("U2ALGO_SCALP_URL", "https://v3.178-104-122-91.nip.io"),
+        "password": _DASHBOARD_PASSWORD,
         "timeframes": "5m / 1h / 4h",
     },
 }
@@ -628,6 +638,15 @@ async def trade_watcher(app: Application):
 # ─── Ana Fonksiyon ────────────────────────────────────────────────────────────
 
 def main():
+    # Fail-fast: eksik env ile sessizce yanlış davranma (security.md sözleşmesi)
+    missing = [k for k, v in {
+        "U2ALGO_TELEGRAM_TOKEN": TELEGRAM_TOKEN,
+        "U2ALGO_TELEGRAM_CHAT_ID": TELEGRAM_CHAT_ID,
+        "DASHBOARD_PASSWORD": _DASHBOARD_PASSWORD,
+    }.items() if not v]
+    if missing:
+        raise SystemExit(f"Eksik env değişkenleri: {', '.join(missing)} — bkz. .env.example")
+
     async def post_init(application: Application) -> None:
         await application.bot.send_message(
             chat_id=TELEGRAM_CHAT_ID,
