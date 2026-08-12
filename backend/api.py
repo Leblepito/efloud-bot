@@ -4,6 +4,7 @@ All endpoints under /api. /api/login is public; rest require auth.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import json
@@ -83,8 +84,11 @@ async def positions() -> list[dict]:
     if not runner.client or not runner.order_mgr:
         return []
     try:
-        # Fetch actual live positions on Binance
-        bn_positions = runner.client.get_open_positions()
+        # Fetch actual live positions on Binance.
+        # to_thread: senkron ccxt çağrısı event loop'u bloklarsa /healthz dahil
+        # tüm istekler bekler → docker healthcheck düşer → autoheal canlı botu
+        # restart eder (panel bu endpoint'i 15s'de bir çeker).
+        bn_positions = await asyncio.to_thread(runner.client.get_open_positions)
     except Exception as e:
         log.warning(f"Failed to fetch live positions from Binance: {e}")
         # Fallback to empty if exchange is temporarily unreachable
@@ -95,8 +99,10 @@ async def positions() -> list[dict]:
     from exchange import _strip_contract_suffix
 
     # Create a lookup map of local bot positions by symbol and direction
+    # (E-3 sınıfı: canlı liste yerine snapshot — bot thread eşzamanlı mutasyonu)
+    local_positions = runner.order_mgr._positions_snapshot()
     local_pos_map = {
-        (_strip_contract_suffix(p.symbol), p.direction): p for p in runner.order_mgr.positions
+        (_strip_contract_suffix(p.symbol), p.direction): p for p in local_positions
     }
 
     # If we successfully fetched live positions, use them as the primary source of truth
@@ -160,9 +166,9 @@ async def positions() -> list[dict]:
             })
     else:
         # Fallback to local positions list if exchange is temporarily unreachable (graceful degradation)
-        for p in runner.order_mgr.positions:
+        for p in local_positions:
             try:
-                cur_price = runner.client.get_price(p.symbol)
+                cur_price = await asyncio.to_thread(runner.client.get_price, p.symbol)
             except Exception:
                 cur_price = p.entry
             is_long = p.direction == "LONG"
@@ -198,7 +204,8 @@ async def orders() -> list[dict]:
     if not runner.client:
         return []
     try:
-        raw = runner.client.exchange.fetch_open_orders()
+        # to_thread: bkz. /positions — senkron ccxt loop'u bloklamamalı
+        raw = await asyncio.to_thread(runner.client.exchange.fetch_open_orders)
     except Exception as e:
         log.warning(f"Open orders fetch failed: {e}")
         return []
@@ -852,7 +859,10 @@ async def close_position(body: ClosePositionBody) -> dict:
     )
     try:
         if target is not None:
-            if not runner.order_mgr.close_position(target, reason="manual_mobile"):
+            closed = await asyncio.to_thread(
+                runner.order_mgr.close_position, target, reason="manual_mobile"
+            )
+            if not closed:
                 raise HTTPException(status_code=404, detail="Position not tracked locally")
             await db.record_mobile_idempotency(body.idempotency_key)  # best-effort: ignore errors
             _log_mobile_action(
@@ -861,7 +871,7 @@ async def close_position(body: ClosePositionBody) -> dict:
             return {"ok": True, "type": "tracked"}
 
         # 2) untracked/orphan -> direct reduceOnly market close (MVP: sibling cleanup best-effort)
-        bn = runner.client.get_open_positions()
+        bn = await asyncio.to_thread(runner.client.get_open_positions)
         match = next(
             (
                 bp
@@ -881,8 +891,9 @@ async def close_position(body: ClosePositionBody) -> dict:
         close_params = {"reduceOnly": True}
         if runner.order_mgr.hedge_mode:
             close_params["positionSide"] = direction
-        runner.client.exchange.create_order(
-            ccxt_sym, "market", close_side, contracts, params=close_params
+        await asyncio.to_thread(
+            runner.client.exchange.create_order,
+            ccxt_sym, "market", close_side, contracts, params=close_params,
         )
         await db.record_mobile_idempotency(body.idempotency_key)  # B-4: başarı sonrası
         _log_mobile_action(
