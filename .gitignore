@@ -105,4 +105,7 @@ node_modules
 # canli Binance API anahtarlarini repo'ya sokabilirdi.
 .env.production
 .env.production.*
+# deploy/ altindaki .example sablonlari secret ICERMEZ ve tracked kalmali
+# (.env.production.scalp.example zaten tracked; yeni long sablonu da girsin).
+!deploy/.env.production.*.example
 .env.*.local
