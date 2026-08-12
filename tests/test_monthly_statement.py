@@ -189,7 +189,9 @@ def test_render_markdown_contains_core_fields(tmp_path: Path):
 
     md = render_markdown(statement)
 
-    assert "2026-06" in md
+    # Ay etiketi window.until'den (=NOW) türetilir; NOW göreli olduğu için
+    # sabit bir takvim ayı assert etmek her ay kırılırdı (2026-08 regresyonu).
+    assert NOW.strftime("%Y-%m") in md
     assert "Trade sayısı" in md or "trade_count" in md
     assert "100.0" in md or "100.00" in md  # win rate %100 (tek kazanan)
 

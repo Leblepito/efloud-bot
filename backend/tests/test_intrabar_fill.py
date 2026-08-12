@@ -41,10 +41,21 @@ def test_long_both_hit_open_below_entry_sl_first():
     assert level == "SL"
 
 
-def test_long_both_hit_open_above_entry_tp_first():
+def test_long_both_hit_default_pessimistic_sl_wins():
+    """BT-17: her iki seviye de aynı barda vurulduğunda default tie-break
+    pesimisttir — bar.open entry'nin üstünde olsa bile SL kazanır."""
     pos = _Pos("LONG", entry=100, sl=95, tp1=105)
     bar = Bar(open=101, high=106, low=94, close=98)
     level, _ = resolve_fill(pos, bar)
+    assert level == "SL"
+
+
+def test_long_both_hit_open_heuristic_legacy_tp_first():
+    """Legacy open_heuristic modu eski raporları yeniden üretmek için kalır:
+    bar.open >= entry → TP kazanır (optimistik)."""
+    pos = _Pos("LONG", entry=100, sl=95, tp1=105)
+    bar = Bar(open=101, high=106, low=94, close=98)
+    level, _ = resolve_fill(pos, bar, tie_break="open_heuristic")
     assert level == "TP1"
 
 
