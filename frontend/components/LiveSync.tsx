@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { mutate } from "swr";
 import { useWebSocket, type WsEvent } from "@/hooks/useWebSocket";
 
@@ -8,17 +8,19 @@ import { useWebSocket, type WsEvent } from "@/hooks/useWebSocket";
  * Subscribes to /ws, re-fetches relevant SWR keys on events, and renders a
  * fixed bottom-right heartbeat pill showing live connection state.
  *  - OPEN          → green dot, "WS · <last_event>", ring pulse on each cycle
- *  - RECONNECTING  → amber dot, after >20s with no packet
+ *  - RECONNECTING  → amber dot, socket actually closed
+ *
+ * Durum GERÇEK soket state'inden gelir (useWebSocket onStatus). Eski 20s
+ * paket-bekleme sezgisi prod'da 30s cycle aralığıyla her cycle'da ve bot
+ * durdurulduğunda kalıcı olarak sahte "reconnecting" gösteriyordu
+ * (2026-08-12 audit).
  */
 export function LiveSync() {
   const [pulseKey, setPulseKey] = useState(0);
   const [lastEvent, setLastEvent] = useState<string>("idle");
-  const [stale, setStale] = useState(false);
-  const lastTs = useRef<number>(Date.now());
+  const [wsOpen, setWsOpen] = useState(true);
 
   useWebSocket((evt: WsEvent) => {
-    lastTs.current = Date.now();
-    setStale(false);
     setLastEvent(evt.type);
     switch (evt.type) {
       case "cycle_start":
@@ -40,17 +42,9 @@ export function LiveSync() {
         mutate("/api/status");
         break;
     }
-  });
+  }, setWsOpen);
 
-  // Staleness watchdog → "reconnecting" when no packet arrives for > 20s.
-  useEffect(() => {
-    const t = setInterval(() => {
-      setStale(Date.now() - lastTs.current > 20000);
-    }, 4000);
-    return () => clearInterval(t);
-  }, []);
-
-  const open = !stale;
+  const open = wsOpen;
   const dotCls = open ? "bg-accent-green" : "bg-accent-amber";
   const txtCls = open ? "text-text-muted" : "text-accent-amber";
 
