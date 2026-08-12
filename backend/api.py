@@ -293,16 +293,30 @@ async def history(limit: int = 50) -> list[dict]:
 
 @router.get("/equity", dependencies=[Depends(require_auth)])
 async def equity(days: int = 7) -> list[dict]:
+    """Equity eğrisi — iki şemanın alanlarını BİRLİKTE yayar (2026-08-12).
+
+    DB yolu {ts, balance}, journal yolu {t, equity} yayıyordu; frontend
+    EquityChart ts/balance, birleşik panel t/equity okur. Tek şemaya geçmek
+    tüketicilerden birini kırardı — alias'lı birleşik şema ikisini de besler.
+    """
     series = await db.fetch_equity_history(days=min(max(days, 1), 90))
-    if not series:
-        # Derive a cumulative-PnL curve from reconciled journal closes.
-        rows = list(reversed(read_journal_history(_journal_path(), limit=1000)))
-        cum = 0.0
-        series = []
-        for r in rows:
-            cum += float(r.get("realized_pnl", 0) or 0)
-            series.append({"t": r.get("exit_timestamp"), "equity": cum})
-    return series
+    if series:
+        out = []
+        for r in series:
+            d = dict(r)
+            d.setdefault("t", d.get("ts"))
+            d.setdefault("equity", d.get("balance"))
+            out.append(d)
+        return out
+    # Derive a cumulative-PnL curve from reconciled journal closes.
+    rows = list(reversed(read_journal_history(_journal_path(), limit=1000)))
+    cum = 0.0
+    out = []
+    for r in rows:
+        cum += float(r.get("realized_pnl", 0) or 0)
+        ts = r.get("exit_timestamp")
+        out.append({"t": ts, "equity": cum, "ts": ts, "balance": cum})
+    return out
 
 
 @router.get("/reports/monthly", dependencies=[Depends(require_auth)])

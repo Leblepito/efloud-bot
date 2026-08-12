@@ -291,7 +291,8 @@ function badge(st) {
 function upnlSum(ps) {
   let s = 0, any = false;
   for (const p of ps || []) {
-    const v = Number(p.unrealizedPnl ?? p.unrealized_pnl ?? p.pnl ?? NaN);
+    // bot /api/positions gerçek alanı: unrealized_usdt (diğerleri savunma)
+    const v = Number(p.unrealized_usdt ?? p.unrealizedPnl ?? p.unrealized_pnl ?? p.pnl ?? NaN);
     if (isFinite(v)) { s += v; any = true; }
   }
   return any ? s : null;
@@ -304,14 +305,18 @@ function lastEquity(eq) {
 
 function posTable(ps) {
   if (!ps || !ps.length) return `<div class="kv">açık pozisyon yok</div>`;
+  // bot /api/positions gerçek alanları: entry, size, sl, tp1, unrealized_usdt
+  // (eski panel entryPrice/unrealizedPnl bekliyordu → sütunlar hep "—" idi)
+  const lvl = v => { const x = Number(v); return (isFinite(x) && x > 0) ? fmt(x, 4) : "—"; };
   const rows = ps.map(p => {
-    const pnl = Number(p.unrealizedPnl ?? p.unrealized_pnl ?? p.pnl ?? NaN);
+    const pnl = Number(p.unrealized_usdt ?? p.unrealizedPnl ?? p.unrealized_pnl ?? p.pnl ?? NaN);
     return `<tr><td>${esc(p.symbol || "?")}</td><td>${esc(p.side || p.direction || "")}</td>` +
-           `<td>${fmt(p.contracts ?? p.size ?? p.positionAmt, 4)}</td>` +
-           `<td>${fmt(p.entryPrice ?? p.entry_price, 4)}</td>` +
+           `<td>${fmt(p.size ?? p.contracts ?? p.positionAmt, 4)}</td>` +
+           `<td>${fmt(p.entry ?? p.entryPrice ?? p.entry_price, 4)}</td>` +
+           `<td>${lvl(p.sl)}</td><td>${lvl(p.tp1)}</td>` +
            `<td class="${pnlCls(pnl)}">${isFinite(pnl) ? fmt(pnl) : "—"}</td></tr>`;
   }).join("");
-  return `<table><tr><th>Sembol</th><th>Yön</th><th>Boyut</th><th>Giriş</th><th>uPnL</th></tr>${rows}</table>`;
+  return `<table><tr><th>Sembol</th><th>Yön</th><th>Boyut</th><th>Giriş</th><th>SL</th><th>TP1</th><th>uPnL</th></tr>${rows}</table>`;
 }
 
 function card(b) {
@@ -390,12 +395,14 @@ function renderTrades(bots) {
   for (const id of Object.keys(bots))
     for (const t of (bots[id].history || []))
       all.push({ bot:id, ...t });
-  all.sort((a,b) => String(b.exit_timestamp||b.timestamp||"").localeCompare(String(a.exit_timestamp||a.timestamp||"")));
+  // DB'li botlar closed_at/pnl_usdt, journal'lılar exit_timestamp/realized_pnl yayar
+  const when = t => String(t.closed_at || t.exit_timestamp || t.timestamp || "");
+  all.sort((a,b) => when(b).localeCompare(when(a)));
   const rows = all.slice(0,20).map(t => {
-    const pnl = Number(t.realized_pnl ?? t.pnl ?? NaN);
+    const pnl = Number(t.pnl_usdt ?? t.realized_pnl ?? t.pnl ?? NaN);
     return `<tr><td style="color:${COLORS[t.bot]}">${esc(t.bot.toUpperCase())}</td>` +
            `<td>${esc(t.symbol || "?")}</td><td>${esc(t.direction || t.side || "")}</td>` +
-           `<td>${esc(String(t.exit_timestamp||t.timestamp||"")).slice(0,16).replace("T"," ")}</td>` +
+           `<td>${esc(when(t)).slice(0,16).replace("T"," ")}</td>` +
            `<td class="${pnlCls(pnl)}">${isFinite(pnl) ? fmt(pnl) : "—"}</td></tr>`;
   }).join("");
   document.getElementById("trades").innerHTML = all.length

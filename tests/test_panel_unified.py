@@ -171,3 +171,15 @@ def test_page_escapes_dynamic_fields(needle):
 def test_page_survives_missing_chartjs():
     """CDN erişilemezse sayfa çökmemeli — typeof Chart guard'ı pinli."""
     assert 'typeof Chart' in panel_main.PAGE
+
+
+# Bot API'lerinin GERÇEK alan adları — eski panel entryPrice/unrealizedPnl
+# bekliyordu, sütunlar hep "—" kalıyordu (2026-08-12 audit HIGH bulgusu).
+@pytest.mark.parametrize("needle", [
+    "p.unrealized_usdt",   # /api/positions uPnL alanı
+    "p.entry ??",          # /api/positions giriş fiyatı alanı
+    "t.pnl_usdt",          # /api/history DB-yolu PnL alanı
+    "t.closed_at",         # /api/history DB-yolu zaman alanı
+])
+def test_page_reads_real_bot_api_fields(needle):
+    assert needle in panel_main.PAGE, f"PAGE gerçek API alanını okumuyor: {needle}"
