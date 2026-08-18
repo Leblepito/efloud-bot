@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  efloud-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: efloud-bot:testnet
+    container_name: efloud-bot-testnet
+    restart: unless-stopped
+    env_file:
+      - .env.testnet
+    environment:
+      - EFLOUD_LOG_FILE=/app/logs/efloud_bot.log
+      - EFLOUD_CONFIG_PATH=configs/config.testnet.yaml
+    ports:
+      - "8080:8080"
+    volumes:
+      - efloud_state_testnet:/app/state
+      - efloud_logs_testnet:/app/logs
+      - efloud_reports_testnet:/app/reports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz', timeout=5).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: efloud-caddy-testnet
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data_testnet:/data
+      - caddy_config_testnet:/config
+    depends_on:
+      efloud-bot:
+        condition: service_started
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  efloud_state_testnet:
+  efloud_logs_testnet:
+  efloud_reports_testnet:
+  caddy_data_testnet:
+  caddy_config_testnet:

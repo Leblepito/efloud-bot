@@ -1,0 +1,71 @@
+# Caddyfile — auto-HTTPS reverse proxy for efloud-bot
+# NEW VPS: Replace <VPS_IP> with actual IP after creation
+# nip.io: any subdomain like <VPS_IP_DASHED>.nip.io → resolves to <VPS_IP>
+# Caddy auto-provisions a Let's Encrypt cert via TLS-ALPN-01 (port 443)
+# and uses port 80 for HTTP→HTTPS redirects + HTTP-01 fallback.
+# Both 80 and 443 must be open in UFW.
+
+{
+    # Global options
+    email utkucanuysall@gmail.com  # used by ACME (LE) for cert expiry warnings
+}
+
+# V1 dashboard (mid profile)
+bot.ualgotrade.com, <VPS_IP_DASHED>.nip.io {
+    encode gzip zstd
+    reverse_proxy efloud-bot:8080 {
+        header_up X-Real-IP {remote_host}
+    }
+
+    # Security headers (HTTPS-only)
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+}
+
+# V2 long-bot dashboard
+v2.u2algo.com, v2.<VPS_IP_DASHED>.nip.io {
+    encode gzip zstd
+    reverse_proxy efloud-bot-long:8080 {
+        header_up X-Real-IP {remote_host}
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+}
+
+# V3 scalp-bot dashboard
+scalp.u2algo.com, v3.<VPS_IP_DASHED>.nip.io {
+    encode gzip zstd
+    reverse_proxy efloud-bot-scalp:8080 {
+        header_up X-Real-IP {remote_host}
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+}
+
+# Birleşik çoklu-bot izleme paneli
+bot.u2algo.com, panel.<VPS_IP_DASHED>.nip.io {
+    encode gzip zstd
+    reverse_proxy efloud-panel:8090 {
+        header_up X-Real-IP {remote_host}
+    }
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+}
