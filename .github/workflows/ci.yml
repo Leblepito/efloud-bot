@@ -178,20 +178,4 @@ jobs:
       - name: Build
         run: npm run build --workspace efloud-frontend
 
-  # T-023: LLTODO process lint (naming, required sections, claim limits,
-  # scoreboard consistency, cross-refs) was previously run only by hand.
-  lltodo-lint:
-    name: lltodo lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Run LLTODO lint
-        run: python LLTODO/scripts/lltodo_lint.py

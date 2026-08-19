@@ -42,11 +42,11 @@ EFLOUD_AUTOSTART=0
 EFLOUD_AUTO_MIGRATE=1
 
 # ── Web Platform ──
-DASHBOARD_PASSWORD=Leblepito_2026_SecurePass32!
-SESSION_SECRET=Leblepito_Session_Secret_32_Chars!!
+DASHBOARD_PASSWORD=<DASHBOARD_PASSWORD_GIRIN>
+SESSION_SECRET=<SESSION_SECRET_32_CHARS_GIRIN>
 
 # ── Supabase Postgres (Connection Pooler - port 6543) ──
-DATABASE_URL=postgresql://postgres:Leblepito_2026@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres:<SUPABASE_DB_PASSWORD>@<SUPABASE_POOLER_HOST>:6543/postgres
 
 # ── CORS ──
 ALLOWED_ORIGINS=https://bot.ualgotrade.com,https://bot.u2algo.com,https://scalp.u2algo.com
@@ -96,11 +96,11 @@ EFLOUD_AUTOSTART=0
 EFLOUD_AUTO_MIGRATE=1
 
 # ── Web Platform ──
-DASHBOARD_PASSWORD=Leblepito_2026_SecurePass32!
-SESSION_SECRET=Leblepito_Session_Secret_32_Chars!!
+DASHBOARD_PASSWORD=<DASHBOARD_PASSWORD_GIRIN>
+SESSION_SECRET=<SESSION_SECRET_32_CHARS_GIRIN>
 
 # ── Supabase Postgres ──
-DATABASE_URL=postgresql://postgres:Leblepito_2026@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres:<SUPABASE_DB_PASSWORD>@<SUPABASE_POOLER_HOST>:6543/postgres
 
 # ── CORS ──
 ALLOWED_ORIGINS=https://bot.ualgotrade.com,https://bot.u2algo.com,https://scalp.u2algo.com
@@ -130,11 +130,11 @@ EFLOUD_AUTOSTART=0
 EFLOUD_AUTO_MIGRATE=1
 
 # ── Web Platform ──
-DASHBOARD_PASSWORD=Leblepito_2026_SecurePass32!
-SESSION_SECRET=Leblepito_Session_Secret_32_Chars!!
+DASHBOARD_PASSWORD=<DASHBOARD_PASSWORD_GIRIN>
+SESSION_SECRET=<SESSION_SECRET_32_CHARS_GIRIN>
 
 # ── Supabase Postgres ──
-DATABASE_URL=postgresql://postgres:Leblepito_2026@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres:<SUPABASE_DB_PASSWORD>@<SUPABASE_POOLER_HOST>:6543/postgres
 
 # ── CORS ──
 ALLOWED_ORIGINS=https://bot.ualgotrade.com,https://bot.u2algo.com,https://scalp.u2algo.com
@@ -156,7 +156,7 @@ echo "📋 NEXT STEPS:"
 echo "1. Check containers: docker compose -f docker-compose.prod.yml ps"
 echo "2. Check logs: docker compose -f docker-compose.prod.yml logs -f efloud-bot"
 echo "3. Open dashboard: http://<VPS_IP>  (Caddy serves on port 80/443)"
-echo "4. Login with password: Leblepito_2026_SecurePass32!"
+echo "4. Login with the DASHBOARD_PASSWORD you set in .env.production"
 echo "5. Press 'Start' button (within 10 min) to begin trading"
 echo ""
 echo "⚠️  IMPORTANT: Verify NO open positions before pressing Start if leverage changed!"

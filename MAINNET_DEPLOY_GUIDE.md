@@ -106,7 +106,7 @@ bot.u2algo.com         A   <VPS_IP>   Proxied: Yes
 
 ```
 1. Tarayıcıda aç: https://bot.ualgotrade.com (veya nip.io adresi)
-2. Şifre: Leblepito_2026_SecurePass32!
+2. Şifre: .env.production dosyanızdaki DASHBOARD_PASSWORD değeri
 3. "Positions" sekmesine git → BOŞ (flat) olduğunu DOĞRULA
    ⚠️ Eğer açık pozisyon varsa: leverage değişimi (5x→10x) likidasyon fiyatını değiştirir!
 4. "Overview" sekmesine dön → ▶ Start butonuna bas
@@ -178,9 +178,9 @@ docker compose -f docker-compose.prod.yml up -d efloud-bot
 GitHub repo settings → Secrets and variables → Actions:
 
 ```
-HETZNER_API_TOKEN = kLO2iyIyVEA7LJlTDRW4FmawH6VmeyGmprlKWUZ7e2XNXdUyFqm1lHRS2DBX9A2S
+HETZNER_API_TOKEN = <HETZNER_API_TOKEN>
 DOCKER_HUB_TOKEN = <docker hub token jika push edecekseniz>
-SUPABASE_DB_PASSWORD = Leblepito_2026
+SUPABASE_DB_PASSWORD = <SUPABASE_DB_PASSWORD>
 ```
 
 ---
@@ -204,7 +204,7 @@ SUPABASE_DB_PASSWORD = Leblepito_2026
 | Hetzner API Token | **Geçersiz (401)** | Manuel VPS oluşturun |
 | VPS | **Yok** | Hetzner Console'dan CPX21 oluşturun |
 | Binance IP Whitelist | **Bilinmiyor** | VPS IP'sini Binance API ayarlarına ekleyin |
-| Supabase DB şifresi | **Leblepito_2026 varsayılarak** | Doğruysa OK, değilse .env'de düzeltin |
+| Supabase DB şifresi | **.env'de girilecek** | Yeni Supabase kurulumundan alın |
 | Gerçek Binance sub-account ayrımı | **Config'te varsayılıyor** | 3 ayrı API key/secret mi var? (V1/V2/V3) |
 | config.phase2_long_1k.yaml / scalp_1k.yaml | **Var (local)** | VPS'te doğrulanmalı |
 | efloud-panel container | **docker-compose.prod.yml'de var** | `.env.production.panel` gerekirse ayrı oluşturun |
