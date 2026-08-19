@@ -97,4 +97,4 @@ export EFLOUD_ALLOW_MAINNET=1
 
 ## Support
 
-For issues or questions, refer to the main project documentation and the MAINNET_GECIS_REHBERI.md file.
+For issues or questions, refer to the main project documentation and MAINNET_DEPLOY_GUIDE.md.

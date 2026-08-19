@@ -1,5 +1,0 @@
-Hazırlık tamamlandı. Hiçbir platforma yayın yapılmadı; dosya yalnızca private/draft-only kullanım için oluşturuldu. Ekli Markdown dosyasında X postları, Instagram carousel metinleri, Telegram duyurusu, Shorts/Reels script’i ve DNS/TLS kontrol checklist’i yer alıyor.
-
----
-
-Anladım. Hiçbir platforma yayın yapmadan, yalnızca Türkçe ve güvenli taslak içerikler ile DNS/TLS kontrol checklist’ini hazırlıyorum.
