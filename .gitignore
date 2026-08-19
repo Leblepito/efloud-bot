@@ -109,3 +109,8 @@ node_modules
 # (.env.production.scalp.example zaten tracked; yeni long sablonu da girsin).
 !deploy/.env.production.*.example
 .env.*.local
+
+# 2026-08-19: .env.testnet gercek Binance testnet API key/secret icerir,
+# repoya girmemeli. .env.testnet.example (secret'siz) tracked kalir.
+.env.testnet
+!.env.testnet.example
