@@ -33,7 +33,16 @@
       "Bash(gh secret list *)",
       "Bash(gh auth status *)",
       "Bash(gh secret set *)",
-      "Bash(gh api repos/Leblepito/efloud-bot/actions/secrets/ANTHROPIC_API_KEY *)"
+      "Bash(gh api repos/Leblepito/efloud-bot/actions/secrets/ANTHROPIC_API_KEY *)",
+      "Bash(cd \"C:\\Users\\utkuc\\Downloads\\efloud-bot\" ; Select-String -Path .gitignore -Pattern \"env\" ; echo \"---keys---\"; Select-Str…)",
+      "Bash(curl -s -o NUL -w \"%{http_code}\" http://localhost:8080 2>&1; echo; docker version 2>&1 | Select-Object -First 5)",
+      "Bash(Start-Process \"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe\"; Start-Sleep -Seconds 5; echo \"started, waiting...\")",
+      "Bash(curl -s http://localhost:8080/healthz 2>&1; echo; echo \"---\"; docker logs efloud-bot-testnet --tail 30 2>&1)",
+      "Bash(cd \"C:\\Users\\utkuc\\Downloads\\efloud-bot\" ; $env:DPW = (Select-String -Path .env.testnet -Pattern '^DASHBOARD_PASSWORD=(.…)",
+      "Bash(cd \"C:\\Users\\utkuc\\Downloads\\efloud-bot\" ; $env:DPW = (Select-String -Path .env.testnet -Pattern '^DASHBOARD_PASSWORD=(.…)",
+      "Bash(cd \"C:\\Users\\utkuc\\Downloads\\efloud-bot\" ; curl.exe -s -b cookies.txt http://localhost:8080/api/bot/status)",
+      "Bash(cd \"C:\\Users\\utkuc\\Downloads\\efloud-bot\" ; curl.exe -s -b cookies.txt http://localhost:8080/api/positions)",
+      "Bash(cd \"C:\\Users\\utkuc\\Downloads\\efloud-bot\" ; Remove-Item login.json,cookies.txt -ErrorAction SilentlyContinue; git status …)"
     ]
   }
 }
