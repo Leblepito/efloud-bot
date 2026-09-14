@@ -15,7 +15,6 @@ remaining size is on a risk-free trail, and adding a flip would
 complicate atomicity for no expected-value gain.
 """
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 from engine.safety.position_guard import PositionGuard
 
@@ -35,9 +34,9 @@ class _FakePos:
     is_open: bool = True
     avg_entry_price: float = 100.0
     remaining_size: float = 0.1
-    scenario_id: Optional[str] = None
+    scenario_id: str | None = None
     id: str = "fake-pos-1"
-    exits: List[_FakeExit] = field(default_factory=list)
+    exits: list[_FakeExit] = field(default_factory=list)
 
 
 def _guard(threshold: float = 0.2):

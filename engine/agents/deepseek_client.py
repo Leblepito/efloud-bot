@@ -1,7 +1,6 @@
-import os
-import logging
 import json
-from typing import Optional
+import logging
+import os
 
 try:
     from openai import OpenAI
@@ -13,7 +12,7 @@ log = logging.getLogger("efloud.agents.deepseek")
 DEFAULT_MODEL = "deepseek-chat"
 
 class DeepSeekClient:
-    def __init__(self, api_key: Optional[str] = None, model: str = DEFAULT_MODEL):
+    def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL):
         if OpenAI is None:
             raise ImportError("openai package required for DeepSeekClient")
         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")

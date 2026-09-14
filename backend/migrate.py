@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 import asyncpg
 
@@ -52,7 +51,7 @@ async def _get_applied(conn: asyncpg.Connection) -> set[str]:
     return {r["version"] for r in rows}
 
 
-async def run_pending(pool: Optional[asyncpg.Pool] = None) -> None:
+async def run_pending(pool: asyncpg.Pool | None = None) -> None:
     """Discovers migrations and applies any not yet recorded in schema_migrations.
 
     DATABASE_URL env yoksa sessizce döner (no-op, graceful degrade).
@@ -93,13 +92,12 @@ async def run_pending(pool: Optional[asyncpg.Pool] = None) -> None:
         log.info(f"Applying {len(pending)} migration(s): {pending}")
         for version in pending:
             sql = sql_by_version[version]
-            async with pool.acquire() as conn:
-                async with conn.transaction():
-                    await conn.execute(sql)
-                    await conn.execute(
-                        "INSERT INTO schema_migrations (version) VALUES ($1)",
-                        version,
-                    )
+            async with pool.acquire() as conn, conn.transaction():
+                await conn.execute(sql)
+                await conn.execute(
+                    "INSERT INTO schema_migrations (version) VALUES ($1)",
+                    version,
+                )
             log.info(f"  ✓ {version} applied")
     finally:
         if owned_pool and pool is not None:

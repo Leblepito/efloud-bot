@@ -27,8 +27,6 @@ Saf fonksiyon — I/O yok, log yok.
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
 import pandas as pd
 
 from engine.smc_v2.zones import ZoneSpec
@@ -45,7 +43,7 @@ def detect_v_recovery(
     min_recovery_ratio: float = 0.5,
     max_recovery_bars: int = 6,
     max_fill_ratio: float = 0.9,
-) -> Tuple[bool, Optional[float]]:
+) -> tuple[bool, float | None]:
     """Bölgede V-type recovery onayı ara.
 
     Args:

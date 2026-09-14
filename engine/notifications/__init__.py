@@ -14,8 +14,8 @@ Kullanım yerleri:
 """
 
 import logging
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
 from .null_manager import NullNotificationManager
 
@@ -25,7 +25,7 @@ log = logging.getLogger("efloud.notifications")
 class NotificationManager:
     """Sinyal ve event bildirimi — kanal-agnostic."""
 
-    def __init__(self, channels: Optional[list] = None, content_emitter=None, on_signal_readonly=None):
+    def __init__(self, channels: list | None = None, content_emitter=None, on_signal_readonly=None):
         """
         channels: ['terminal', 'log', 'telegram', ...] — şimdilik 'terminal' + 'log'
         content_emitter: ContentJobEmitter instance (Lane A, default None = inert)

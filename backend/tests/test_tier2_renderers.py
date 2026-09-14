@@ -8,9 +8,7 @@ Bu testler:
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -30,7 +28,6 @@ from backend.social.tier2_renderers import (
     render,
     render_and_enqueue,
 )
-
 
 REPO = Path(__file__).resolve().parents[2]
 TEMPLATES_PATH = REPO / "scripts" / "content_templates" / "templates.yaml"
@@ -362,7 +359,7 @@ def test_render_resolver_no_op_for_non_signal_template(templates):
 
 def test_render_with_manifest_resolver_integration(tmp_path, templates):
     """End-to-end: build ManifestIndex + resolver closure + render."""
-    from backend.social.tv_manifest import build_index, ManifestIndex, ChartSnapshot
+    from backend.social.tv_manifest import build_index
 
     # tmp_path manifest dizininde latest.json yaz
     _write_manifest = lambda name, items: (

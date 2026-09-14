@@ -6,7 +6,6 @@ Reverse-calculates position size from maximum acceptable loss.
 Ensures proper risk management for live trading with real money.
 """
 import logging
-from typing import Dict
 
 log = logging.getLogger("efloud.risk")
 
@@ -94,7 +93,7 @@ class CustomRiskCalculator:
         notional = self.calculate_notional_exposure(margin)
         return notional / entry_price
 
-    def validate_risk_parameters(self, position_size: float, current_price: float, stop_price: float) -> Dict:
+    def validate_risk_parameters(self, position_size: float, current_price: float, stop_price: float) -> dict:
         """
         Validate that trade parameters meet risk requirements.
 

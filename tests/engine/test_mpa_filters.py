@@ -13,7 +13,6 @@ botlarının davranışının sessizce değiştiği anlamına gelir.
 from pathlib import Path
 
 import pandas as pd
-import pytest
 import yaml
 
 from engine.smc import StructBreak, Swing

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from engine.smc import Swing, StructBreak, FVG
+from engine.smc import FVG, StructBreak, Swing
 from engine.smc_v2.triggers import HtfBar, generate_setup_candidates
 
 

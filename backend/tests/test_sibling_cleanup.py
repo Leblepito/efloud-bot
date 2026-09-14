@@ -1,5 +1,6 @@
 """Unit tests for OrderManager._cancel_position_siblings — orphan order cleanup helper."""
 from unittest.mock import MagicMock
+
 import ccxt
 import pytest
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -134,7 +134,7 @@ class MT5Client:
         log.debug("MT5 position mode is dictated by account type (Hedging vs Netting)")
         return True
 
-    def get_open_positions(self, symbol: Optional[str] = None) -> list[dict[str, Any]]:
+    def get_open_positions(self, symbol: str | None = None) -> list[dict[str, Any]]:
         """Queries MT5 open orders/positions and maps them to standard format."""
         if self._mt5 is None:
             return []

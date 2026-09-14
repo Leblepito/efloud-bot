@@ -1,5 +1,6 @@
 """Binance Futures funding fees — 8h cadence application."""
 from __future__ import annotations
+
 import pandas as pd
 
 

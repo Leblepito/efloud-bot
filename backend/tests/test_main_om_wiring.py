@@ -8,7 +8,6 @@ had hedge_mode: true. In hedge mode, Binance requires positionSide
 parameter on SL/TP orders (not reduceOnly). Wrong mode → SL/TP rejected.
 """
 from unittest.mock import MagicMock, patch
-import pytest
 
 
 class TestMainOMWiring:

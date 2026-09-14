@@ -2,7 +2,6 @@
 
 import logging
 from types import SimpleNamespace
-from typing import Dict
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -23,16 +22,16 @@ class TestFormatScoreHistogram:
     def test_multiple_buckets_sorted_by_score_descending(self) -> None:
         # Three buckets, all shown; highest score first so the reader sees
         # how close any reject came to the floor.
-        buckets: Dict[int, int] = {55: 1, 60: 5, 65: 2}
+        buckets: dict[int, int] = {55: 1, 60: 5, 65: 2}
         assert _format_score_histogram(buckets) == "65×2 60×5 55×1"
 
     def test_top_n_limits_output_to_three_highest_scores(self) -> None:
-        buckets: Dict[int, int] = {50: 1, 55: 2, 60: 5, 65: 3, 70: 1}
+        buckets: dict[int, int] = {50: 1, 55: 2, 60: 5, 65: 3, 70: 1}
         # Default top_n=3 → 70, 65, 60 (highest scores, regardless of count)
         assert _format_score_histogram(buckets) == "70×1 65×3 60×5"
 
     def test_top_n_override(self) -> None:
-        buckets: Dict[int, int] = {55: 1, 60: 5, 65: 2}
+        buckets: dict[int, int] = {55: 1, 60: 5, 65: 2}
         assert _format_score_histogram(buckets, top_n=1) == "65×2"
 
 

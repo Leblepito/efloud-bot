@@ -20,10 +20,10 @@ import hashlib
 import json
 import logging
 import multiprocessing as mp
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import product
 from pathlib import Path
-from typing import Callable, Iterable, Iterator
 
 
 def _worker_init():

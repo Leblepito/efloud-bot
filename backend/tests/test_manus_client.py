@@ -14,10 +14,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -25,8 +24,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from backend.social import manus_client as mc  # noqa: E402
-
+from backend.social import manus_client as mc
 
 # ────────────────────────── Enable / key gating ──────────────────────────
 

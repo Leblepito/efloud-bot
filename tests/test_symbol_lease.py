@@ -2,10 +2,11 @@
 Tests for symbol lease acquisition and multi-instance coordination.
 Part of PR #236 A5 multi-instance migration.
 """
-import pytest
 import asyncio
 import os
-from datetime import datetime, timedelta
+
+import pytest
+
 from backend.db import db
 
 

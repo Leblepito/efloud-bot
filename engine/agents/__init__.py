@@ -18,25 +18,25 @@ to make a hard ``REJECT`` veto the signal — but only after shadow
 mode has built confidence in the verdicts.
 """
 
-from .base import BaseAgent, AgentVerdict
+from .base import AgentVerdict, BaseAgent
 from .gemini_client import GeminiClient
-from .team import AgentTeam
 from .roles import (
-    SignalValidatorAgent,
-    RiskReviewerAgent,
-    RegimeAgent,
     OverseerAgent,
     PostMortemAgent,
+    RegimeAgent,
+    RiskReviewerAgent,
+    SignalValidatorAgent,
 )
+from .team import AgentTeam
 
 __all__ = [
-    "BaseAgent",
-    "AgentVerdict",
-    "GeminiClient",
     "AgentTeam",
-    "SignalValidatorAgent",
-    "RiskReviewerAgent",
-    "RegimeAgent",
+    "AgentVerdict",
+    "BaseAgent",
+    "GeminiClient",
     "OverseerAgent",
     "PostMortemAgent",
+    "RegimeAgent",
+    "RiskReviewerAgent",
+    "SignalValidatorAgent",
 ]

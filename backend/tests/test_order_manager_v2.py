@@ -1,5 +1,5 @@
 """Unit tests for OrderManager v2.2 — server-side TP/SL + reconciliation."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

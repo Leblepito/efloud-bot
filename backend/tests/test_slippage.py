@@ -3,6 +3,7 @@
 Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §6.7
 """
 import pytest
+
 from backtest.slippage import SlippageConfig, adverse_fill
 
 

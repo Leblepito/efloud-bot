@@ -5,8 +5,7 @@ for options.defaultType. Passing 'futures' (plural — the bot's internal name)
 silently routes fetch_open_orders to the spot endpoint, which is the 2026-05-08
 reconcile-blindspot bug.
 """
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from exchange import BinanceClient
 

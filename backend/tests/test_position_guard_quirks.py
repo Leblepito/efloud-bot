@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import pytest
-
 from engine.safety.position_guard import PositionGuard
 
 

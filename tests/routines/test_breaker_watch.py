@@ -1,5 +1,6 @@
 from scripts.routines.breaker_watch import evaluate
 
+
 def test_halt_transition_pages():
     rep, b = evaluate({"state": "OPEN"}, {"state": "HALTED", "reason": "weekly_dd"})
     assert any(x["severity"] == "critical" for x in b)
@@ -21,6 +22,7 @@ def test_run_reads_statestore_envelope_from_live_state_dir(tmp_path, monkeypatch
     ve cfg operation.state_dir altına yazar. Rutin zarfı açmadan sabit
     state/breaker.json okuyunca HALT geçişi HİÇ görülmüyordu."""
     import json
+
     from scripts.routines import breaker_watch as bw
 
     monkeypatch.chdir(tmp_path)
@@ -40,6 +42,7 @@ def test_run_reads_statestore_envelope_from_live_state_dir(tmp_path, monkeypatch
 
 def test_env_state_dir_overrides_cfg(tmp_path, monkeypatch):
     import json
+
     from scripts.routines import breaker_watch as bw
 
     monkeypatch.chdir(tmp_path)

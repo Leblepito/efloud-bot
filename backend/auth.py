@@ -13,9 +13,7 @@ from __future__ import annotations
 import hmac
 import logging
 import os
-import secrets
 import time
-from typing import Optional
 
 from fastapi import Cookie, Header, HTTPException, Request, Response, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -133,7 +131,7 @@ def logout(response: Response) -> None:
     response.delete_cookie(COOKIE_NAME)
 
 
-def is_authenticated(session_cookie: Optional[str]) -> bool:
+def is_authenticated(session_cookie: str | None) -> bool:
     if not session_cookie:
         return False
     try:
@@ -146,8 +144,8 @@ def is_authenticated(session_cookie: Optional[str]) -> bool:
 
 # FastAPI dependency
 async def require_auth(
-    efloud_session: Optional[str] = Cookie(default=None, alias=COOKIE_NAME),
-    authorization: Optional[str] = Header(default=None),
+    efloud_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
+    authorization: str | None = Header(default=None),
 ) -> None:
     # Cookie path (web)
     if efloud_session and is_authenticated(efloud_session):

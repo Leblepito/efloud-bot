@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -131,7 +131,7 @@ class OandaClient:
             self._client.request(r)
             summary = r.response.get("account", {})
             return float(summary.get("marginAvailable", 0.0))
-        except Exception as e:
+        except Exception:
             return 0.0
 
     def get_price(self, symbol: str) -> float:
@@ -168,7 +168,7 @@ class OandaClient:
         log.debug("OANDA position mode is predetermined by account type settings")
         return True
 
-    def get_open_positions(self, symbol: Optional[str] = None) -> list[dict[str, Any]]:
+    def get_open_positions(self, symbol: str | None = None) -> list[dict[str, Any]]:
         """Queries OANDA open positions."""
         if self._client is None or not self._api_token:
             return []

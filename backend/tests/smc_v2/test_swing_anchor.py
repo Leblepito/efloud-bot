@@ -17,7 +17,6 @@ with idx will silently fail. See test_production_shape_with_dataframe_row
 for the calling convention PR #S3b will use.
 """
 from dataclasses import dataclass
-import pytest
 
 from engine.smc import Swing
 
@@ -195,9 +194,11 @@ class TestProductionShapeContract:
         """Construct a realistic HTF DataFrame, convert to BarLike sequence,
         verify ordinal coercion is correct."""
         from dataclasses import dataclass
-        from engine.smc_v2.swing_anchor import select_htf_swing_anchor
-        import pandas as pd
         from datetime import datetime, timezone
+
+        import pandas as pd
+
+        from engine.smc_v2.swing_anchor import select_htf_swing_anchor
 
         # Simulate an HTF DataFrame with 30 bars and real ms-epoch timestamps
         idx = pd.date_range(

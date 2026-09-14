@@ -3,6 +3,7 @@
 Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §6.1
 """
 from unittest.mock import patch
+
 import pytest
 import yaml
 

@@ -13,7 +13,6 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -22,18 +21,18 @@ from backend.db import db
 from backend.events import bus
 from backend.notifications import TelegramNotifier
 from engine import SafeOrchestrator
+from engine.agents.llm import make_llm_client
+from engine.ai.kronos import run_kronos_prediction, synthesize_signal_with_kronos
+from engine.content_jobs import ContentJobEmitter
 from engine.instance_manager import InstanceManager
-from utils.logging import log_event
 from engine.journal import TradeJournal
 from engine.notifications import NotificationManager
-from engine.content_jobs import ContentJobEmitter
 from engine.permissions import PermissionManager
 from engine.safety import MainnetGuard, OrphanProtector, load_orphan_protection_config
 from engine.universe import SymbolUniverse
 from exchange import BinanceClient, OrderManager, Position, _timeframe_ms
 from main import resolve_credentials, validate_config
-from engine.ai.kronos import run_kronos_prediction, synthesize_signal_with_kronos
-from engine.agents.llm import make_llm_client
+from utils.logging import log_event
 
 log = logging.getLogger("efloud.runner")
 
@@ -84,14 +83,14 @@ def _enforce_margin_setup(client, tradeable, margin_mode, leverage, hedge_mode):
 
 class BotRunner:
     def __init__(self) -> None:
-        self.task: Optional[asyncio.Task] = None
-        self.sentiment_task: Optional[asyncio.Task] = None
-        self.loop: Optional[asyncio.AbstractEventLoop] = None  # captured at startup for cross-thread DB writes
+        self.task: asyncio.Task | None = None
+        self.sentiment_task: asyncio.Task | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None  # captured at startup for cross-thread DB writes
         self.cfg: dict = {}
-        self.client: Optional[BinanceClient] = None
-        self.orch: Optional[SafeOrchestrator] = None
-        self.order_mgr: Optional[OrderManager] = None
-        self.universe: Optional[SymbolUniverse] = None
+        self.client: BinanceClient | None = None
+        self.orch: SafeOrchestrator | None = None
+        self.order_mgr: OrderManager | None = None
+        self.universe: SymbolUniverse | None = None
         # Telegram notifier — env-gated, no-op when EFLOUD_TELEGRAM_TOKEN/
         # CHAT_ID are not set. Constructed once at runner init so that
         # subsequent env edits don't change behavior mid-run (predictable).
@@ -102,12 +101,12 @@ class BotRunner:
         # never has None-check on the attr; the engine itself no-ops on None pool.
         self.audit_engine: AuditEngine = AuditEngine(pool=None)
         self.cycle_count = 0
-        self.last_cycle_at: Optional[str] = None
+        self.last_cycle_at: str | None = None
         self.last_cycle_duration_ms: int = 0
         self.running = False
         self.stopped = False
-        self.last_error: Optional[str] = None
-        self.pubsub_task: Optional[asyncio.Task] = None  # Phase 3.1 Pub/Sub consumer
+        self.last_error: str | None = None
+        self.pubsub_task: asyncio.Task | None = None  # Phase 3.1 Pub/Sub consumer
 
         # ── Kronos advisory layer (default-OFF, additive, advisory-only) ──────
         # All state initialised inert so the bot behaves EXACTLY as if the
@@ -118,8 +117,8 @@ class BotRunner:
         self._kronos_enabled: bool = False
         self._kronos_run_on: set = set()          # subset of {"trade_open","readonly"}
         self._kronos_available: bool = True        # flipped False by the prewarm gate on failure
-        self._kronos_executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
-        self._kronos_sem: Optional[asyncio.Semaphore] = None
+        self._kronos_executor: concurrent.futures.ThreadPoolExecutor | None = None
+        self._kronos_sem: asyncio.Semaphore | None = None
         self._kronos_last_run: dict = {}           # (symbol,direction,bar_bucket) -> ts
         self._kronos_inflight: set = set()         # (symbol,direction,bar_bucket) in-flight
         self._kronos_cache = None                  # SentimentCache, lazily built when enabled
@@ -1031,7 +1030,7 @@ class BotRunner:
         entry: float,
         sl: float,
         tp1: float,
-        tp2: Optional[float],
+        tp2: float | None,
         confluence: int,
         reasons: list[str],
     ) -> None:
@@ -1059,13 +1058,13 @@ class BotRunner:
 
     async def _run_kronos_analysis(
         self,
-        trade_id: Optional[str],
+        trade_id: str | None,
         symbol: str,
         direction: str,
         entry: float,
         sl: float,
         tp1: float,
-        tp2: Optional[float],
+        tp2: float | None,
         confluence: int,
         reasons: list[str],
     ) -> None:

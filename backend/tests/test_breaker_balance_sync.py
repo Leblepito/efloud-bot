@@ -5,7 +5,7 @@ On open positions, unrealized PnL or external wallet changes (manual transfer) d
 breaker state away from reality. Real incident (2026-05-05): bot HALTED with reported
 balance $993 while wallet was actually $2040 because the breaker tracked stale state.
 """
-from engine.safety.breaker import CircuitBreaker, BreakerState
+from engine.safety.breaker import BreakerState, CircuitBreaker
 
 
 def _fresh_breaker(starting=2000.0, threshold=1800.0):

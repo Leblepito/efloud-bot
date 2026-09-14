@@ -27,7 +27,6 @@ her sembolde sinyal sessizce sıfırlanırdı. Bkz. `po3_blocks_entry`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import pandas as pd
 
@@ -42,11 +41,11 @@ class Po3State:
     """Bir Po3 penceresinin (varsayılan: günlük) anlık durumu."""
 
     phase: str
-    acc_high: Optional[float] = None
-    acc_low: Optional[float] = None
-    swept_side: Optional[str] = None   # "UP" | "DOWN" | None
-    sweep_idx: Optional[int] = None
-    confirm_idx: Optional[int] = None  # distribution'ı doğrulayan displacement barı
+    acc_high: float | None = None
+    acc_low: float | None = None
+    swept_side: str | None = None   # "UP" | "DOWN" | None
+    sweep_idx: int | None = None
+    confirm_idx: int | None = None  # distribution'ı doğrulayan displacement barı
     reason: str = ""
 
 
@@ -116,8 +115,8 @@ def classify_po3_phase(
 
     highs = df["high"].values
     lows = df["low"].values
-    sweep_idx: Optional[int] = None
-    swept_side: Optional[str] = None
+    sweep_idx: int | None = None
+    swept_side: str | None = None
     for pos in post_positions:
         if highs[pos] > acc_high:
             sweep_idx, swept_side = pos, "UP"
@@ -137,7 +136,7 @@ def classify_po3_phase(
     # Süpürme sonrası displacement var mı? Varsa manipülasyon bitti, dağıtım başladı.
     ref = _body_ref(df, body_ref_len)
     body = (df["close"] - df["open"]).abs()
-    confirm_idx: Optional[int] = None
+    confirm_idx: int | None = None
     for pos in range(sweep_idx + 1, len(df)):
         if body.iloc[pos] >= disp_mult * ref.iloc[pos]:
             confirm_idx = pos
@@ -172,7 +171,7 @@ def po3_blocks_entry(state: Po3State) -> bool:
     return state.phase == PHASE_MANIPULATION
 
 
-def po3_expected_direction(state: Po3State) -> Optional[str]:
+def po3_expected_direction(state: Po3State) -> str | None:
     """Süpürme yönünden beklenen dağıtım yönü.
 
     Klasik Po3: manipülasyon sahte yöndür; asıl hareket TERSİ yöne gider.

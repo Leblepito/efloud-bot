@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
-from io import BytesIO
 from pathlib import Path
-
 
 # ─────────────────────────────────────────────────────────────────────
 # JsonLogTail — file position cursor over a JSON-line log file.

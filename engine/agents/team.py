@@ -27,13 +27,16 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 import threading
+import time
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any
 
-from .gemini_client import DEFAULT_MODEL, GeminiClient  # noqa: F401 (back-compat type/import)
+from .gemini_client import (  # noqa: F401 (back-compat type/import)
+    DEFAULT_MODEL,
+    GeminiClient,
+)
 from .llm import make_llm_client
 from .roles import (
     OverseerAgent,
@@ -62,9 +65,9 @@ class AgentTeam:
 
     def __init__(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         *,
-        client: Optional[GeminiClient] = None,
+        client: GeminiClient | None = None,
         state_dir: str = "./state",
     ) -> None:
         self.cfg = dict(config or {})
@@ -89,11 +92,11 @@ class AgentTeam:
 
         self._lock = threading.RLock()
         # Rolling in-memory history for the /api/ai/agents endpoint.
-        self._history: Deque[Dict[str, Any]] = deque(maxlen=_INMEM_HISTORY_LIMIT)
+        self._history: deque[dict[str, Any]] = deque(maxlen=_INMEM_HISTORY_LIMIT)
 
     # ── Public API ────────────────────────────────────────────────────────
 
-    def review_trade(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    def review_trade(self, ctx: dict[str, Any]) -> dict[str, Any]:
         """Per-signal advisory. Does NOT change deterministic guard behavior.
 
         Returns a dict with ``team_verdict``, ``team_confidence``, ``score``,
@@ -108,7 +111,7 @@ class AgentTeam:
         # LLM prompts. A memory-poisoning guard is a follow-up.
 
         try:
-            verdicts: List[Any] = [
+            verdicts: list[Any] = [
                 self.signal.review(ctx),
                 self.risk.review(ctx),
                 self.regime.review(ctx),
@@ -131,7 +134,7 @@ class AgentTeam:
                 agents_list = ([v.to_dict() if hasattr(v, "to_dict") else dict(v) for v in verdicts]
                                + [final.to_dict() if hasattr(final, "to_dict") else dict(final)])
 
-            review: Dict[str, Any] = {
+            review: dict[str, Any] = {
                 "team_verdict": final_verdict,
                 "team_confidence": final_confidence,
                 "score": score,
@@ -159,7 +162,7 @@ class AgentTeam:
             })
         return review
 
-    def recent_reviews(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def recent_reviews(self, limit: int = 20) -> list[dict[str, Any]]:
         """Return the most recent verdicts (newest first) for the API."""
         with self._lock:
             return list(reversed(list(self._history)))[:limit]
@@ -184,7 +187,7 @@ class AgentTeam:
 
     # ── Telemetry sinks ───────────────────────────────────────────────────
 
-    def _log_disagreement(self, ctx: Dict[str, Any], review: Dict[str, Any]) -> None:
+    def _log_disagreement(self, ctx: dict[str, Any], review: dict[str, Any]) -> None:
         """Append one row per cycle to ``agent_disagreements.jsonl``."""
         with self._lock:
             try:

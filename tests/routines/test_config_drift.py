@@ -1,5 +1,6 @@
 from scripts.routines.config_drift import evaluate, run
 
+
 def test_drift_detected():
     _, b = evaluate({"min_confluence": 50}, {"min_confluence": 80}, ["min_confluence"])
     assert any(x["severity"] == "warn" for x in b)
@@ -70,6 +71,7 @@ def _repo_shape(min_conf=50, daily=10.0):
 def test_matching_configs_produce_zero_breaches(tmp_path, monkeypatch):
     """Eski key seti gerçek şemada 2 kalıcı false drift + 2 kör key üretiyordu."""
     import yaml
+
     import scripts.routines._base as base
 
     cfg_file = tmp_path / "instance.yaml"
@@ -88,6 +90,7 @@ def test_min_confluence_drift_now_detected(tmp_path, monkeypatch):
     """Canlı-para eşiği risk.min_confluence altında — eski 'min_confluence'
     top-level key'i iki tarafta da None bulup drift'i HİÇ yakalayamıyordu."""
     import yaml
+
     import scripts.routines._base as base
 
     cfg_file = tmp_path / "instance.yaml"

@@ -1,12 +1,11 @@
 """Unit tests for candle close synchronization in BotRunner and main.py loop."""
 from __future__ import annotations
 
-import time
 from unittest.mock import MagicMock, patch
-import pytest
 
 from backend.bot_runner import BotRunner
 from main import run_cycle
+
 
 def test_bot_runner_scan_universe_only_runs_on_candle_close():
     """BotRunner._scan_universe should skip execution if within the same candle timeframe,

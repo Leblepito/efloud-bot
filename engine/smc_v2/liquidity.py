@@ -22,7 +22,6 @@ Saf fonksiyon — I/O yok, log yok.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Optional
 
 import pandas as pd
 
@@ -54,7 +53,7 @@ def detect_liquidity_event(
     sweep_threshold_atr: float = 0.5,
     min_excess_atr: float = 0.10,
     reclaim_bars: int = 3,
-) -> Optional[LiquidityEvent]:
+) -> LiquidityEvent | None:
     """`df` içindeki SON likidite olayını tespit et ve sınıflandır.
 
     Bir olay ancak seviye ihlal edilir VE `reclaim_bars` içinde gövde
@@ -126,7 +125,7 @@ def detect_liquidity_event(
 
 
 def liquidity_score(
-    event: Optional[LiquidityEvent],
+    event: LiquidityEvent | None,
     regime: str,
     htf_level: bool = False,
     base: int = 9,
@@ -165,7 +164,7 @@ def liquidity_score(
     return int(min(score, base + htf_bonus + clean_reclaim_bonus))
 
 
-def regime_risk_multiplier(event: Optional[LiquidityEvent], regime: str) -> float:
+def regime_risk_multiplier(event: LiquidityEvent | None, regime: str) -> float:
     """Trend-devam kurgusunda majör SWEEP geldiyse riski kıs (0.85).
 
     Gerekçe: kaynak SWEEP'i trend DEĞİŞİMİ ile ilişkilendiriyor. Trend yönünde

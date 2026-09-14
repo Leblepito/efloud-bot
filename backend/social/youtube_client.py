@@ -20,7 +20,6 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 log = logging.getLogger("efloud.youtube")
 
@@ -41,7 +40,13 @@ except ImportError:
     log.warning("gTTS not available - YouTube client will be limited")
 
 try:
-    from moviepy.editor import CompositeVideoClip, ImageClip, AudioFileClip, TextClip, ColorClip
+    from moviepy.editor import (
+        AudioFileClip,
+        ColorClip,
+        CompositeVideoClip,
+        ImageClip,
+        TextClip,
+    )
     _MOVIEPY_AVAILABLE = True
 except ImportError:
     log.warning("moviepy not available - YouTube client will be limited")
@@ -84,11 +89,11 @@ class YouTubeResponse:
     ok: bool
     dry_run: bool = False
     would_execute: bool = False
-    post_id: Optional[str] = None  # YouTube video ID
-    post_url: Optional[str] = None  # YouTube watch URL
+    post_id: str | None = None  # YouTube video ID
+    post_url: str | None = None  # YouTube watch URL
     stdout: str = ""
     stderr: str = ""
-    exit_code: Optional[int] = None
+    exit_code: int | None = None
     raw: dict = None
 
     def to_dict(self) -> dict:
@@ -111,7 +116,7 @@ def _enabled() -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
-def _credential(name: str) -> Optional[str]:
+def _credential(name: str) -> str | None:
     """YouTube credential env read."""
     raw = os.environ.get(name, "").strip()
     return raw if raw else None
@@ -148,7 +153,7 @@ class YouTubeClient:
         """Client enabled ve credentials var."""
         return self._active
 
-    def _create_video(self, text: str, image_path: Optional[str] = None) -> Optional[str]:
+    def _create_video(self, text: str, image_path: str | None = None) -> str | None:
         """Create 9:16 video from text and image.
 
         Returns:
@@ -219,7 +224,7 @@ class YouTubeClient:
             log.error(f"OAuth refresh failed: {e}")
             return False
 
-    def post(self, text: str, *, video_path: Optional[str] = None) -> YouTubeResponse:
+    def post(self, text: str, *, video_path: str | None = None) -> YouTubeResponse:
         """YouTube Short upload (9:16 video).
 
         Args:
@@ -329,7 +334,7 @@ class YouTubeClient:
 
 
 # Singleton instance
-_client_instance: Optional[YouTubeClient] = None
+_client_instance: YouTubeClient | None = None
 
 
 def get_youtube_client() -> YouTubeClient:

@@ -15,14 +15,13 @@ Atomik yazım: önce .tmp'ye yaz, sonra rename (crash-safe).
 """
 
 import json
-import os
-import tempfile
-import threading
-import shutil
-from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional, Any
 import logging
+import os
+import shutil
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 log = logging.getLogger("efloud.state")
 
@@ -70,7 +69,7 @@ class StateStore:
                     pass
             return False
 
-    def load(self, key: str) -> Optional[Any]:
+    def load(self, key: str) -> Any | None:
         """State yükle."""
         path = self.dir / f"{key}.json"
         if not path.exists():
@@ -91,7 +90,7 @@ class StateStore:
                 pass
             return None
 
-    def saved_at(self, key: str) -> Optional[datetime]:
+    def saved_at(self, key: str) -> datetime | None:
         """State dosyası ne zaman yazıldı?"""
         path = self.dir / f"{key}.json"
         if not path.exists():
@@ -127,7 +126,6 @@ class StateStore:
 
 class ReconciliationError(Exception):
     """Bot state ile exchange state uyuşmadığında."""
-    pass
 
 
 def reconcile_positions(bot_positions: list, exchange_positions: list,

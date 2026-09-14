@@ -11,10 +11,12 @@ mae_pct=0, mfe_pct=0 because the args were never passed, and the dataclass
 didn't even have the fields.
 """
 from unittest.mock import MagicMock
+
 import pytest
 
-from exchange import OrderManager, Position as ExchangePosition
 from engine.journal import TradeJournal
+from exchange import OrderManager
+from exchange import Position as ExchangePosition
 
 
 @pytest.fixture

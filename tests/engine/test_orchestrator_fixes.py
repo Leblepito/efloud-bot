@@ -11,8 +11,6 @@ F2: Canlı v2 open lifecycle'a mirror edilmiyordu → guard'lar + breaker kör.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
-
 from engine.lifecycle import PositionLifecycle
 from engine.safe_orchestrator import SafeOrchestrator
 

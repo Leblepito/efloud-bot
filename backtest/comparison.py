@@ -12,7 +12,6 @@ import pandas as pd
 from backtest.engine import _DEFAULT_SMC_WINDOW, run_backtest
 from backtest.metrics import compute_stop_hunt_rate
 
-
 # Gate semantics (per spec §8.2):
 #   "v2_min_vs_v1" — higher is better; v2/v1 ratio threshold
 #   "v2_max_vs_v1" — lower is better; v2/v1 ratio threshold
@@ -101,7 +100,7 @@ def compute_deltas(v1: dict, v2: dict) -> dict[str, dict]:
     Skips non-numeric fields. `rel_pct` is None when v1 == 0.
     """
     out = {}
-    for key in v1.keys():
+    for key in v1:
         v1_val = v1.get(key)
         v2_val = v2.get(key)
         if not isinstance(v1_val, (int, float)) or not isinstance(v2_val, (int, float)):

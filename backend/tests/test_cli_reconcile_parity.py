@@ -18,8 +18,8 @@ regression protection on the production CLI code path. The dedup contract is
 byte-equivalent to bot_runner's helper: record + flag live INSIDE the
 `if logical is not None and not logical._reported_to_breaker` block.
 """
-from dataclasses import dataclass, field
 import logging
+from dataclasses import dataclass, field
 from unittest.mock import MagicMock
 
 

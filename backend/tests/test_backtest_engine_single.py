@@ -3,6 +3,7 @@
 Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §5, §6.1
 """
 import json
+
 import pandas as pd
 import pytest
 import yaml
@@ -65,9 +66,10 @@ def test_engine_deterministic(base_config, synthetic_data):
 def test_mtm_dd_isolated_unit(base_config, tmp_path):
     """Inject a position manually; verify MTM drawdown picks up unrealized loss."""
     import tempfile
+
+    from backtest.engine import compute_mtm_drawdown
     from engine import SafeOrchestrator
     from engine.notifications import NullNotificationManager
-    from backtest.engine import compute_mtm_drawdown
 
     with tempfile.TemporaryDirectory() as state_dir:
         orch = SafeOrchestrator(

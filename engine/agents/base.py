@@ -15,10 +15,9 @@ new verdicts without updating the team aggregation logic.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from .gemini_client import GeminiClient
-
 
 VERDICTS = ("ACCEPT", "REJECT", "NEUTRAL", "ERROR")
 
@@ -35,9 +34,9 @@ class AgentVerdict:
     verdict: str          # one of VERDICTS
     confidence: float     # 0.0 - 1.0
     reasoning: str
-    raw: Dict[str, Any]
+    raw: dict[str, Any]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "verdict": self.verdict,
@@ -66,16 +65,16 @@ class BaseAgent:
 
     # ── Hooks subclasses override ─────────────────────────────────────────
 
-    def build_prompt(self, ctx: Dict[str, Any]) -> str:
+    def build_prompt(self, ctx: dict[str, Any]) -> str:
         raise NotImplementedError
 
-    def filter_context(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    def filter_context(self, ctx: dict[str, Any]) -> dict[str, Any]:
         """Default: pass through unchanged. Override to enforce role scope."""
         return ctx
 
     # ── Default orchestration ─────────────────────────────────────────────
 
-    def review(self, ctx: Dict[str, Any]) -> AgentVerdict:
+    def review(self, ctx: dict[str, Any]) -> AgentVerdict:
         """Filter → prompt → LLM → verdict.
 
         Failures (network, parse, empty response) are caught upstream
@@ -103,7 +102,7 @@ class BaseAgent:
                                 confidence=0.0, reasoning=f"Agent review failed: {e!r}", raw={})
 
 
-def _verdict_from_payload(name: str, data: Dict[str, Any]) -> AgentVerdict:
+def _verdict_from_payload(name: str, data: dict[str, Any]) -> AgentVerdict:
     """Coerce a raw LLM JSON payload into a typed :class:`AgentVerdict`.
 
     Expected schema (validated permissively — missing fields tolerated,

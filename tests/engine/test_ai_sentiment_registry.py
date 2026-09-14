@@ -1,6 +1,3 @@
-import json
-from pathlib import Path
-import pytest
 
 def test_default_sentiment_registry_fallback(tmp_path):
     reg_path = tmp_path / "ai_sentiment_registry.json"

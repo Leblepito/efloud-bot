@@ -1,4 +1,3 @@
-import pytest
 from scripts.routines import runner
 
 

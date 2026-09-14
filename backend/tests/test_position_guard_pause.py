@@ -17,16 +17,14 @@ import logging
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
-
+from engine.lifecycle import PositionLifecycle
+from engine.safety.breaker import CircuitBreaker
 from engine.safety.position_guard import (
     PauseGateDecision,
     PositionCheckResult,
     PositionGuard,
     load_pause_config,
 )
-from engine.lifecycle import PositionLifecycle
-from engine.safety.breaker import CircuitBreaker
 from exchange import OrderManager
 
 

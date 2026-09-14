@@ -13,10 +13,7 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
-import tempfile
 import time
-from typing import Optional
 
 import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -102,7 +99,7 @@ def fmt_pnl(val) -> str:
     sign = "+" if f > 0 else ""
     return f"{sign}{f:.2f} USDT"
 
-def date_str(ts: Optional[str]) -> str:
+def date_str(ts: str | None) -> str:
     if not ts:
         return ""
     try:
@@ -114,7 +111,7 @@ def date_str(ts: Optional[str]) -> str:
 
 # ─── Bot API İstemcisi ────────────────────────────────────────────────────────
 
-def get_bot_session(bot_id: str) -> Optional[requests.Session]:
+def get_bot_session(bot_id: str) -> requests.Session | None:
     cfg = BOTS[bot_id]
     session = requests.Session()
     try:
@@ -157,7 +154,7 @@ def fetch_history(bot_id: str, limit: int = 5) -> list:
         logger.error("History hatası %s: %s", bot_id, e)
     return []
 
-def fetch_equity(bot_id: str) -> Optional[float]:
+def fetch_equity(bot_id: str) -> float | None:
     session = get_bot_session(bot_id)
     if not session:
         return None
@@ -356,7 +353,8 @@ def publish_to_instagram(caption: str, image_path: str | None = None, bot_id: st
     Sandbox'taki zamanlanmış görev bu dosyayı okuyup MCP ile yayınlar.
     """
     try:
-        import base64, uuid
+        import base64
+        import uuid
         pending_dir = "/tmp/ig_pending"
         os.makedirs(pending_dir, exist_ok=True)
 

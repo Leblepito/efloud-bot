@@ -26,12 +26,11 @@ Configuration (via config.yaml or environment variables):
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
 import time
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from engine import SafeOrchestrator
@@ -54,10 +53,10 @@ def _build_signal_model():
             entry:     float
             sl:        float
             tp1:       float
-            tp2:       Optional[float] = None
-            size:      Optional[float] = None       # override position sizing
-            source:    Optional[str]  = None        # signal origin tag
-            timestamp: Optional[int]  = None        # UTC ms epoch
+            tp2:       float | None = None
+            size:      float | None = None       # override position sizing
+            source:    str | None  = None        # signal origin tag
+            timestamp: int | None  = None        # UTC ms epoch
 
             @field_validator("direction")
             @classmethod
@@ -97,7 +96,7 @@ class PubSubConsumer:
     def __init__(
         self,
         cfg: dict,
-        orchestrator: "Optional[SafeOrchestrator]" = None,
+        orchestrator: SafeOrchestrator | None = None,
         order_manager: Any = None,
     ) -> None:
         self.cfg = cfg
@@ -291,7 +290,7 @@ class PubSubConsumer:
             self._seen_ids[msg_id] = time.monotonic()
             self._ack(subscriber, sub_path, [received_msg.ack_id])
 
-    def _pretrade_guard(self, signal) -> Optional[str]:
+    def _pretrade_guard(self, signal) -> str | None:
         """B-7 (2026-07-18): pubsub dispatch SafeOrchestrator'ın gate zincirini
         (breaker/max-pos/confluence) TAMAMEN baypas ediyordu. Minimal fail-closed
         guard — reddedilirse sebep string'i döner (kalıcı-red → ACK-discard),

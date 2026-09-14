@@ -1,6 +1,7 @@
 import ast
 from pathlib import Path
 
+
 def test_resolver_imports_no_order_surface():
     src = Path("scripts/routines/resolve_signals.py").read_text(encoding="utf-8")
     tree = ast.parse(src)

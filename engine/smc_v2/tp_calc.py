@@ -16,9 +16,8 @@ Spec §5.2:
   Precedence on price ties (LIQUIDITY > FVG_NEAR) is explicit via a priority
   dict so a future refactor reordering list-comp blocks cannot silently flip it.
 """
-from typing import Protocol, Tuple, Optional
+from typing import Protocol
 
-from engine.smc import FVG, EqLevel
 from engine.smc_v2.exceptions import InsufficientTPDistanceError
 
 
@@ -51,7 +50,7 @@ def calc_tp_targets(
     htf_fvgs: list,              # List[FVG]
     eq_levels: list,             # List[EqLevel]
     config: RiskConfigLike,
-) -> Tuple[float, Optional[float], dict]:
+) -> tuple[float, float | None, dict]:
     """Compute TP1 + TP2 + source tags."""
     risk = abs(entry_price - sl_price)
     min_rr = config.min_rr

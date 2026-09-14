@@ -2,10 +2,8 @@
 
 Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §9.4
 """
-import json
-import pytest
 
-from backtest.grid import expand_grid, config_hash, GridRunner
+from backtest.grid import GridRunner, config_hash, expand_grid
 
 
 def test_grid_expansion_2d():

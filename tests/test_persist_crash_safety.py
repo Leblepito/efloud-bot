@@ -23,9 +23,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from exchange import OrderManager, Position
-from engine.safety.state import StateStore
 from engine.journal import TradeJournal, TradeSnapshot
+from engine.safety.state import StateStore
+from exchange import OrderManager, Position
 
 
 def _snap(i: int) -> TradeSnapshot:

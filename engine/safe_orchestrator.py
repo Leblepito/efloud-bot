@@ -14,10 +14,11 @@ Safe Orchestrator v2.1 — Güvenlik Katmanları Entegre
 import json
 import logging
 import os
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional, TYPE_CHECKING
-from dataclasses import dataclass
+from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
 
@@ -25,22 +26,29 @@ if TYPE_CHECKING:
     from engine.smc_v2.setup_state import SetupStateStore
     from engine.smc_v2.zones import ZoneSpec
 
-from .smc import SMCEngine
-from .levels import LevelEngine
+from utils.logging import log_event, new_trace_id, set_trace_id
+
 from .intent import IntentEngine
-from .signals import generate_signals
-from .scenarios import ScenarioPlanner
-from .lifecycle import PositionLifecycle, Position
 from .journal import TradeJournal, TradeSnapshot
+from .levels import LevelEngine
+from .lifecycle import Position, PositionLifecycle
+from .regimes import RegimeDetector
 from .report import ReportEngine
-from .regimes import RegimeDetector, RegimeAnalysis
 from .safety import (
-    CircuitBreaker, StateStore, PositionGuard, load_pause_config,
-    OrphanProtector, load_orphan_protection_config,
-    validate_kline_freshness, validate_kline_integrity,
-    StaleDataError, cleanup_orphan_hedges
+    CircuitBreaker,
+    OrphanProtector,
+    PositionGuard,
+    StaleDataError,
+    StateStore,
+    cleanup_orphan_hedges,
+    load_orphan_protection_config,
+    load_pause_config,
+    validate_kline_freshness,
+    validate_kline_integrity,
 )
-from utils.logging import new_trace_id, set_trace_id, log_event
+from .scenarios import ScenarioPlanner
+from .signals import generate_signals
+from .smc import SMCEngine
 
 log = logging.getLogger("efloud.safe_orch")
 
@@ -171,9 +179,9 @@ class SafeOrchestrator:
                   *,
                   freshness_check: bool = True,
                   persist: bool = True,
-                  trade_journal: Optional[TradeJournal] = None,
+                  trade_journal: TradeJournal | None = None,
                   setup_state_store: Optional["SetupStateStore"] = None,
-                  breaker_state_sink: Optional[Callable[[dict], None]] = None):
+                  breaker_state_sink: Callable[[dict], None] | None = None):
         """
         permission_mgr: PermissionManager instance (opsiyonel)
         notification_mgr: NotificationManager instance (opsiyonel)
@@ -570,12 +578,12 @@ class SafeOrchestrator:
     def _journal_record_entry(
         self,
         pos: Position,
-        agent_review: Optional[dict] = None,
+        agent_review: dict | None = None,
         signal_entry_price: float = 0.0,
         actual_fill_price: float = 0.0,
         zone_mid: float = 0.0,
-        ts_signal: Optional[str] = None,
-        ts_fill: Optional[str] = None,
+        ts_signal: str | None = None,
+        ts_fill: str | None = None,
     ) -> None:
         """Record a freshly-opened position to the trade journal with telemetry.
 
@@ -677,7 +685,7 @@ class SafeOrchestrator:
         pos: Position,
         confluence: int,
         htf_bias: str,
-        df_htf: Optional[pd.DataFrame],
+        df_htf: pd.DataFrame | None,
         adx: float,
         rr: float,
         size_notional_pct: float,
@@ -1048,9 +1056,9 @@ class SafeOrchestrator:
         df_htf: pd.DataFrame,
         df_mtf: pd.DataFrame,
         df_entry: pd.DataFrame,
-        df_daily: Optional[pd.DataFrame] = None,
-        balance: Optional[float] = None,
-        now: Optional[datetime] = None,
+        df_daily: pd.DataFrame | None = None,
+        balance: float | None = None,
+        now: datetime | None = None,
     ) -> SafeCycleResult:
         """Safety check'li tam analiz cycle'ı."""
         # Multi-instance lease acquisition (fail-closed, must succeed before any work)
@@ -1417,7 +1425,7 @@ class SafeOrchestrator:
                     except Exception as e:
                         log.warning(f"Error in synchronous AgentTeam gating review: {e!r}")
                         _agent_veto = True
-                        log.warning(f"🚫 [AgentTeam] Signal vetoed due to exception in gating review")
+                        log.warning("🚫 [AgentTeam] Signal vetoed due to exception in gating review")
             
                 if _agent_veto:
                     actions.append(f"[{symbol}] Vetoed by agent team")
@@ -1485,7 +1493,9 @@ class SafeOrchestrator:
                                     leverage=self.config["exchange"].get("leverage", 1),
                                 )
                             elif risk_cfg.get("position_size_calculation") == "reverse_from_risk":
-                                from engine.risk.custom_calculator import CustomRiskCalculator
+                                from engine.risk.custom_calculator import (
+                                    CustomRiskCalculator,
+                                )
                                 calc = CustomRiskCalculator(
                                     max_loss_usdt=risk_cfg["max_loss_per_trade_usdt"],
                                     leverage=self.config["exchange"].get("leverage", 1),
@@ -1585,7 +1595,7 @@ class SafeOrchestrator:
                             })()
                             pause_decision = self.pos_guard.is_new_entry_allowed(pause_signal)
             
-                            reversed_from: Optional[str] = None
+                            reversed_from: str | None = None
                             if (not guard_check.allowed
                                 and pause_decision.allowed
                                 and guard_check.reason.startswith("OPPOSITE_DIRECTION_EXISTS")):
@@ -1789,7 +1799,7 @@ class SafeOrchestrator:
                     if not self.intent.check_confirmation(df_entry, bias_check, min_score=50):
                         continue
             
-                    from risk import calc_position_size, calc_fixed_position_size
+                    from risk import calc_fixed_position_size, calc_position_size
                     balance_now = balance if balance else 10000.0
                     mid = (scen.entry_zone_top + scen.entry_zone_bottom) / 2
                     lev = self.config["exchange"].get("leverage", 1)
@@ -1994,8 +2004,8 @@ class SafeOrchestrator:
         effective_pullback_timeout_bars = smc_v2_cfg.get("pullback_timeout_bars", pullback_timeout_bars)
 
         # Local import to avoid module-level circular dependency on smc_v2
-        from engine.smc_v2.zones import is_price_in_zone
         from engine.smc_v2.setup_state import PERSISTED_STATES
+        from engine.smc_v2.zones import is_price_in_zone
 
         # ── BT-24 (2026-07-26): bars_waited counts CLOSED LTF BARS, not ticks ──
         # It used to increment on every orchestrator tick. With
@@ -2143,6 +2153,7 @@ class SafeOrchestrator:
                 state_dir = self.config.get("operation", {}).get("state_dir", "./state")
                 self.signal_ledger = SignalLedger(_P(state_dir) / "signal_ledger.jsonl")
             import time as _time
+
             import pandas as _pd
             ts_raw = getattr(latest, "timestamp", "") or ""
             try:
@@ -2394,11 +2405,12 @@ class SafeOrchestrator:
             log.warning(f"[v2 reject] {cand.symbol}: breaker check failed ({e})")
             return None
 
+        from types import SimpleNamespace
+
+        from engine.smc_v2.atr import wilder_atr
+        from engine.smc_v2.exceptions import InsufficientTPDistanceError, SLTooFarError
         from engine.smc_v2.sl_calc import calc_sl
         from engine.smc_v2.tp_calc import calc_tp_targets
-        from engine.smc_v2.exceptions import SLTooFarError, InsufficientTPDistanceError
-        from engine.smc_v2.atr import wilder_atr
-        from types import SimpleNamespace
 
         safety_cfg = self.config.get("safety", {})
         risk_cfg = self.config.get("risk", {})

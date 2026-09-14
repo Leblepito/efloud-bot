@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 log = logging.getLogger("efloud.signals.smc")
 
@@ -68,7 +68,7 @@ def compute_smc_heuristic(
 
     # 2. BOS / CHOCH
     structure: list[dict[str, Any]] = []
-    trend: Optional[str] = None
+    trend: str | None = None
     last_high = last_low = None
     si = 0
     for i in range(n):
@@ -165,7 +165,7 @@ def _candles_from_klines(klines: list[list]) -> list[Candle]:
     return out
 
 
-def _engine_smc(symbol: str, timeframe: str, runner: Any) -> Optional[dict[str, Any]]:
+def _engine_smc(symbol: str, timeframe: str, runner: Any) -> dict[str, Any] | None:
     """Try to read live SMC structure off the running orchestrator.
 
     The bot's ``engine/smc_v2`` setups (``select_htf_swing_anchor``,

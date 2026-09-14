@@ -2,7 +2,6 @@
 
 Bot worker başlatılmaz (lifespan bypass'lanır), sadece HTTP layer test edilir.
 """
-import os
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -24,8 +23,8 @@ async def client(tmp_path):
     skipped, so we wire it explicitly here with a fresh RuntimeState that the
     test can pre-populate to simulate either healthy or unhealthy states.
     """
-    from backend.main import app
     from backend.healthz import configure as configure_healthz
+    from backend.main import app
     from engine.safety.runtime_state import RuntimeState
 
     rs = RuntimeState(state_dir=str(tmp_path))

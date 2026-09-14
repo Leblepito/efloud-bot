@@ -9,11 +9,14 @@ from typing import Any, Literal
 
 import pandas as pd
 
-from backtest.intrabar import resolve_fill, Bar
+from backtest.intrabar import Bar, resolve_fill
 from backtest.metrics import (
-    aggregate_metrics, apply_commission_costs, apply_funding_costs, serialize_trade,
+    aggregate_metrics,
+    apply_commission_costs,
+    apply_funding_costs,
+    serialize_trade,
 )
-from backtest.slippage import adverse_fill, SlippageConfig
+from backtest.slippage import SlippageConfig, adverse_fill
 from data.timeframes import tf_to_minutes
 from engine import SafeOrchestrator
 from engine.notifications import NullNotificationManager

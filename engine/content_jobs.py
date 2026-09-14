@@ -15,7 +15,6 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 try:
     import jsonschema
@@ -42,7 +41,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _git_commit() -> Optional[str]:
+def _git_commit() -> str | None:
     """Container'da /app/.git/HEAD -> commit."""
     try:
         head = Path("/app/.git/HEAD")
@@ -58,8 +57,8 @@ def _git_commit() -> Optional[str]:
 class ContentJobEmitter:
     """Tek dosyaya atomik JSONL append. Per-day rotation. Hata -> log + drop."""
 
-    def __init__(self, base_path: Optional[Path] = None, env: str = "mainnet",
-                 loop_id: Optional[str] = None):
+    def __init__(self, base_path: Path | None = None, env: str = "mainnet",
+                 loop_id: str | None = None):
         self.base_path = base_path or _base_path()
         self.env = env
         self.loop_id = loop_id or str(uuid.uuid4())
@@ -69,7 +68,7 @@ class ContentJobEmitter:
         # aralarinda race olabilir. Lock ile sequentialize.
         self._lock = threading.Lock()
 
-    def _schema(self) -> Optional[dict]:
+    def _schema(self) -> dict | None:
         sp = Path(__file__).parent.parent / "docs" / "schemas" / f"content_job-{SCHEMA_VERSION}.json"
         if not sp.exists():
             sp = Path("docs/schemas") / f"content_job-{SCHEMA_VERSION}.json"
@@ -108,7 +107,7 @@ class ContentJobEmitter:
                 log.error("content_jobs_write_failed err=%s", e)
                 return False
 
-    def emit(self, event_type: str, signal: dict, execution: Optional[dict] = None) -> bool:
+    def emit(self, event_type: str, signal: dict, execution: dict | None = None) -> bool:
         if not _enabled():
             return False
         event = {
@@ -134,4 +133,4 @@ class ContentJobEmitter:
         return self._append(json.dumps(event, separators=(",", ":"), ensure_ascii=False))
 
 
-__all__ = ["ContentJobEmitter", "SCHEMA_VERSION"]
+__all__ = ["SCHEMA_VERSION", "ContentJobEmitter"]

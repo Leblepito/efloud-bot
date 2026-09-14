@@ -2,9 +2,11 @@
 Fail-closed unit tests for InstanceManager.sync_acquire_symbol and sync_release_symbol.
 Tests decision logic without actual DB dependencies.
 """
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, patch
+
+import pytest
+
 from engine.instance_manager import InstanceManager
 
 

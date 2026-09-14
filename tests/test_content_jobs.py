@@ -21,17 +21,12 @@ intact.
 """
 
 import json
-import os
-import shutil
-import tempfile
 import threading
 import uuid
-from pathlib import Path
-from unittest import mock
 
 import pytest
 
-from engine.content_jobs import ContentJobEmitter, SCHEMA_VERSION, _enabled, _base_path
+from engine.content_jobs import SCHEMA_VERSION, ContentJobEmitter
 from engine.notifications import NotificationManager
 
 

@@ -31,7 +31,6 @@ import pytest
 from engine.smc_v2.setup_state import SetupCandidate
 from engine.smc_v2.zones import ZoneSpec
 
-
 # --- fixtures ---------------------------------------------------------------
 
 class _RecordingStore:
@@ -84,7 +83,7 @@ def _orch(monkeypatch, candidates, max_entry_dist_atr=None,
     is a live setting there, not a disable.
     """
     from engine.safe_orchestrator import SafeOrchestrator
-    import engine.smc_v2.triggers as triggers
+    from engine.smc_v2 import triggers
 
     smc_v2 = {}
     if max_entry_dist_atr is not None:

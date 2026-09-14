@@ -17,6 +17,7 @@ Behavior (spec §5.2):
     LIQUIDITY > FVG_NEAR on ties.
 """
 from dataclasses import dataclass
+
 import pytest
 
 from engine.smc import FVG, EqLevel, Swing

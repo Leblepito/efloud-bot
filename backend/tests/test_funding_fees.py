@@ -2,8 +2,9 @@
 
 Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §6.5
 """
-import pytest
 import pandas as pd
+import pytest
+
 from backtest.funding import compute_funding_delta, funding_events_in_range
 
 

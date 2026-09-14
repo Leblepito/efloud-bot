@@ -1,11 +1,11 @@
 """Test publishing worker - approved draft processing and platform publishing."""
-import pytest
-from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime, timezone
+from unittest.mock import Mock, patch
 
-from backend.social.publishing_worker import PublishingWorker
+import pytest
+
 from backend.social.content_queue import ContentDraft, ContentStatus
-from backend.social.queue_storage import save_draft, load_draft
+from backend.social.publishing_worker import PublishingWorker
 
 
 @pytest.fixture

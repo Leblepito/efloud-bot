@@ -1,7 +1,8 @@
 import hashlib
 import json
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
+
 
 class SentimentCache:
     """SHA-256 JSON-based semantic caching layer for LLM requests."""
@@ -13,7 +14,7 @@ class SentimentCache:
     def _get_hash(self, text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-    def get(self, text: str) -> Optional[Dict[str, Any]]:
+    def get(self, text: str) -> dict[str, Any] | None:
         h = self._get_hash(text)
         cache_file = self.cache_dir / f"{h}.json"
         if cache_file.exists():
@@ -23,7 +24,7 @@ class SentimentCache:
                 return None
         return None
 
-    def set(self, text: str, data: Dict[str, Any]) -> None:
+    def set(self, text: str, data: dict[str, Any]) -> None:
         h = self._get_hash(text)
         cache_file = self.cache_dir / f"{h}.json"
         cache_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")

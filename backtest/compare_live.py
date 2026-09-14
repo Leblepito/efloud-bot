@@ -13,13 +13,11 @@ For testing: pass `live_trades=` and `backtest_trades=` directly to `reconcile()
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
-
 import statistics
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from backtest.slippage import SlippageConfig
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -40,7 +38,7 @@ def _parse_dt(value) -> datetime:
     return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def _get_pnl(trade: dict, *, is_live: bool) -> Optional[float]:
+def _get_pnl(trade: dict, *, is_live: bool) -> float | None:
     """Read pnl with explicit presence check (don't conflate 0.0 with absent).
 
     Live trades use pnl_usdt (Supabase schema); backtest uses pnl. We try the
@@ -96,9 +94,9 @@ def reconcile(
         candidates = bt_pool.get(key, [])
 
         live_dt = _parse_dt(live["opened_at"])
-        best_idx: Optional[int] = None
-        best_bt: Optional[dict] = None
-        best_gap: Optional[timedelta] = None
+        best_idx: int | None = None
+        best_bt: dict | None = None
+        best_gap: timedelta | None = None
 
         for bt_idx, bt in candidates:
             if bt_idx in used_bt_indices:
@@ -157,7 +155,7 @@ def reconcile(
         drift_pct_max = 0.0
 
     # Calibration recommendation
-    calibration_recommendation: Optional[dict] = None
+    calibration_recommendation: dict | None = None
     if abs(drift_pct_mean) > drift_threshold_pct and drift_pct_mean < 0:
         # Live worse than backtest → increase modeled slippage to match reality.
         factor = 1 + abs(drift_pct_mean) / 100

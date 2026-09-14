@@ -1,12 +1,10 @@
 """Verify migration 002 adds trace_id column and index to trades table."""
 from __future__ import annotations
 
-import asyncio
 import os
 
 import asyncpg
 import pytest
-
 
 pytestmark = pytest.mark.asyncio
 

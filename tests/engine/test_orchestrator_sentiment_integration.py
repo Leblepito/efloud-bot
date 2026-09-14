@@ -2,9 +2,11 @@
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
 import pandas as pd
-import pytest
+
 from engine.signals import generate_signals
+
 
 class TestSentimentConfluenceScoring:
     def _make_mock_engine(self, break_obj) -> MagicMock:

@@ -10,12 +10,11 @@ Uses asyncpg pool mocking so no real Postgres connection is required.
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from backend.db import Database
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers

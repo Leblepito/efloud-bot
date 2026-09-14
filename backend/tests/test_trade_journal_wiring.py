@@ -10,6 +10,7 @@ TradeJournal, exposes two helper methods, and is a no-op when no journal
 is provided (backwards-compat).
 """
 from unittest.mock import MagicMock
+
 import pytest
 import yaml
 

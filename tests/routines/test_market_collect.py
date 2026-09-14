@@ -1,5 +1,6 @@
 from scripts.routines.market_collect import dedup_candles, detect_gaps, score_market
 
+
 def test_dedup_on_symbol_ts_source():
     rows = [{"symbol": "BTC", "ts": 1, "src": "1m", "o": 1}, {"symbol": "BTC", "ts": 1, "src": "1m", "o": 1}]
     assert len(dedup_candles(rows)) == 1

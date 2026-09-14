@@ -1,5 +1,6 @@
 """Per-leg slippage model for backtest fills."""
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 

@@ -16,10 +16,10 @@ import json
 import logging
 import os
 import threading
-from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import List, Optional, Dict, Any
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 log = logging.getLogger("efloud.journal")
 
@@ -49,12 +49,12 @@ class TradeSnapshot:
     actual_fill_price: float = 0.0
     slippage_pct: float = 0.0
     zone_mid: float = 0.0
-    ts_signal: Optional[str] = None
-    ts_fill: Optional[str] = None
+    ts_signal: str | None = None
+    ts_fill: str | None = None
     latency_ms: float = 0.0
 
     # Market conditions at entry
-    confluence_reasons: List[str] = field(default_factory=list)
+    confluence_reasons: list[str] = field(default_factory=list)
 
     # Flags at entry
     in_ote: bool = False
@@ -69,26 +69,26 @@ class TradeSnapshot:
     stacked_zones_count: int = 0
 
     # Scenario context
-    scenario_kind: Optional[str] = None   # "main" | "invalidation" | "plan_b"
-    scenario_name: Optional[str] = None
+    scenario_kind: str | None = None   # "main" | "invalidation" | "plan_b"
+    scenario_name: str | None = None
 
     # Runtime Agent Team verdict (canonical A7). Populated by
     # SafeOrchestrator._journal_record_entry when an agent team is
     # configured. ``None`` means the team was disabled or skipped.
     # The full dict is preserved so downstream post-mortem analysis
     # (PostMortemAgent) can mine the per-agent verdicts later.
-    agent_review: Optional[Dict[str, Any]] = None
+    agent_review: dict[str, Any] | None = None
 
     # Adaptations during life
-    additions: List[Dict] = field(default_factory=list)
-    partial_exits: List[Dict] = field(default_factory=list)
+    additions: list[dict] = field(default_factory=list)
+    partial_exits: list[dict] = field(default_factory=list)
     hedge_opened: bool = False
     hedge_pnl: float = 0.0
 
     # Exit
-    exit_timestamp: Optional[str] = None
-    exit_price: Optional[float] = None
-    exit_reason: Optional[str] = None
+    exit_timestamp: str | None = None
+    exit_price: float | None = None
+    exit_reason: str | None = None
     realized_pnl: float = 0.0
     realized_pnl_pct: float = 0.0
     bars_held: int = 0
@@ -99,8 +99,8 @@ class TradeSnapshot:
 
     # Post-mortem
     is_winner: bool = False
-    error_tags: List[str] = field(default_factory=list)
-    lessons: List[str] = field(default_factory=list)
+    error_tags: list[str] = field(default_factory=list)
+    lessons: list[str] = field(default_factory=list)
 
     # PR C — PnL reconciliation provenance. "estimated" = gross price-diff;
     # "exchange" = net realizedPnl - commission - funding from Binance income.
@@ -109,7 +109,7 @@ class TradeSnapshot:
     commission_paid: float = 0.0
     funding_paid: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -120,7 +120,7 @@ class TradeJournal:
         self.path = Path(journal_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
-        self._cache: List[TradeSnapshot] = []
+        self._cache: list[TradeSnapshot] = []
         self._load()
 
     def _load(self):
@@ -262,7 +262,7 @@ class TradeJournal:
             self._persist(snap)
             log.info(f"📝 Journal PnL reconciled: {trade_id} → ${realized_pnl:+.2f} [{pnl_source}]")
 
-    def attach_lessons(self, trade_id: str, error_tags: List[str], lessons: List[str]):
+    def attach_lessons(self, trade_id: str, error_tags: list[str], lessons: list[str]):
         """Post-mortem analiz sonuçlarını ekle."""
         with self._lock:
             snap = self.get(trade_id)
@@ -292,18 +292,18 @@ class TradeJournal:
                 os.fsync(f.fileno())
             os.replace(tmp, self.path)
 
-    def get(self, trade_id: str) -> Optional[TradeSnapshot]:
+    def get(self, trade_id: str) -> TradeSnapshot | None:
         with self._lock:
             for s in self._cache:
                 if s.trade_id == trade_id:
                     return s
             return None
 
-    def all_closed(self) -> List[TradeSnapshot]:
+    def all_closed(self) -> list[TradeSnapshot]:
         with self._lock:
             return [s for s in self._cache if s.exit_timestamp is not None]
 
-    def recent(self, n: int = 20) -> List[TradeSnapshot]:
+    def recent(self, n: int = 20) -> list[TradeSnapshot]:
         with self._lock:
             closed = self.all_closed()
             return closed[-n:]
@@ -334,7 +334,7 @@ class TradeJournal:
                                  if losses and sum(t.realized_pnl for t in losses) != 0 else 0,
             }
 
-    def update_agent_review(self, trade_id: str, agent_review: Dict[str, Any]):
+    def update_agent_review(self, trade_id: str, agent_review: dict[str, Any]):
         """Post-entry: update the agent team review in the snapshot and persist."""
         with self._lock:
             snap = self.get(trade_id)

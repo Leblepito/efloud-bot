@@ -14,7 +14,7 @@ The CUSTOMER-channel notifier is distinct from backend.notifications.TelegramNot
 """
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 

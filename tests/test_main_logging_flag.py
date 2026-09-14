@@ -44,6 +44,7 @@ def test_setup_logging_uses_json_formatter_when_flag_set(tmp_path):
     otherwise the bot's own logging override would clobber configure_json_logging().
     """
     import json
+
     from main import setup_logging
 
     log_path = tmp_path / "efloud_test.log"

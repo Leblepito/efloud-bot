@@ -22,7 +22,6 @@ from unittest.mock import MagicMock
 
 from exchange import BinanceClient, OrderManager
 
-
 # ── pure guard logic ──────────────────────────────────────────────
 
 def test_allow_when_live_near_signal():

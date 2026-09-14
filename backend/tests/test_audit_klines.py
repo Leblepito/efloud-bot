@@ -31,7 +31,7 @@ def test_fetch_klines_returns_normalized_candles():
 
 def test_fetch_klines_passes_correct_params():
     with patch("backend.audit.klines.requests.get") as mock_get:
-        mock_get.return_value = MagicMock(status_code=200, json=lambda: [])
+        mock_get.return_value = MagicMock(status_code=200, json=list)
         fetch_klines("ETHUSDT", "5m", 100, 200)
 
     call = mock_get.call_args
@@ -82,7 +82,7 @@ def test_fetch_klines_handles_malformed_json():
 
 def test_fetch_klines_empty_response_returns_empty_list():
     with patch("backend.audit.klines.requests.get") as mock_get:
-        mock_get.return_value = MagicMock(status_code=200, json=lambda: [])
+        mock_get.return_value = MagicMock(status_code=200, json=list)
         candles = fetch_klines("BTCUSDT", "1h", 0, 1)
     assert candles == []
 

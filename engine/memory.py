@@ -16,8 +16,8 @@ Memory iki katmanlıdır:
 import logging
 from collections import Counter
 from dataclasses import dataclass
-from typing import List, Dict
-from .journal import TradeJournal, TradeSnapshot
+
+from .journal import TradeJournal
 
 log = logging.getLogger("efloud.memory")
 
@@ -64,7 +64,7 @@ class LearningMemory:
         self.journal = journal
         self.window = short_term_window
 
-    def analyze_patterns(self) -> List[Pattern]:
+    def analyze_patterns(self) -> list[Pattern]:
         """Journal'ı tarayıp pattern'leri çıkar."""
         all_trades = self.journal.all_closed()
         if not all_trades:
@@ -112,7 +112,7 @@ class LearningMemory:
         ))
         return patterns
 
-    def get_critical_patterns(self) -> List[Pattern]:
+    def get_critical_patterns(self) -> list[Pattern]:
         """Sadece CRITICAL/WARNING pattern'ler — aktif adaptasyon gerektiriyor."""
         return [p for p in self.analyze_patterns()
                 if p.severity in ("CRITICAL", "WARNING")]
@@ -128,7 +128,7 @@ class LearningMemory:
         lines = [
             "# 🧠 Learning Memory Report",
             "",
-            f"## İstatistikler",
+            "## İstatistikler",
             f"- Toplam trade: **{stats['trades']}**",
             f"- Win rate: **{stats['win_rate']}%** ({stats['wins']}W / {stats['losses']}L)",
             f"- Toplam PnL: **${stats['total_pnl']:+.2f}**",

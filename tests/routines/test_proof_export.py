@@ -224,8 +224,8 @@ class TestRun:
         assert sample["status"] == "unreachable"
 
     def test_registered_in_runner(self):
-        from scripts.routines.runner import REGISTRY
         import scripts.routines.proof_export  # noqa: F401 — ensure import side effect
+        from scripts.routines.runner import REGISTRY
         assert "proof_export" in REGISTRY
 
 

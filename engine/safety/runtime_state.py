@@ -23,7 +23,6 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 log = logging.getLogger("efloud.runtime_state")
 
@@ -45,13 +44,13 @@ class RuntimeState:
         self.path = self.dir / "runtime.json"
         self._lock = threading.Lock()
         # Volatile (in-memory only)
-        self.last_loop_tick_ms: Optional[int] = None
-        self.last_exchange_ping_ms: Optional[int] = None
+        self.last_loop_tick_ms: int | None = None
+        self.last_exchange_ping_ms: int | None = None
         # Persistent
         self.fatal_exception_state: bool = False
-        self.fatal_exception_set_at_ms: Optional[int] = None
+        self.fatal_exception_set_at_ms: int | None = None
         self.crash_count: int = 0
-        self.last_crash_ms: Optional[int] = None
+        self.last_crash_ms: int | None = None
         self._load()
 
     def _load(self) -> None:

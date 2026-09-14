@@ -2,12 +2,13 @@
 Fail-closed unit tests for SafeOrchestrator lease integration.
 Tests that lease failure blocks trades and cross-symbol isolation works.
 """
-import pytest
+from unittest.mock import MagicMock, Mock, patch
+
 import pandas as pd
-from datetime import datetime
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from engine.safe_orchestrator import SafeOrchestrator
+import pytest
+
 from engine.instance_manager import InstanceManager
+from engine.safe_orchestrator import SafeOrchestrator
 
 
 @pytest.fixture

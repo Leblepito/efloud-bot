@@ -12,10 +12,12 @@ FULL snapshot atomically (entry+exit in one go) instead of trying to
 match an orchestrator-side trade_id.
 """
 from unittest.mock import MagicMock
+
 import pytest
 
-from exchange import OrderManager, Position as ExchangePosition
 from engine.journal import TradeJournal, TradeSnapshot
+from exchange import OrderManager
+from exchange import Position as ExchangePosition
 
 
 @pytest.fixture

@@ -1,16 +1,16 @@
 """Multi-Timeframe signal generation — Efloud setup akışı."""
 
 import logging
-from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Any
-from .smc import SMCEngine
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
+import pandas as pd
+
+from utils.cache import SentimentCache
+
 from .confluence import calc_confluence
 from .levels import Level
-import pandas as pd
-import httpx
-import os
-import json
-from utils.cache import SentimentCache
+from .smc import SMCEngine
 
 log = logging.getLogger("efloud.signals")
 
@@ -36,9 +36,9 @@ def _normalize_symbol(symbol: str) -> str:
 
 
 def resolve_min_confluence(
-    symbol: Optional[str],
+    symbol: str | None,
     global_min: int,
-    symbol_overrides: Optional[Dict[str, int]],
+    symbol_overrides: dict[str, int] | None,
 ) -> int:
     """Pick the effective confluence threshold for a given symbol.
 
@@ -59,7 +59,7 @@ def resolve_min_confluence(
     return global_min
 
 
-def _format_score_histogram(buckets: Dict[int, int], top_n: int = 3) -> str:
+def _format_score_histogram(buckets: dict[int, int], top_n: int = 3) -> str:
     """Render a score-bucket histogram as `score×count` pairs, highest-score first.
 
     Returns an empty string when no buckets are populated. Used in the reject
@@ -83,13 +83,11 @@ def _resolve_deviation_tp2(raw_tp2, tp1, min_tp, price, risk, is_long):
     """
     tp2 = raw_tp2
     if is_long:
-        if tp2 < min_tp:
-            tp2 = min_tp
+        tp2 = max(tp2, min_tp)
         if tp2 <= tp1:
             tp2 = price + risk * 2.618
     else:
-        if tp2 > min_tp:
-            tp2 = min_tp
+        tp2 = min(tp2, min_tp)
         if tp2 >= tp1:
             tp2 = price - risk * 2.618
     return tp2
@@ -121,9 +119,9 @@ def _collect_smc_blocks(
     entry_price: float,
     htf: dict,
     e_range,  # RangeInfo
-    levels: Optional[List] = None,
-    mtf: Optional[dict] = None,
-) -> List[tuple]:
+    levels: list | None = None,
+    mtf: dict | None = None,
+) -> list[tuple]:
     """Kâr yönündeki TÜM SMC bloklarını topla, mesafeye göre sırala.
 
     Kaynak önceliği (tie-break):
@@ -141,7 +139,7 @@ def _collect_smc_blocks(
         LONG: entry'den YUKARIdaki bloklar
         SHORT: entry'den AŞAĞIDAKI bloklar
     """
-    blocks: List[tuple] = []
+    blocks: list[tuple] = []
 
     if is_long:
         # ── Liquidity: equal highs + swing highs ──
@@ -218,7 +216,7 @@ def _collect_smc_blocks(
 
 
 def _select_tp_from_smc_blocks(
-    blocks: List[tuple],
+    blocks: list[tuple],
     entry_price: float,
     risk: float,
     min_rr_tp1: float,
@@ -285,11 +283,9 @@ def _enforce_tp2_beyond_tp1(tp2, tp1, price, risk, is_long, min_gap_r: float = 0
         # Scalp v3: configurable minimum gap between TP1 and TP2
         gap = min_gap_r * risk
         if is_long:
-            if tp2 < tp1 + gap:
-                tp2 = tp1 + gap
+            tp2 = max(tp2, tp1 + gap)
         else:
-            if tp2 > tp1 - gap:
-                tp2 = tp1 - gap
+            tp2 = min(tp2, tp1 - gap)
     else:
         if is_long:
             if tp2 <= tp1:
@@ -310,7 +306,7 @@ class Signal:
     rr1: float
     rr2: float
     confluence: int
-    reasons: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
     timestamp: str = ""
     in_ote: bool = False
     in_ob: bool = False
@@ -321,7 +317,7 @@ class Signal:
     # code (journal, DB) can persist it without changing the schema.
     # Always a plain dict — never assume the key set; downstream readers
     # should use ``.get("agent_review")`` and tolerate ``None``.
-    meta: Dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -366,8 +362,8 @@ def validate_signal_with_gemini(
     df_htf: pd.DataFrame,
     df_mtf: pd.DataFrame,
     df_entry: pd.DataFrame,
-    api_key: Optional[str] = None,
-) -> Dict[str, Any]:
+    api_key: str | None = None,
+) -> dict[str, Any]:
     """Validate a trade signal's market structure using Gemini 1.5 Flash.
 
     Public signature is stable; the internal HTTP call is delegated to
@@ -462,12 +458,12 @@ def generate_signals(
     min_rr: float = 1.5,
     fib_ext: float = 1.618,
     recency_bars: int = 20,
-    df_daily: Optional[pd.DataFrame] = None,   # 4. TF — 1d filter (opsiyonel)
+    df_daily: pd.DataFrame | None = None,   # 4. TF — 1d filter (opsiyonel)
     daily_filter_strict: bool = False,          # True = 1d ters yön → reddet
-    symbol: Optional[str] = None,               # NEW — for per-symbol threshold lookup
-    symbol_confluence_overrides: Optional[Dict[str, int]] = None,  # NEW
-    levels: Optional[List[Level]] = None,       # NEW — injected levels for PA confluence
-    ai_sentiment: Optional[Dict[str, Any]] = None,  # NEW — async macro sentiment
+    symbol: str | None = None,               # NEW — for per-symbol threshold lookup
+    symbol_confluence_overrides: dict[str, int] | None = None,  # NEW
+    levels: list[Level] | None = None,       # NEW — injected levels for PA confluence
+    ai_sentiment: dict[str, Any] | None = None,  # NEW — async macro sentiment
     # ── Scalp v3: Fibonacci-aware range TP / minimum gap enforcement ──
     range_tp1_fib: float = 0.5,      # Range TP1 at this fib level (default: EQ=0.5; scalp: 0.618)
     range_tp2_fib: float = 1.0,      # Range TP2 at this fib level (default: extreme=1.0)
@@ -484,7 +480,7 @@ def generate_signals(
     blended_rr_target: float = 1.5,  # Blended R:R target (0.5×TP1_R + 0.5×TP2_R >= this)
     strict_target_reject: bool = False,   # H7 (2026-06-20 audit): default OFF — see below
     fix_discovery_classification: bool = False,  # M1 (2026-06-20 audit): default OFF — see below
-) -> List[Signal]:
+) -> list[Signal]:
     """
     4-Timeframe Efloud akışı:
     1. Daily (1d) → makro yön filtresi (opsiyonel, +confluence puanı)
@@ -573,7 +569,7 @@ def generate_signals(
     # v3.2 (spec 2026-07-11): MTF likidite havuzu — sadece SMC TP targeting
     # açıkken kurulur (loop-invariant, bir kez). Zaten hesaplanmış MTF
     # swing'lerini kullanır; full analyze() maliyeti YOK.
-    mtf_liq: Optional[dict] = None
+    mtf_liq: dict | None = None
     if smc_tp_targeting:
         mtf_liq = {
             "swing_highs": mtf_sh,
@@ -606,7 +602,7 @@ def generate_signals(
     reject_no_target = 0  # H7: strict_target_reject rejects instead of clamping
     max_seen_score = 0
     max_seen_rr = 0.0
-    score_buckets: Dict[int, int] = {}
+    score_buckets: dict[int, int] = {}
 
     for brk in e_brks:
         # CHoCH (reversal) + BOS (continuation) — both must align with HTF bias.
@@ -728,8 +724,7 @@ def generate_signals(
                         score = min(100, score + 8)
                         reasons.append(f"Price in Stacked Zone level {lvl.name} ({lvl.price:.2f})")
 
-        if score > max_seen_score:
-            max_seen_score = score
+        max_seen_score = max(max_seen_score, score)
         bucket = (score // 5) * 5
         score_buckets[bucket] = score_buckets.get(bucket, 0) + 1
 
@@ -786,8 +781,7 @@ def generate_signals(
             # keeps it tight — an old swing far below the buffered 20-bar low is
             # discarded in favour of local_lo.
             sl = (sl_c[-1].price - buffer) if sl_c else local_lo
-            if sl < local_lo:
-                sl = local_lo
+            sl = max(sl, local_lo)
 
             # Range deviation tight SL override
             if has_dev and e_range:
@@ -812,8 +806,7 @@ def generate_signals(
                 # range_tp1_fib=0.5  → TP1 at EQ (legacy behavior, backward compatible).
                 range_size = e_range.hi - e_range.lo
                 tp1 = e_range.lo + range_tp1_fib * range_size
-                if tp1 < min_tp_long:
-                    tp1 = min_tp_long
+                tp1 = max(tp1, min_tp_long)
             elif (htf_bias_original == "UNDEF") and liquidity_targets:
                 # Ranging market: target liquidity pools
                 tp1 = min(liquidity_targets)
@@ -848,8 +841,7 @@ def generate_signals(
             # Mirror of LONG: SL = structure + 0.5·ATR buffer; add the buffer to the
             # chosen swing too so the stop sits ABOVE structure, not on it.
             sl = (sl_c[-1].price + buffer) if sl_c else local_hi
-            if sl > local_hi:
-                sl = local_hi
+            sl = min(sl, local_hi)
 
             # Range deviation tight SL override
             if has_dev and e_range:
@@ -871,8 +863,7 @@ def generate_signals(
                 # Entry at premium → TP toward discount side.
                 range_size = e_range.hi - e_range.lo
                 tp1 = e_range.hi - range_tp1_fib * range_size
-                if tp1 > min_tp_short:
-                    tp1 = min_tp_short
+                tp1 = min(tp1, min_tp_short)
             elif (htf_bias_original == "UNDEF") and liquidity_targets:
                 # Ranging market: target liquidity pools
                 tp1 = max(liquidity_targets)
@@ -1001,8 +992,7 @@ def generate_signals(
             reject_tp_wrong_side += 1
             continue
 
-        if rr1 > max_seen_rr:
-            max_seen_rr = rr1
+        max_seen_rr = max(max_seen_rr, rr1)
 
         # ── R:R Gate ──
         # BT-18 hard floor: TP1 must stand on its own feet before any blend.

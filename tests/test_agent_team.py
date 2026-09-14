@@ -17,14 +17,11 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock
+from typing import Any
 
 import pytest
-
 
 # ── Stubs ──────────────────────────────────────────────────────────────────
 
@@ -39,13 +36,13 @@ class _StubResponse:
 class _StubGeminiClient:
     """Records every call; returns whatever the test scripted."""
 
-    def __init__(self, response: Optional[_StubResponse] = None,
+    def __init__(self, response: _StubResponse | None = None,
                  raise_on_complete: bool = False) -> None:
         self.response = response or _StubResponse()
         self.raise_on_complete = raise_on_complete
-        self.calls: List[str] = []
+        self.calls: list[str] = []
 
-    def complete_json(self, prompt: str, *, timeout: float = 20.0) -> Dict[str, Any]:
+    def complete_json(self, prompt: str, *, timeout: float = 20.0) -> dict[str, Any]:
         self.calls.append(prompt)
         if self.raise_on_complete:
             raise RuntimeError("simulated network failure")
@@ -56,7 +53,7 @@ class _StubGeminiClient:
         }
 
 
-def _make_ctx(**overrides: Any) -> Dict[str, Any]:
+def _make_ctx(**overrides: Any) -> dict[str, Any]:
     """Baseline context matching what safe_orchestrator would feed the team."""
     base = {
         "symbol": "BTC/USDT",
@@ -91,6 +88,7 @@ class TestGeminiClientFailSafe:
     def test_real_client_returns_empty_when_endpoint_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Stub httpx to raise; the client must still return ``{}``."""
         import httpx
+
         from engine.agents import gemini_client as gc
         from engine.agents.gemini_client import GeminiClient
 
@@ -110,7 +108,9 @@ class TestRoleVerdicts:
     ])
     def test_verdict_coerced_to_known_set(self, role_name: str) -> None:
         from engine.agents.roles import (
-            OverseerAgent, RegimeAgent, RiskReviewerAgent,
+            OverseerAgent,
+            RegimeAgent,
+            RiskReviewerAgent,
             SignalValidatorAgent,
         )
         client = _StubGeminiClient(response=_StubResponse(
@@ -179,7 +179,10 @@ class TestTeamAggregation:
 
     def test_mixed_verdicts_counted_correctly(self) -> None:
         from engine.agents.roles import (
-            OverseerAgent, RegimeAgent, RiskReviewerAgent, SignalValidatorAgent,
+            OverseerAgent,
+            RegimeAgent,
+            RiskReviewerAgent,
+            SignalValidatorAgent,
         )
         from engine.agents.team import AgentTeam
 
@@ -209,7 +212,10 @@ class TestLLMExceptionSafety:
 
     def test_exception_yields_neutral_verdict(self) -> None:
         from engine.agents.roles import (
-            OverseerAgent, RegimeAgent, RiskReviewerAgent, SignalValidatorAgent,
+            OverseerAgent,
+            RegimeAgent,
+            RiskReviewerAgent,
+            SignalValidatorAgent,
         )
         from engine.agents.team import AgentTeam
 
@@ -299,8 +305,8 @@ class TestPostMortemAgent:
 
     def test_writes_markdown_even_without_llm(self) -> None:
         """No GEMINI_API_KEY → empty LLM payload → report still complete."""
-        from engine.agents.roles import PostMortemAgent
         from engine.agents.gemini_client import GeminiClient
+        from engine.agents.roles import PostMortemAgent
 
         with tempfile.TemporaryDirectory() as tmp:
             journal = Path(tmp) / "trade_journal.jsonl"

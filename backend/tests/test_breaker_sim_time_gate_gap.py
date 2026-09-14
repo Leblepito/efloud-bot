@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from engine.safety.breaker import CircuitBreaker, BreakerState
+from engine.safety.breaker import BreakerState, CircuitBreaker
 
 
 @pytest.mark.xfail(

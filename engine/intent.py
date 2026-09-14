@@ -33,11 +33,12 @@ Toplam skor 0-100:
   <40  = "Zayıf" (erken çıkış veya giriş alma)
 """
 
-import pandas as pd
-import numpy as np
+import logging
 from dataclasses import dataclass
 from typing import Literal
-import logging
+
+import numpy as np
+import pandas as pd
 
 log = logging.getLogger("efloud.intent")
 

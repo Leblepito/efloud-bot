@@ -25,10 +25,10 @@ import pytest
 
 from scripts.higgsfield_adapter import (
     DEFAULT_MODEL,
+    TOKEN_ENV,
     HiggsfieldClient,
     HiggsfieldError,
     HiggsfieldUnavailable,
-    TOKEN_ENV,
     _extract_job_id,
     _extract_upload,
     _extract_url,
@@ -229,8 +229,9 @@ class TestRenderClipIntegration:
 
         if not ffmpeg_available():
             pytest.skip("ffmpeg not installed")
-        from scripts.chart_render import TradeLevels, render_trade_chart
         import pandas as pd
+
+        from scripts.chart_render import TradeLevels, render_trade_chart
 
         idx = pd.date_range("2026-07-20", periods=30, freq="15min")
         candles = pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0,

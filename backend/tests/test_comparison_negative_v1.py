@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from backtest.comparison import _evaluate_metric, evaluate_gates, DEFAULT_GATES
+from backtest.comparison import DEFAULT_GATES, _evaluate_metric, evaluate_gates
 
 HIGHER_BETTER = {"v2_min_vs_v1": 1.0, "hard_reject_vs_v1": 0.9}
 LOWER_BETTER = {"v2_max_vs_v1": 1.0, "hard_reject_vs_v1": 1.1}

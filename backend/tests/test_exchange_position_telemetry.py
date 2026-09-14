@@ -5,9 +5,7 @@ forward-compatible. v1 callers omit the kwargs; v2 (PR #71) passes them.
 """
 from __future__ import annotations
 
-import pytest
-
-from exchange import Position, OrderManager
+from exchange import OrderManager, Position
 
 
 def test_exchange_position_telemetry_fields_default_none():

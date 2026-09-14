@@ -6,8 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.audit.journal import AuditEngine, RECENT_CLOSE_WINDOW_SECONDS
-
+from backend.audit.journal import RECENT_CLOSE_WINDOW_SECONDS, AuditEngine
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures

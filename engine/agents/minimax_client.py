@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -46,7 +46,7 @@ class MiniMaxClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         *,
         timeout: float = 30.0,
@@ -61,7 +61,7 @@ class MiniMaxClient:
         self.timeout = float(timeout)
         self.max_tokens = int(max_tokens)
 
-    def complete_json(self, prompt: str, *, timeout: Optional[float] = None) -> Dict[str, Any]:
+    def complete_json(self, prompt: str, *, timeout: float | None = None) -> dict[str, Any]:
         """Single-shot JSON call. Returns the parsed object, or ``{}`` on any failure."""
         global _consecutive_failures
         if not self.api_key:

@@ -22,30 +22,33 @@ Environment:
   EFLOUD_ALLOW_MAINNET=1      # Mainnet LIVE için zorunlu
 """
 
-import yaml
-import time
 import logging
 import logging.handlers
-import sys
 import os
 import signal as sys_signal
-from pathlib import Path
+import sys
+import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
 
 from engine import SafeOrchestrator
+from engine.content_jobs import ContentJobEmitter
 from engine.journal import TradeJournal
+from engine.notifications import NotificationManager
+from engine.permissions import PermissionManager
 from engine.safety import (
-    MainnetGuard, mask_secret, retry_with_backoff,
-    RateLimiter, validate_kline_integrity,
-    OrphanProtector, load_orphan_protection_config,
+    MainnetGuard,
+    OrphanProtector,
+    RateLimiter,
+    load_orphan_protection_config,
+    mask_secret,
+    retry_with_backoff,
+    validate_kline_integrity,
 )
 from engine.universe import SymbolUniverse
-from engine.permissions import PermissionManager
-from engine.notifications import NotificationManager
-from engine.content_jobs import ContentJobEmitter
 from exchange import BinanceClient, OrderManager
-
-from typing import Optional
 
 # ── UTF-8 stdout wrapper (Windows cp1252 fix) ──
 if sys.platform == "win32":
@@ -67,14 +70,14 @@ def _build_setup_state_store(cfg: dict, state_dir: str):
     When v2 active: returns SetupStateStore at {state_dir}/setup_candidates.json
     with max_pending_per_symbol from smc_v2 block (default 3 per spec §9).
     """
-    print(f"[DEBUG] _build_setup_state_store called")
+    print("[DEBUG] _build_setup_state_store called")
     print(f"[DEBUG] cfg.get('engine') = {cfg.get('engine')}")
     smc_version = cfg.get("engine", {}).get("smc_version")
     print(f"[DEBUG] smc_version = {smc_version!r}")
     if smc_version != "v2":
-        print(f"[DEBUG] smc_version != 'v2', returning None")
+        print("[DEBUG] smc_version != 'v2', returning None")
         return None
-    print(f"[DEBUG] Creating SetupStateStore...")
+    print("[DEBUG] Creating SetupStateStore...")
     from engine.smc_v2.setup_state import SetupStateStore
     smc_v2_cfg = cfg.get("smc_v2", {})
     store = SetupStateStore(
@@ -301,7 +304,7 @@ def resolve_credentials(cfg: dict) -> tuple:
     return api_key, api_secret
 
 
-def print_banner(cfg: dict, api_key: str, symbols: Optional[list] = None):
+def print_banner(cfg: dict, api_key: str, symbols: list | None = None):
     dry = "DRY RUN" if cfg["operation"]["dry_run"] else "LIVE"
     net = "TESTNET" if cfg["exchange"]["testnet"] else "MAINNET"
     watch = " (watch only)" if cfg["operation"].get("watch_only") else ""
@@ -664,9 +667,9 @@ def main():
             success = client.set_position_mode(hedge_mode)
             if not success:
                 log.critical(
-                    f"⛔ CRITICAL: Position mode setup failed! Binance rejected the change. "
-                    f"Make sure you have NO open positions and NO open orders on your entire Futures account, "
-                    f"then restart the bot."
+                    "⛔ CRITICAL: Position mode setup failed! Binance rejected the change. "
+                    "Make sure you have NO open positions and NO open orders on your entire Futures account, "
+                    "then restart the bot."
                 )
                 sys.exit(1)
         except Exception as e:

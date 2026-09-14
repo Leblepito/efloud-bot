@@ -14,15 +14,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from datetime import datetime, timezone
-from typing import Optional
 
 from backend.db import db
-from backend.social.queue_storage import load_draft, save_draft, list_by_status
-from backend.social.content_queue import ContentStatus, ContentDraft
-from backend.social.xurl_client import XurlClient
+from backend.social.content_queue import ContentDraft, ContentStatus
 from backend.social.instagram_client import InstagramClient
+from backend.social.queue_storage import list_by_status, save_draft
+from backend.social.xurl_client import XurlClient
 from backend.social.youtube_client import YouTubeClient
 
 log = logging.getLogger("efloud.publishing_worker")
@@ -37,7 +35,7 @@ class PublishingWorker:
 
     def __init__(self):
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
         # Initialize clients (lazy - only if enabled)
         self._x_client = None
@@ -204,7 +202,7 @@ class PublishingWorker:
 
 
 # Global worker instance
-_worker: Optional[PublishingWorker] = None
+_worker: PublishingWorker | None = None
 
 
 def get_worker() -> PublishingWorker:

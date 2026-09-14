@@ -7,17 +7,16 @@ full suite stays fast (< ~2s) and CI never triggers the 3-7 min torch install.
 from __future__ import annotations
 
 import subprocess as _sp
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from backend.db import Database
 from engine.ai.kronos import (
     get_yfinance_ticker,
-    synthesize_signal_with_kronos,
     run_kronos_prediction,
+    synthesize_signal_with_kronos,
 )
-from backend.db import Database
-
 
 # ── Sample Kronos stdout in the real runner format (for parse tests) ──────────
 _KRONOS_STDOUT = (
@@ -331,8 +330,9 @@ def test_predict_script_df_path_loading(tmp_path, monkeypatch):
 
 def test_run_kronos_prediction_binance_df_injection(monkeypatch):
     """Verify run_kronos_prediction converts DataFrame to temp parquet, passes --df-path, and cleans it up."""
-    import pandas as pd
     import os
+
+    import pandas as pd
     
     # Create dummy dataframe
     df = pd.DataFrame(

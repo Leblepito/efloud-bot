@@ -9,9 +9,6 @@ from __future__ import annotations
 import builtins
 from typing import Any
 
-import pytest
-
-
 # ─────────────────────────────────────────────────────────────────────
 # Test doubles — minimal stand-ins for the Anthropic client + state.
 # ─────────────────────────────────────────────────────────────────────

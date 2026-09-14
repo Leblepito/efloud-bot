@@ -3,6 +3,7 @@
 Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §5
 """
 import json
+
 import pandas as pd
 import pytest
 import yaml

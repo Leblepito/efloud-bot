@@ -1,5 +1,6 @@
 from scripts.routines._alert import AlertRouter
 
+
 class FakeTg:
     def __init__(self):
         self.sent = []

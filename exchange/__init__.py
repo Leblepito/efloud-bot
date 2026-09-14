@@ -1,20 +1,21 @@
 """Binance exchange client + order manager — CCXT tabanlı."""
 
-import ccxt
 import json
+import logging
 import os
 import threading
 import time as _time
-import pandas as pd
-import logging
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, List
-from dataclasses import dataclass, field, asdict
 
 # TradeJournal imported lazily inside OrderManager to avoid a hard import
 # cycle (engine.journal stays optional for unit tests that don't need it).
 # A TYPE_CHECKING-only import keeps the type hint readable.
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+import ccxt
+import pandas as pd
+
 if TYPE_CHECKING:
     from engine.journal import TradeJournal
 
@@ -307,7 +308,7 @@ class BinanceClient:
         return [p for p in positions if float(p.get("contracts", 0)) > 0]
 
     def fetch_realized_pnl(self, symbol: str, since_ms: int,
-                           until_ms: Optional[int] = None) -> dict:
+                           until_ms: int | None = None) -> dict:
         """Sum REALIZED_PNL / COMMISSION / FUNDING_FEE for a symbol+window.
 
         Reads the USD-M income endpoint (fapiPrivateGetIncome). Soft-fails:
@@ -357,7 +358,7 @@ class Position:
     # tp2 = None signals single-target mode (SMC v2, PR #S5.5). v1 always sets
     # a numeric tp2; v2 single-target setups set None so lifecycle.partial_close
     # TP1 branch full-closes and orchestrator cancels orphan SL.
-    tp2: Optional[float]
+    tp2: float | None
     size: float             # Kontrat sayısı (toplam — TP1 hit'ten sonra yarısı remaining)
     order_id: str = ""
     sl_order_id: str = ""
@@ -375,8 +376,8 @@ class Position:
     commission_paid: float = 0.0         # summed COMMISSION income for this position's fills
     funding_paid: float = 0.0            # summed FUNDING_FEE income over the position lifetime
     pnl_source: str = "estimated"        # "estimated" until reconciled, then "exchange"
-    trace_id: Optional[str] = None       # log correlation across orchestrator → DB
-    bar_ts_ms: Optional[int] = None      # bar-aligned timestamp (UTC ms epoch)
+    trace_id: str | None = None       # log correlation across orchestrator → DB
+    bar_ts_ms: int | None = None      # bar-aligned timestamp (UTC ms epoch)
 
     # Per-bar excursion tracking — mirrors engine.lifecycle.Position contract:
     # positive monotonic-max %, never decreasing. Surfaced to TradeJournal at
@@ -387,18 +388,18 @@ class Position:
     # SMC v2 telemetry (PR #S5) — mirrors engine.lifecycle.Position. v1 callers
     # leave these None; v2 entry path (PR #71 _place_v2_entry_order) populates them.
     # Surfaced to DB trades table via bot_runner.position_opened wiring.
-    entry_setup_source: Optional[str] = None   # "FVG_PULLBACK" | "OTE_RETRACE" | "V1_LEGACY" | None
-    tp1_target_type:    Optional[str] = None   # "LIQUIDITY"    | "FVG_NEAR"    | "RR_PROJECTION" | None
-    tp2_target_type:    Optional[str] = None   # "FVG_FAR"      | "FIB_EXT"     | "NONE"          | None
-    bars_to_pullback:   Optional[int] = None   # bars elapsed AWAITING_PULLBACK → IN_ZONE
+    entry_setup_source: str | None = None   # "FVG_PULLBACK" | "OTE_RETRACE" | "V1_LEGACY" | None
+    tp1_target_type:    str | None = None   # "LIQUIDITY"    | "FVG_NEAR"    | "RR_PROJECTION" | None
+    tp2_target_type:    str | None = None   # "FVG_FAR"      | "FIB_EXT"     | "NONE"          | None
+    bars_to_pullback:   int | None = None   # bars elapsed AWAITING_PULLBACK → IN_ZONE
 
     # Warehouse telemetry (Phase 3.2) — market-state snapshot at entry time.
     # Persisted to DB for post-mortem analysis via bot_runner.position_opened.
     # All default None so existing callers remain unaffected.
-    adx_value:          Optional[float] = None  # ADX indicator value at entry
-    atr_value:          Optional[float] = None  # ATR indicator value at entry
-    funding_rate:       Optional[float] = None  # Funding rate at entry (from exchange)
-    confluence_details: Optional[dict]  = None  # Sub-scores, reasons, HTF/MTF biases
+    adx_value:          float | None = None  # ADX indicator value at entry
+    atr_value:          float | None = None  # ATR indicator value at entry
+    funding_rate:       float | None = None  # Funding rate at entry (from exchange)
+    confluence_details: dict | None  = None  # Sub-scores, reasons, HTF/MTF biases
 
     def update_excursion(self, high: float, low: float) -> None:
         """Update mae_pct/mfe_pct from this bar's price extremes.
@@ -416,10 +417,8 @@ class Position:
         else:  # SHORT
             adverse = max(0.0, (high - self.entry) / self.entry * 100.0)
             favorable = max(0.0, (self.entry - low) / self.entry * 100.0)
-        if adverse > self.mae_pct:
-            self.mae_pct = adverse
-        if favorable > self.mfe_pct:
-            self.mfe_pct = favorable
+        self.mae_pct = max(self.mae_pct, adverse)
+        self.mfe_pct = max(self.mfe_pct, favorable)
 
 
 class OrderManager:
@@ -432,9 +431,9 @@ class OrderManager:
     """
 
     def __init__(self, client: BinanceClient, dry_run: bool = True,
-                 on_position_change=None, state_dir: Optional[str] = None,
+                 on_position_change=None, state_dir: str | None = None,
                  orphan_protector=None,
-                 trade_journal: "Optional[TradeJournal]" = None,
+                 trade_journal: "TradeJournal | None" = None,
                  hedge_mode: bool = False,
                  max_entry_drift_pct: float = 0.0):
         self.client = client
@@ -458,13 +457,13 @@ class OrderManager:
         self.verify_delay_sec = 2.5
         self.verify_max_attempts = 3
         self.rollback_on_sl_failure = True
-        self.positions: List[Position] = []
+        self.positions: list[Position] = []
         # B1 (W1.4): positions listesine bot cycle thread'i + backend API tarafı
         # erişir. Bileşik diziler (kontrol-et-ve-sil, yürü-ve-sil, persist
         # snapshot'ı) RLock korumalı yardımcılardan geçer; kilit ASLA ağ I/O'su
         # boyunca tutulmaz. Tasarım: docs/dev/2026-07-15-b1-ordermanager-positions-lock.md
         self._positions_lock = threading.RLock()
-        self.closed_positions: List[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
+        self.closed_positions: list[Position] = []  # son kapanan pozisyon history (DB'ye yazılır)
         # M4: per-sweep (trade_id, old_pnl, new_pnl) tuples produced by
         # audit_realized_pnl; drained by SafeOrchestrator STEP5 to back-correct
         # the breaker's consecutive-loss counter (default-OFF).
@@ -484,8 +483,8 @@ class OrderManager:
         # change so a restart picks up the same open positions and PositionGuard's
         # duplicate-direction check stays effective. See 2026-05-08 stacking bug
         # for why this matters in production.
-        self._state_dir: Optional[Path] = Path(state_dir) if state_dir else None
-        self._state_file: Optional[Path] = (
+        self._state_dir: Path | None = Path(state_dir) if state_dir else None
+        self._state_file: Path | None = (
             self._state_dir / "order_manager_positions.json" if self._state_dir else None
         )
         if self._state_dir is not None:
@@ -534,7 +533,7 @@ class OrderManager:
 
     @staticmethod
     def _entry_drift_rejection(direction: str, live_price: float, entry: float,
-                              tp1: float, max_drift_pct: float) -> Optional[str]:
+                              tp1: float, max_drift_pct: float) -> str | None:
         """Return a rejection reason if the live price has drifted too far from
         the signal entry to safely open, else None (allow).
 
@@ -1035,18 +1034,18 @@ class OrderManager:
 
     def open_position(self, symbol: str, direction: str, size: float,
                       entry: float, sl: float, tp1: float,
-                      tp2: Optional[float],
-                      trace_id: Optional[str] = None,
-                      bar_ts_ms: Optional[int] = None,
+                      tp2: float | None,
+                      trace_id: str | None = None,
+                      bar_ts_ms: int | None = None,
                       *,
-                      entry_setup_source: Optional[str] = None,
-                      tp1_target_type: Optional[str] = None,
-                      tp2_target_type: Optional[str] = None,
-                      bars_to_pullback: Optional[int] = None,
-                      adx_value: Optional[float] = None,
-                      atr_value: Optional[float] = None,
-                      funding_rate: Optional[float] = None,
-                      confluence_details: Optional[dict] = None) -> Optional[Position]:
+                      entry_setup_source: str | None = None,
+                      tp1_target_type: str | None = None,
+                      tp2_target_type: str | None = None,
+                      bars_to_pullback: int | None = None,
+                      adx_value: float | None = None,
+                      atr_value: float | None = None,
+                      funding_rate: float | None = None,
+                      confluence_details: dict | None = None) -> Position | None:
         """Yeni pozisyon aç + server-side SL + TP1 (yarı) + TP2 (yarı) yerleştir.
 
         trace_id / bar_ts_ms: optional log-correlation + bar-alignment metadata
@@ -1310,7 +1309,7 @@ class OrderManager:
     # Reconciliation — primary source of truth for closes
     # ─────────────────────────────────────────────────────────────
 
-    def reconcile(self) -> List[Position]:
+    def reconcile(self) -> list[Position]:
         """Her cycle başı: Binance ↔ local pozisyon karşılaştır.
 
         Returns: Bu cycle'da kapanmış pozisyonlar.
@@ -1434,7 +1433,7 @@ class OrderManager:
                 f"algo_ok={algo_fetch_ok}) — cannot assess SL coverage this cycle"
             )
 
-        closed_now: List[Position] = []
+        closed_now: list[Position] = []
 
         for pos in self._positions_snapshot():
             # Normalization fallback for legacy/mock tests that don't pass 'side' parameter:
@@ -2415,7 +2414,7 @@ class OrderManager:
                 return True
             return False
 
-    def _positions_snapshot(self) -> "List[Position]":
+    def _positions_snapshot(self) -> "list[Position]":
         """Yürüyüş/serialization/üyelik testi için tutarlı kopya."""
         with self._plock():
             return self.positions[:]
@@ -2463,7 +2462,7 @@ class OrderManager:
             with open(self._state_file, "r", encoding="utf-8") as f:
                 payload = json.load(f)
             raw = payload.get("positions", [])
-            restored: List[Position] = []
+            restored: list[Position] = []
             for d in raw:
                 # Tolerate unknown fields from older formats.
                 fields = {f.name for f in Position.__dataclass_fields__.values()}

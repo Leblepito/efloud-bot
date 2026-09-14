@@ -4,9 +4,7 @@ from __future__ import annotations
 import json
 import logging
 
-import pytest
-
-from utils.logging import JsonFormatter, get_trace_id, set_trace_id
+from utils.logging import JsonFormatter, set_trace_id
 
 
 def make_record(level=logging.INFO, msg="hello", extra=None):

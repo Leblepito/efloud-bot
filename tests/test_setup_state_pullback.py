@@ -10,13 +10,11 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from engine.smc_v2.setup_state import (
+    PERSISTED_STATES,
+    VALID_STATES,
     SetupCandidate,
     SetupStateStore,
-    VALID_STATES,
-    PERSISTED_STATES,
 )
 from engine.smc_v2.zones import ZoneSpec
 

@@ -32,9 +32,10 @@ import json
 import logging
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -52,7 +53,7 @@ USER_AGENT = "efloud-manus-client/1.0 (+https://u2algo.com)"
 # `requests` transport — Python `urllib`'in TLS fingerprint'i Hetzner IP'de
 # AWS WAF tarafından 403 dönüyordu (curl 200 alırken). urllib3 farklı JA3 →
 # bypass. Regression guard: smoke_regression_* testleri.
-_SESSION: Optional["requests.Session"] = None
+_SESSION: requests.Session | None = None
 
 # Retry
 MAX_RETRIES = 3
@@ -101,7 +102,7 @@ def _enabled() -> bool:
     return os.environ.get("MANUS_API_ENABLED", "").lower() in ("1", "true", "yes")
 
 
-def _api_key() -> Optional[str]:
+def _api_key() -> str | None:
     """MANUS_API_KEY env — return None if missing (no-op tetikler)."""
     key = os.environ.get("MANUS_API_KEY", "").strip()
     return key if key else None
@@ -127,7 +128,7 @@ class ManusResponse:
     """HTTP response wrapper."""
     status: int
     body: dict  # parsed JSON
-    request_id: Optional[str] = None
+    request_id: str | None = None
     raw: str = ""
 
     @property
@@ -165,8 +166,8 @@ def _http_request(
     method: str,
     path: str,
     api_key: str,
-    params: Optional[dict] = None,
-    json_body: Optional[dict] = None,
+    params: dict | None = None,
+    json_body: dict | None = None,
     timeout: float = 30.0,
 ) -> ManusResponse:
     """Manus API'ye HTTP istek — `requests` session + retry/backoff.
@@ -193,7 +194,7 @@ def _http_request(
         _SESSION = _build_session()
     session = _SESSION
 
-    last_exc: Optional[Exception] = None
+    last_exc: Exception | None = None
     for attempt in range(MAX_RETRIES + 1):
         try:
             resp = session.request(
@@ -334,9 +335,9 @@ def _validate_template(template: dict) -> None:
             raise TemplateValidationError(f"compliance.{lang}", "empty_or_not_string")
     # Compliance token kontrolü — disclaimer metni template içinde geçmeli
     if COMPLIANCE_TR not in template["prompt_template"]:
-        raise TemplateValidationError("prompt_template", f"missing_compliance_tr_token")
+        raise TemplateValidationError("prompt_template", "missing_compliance_tr_token")
     if COMPLIANCE_EN not in template["prompt_template"]:
-        raise TemplateValidationError("prompt_template", f"missing_compliance_en_token")
+        raise TemplateValidationError("prompt_template", "missing_compliance_en_token")
 
     md = template["task_metadata"]
     if not isinstance(md, dict) or "type" not in md or "version" not in md:
@@ -349,7 +350,7 @@ def _validate_template(template: dict) -> None:
 @dataclass
 class CreateTaskResult:
     task_id: str
-    request_id: Optional[str] = None
+    request_id: str | None = None
     status: str = "pending"
     raw: dict = field(default_factory=dict)
 
@@ -358,15 +359,15 @@ class CreateTaskResult:
 class TaskStatus:
     task_id: str
     agent_status: str  # running | stopped | waiting | error
-    status_detail: Optional[str] = None
-    result_text: Optional[str] = None  # stopped durumda assistant_message
-    request_id: Optional[str] = None
+    status_detail: str | None = None
+    result_text: str | None = None  # stopped durumda assistant_message
+    request_id: str | None = None
 
 
 class ManusClient:
     """Manus API client — fail-safe (no-op when disabled)."""
 
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None) -> None:
+    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
         """Client oluştur — key verilmezse env'den oku.
 
         Key yoksa veya flag false ise tüm metodlar ManusDisabled fırlatır
@@ -375,7 +376,7 @@ class ManusClient:
         self._explicit_key = api_key
         self._explicit_base = base_url
 
-    def _resolve_key(self) -> Optional[str]:
+    def _resolve_key(self) -> str | None:
         return self._explicit_key if self._explicit_key is not None else _api_key()
 
     def _resolve_base(self) -> str:
@@ -388,9 +389,9 @@ class ManusClient:
     def create_task(
         self,
         prompt: str,
-        template: Optional[dict] = None,
-        agent_profile: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        template: dict | None = None,
+        agent_profile: str | None = None,
+        metadata: dict | None = None,
     ) -> CreateTaskResult:
         """Yeni Manus task oluştur.
 
@@ -487,7 +488,7 @@ class ManusClient:
         task_id: str,
         timeout_sec: float = 600.0,
         poll_interval_sec: float = 5.0,
-        on_poll: Optional[Callable[[TaskStatus], None]] = None,
+        on_poll: Callable[[TaskStatus], None] | None = None,
     ) -> TaskStatus:
         """Task tamamlanana kadar poll et (blocking).
 
@@ -528,7 +529,7 @@ class ManusClient:
 # ────────────────────────── Template loader ──────────────────────────
 
 
-def load_template(name: str, templates_dir: Optional[Path] = None) -> dict:
+def load_template(name: str, templates_dir: Path | None = None) -> dict:
     """Template dosyasını yükle + validate et.
 
     Varsayılan templates_dir: backend/social/templates/<name>.json

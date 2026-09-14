@@ -3,7 +3,7 @@ rejected by Binance while any position or order is open, so preflight must FAIL
 in that case rather than let the operator half-apply the switch."""
 from unittest.mock import MagicMock
 
-from preflight import evaluate_flat_book, count_open_book
+from preflight import count_open_book, evaluate_flat_book
 
 
 def test_flat_book_ok_when_no_change_needed():
@@ -31,6 +31,7 @@ def test_flat_book_fails_when_change_needed_and_orders_open():
 def test_importing_preflight_has_no_side_effects(capsys):
     # Importing preflight must NOT run the banner/API checks (body is under main()).
     import importlib
+
     import preflight
     importlib.reload(preflight)
     out = capsys.readouterr().out

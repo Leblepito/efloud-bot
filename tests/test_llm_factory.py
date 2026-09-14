@@ -5,9 +5,9 @@ validation) all resolve the same provider from config. Default is Claude
 (``provider: claude``); Gemini stays selectable as a fallback. Both backends
 duck-type the ``complete_json(prompt) -> dict`` contract.
 """
-from engine.agents.llm import make_llm_client
 from engine.agents.claude_client import ClaudeClient
 from engine.agents.gemini_client import GeminiClient
+from engine.agents.llm import make_llm_client
 from engine.agents.minimax_client import MiniMaxClient
 
 

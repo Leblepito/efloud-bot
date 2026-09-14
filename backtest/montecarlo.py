@@ -17,7 +17,7 @@ Pure functions, no I/O. Randomness is seeded for reproducibility.
 from __future__ import annotations
 
 import random
-from typing import Sequence
+from collections.abc import Sequence
 
 
 def _percentile(sorted_vals: list[float], p: float) -> float:
@@ -55,12 +55,10 @@ def bootstrap_pnl_distribution(
         max_dd = 0.0
         for _ in range(n):
             bal += pnls[rng.randrange(n)]
-            if bal > peak:
-                peak = bal
+            peak = max(peak, bal)
             if peak > 0:
                 dd = (peak - bal) / peak * 100.0
-                if dd > max_dd:
-                    max_dd = dd
+                max_dd = max(max_dd, dd)
         returns.append((bal - initial_balance) / initial_balance * 100.0)
         drawdowns.append(max_dd)
     returns.sort()

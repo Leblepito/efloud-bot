@@ -17,8 +17,8 @@ Edge cases:
 """
 
 import logging
-from typing import Dict, List, Tuple
 from dataclasses import dataclass
+from typing import Dict, List, Tuple
 
 log = logging.getLogger("efloud.permissions")
 
@@ -41,12 +41,12 @@ class PermissionManager:
         client: BinanceClient instance
         """
         self.client = client
-        self.permissions: Dict[str, SymbolPermission] = {}
+        self.permissions: dict[str, SymbolPermission] = {}
         self.account_can_trade: bool = False
         self._exchange_info_cache = None
 
-    def detect_all(self, symbols: List[str],
-                    estimated_notional: float = 30.0) -> Dict[str, SymbolPermission]:
+    def detect_all(self, symbols: list[str],
+                    estimated_notional: float = 30.0) -> dict[str, SymbolPermission]:
         """
         Tüm semboller için yetki tespiti yap.
 
@@ -118,7 +118,7 @@ class PermissionManager:
 
         if sym_info is None:
             return SymbolPermission(symbol, False,
-                                      reason=f"Symbol not listed on Binance futures",
+                                      reason="Symbol not listed on Binance futures",
                                       status="NOT_FOUND")
 
         # 3. Trading aktif mi?
@@ -159,8 +159,8 @@ class PermissionManager:
         perm = self.permissions.get(symbol)
         return perm is not None and perm.tradeable
 
-    def get_tradeable_symbols(self) -> List[str]:
+    def get_tradeable_symbols(self) -> list[str]:
         return [s for s, p in self.permissions.items() if p.tradeable]
 
-    def get_readonly_symbols(self) -> List[str]:
+    def get_readonly_symbols(self) -> list[str]:
         return [s for s, p in self.permissions.items() if not p.tradeable]

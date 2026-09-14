@@ -1,7 +1,6 @@
 """Healthz endpoint integration tests — verify wiring + status code semantics."""
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import pytest
@@ -14,7 +13,8 @@ from engine.safety.runtime_state import RuntimeState
 def configured_app(tmp_path: Path):
     """Build a FastAPI app with healthz wired to a fresh RuntimeState we control."""
     from fastapi import FastAPI
-    from backend.healthz import health_router, configure
+
+    from backend.healthz import configure, health_router
 
     rs = RuntimeState(state_dir=str(tmp_path))
 

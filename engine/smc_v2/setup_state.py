@@ -23,7 +23,7 @@ import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import List, Literal
+from typing import Literal
 
 from engine.smc_v2.zones import ZoneSpec
 
@@ -69,7 +69,7 @@ class SetupCandidate:
     bars_waited: int                               # incremented per CLOSED LTF bar (BT-24)
     state: Literal["AWAITING_PULLBACK", "IN_ZONE", "AWAITING_REENTRY", "CONFIRMED", "EXPIRED"]
     confluence_score: int
-    reasons: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
     has_left_zone: bool = False                    # pullback detection flag
 
 
@@ -102,7 +102,7 @@ class SetupStateStore:
         self.path = Path(path)
         self.max_pending_per_symbol = max_pending_per_symbol
         self.max_file_bytes = max_file_bytes
-        self.candidates: List[SetupCandidate] = []
+        self.candidates: list[SetupCandidate] = []
 
     def add(self, candidate: "SetupCandidate") -> bool:
         """Append a new pending candidate.

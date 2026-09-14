@@ -1,6 +1,5 @@
 """Efloud Confluence Scoring — çoklu değerlendirme zorunlu."""
 
-from typing import Tuple, List
 
 
 def calc_confluence(
@@ -15,7 +14,7 @@ def calc_confluence(
     ob_at_eq: bool,
     correct_zone: bool,     # long+discount veya short+premium
     has_deviation: bool,
-) -> Tuple[int, List[str]]:
+) -> tuple[int, list[str]]:
     """
     Returns (score 0-100, reasons list).
     Efloud: "Tekil değerlendirilen konseptin çalışma olasılığı çok düşük."

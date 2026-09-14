@@ -5,7 +5,6 @@ Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §6.3
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 
 @dataclass
@@ -18,7 +17,7 @@ class Bar:
 
 def resolve_fill(
     pos, bar: Bar, tie_break: str = "pessimistic",
-) -> Tuple[Optional[str], Optional[float]]:
+) -> tuple[str | None, float | None]:
     """Return (level, fill_price) for the position, or (None, None) if no level hit.
 
     ``pos`` must expose: .direction ("LONG"|"SHORT"), .entry, .sl, .tp1

@@ -7,11 +7,9 @@ over the Gemini client by construction:
     cannot leak into an httpx error string (the Gemini ``?key=`` leak); and
   * it targets a real, stable Anthropic model alias (no 404-class regression).
 """
-import json
 import logging
 
 import httpx
-import pytest
 
 from engine.agents import claude_client as cc
 from engine.agents.claude_client import ClaudeClient

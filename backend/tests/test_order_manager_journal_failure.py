@@ -13,10 +13,12 @@ Both tests verify that even when TradeJournal raises:
     not skipped).
 """
 from unittest.mock import MagicMock
+
 import pytest
 
-from exchange import OrderManager, Position as ExchangePosition
 from engine.journal import TradeJournal
+from exchange import OrderManager
+from exchange import Position as ExchangePosition
 
 
 @pytest.fixture

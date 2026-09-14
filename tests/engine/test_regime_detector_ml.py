@@ -1,12 +1,12 @@
-import pandas as pd
-import numpy as np
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock
-import json
 import os
-from engine.regimes import RegimeDetector, RegimeAnalysis
+from unittest.mock import MagicMock
+
+import numpy as np
+import pandas as pd
+
+from engine.regimes import RegimeDetector
 from engine.regimes.model import RegimeMLModel
+
 
 def test_regime_detector_loads_ml_model_and_runs_ensemble(tmp_path):
     """Verify that RegimeDetector loads a saved weights file, makes inference, and ensembles it into notes."""

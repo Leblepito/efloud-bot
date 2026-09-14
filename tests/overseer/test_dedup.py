@@ -35,7 +35,7 @@ def test_overseer_dedup_env_override(tmp_path, monkeypatch):
 def test_overseer_dedup_window_default_30min(tmp_path, monkeypatch):
     """Default window 1800s (30 min) — Phase A2 reviewer recommendation."""
     monkeypatch.setenv("EFLOUD_OVERSEER_DEDUP_DB", str(tmp_path / "x.sqlite"))
-    from ops.overseer.dedup import OverseerDedup, DEFAULT_WINDOW_SECONDS
+    from ops.overseer.dedup import DEFAULT_WINDOW_SECONDS, OverseerDedup
     assert DEFAULT_WINDOW_SECONDS == 1800
     d = OverseerDedup()
     assert d.default_window_seconds == 1800

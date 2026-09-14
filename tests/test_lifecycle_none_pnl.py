@@ -13,17 +13,15 @@ Run: python -m pytest tests/test_lifecycle_none_pnl.py -v
 """
 
 import sys
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from engine.lifecycle import PositionLifecycle, Exit, ExitReason, Position  # noqa: E402
+from engine.lifecycle import Exit, Position
 
 
 def _make_position_with_exits(exits):
