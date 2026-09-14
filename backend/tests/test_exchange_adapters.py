@@ -5,13 +5,10 @@ structural subtyping contract (duck-typing) defined by the ExchangeAdapter Proto
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock, patch
-
-import pytest
+from typing import Any
+from unittest.mock import patch
 
 from exchange import BinanceClient
-from exchange.adapter import ExchangeAdapter
 from exchange.mt5 import MT5Client
 from exchange.oanda import OandaClient
 

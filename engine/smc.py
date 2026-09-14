@@ -3,11 +3,11 @@ Efloud SMC Core Engine — Tüm detection algoritmaları.
 Swing, CHoCH/BOS, FVG, Order Block, Breaker, IC, SFP, Range, OTE.
 """
 
+import logging
+from dataclasses import asdict, dataclass
+
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Tuple
-import logging
 
 log = logging.getLogger("efloud.engine")
 
@@ -127,7 +127,7 @@ class SMCEngine:
 
     # ── Swings ──
 
-    def swings(self, df: pd.DataFrame) -> Tuple[List[Swing], List[Swing]]:
+    def swings(self, df: pd.DataFrame) -> tuple[list[Swing], list[Swing]]:
         h, l = df["high"].values, df["low"].values
         n, lb = len(df), self.swing_lb
         ts = self._ts(df)
@@ -141,7 +141,7 @@ class SMCEngine:
 
     # ── Structure (CHoCH / BOS) ──
 
-    def structure(self, df: pd.DataFrame, sh: list, sl: list) -> List[StructBreak]:
+    def structure(self, df: pd.DataFrame, sh: list, sl: list) -> list[StructBreak]:
         c = df["close"].values
         ts = self._ts(df)
         out, trend = [], "UNDEF"
@@ -166,7 +166,7 @@ class SMCEngine:
 
     # ── FVG ──
 
-    def fvgs(self, df: pd.DataFrame) -> List[FVG]:
+    def fvgs(self, df: pd.DataFrame) -> list[FVG]:
         h, l = df["high"].values, df["low"].values
         ts = self._ts(df)
         out = []
@@ -180,16 +180,14 @@ class SMCEngine:
         # Mitigation
         for f in out:
             for j in range(f.idx + 2, len(df)):
-                if f.direction == "BULL" and l[j] <= f.bot:
-                    f.mitigated = True; break
-                elif f.direction == "BEAR" and h[j] >= f.top:
+                if f.direction == "BULL" and l[j] <= f.bot or f.direction == "BEAR" and h[j] >= f.top:
                     f.mitigated = True; break
         return out
 
     # ── Order Block (Efloud Extended) ──
 
     def order_blocks(self, df: pd.DataFrame, sh: list, sl: list,
-                     trend: str = "UNDEF") -> List[OrderBlock]:
+                     trend: str = "UNDEF") -> list[OrderBlock]:
         o, c, h, l = df["open"].values, df["close"].values, df["high"].values, df["low"].values
         ts = self._ts(df)
         atr = pd.Series(h - l).rolling(14).mean().values
@@ -249,15 +247,13 @@ class SMCEngine:
         # Mitigation → breaker
         for ob in out:
             for j in range(ob.idx + 2, len(df)):
-                if ob.direction == "BULL" and c[j] < ob.bot:
-                    ob.mitigated = ob.became_breaker = True; break
-                elif ob.direction == "BEAR" and c[j] > ob.top:
+                if ob.direction == "BULL" and c[j] < ob.bot or ob.direction == "BEAR" and c[j] > ob.top:
                     ob.mitigated = ob.became_breaker = True; break
         return out
 
     # ── SFP ──
 
-    def sfps(self, df: pd.DataFrame, sh: list, sl: list) -> List[SFP]:
+    def sfps(self, df: pd.DataFrame, sh: list, sl: list) -> list[SFP]:
         h, l, c = df["high"].values, df["low"].values, df["close"].values
         ts = self._ts(df)
         out = []
@@ -293,7 +289,7 @@ class SMCEngine:
 
     # ── OTE ──
 
-    def ote(self, sh: list, sl: list, trend: str) -> Optional[OTE]:
+    def ote(self, sh: list, sl: list, trend: str) -> OTE | None:
         if not sh or not sl: return None
         d = sh[-1].price - sl[-1].price
         if d <= 0: return None
@@ -327,7 +323,7 @@ class SMCEngine:
                                 "type": "EQH" if swings[i].is_high else "EQL"})
         return out
 
-    def liquidity_pools(self, swings_high: list, swings_low: list) -> List["EqLevel"]:
+    def liquidity_pools(self, swings_high: list, swings_low: list) -> list["EqLevel"]:
         """Cluster equal highs / lows into typed EqLevel records (v2).
 
         Distinct from equal_levels() — that one returns dicts for legacy v1
@@ -343,7 +339,7 @@ class SMCEngine:
             List of EqLevel sorted by price ascending. Each cluster contains
             >= 2 touches by definition (singletons are not liquidity).
         """
-        def _cluster(swings: list, kind: str) -> List["EqLevel"]:
+        def _cluster(swings: list, kind: str) -> list["EqLevel"]:
             if len(swings) < 2:
                 return []
             # Greedy linear pass over price-sorted swings: each swing joins
@@ -351,7 +347,7 @@ class SMCEngine:
             # (a swing equidistant from two clusters) are broken by first-match
             # in the price-ascending order — deterministic and stable.
             sorted_swings = sorted(swings, key=lambda s: s.price)
-            clusters: List[List[Swing]] = []
+            clusters: list[list[Swing]] = []
             for sw in sorted_swings:
                 placed = False
                 for cl in clusters:

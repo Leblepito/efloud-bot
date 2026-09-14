@@ -20,7 +20,7 @@ from exchange import BinanceClient, OrderManager, Position
 def _assert_iso_is_utc_aware(value: str) -> None:
     """ISO timestamp must parse as TZ-aware and resolve to UTC offset zero."""
     assert value, "timestamp must not be empty"
-    raw = value[:-1] if value.endswith("Z") else value
+    raw = value.removesuffix("Z")
     parsed = datetime.fromisoformat(raw)
     assert parsed.tzinfo is not None, (
         f"expected TZ-aware UTC ISO string, got TZ-naive: {value!r}"

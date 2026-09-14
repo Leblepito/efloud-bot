@@ -8,10 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Optional
 
 import pytest
-
 
 # ─────────────────────────────────────────────────────────────────────
 # Test doubles — minimal stand-ins for the three ingestors + state + dedup.
@@ -72,7 +70,7 @@ class _FakeState:
 
 class _FakeDedup:
     """Tracks which keys have fired so duplicate keys return False on 2nd call."""
-    def __init__(self, allow_keys: Optional[set] = None):
+    def __init__(self, allow_keys: set | None = None):
         self.seen: set = set()
         # If allow_keys is None, every NEW key fires once; if explicitly set,
         # only those keys ever fire (rest silently dedupe).
@@ -131,7 +129,6 @@ async def test_watch_tick_builds_state_dict_with_required_keys():
 
     def _capture_rule_check(state):
         captured.update(state)
-        return None
 
     from ops.overseer.rules import Rule
     rule = Rule(name="capture", check=_capture_rule_check)

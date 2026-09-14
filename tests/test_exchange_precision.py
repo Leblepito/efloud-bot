@@ -6,8 +6,8 @@ price_to_precision before orders are created, preventing Binance -2021
 rejections when stopPrice violates tick size requirements.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
+
 from exchange import OrderManager
 
 

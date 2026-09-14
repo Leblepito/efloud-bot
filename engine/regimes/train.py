@@ -1,9 +1,10 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-import json
-from pathlib import Path
-from engine.regimes.model import RegimeMLModel
+
 from engine.regimes import RegimeDetector
+from engine.regimes.model import RegimeMLModel
 
 ROOT = Path(__file__).resolve().parents[2]
 

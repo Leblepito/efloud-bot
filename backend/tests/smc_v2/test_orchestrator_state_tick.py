@@ -8,6 +8,7 @@ PR #S2b ships ONLY the inert opt-in scaffold:
 Trigger phase and real confirmation land in PR #S3.
 """
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from engine.safe_orchestrator import SafeOrchestrator
@@ -319,8 +320,9 @@ class TestRunCycleAdvanceCall:
     def _make_df(self, length=50, base_price=95000.0):
         """Construct a minimal valid OHLCV DataFrame for run_cycle.
         Real shape: DatetimeIndex (UTC), columns [open,high,low,close,volume]."""
+        from datetime import datetime, timezone
+
         import pandas as pd
-        from datetime import datetime, timezone, timedelta
         idx = pd.date_range(
             end=datetime.now(timezone.utc), periods=length, freq="15min", tz="UTC",
         )
@@ -372,8 +374,9 @@ class TestRunCycleSaveState:
     store.save() so state survives restart. Inert when store is None."""
 
     def _make_df(self, length=50, base_price=95000.0):
-        import pandas as pd
         from datetime import datetime, timezone
+
+        import pandas as pd
         idx = pd.date_range(
             end=datetime.now(timezone.utc), periods=length, freq="15min", tz="UTC",
         )

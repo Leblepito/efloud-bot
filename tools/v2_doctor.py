@@ -69,18 +69,18 @@ if not (REPO_ROOT / "engine").is_dir() and Path("/app/engine").is_dir():
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import pandas as pd  # noqa: E402
-import yaml  # noqa: E402
+import pandas as pd
+import yaml
 
-from engine.smc import SMCEngine  # noqa: E402
-from engine.smc_v2.atr import wilder_atr  # noqa: E402
-from engine.smc_v2.swing_anchor import select_htf_swing_anchor  # noqa: E402
-from engine.smc_v2.triggers import (  # noqa: E402
+from engine.smc import SMCEngine
+from engine.smc_v2.atr import wilder_atr
+from engine.smc_v2.swing_anchor import select_htf_swing_anchor
+from engine.smc_v2.triggers import (
     HtfBar,
     _bar_ts_to_ms,
     generate_setup_candidates,
 )
-from engine.smc_v2.zones import build_pullback_zones  # noqa: E402
+from engine.smc_v2.zones import build_pullback_zones
 
 DEFAULT_CONFIG = "configs/config.phase2_1k.yaml"
 

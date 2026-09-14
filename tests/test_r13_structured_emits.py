@@ -18,7 +18,6 @@ import logging
 
 import yaml
 
-
 # ─────────────────────────────────────────────────────────────────────
 # regime_change emisyonu — modül-seviyesi helper (orchestrator inline çağırır)
 # ─────────────────────────────────────────────────────────────────────

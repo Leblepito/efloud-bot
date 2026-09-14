@@ -9,7 +9,6 @@ A missing key stays silent (an expected fail-safe, not an error).
 import logging
 
 import httpx
-import pytest
 
 from engine.agents import gemini_client as gc
 from engine.agents.gemini_client import GeminiClient

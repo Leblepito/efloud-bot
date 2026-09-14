@@ -15,14 +15,13 @@ burada global trip'lenmez — tek sembolün spike'ı tüm portföyü kilitlemesi
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 
 log = logging.getLogger("efloud.breaker")
 
 
-def _parse_dt(value) -> Optional[datetime]:
+def _parse_dt(value) -> datetime | None:
     """Parse an ISO datetime string back to datetime; pass through None/datetime."""
     if value is None or isinstance(value, datetime):
         return value
@@ -42,8 +41,8 @@ class BreakerState(Enum):
 class BreakerStatus:
     state: BreakerState
     reason: str = ""
-    tripped_at: Optional[datetime] = None
-    resume_at: Optional[datetime] = None
+    tripped_at: datetime | None = None
+    resume_at: datetime | None = None
     metrics: dict = field(default_factory=dict)
 
     @property
@@ -95,8 +94,8 @@ class CircuitBreaker:
 
         # State
         self.status = BreakerStatus(BreakerState.OPEN)
-        self.trades_today: List[dict] = []
-        self.trades_this_week: List[dict] = []
+        self.trades_today: list[dict] = []
+        self.trades_this_week: list[dict] = []
         self.consecutive_losses = 0
         self.peak_balance = starting_balance
         self.current_balance = starting_balance
@@ -115,11 +114,10 @@ class CircuitBreaker:
         automatic recovery on balance bounce.
         """
         self.current_balance = float(live_balance)
-        if self.current_balance > self.peak_balance:
-            self.peak_balance = self.current_balance
+        self.peak_balance = max(self.peak_balance, self.current_balance)
 
-    def record_trade(self, pnl: float, timestamp: Optional[datetime] = None,
-                     trade_id: Optional[str] = None):
+    def record_trade(self, pnl: float, timestamp: datetime | None = None,
+                     trade_id: str | None = None):
         """Kapanan trade kaydı.
 
         E-5 (2026-07-18): opsiyonel `trade_id` ledger dict'ine yazılır ki
@@ -134,8 +132,7 @@ class CircuitBreaker:
         self.trades_this_week.append(trade)
         self.current_balance += pnl
 
-        if self.current_balance > self.peak_balance:
-            self.peak_balance = self.current_balance
+        self.peak_balance = max(self.peak_balance, self.current_balance)
 
         if pnl < 0:
             self.consecutive_losses += 1
@@ -147,7 +144,7 @@ class CircuitBreaker:
             self.consecutive_losses = 0
 
     def record_trade_correction(self, old_pnl: float, new_pnl: float,
-                                trade_id: Optional[str] = None):
+                                trade_id: str | None = None):
         """M4: re-apply an exchange-truth PnL correction (from the audit sweep) to
         the breaker after a trade was already recorded with an estimate.
 
@@ -168,8 +165,7 @@ class CircuitBreaker:
         ledger. Trip/halt logic is unchanged — the next check() reads the new count.
         Default-OFF at the call site."""
         self.current_balance += (new_pnl - old_pnl)
-        if self.current_balance > self.peak_balance:
-            self.peak_balance = self.current_balance
+        self.peak_balance = max(self.peak_balance, self.current_balance)
         # B3 (W1.3, 2026-07-15): match + recompute HAFTA ledger'ında (7g).
         # trades_today 24h ROLLING penceredir: (1) pencereyi aşan seride bugünkü
         # kuyruk sayımı sayacı KISALTIYORDU (guard zayıflar), (2) >24h önce
@@ -216,7 +212,7 @@ class CircuitBreaker:
             )
         self.consecutive_losses = recomputed
 
-    def check(self, now: Optional[datetime] = None) -> BreakerStatus:
+    def check(self, now: datetime | None = None) -> BreakerStatus:
         """Mevcut durumu değerlendir ve breaker state güncelle.
 
         `now`: optional sim-time. Live mode passes None → wall-clock. Backtest
@@ -389,7 +385,7 @@ class CircuitBreaker:
         )
         log.info(f"♻️  Restored breaker {state.value} state: {self.status.reason}")
 
-    def restore_from_db_row(self, row: Optional[dict]) -> None:
+    def restore_from_db_row(self, row: dict | None) -> None:
         """Apply a breaker_state DB-mirror row (migration 010) as a HALT fallback.
 
         Summary-level: the DB row only mirrors the halt flag + reason + timestamp,

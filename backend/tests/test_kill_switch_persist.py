@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import backend.api as api
+from backend import api
 
 
 @pytest.mark.asyncio

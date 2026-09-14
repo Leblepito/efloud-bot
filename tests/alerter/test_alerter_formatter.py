@@ -1,5 +1,5 @@
-import pytest
 from ops.alerter.formatter import StructuredAlert, render_alert_html
+
 
 def test_structured_alert_validation():
     """Verify that StructuredAlert Pydantic model correctly validates input fields."""

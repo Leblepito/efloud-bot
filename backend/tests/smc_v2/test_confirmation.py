@@ -13,7 +13,6 @@ Bars at or before `since_ts` are ignored (we only look for confirmations
 after the CHoCH trigger that birthed the setup).
 """
 import pandas as pd
-import pytest
 
 from engine.smc_v2.zones import ZoneSpec
 

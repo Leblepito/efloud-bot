@@ -13,7 +13,6 @@ AFTER the CHoCH trigger that birthed the setup.
 
 Pure function. Returns (confirmed: bool, entry_price: float | None).
 """
-from typing import Optional, Tuple
 
 import pandas as pd
 
@@ -26,7 +25,7 @@ def confirm_entry(
     direction: str,
     since_ts: int,
     last_bar_only: bool = False,
-) -> Tuple[bool, Optional[float]]:
+) -> tuple[bool, float | None]:
     """Detect LTF entry confirmation inside a zone.
 
     Args:

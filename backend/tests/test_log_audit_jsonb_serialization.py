@@ -10,8 +10,8 @@ Both halves of the contract are pinned here:
   1. The 2nd positional arg passed to asyncpg is a ``str`` (JSON-encoded), not a dict.
   2. The SQL contains ``$2::jsonb`` so Postgres parses the string into JSONB.
 """
-from datetime import datetime, timezone
 import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 from backend.db import Database

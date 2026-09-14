@@ -1,6 +1,8 @@
 # tests/risk/test_custom_calculator.py
 import pytest
+
 from engine.risk.custom_calculator import CustomRiskCalculator
+
 
 def test_calculate_position_size_with_default_params():
     """Test position size calculation from max loss tolerance"""

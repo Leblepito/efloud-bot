@@ -15,7 +15,6 @@ import pytest
 
 import backend.api as api_mod
 
-
 BLOCK_SEC = 0.25
 LOOP_BREATH_SEC = 0.10  # bloklama süresinden belirgin küçük olmalı
 
@@ -59,7 +58,7 @@ async def test_positions_does_not_block_loop(monkeypatch):
             get_open_positions=_slow_sync_call([]),
             get_price=_slow_sync_call(100.0),
         ),
-        order_mgr=SimpleNamespace(_positions_snapshot=lambda: [], positions=[]),
+        order_mgr=SimpleNamespace(_positions_snapshot=list, positions=[]),
     )
     monkeypatch.setattr(api_mod, "runner", fake_runner)
 
@@ -96,7 +95,7 @@ async def test_positions_uses_snapshot_not_live_list(monkeypatch):
 
     fake_runner = SimpleNamespace(
         client=SimpleNamespace(
-            get_open_positions=lambda: [],
+            get_open_positions=list,
             get_price=lambda s: 100.0,
         ),
         order_mgr=SimpleNamespace(_positions_snapshot=snapshot, positions=[]),

@@ -11,11 +11,11 @@ F7: TP1/TP2 miktarları bağımsız truncate → dust kalıntısı, pozisyon tam
 """
 
 import math
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
-from exchange import OrderManager, Position, _TP_UNREACHABLE_SENTINEL
+from exchange import _TP_UNREACHABLE_SENTINEL, OrderManager, Position
 
 
 def _om(step: float = 0.001):

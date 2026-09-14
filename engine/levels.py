@@ -16,10 +16,10 @@ Efloud'un kullandığı tüm seviyeleri tespit eder:
 → Bu bölgeler Efloud'un "güçlü S/R" dediği yerler.
 """
 
-import pandas as pd
-from dataclasses import dataclass, field
-from typing import List, Optional
 import logging
+from dataclasses import dataclass
+
+import pandas as pd
 
 log = logging.getLogger("efloud.levels")
 
@@ -44,7 +44,7 @@ class StackedZone:
     center: float
     top: float
     bottom: float
-    levels: List[Level]
+    levels: list[Level]
     strength: int
 
     @property
@@ -62,11 +62,11 @@ class LevelEngine:
     def extract_all(
         self,
         df_daily: pd.DataFrame,
-        df_weekly: Optional[pd.DataFrame] = None,
-        df_monthly: Optional[pd.DataFrame] = None,
-        df_current: Optional[pd.DataFrame] = None,
+        df_weekly: pd.DataFrame | None = None,
+        df_monthly: pd.DataFrame | None = None,
+        df_current: pd.DataFrame | None = None,
         range_lookback: int = 50,
-    ) -> List[Level]:
+    ) -> list[Level]:
         """
         Tüm seviyeleri tek listede döndürür.
 
@@ -137,7 +137,7 @@ class LevelEngine:
 
         return levels
 
-    def detect_stacked_zones(self, levels: List[Level]) -> List[StackedZone]:
+    def detect_stacked_zones(self, levels: list[Level]) -> list[StackedZone]:
         """
         3+ seviye birbirine ≤%0.5 yakınsa → StackedZone.
         Efloud: "Birikmiş seviyeler güçlü S/R oluşturur."
@@ -179,7 +179,7 @@ class LevelEngine:
 
         return zones
 
-    def get_nearest_levels(self, price: float, levels: List[Level],
+    def get_nearest_levels(self, price: float, levels: list[Level],
                             n: int = 5) -> tuple:
         """Fiyatın altındaki ve üstündeki en yakın n seviye."""
         above = sorted([l for l in levels if l.price > price],

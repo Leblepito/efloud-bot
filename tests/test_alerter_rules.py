@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from ops.alerter.rules import (
     RULES,
+    UNHEALTHY_15MIN_THRESHOLD_SEC,
+    BreakerConsecutiveRule,
     BreakerDailyRule,
     BreakerWeeklyRule,
-    BreakerConsecutiveRule,
     HealthCrashLoopRule,
     HealthUnhealthy15MinRule,
-    UNHEALTHY_15MIN_THRESHOLD_SEC,
 )
 
 

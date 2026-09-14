@@ -23,9 +23,8 @@ Veri yapıları:
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Optional, Literal
 from datetime import datetime, timezone
-import pandas as pd
+from typing import Literal
 
 log = logging.getLogger("efloud.lifecycle")
 
@@ -60,15 +59,15 @@ class Position:
     id: str
     symbol: str
     direction: Direction
-    entries: List[Entry] = field(default_factory=list)
-    exits: List[Exit] = field(default_factory=list)
+    entries: list[Entry] = field(default_factory=list)
+    exits: list[Exit] = field(default_factory=list)
 
     sl: float = 0.0
     tp1: float = 0.0
     # tp2 = None signals single-target mode (SMC v2). v1 always sets a numeric tp2.
     # Lifecycle's partial_close TP1 branch checks `pos.tp2 is None` to trigger
     # a full close instead of the legacy 50% partial + BE-SL move (spec §6).
-    tp2: Optional[float] = 0.0
+    tp2: float | None = 0.0
     initial_sl: float = 0.0   # Original SL set at open time — never modified (sl can move to BE)
 
     # Lifecycle flags
@@ -78,16 +77,16 @@ class Position:
 
     # Weakness churn protection
     weakness_exit_count: int = 0
-    last_weakness_ts: Optional[str] = None
+    last_weakness_ts: str | None = None
 
     # Hedge linking
-    hedge_id: Optional[str] = None
+    hedge_id: str | None = None
 
     # Scenario tracking
-    scenario_id: Optional[str] = None
+    scenario_id: str | None = None
 
     opened_at: str = ""
-    closed_at: Optional[str] = None
+    closed_at: str | None = None
 
     # Per-bar excursion tracking (updated by orchestrator each cycle).
     # mae_pct = max % the bar's worst price went against avg_entry.
@@ -101,10 +100,10 @@ class Position:
     # SMC v2 telemetry (PR #S5) — populated by v2 entry path, None for v1.
     # Surfaced to DB trades table for post-mortem analysis (which entry doctrine
     # fired, what target type drove TP1/TP2, how long the pullback waited).
-    entry_setup_source: Optional[str] = None   # "FVG_PULLBACK" | "OTE_RETRACE" | "V1_LEGACY" | None
-    tp1_target_type:    Optional[str] = None   # "LIQUIDITY"    | "FVG_NEAR"    | "RR_PROJECTION" | None
-    tp2_target_type:    Optional[str] = None   # "FVG_FAR"      | "FIB_EXT"     | "NONE"          | None
-    bars_to_pullback:   Optional[int] = None   # bars elapsed AWAITING_PULLBACK → IN_ZONE
+    entry_setup_source: str | None = None   # "FVG_PULLBACK" | "OTE_RETRACE" | "V1_LEGACY" | None
+    tp1_target_type:    str | None = None   # "LIQUIDITY"    | "FVG_NEAR"    | "RR_PROJECTION" | None
+    tp2_target_type:    str | None = None   # "FVG_FAR"      | "FIB_EXT"     | "NONE"          | None
+    bars_to_pullback:   int | None = None   # bars elapsed AWAITING_PULLBACK → IN_ZONE
 
     @property
     def is_open(self) -> bool:
@@ -216,10 +215,8 @@ class Position:
         else:  # SHORT
             adverse = max(0.0, (high - avg) / avg * 100.0)
             favorable = max(0.0, (avg - low) / avg * 100.0)
-        if adverse > self.mae_pct:
-            self.mae_pct = adverse
-        if favorable > self.mfe_pct:
-            self.mfe_pct = favorable
+        self.mae_pct = max(self.mae_pct, adverse)
+        self.mfe_pct = max(self.mfe_pct, favorable)
 
     def to_dict(self) -> dict:
         """Compact summary (counts of entries/exits) — used by report/UI snapshots."""
@@ -316,19 +313,19 @@ class PositionLifecycle:
     """
 
     def __init__(self):
-        self.positions: List[Position] = []
+        self.positions: list[Position] = []
 
     # ── Yeni pozisyon aç ──
 
     def open_position(self, symbol: str, direction: Direction,
                        entry_price: float, size: float,
-                       sl: float, tp1: float, tp2: Optional[float],
-                       scenario_id: Optional[str] = None,
+                       sl: float, tp1: float, tp2: float | None,
+                       scenario_id: str | None = None,
                        *,
-                       entry_setup_source: Optional[str] = None,
-                       tp1_target_type: Optional[str] = None,
-                       tp2_target_type: Optional[str] = None,
-                       bars_to_pullback: Optional[int] = None) -> Position:
+                       entry_setup_source: str | None = None,
+                       tp1_target_type: str | None = None,
+                       tp2_target_type: str | None = None,
+                       bars_to_pullback: int | None = None) -> Position:
         """İlk giriş ile yeni pozisyon aç.
 
         SMC v2 telemetry kwargs (PR #S5) are keyword-only to keep the positional
@@ -450,7 +447,7 @@ class PositionLifecycle:
     # ── Hedge ──
 
     def open_hedge(self, main_pos: Position, hedge_price: float, hedge_size: float,
-                    sl: float, tp1: float, tp2: float) -> Optional[Position]:
+                    sl: float, tp1: float, tp2: float) -> Position | None:
         """
         Ana pozisyona karşı yönlü hedge aç.
         Efloud örnek: "Long pozisyonuma hedge olarak $2310'dan short açtım."
@@ -559,18 +556,18 @@ class PositionLifecycle:
 
     # ── Query ──
 
-    def open_positions(self, symbol: Optional[str] = None) -> List[Position]:
+    def open_positions(self, symbol: str | None = None) -> list[Position]:
         return [p for p in self.positions if p.is_open and
                 (symbol is None or p.symbol == symbol)]
 
-    def same_direction_open(self, symbol: str, direction: Direction) -> Optional[Position]:
+    def same_direction_open(self, symbol: str, direction: Direction) -> Position | None:
         for p in self.positions:
             if p.is_open and p.symbol == symbol and p.direction == direction \
                and p.scenario_id is None:  # hedge değil
                 return p
         return None
 
-    def get_hedge_of(self, pos: Position) -> Optional[Position]:
+    def get_hedge_of(self, pos: Position) -> Position | None:
         if pos.hedge_id is None:
             return None
         for p in self.positions:

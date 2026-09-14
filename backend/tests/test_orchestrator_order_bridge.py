@@ -62,6 +62,7 @@ def _start_source():
     taşındı; wiring artık orada. Smoke test her iki metodu birlikte tarar.
     """
     import inspect
+
     from backend import bot_runner as runner_mod
     src = inspect.getsource(runner_mod.BotRunner.start)
     if hasattr(runner_mod.BotRunner, "_start_impl"):

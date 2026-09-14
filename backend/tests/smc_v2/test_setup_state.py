@@ -1,5 +1,4 @@
 """Tests for smc_v2.setup_state — SetupCandidate dataclass + persistence."""
-from pathlib import Path
 import pytest
 
 from engine.smc_v2.zones import ZoneSpec
@@ -174,8 +173,9 @@ class TestPruning:
         """Pullback detection (d03378e): load validates against VALID_STATES,
         which includes terminal states for backward compat. Terminal entries
         survive load; the tick loop skips them and the next save() prunes."""
-        from engine.smc_v2.setup_state import SetupStateStore, SCHEMA_VERSION
         import json
+
+        from engine.smc_v2.setup_state import SCHEMA_VERSION, SetupStateStore
         # Hand-craft a file with terminal entries (simulating legacy data)
         payload = {
             "version": SCHEMA_VERSION,
@@ -288,6 +288,7 @@ class TestVersionArchival:
 
     def test_unknown_version_archives_and_starts_empty(self, tmp_path):
         import json
+
         from engine.smc_v2.setup_state import SetupStateStore
         path = tmp_path / "state.json"
         # File from a hypothetical future version 99
@@ -308,6 +309,7 @@ class TestVersionArchival:
     def test_missing_version_treated_as_mismatch(self, tmp_path):
         """A file with no `version` key is also a mismatch — archived."""
         import json
+
         from engine.smc_v2.setup_state import SetupStateStore
         path = tmp_path / "state.json"
         path.write_text(json.dumps({"candidates": []}))  # no version
@@ -361,7 +363,8 @@ class TestFileSizeCap:
 
     def test_oversized_file_refused(self, tmp_path):
         import json
-        from engine.smc_v2.setup_state import SetupStateStore, SCHEMA_VERSION
+
+        from engine.smc_v2.setup_state import SCHEMA_VERSION, SetupStateStore
         path = tmp_path / "state.json"
         # Write a file larger than our cap
         cap = 1000
@@ -382,7 +385,8 @@ class TestFileSizeCap:
 
     def test_under_cap_loads_normally(self, tmp_path):
         import json
-        from engine.smc_v2.setup_state import SetupStateStore, SCHEMA_VERSION
+
+        from engine.smc_v2.setup_state import SCHEMA_VERSION, SetupStateStore
         path = tmp_path / "state.json"
         path.write_text(json.dumps({
             "version": SCHEMA_VERSION,
@@ -419,6 +423,7 @@ class TestMalformedZoneOnLoad:
 
     def test_missing_zone_low_dropped(self, tmp_path):
         import json
+
         from engine.smc_v2.setup_state import SetupStateStore
         path = tmp_path / "state.json"
         path.write_text(json.dumps(self._payload_with_zone(
@@ -430,6 +435,7 @@ class TestMalformedZoneOnLoad:
 
     def test_invalid_zone_source_enum_dropped(self, tmp_path):
         import json
+
         from engine.smc_v2.setup_state import SetupStateStore
         path = tmp_path / "state.json"
         path.write_text(json.dumps(self._payload_with_zone(
@@ -441,6 +447,7 @@ class TestMalformedZoneOnLoad:
 
     def test_null_zone_dropped(self, tmp_path):
         import json
+
         from engine.smc_v2.setup_state import SetupStateStore
         path = tmp_path / "state.json"
         # target_zone is JSON null

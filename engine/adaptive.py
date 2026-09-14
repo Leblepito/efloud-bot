@@ -19,12 +19,11 @@ Her adaptasyon için:
 
 import json
 import logging
-from pathlib import Path
-from dataclasses import dataclass, asdict, field
-from typing import Dict, List, Optional
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 
-from .memory import LearningMemory, Pattern
+from .memory import LearningMemory
 
 log = logging.getLogger("efloud.adaptive")
 
@@ -79,8 +78,8 @@ class AdaptiveConfig:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.interval = revaluation_interval
 
-        self.overrides: Dict[str, float] = {}
-        self.adaptations: List[Adaptation] = []
+        self.overrides: dict[str, float] = {}
+        self.adaptations: list[Adaptation] = []
         self.last_eval_trade_count = 0
 
         self._load()
@@ -123,7 +122,7 @@ class AdaptiveConfig:
         current_count = len(self.memory.journal.all_closed())
         return (current_count - self.last_eval_trade_count) >= self.interval
 
-    def evaluate_and_adapt(self) -> List[Adaptation]:
+    def evaluate_and_adapt(self) -> list[Adaptation]:
         """
         Pattern'leri analiz edip adaptasyonları uygula.
         Her çağrıda değişen parametreleri döndürür.

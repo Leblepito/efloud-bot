@@ -45,9 +45,9 @@ class TelegramNotifier:
     """
 
     def __init__(self) -> None:
-        self.bot_token: Optional[str] = os.environ.get("EFLOUD_TELEGRAM_TOKEN")
-        self.chat_id: Optional[str] = os.environ.get("EFLOUD_TELEGRAM_CHAT_ID")
-        self.thread_id: Optional[str] = os.environ.get("EFLOUD_TELEGRAM_THREAD_ID")
+        self.bot_token: str | None = os.environ.get("EFLOUD_TELEGRAM_TOKEN")
+        self.chat_id: str | None = os.environ.get("EFLOUD_TELEGRAM_CHAT_ID")
+        self.thread_id: str | None = os.environ.get("EFLOUD_TELEGRAM_THREAD_ID")
         self.parse_mode: str = os.environ.get("EFLOUD_TELEGRAM_PARSE_MODE", "Markdown")
         try:
             self.timeout: float = float(
@@ -110,7 +110,7 @@ class TelegramNotifier:
         entry: float,
         sl: float,
         tp1: float,
-        tp2: Optional[float],
+        tp2: float | None,
         size: float,
     ) -> None:
         """Fire-and-forget notification for a freshly opened position.

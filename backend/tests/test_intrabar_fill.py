@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from backtest.intrabar import resolve_fill, Bar
+from backtest.intrabar import Bar, resolve_fill
 
 
 @dataclass
@@ -86,12 +86,14 @@ def test_long_gap_through_sl():
 def test_engine_uses_intrabar_for_position_close():
     """A position closes at intrabar SL price (with slippage), not next-cycle close."""
     import tempfile
+    from dataclasses import dataclass as dc
+
     import yaml
+
+    from backtest.intrabar import Bar, resolve_fill
+    from backtest.slippage import SlippageConfig, adverse_fill
     from engine import SafeOrchestrator
     from engine.notifications import NullNotificationManager
-    from backtest.intrabar import resolve_fill, Bar
-    from backtest.slippage import adverse_fill, SlippageConfig
-    from dataclasses import dataclass as dc
 
     with open("configs/config.phase2_1k.yaml", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -139,9 +141,10 @@ def test_tp1_level_translates_to_tp_leg_for_slippage():
     The engine normalizes via `slip_leg = 'SL' if level == 'SL' else 'TP'`. Without
     the normalization, this raised `ValueError: Unknown leg: 'TP1'` on real data.
     """
-    from backtest.intrabar import resolve_fill, Bar
-    from backtest.slippage import adverse_fill, SlippageConfig
     from dataclasses import dataclass as dc
+
+    from backtest.intrabar import Bar, resolve_fill
+    from backtest.slippage import SlippageConfig, adverse_fill
 
     @dc
     class _PosView:

@@ -42,7 +42,6 @@ Spec parent: docs/superpowers/specs/2026-05-07-asama-2-self-maintenance-observab
 from __future__ import annotations
 
 import time
-from typing import Tuple
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -64,7 +63,7 @@ def evaluate_healthz(
     breaker_halted: bool,
     now_ms: int,
     trading_started: bool = True,
-) -> Tuple[int, dict]:
+) -> tuple[int, dict]:
     """Pure function: evaluate healthz conditions, return (status_code, payload).
 
     Outcomes:

@@ -12,8 +12,6 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
 
 import requests
 
@@ -54,11 +52,11 @@ class InstagramResponse:
     ok: bool
     dry_run: bool = False
     would_execute: bool = False
-    post_id: Optional[str] = None
-    post_url: Optional[str] = None
+    post_id: str | None = None
+    post_url: str | None = None
     stdout: str = ""
     stderr: str = ""
-    exit_code: Optional[int] = None
+    exit_code: int | None = None
     raw: dict = None
 
     def to_dict(self) -> dict:
@@ -81,7 +79,7 @@ def _enabled() -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
-def _credential(name: str) -> Optional[str]:
+def _credential(name: str) -> str | None:
     """Instagram credential env read."""
     raw = os.environ.get(name, "").strip()
     return raw if raw else None
@@ -114,7 +112,7 @@ class InstagramClient:
         """Client enabled ve credentials var."""
         return self._active
 
-    def post(self, text: str, *, image_path: Optional[str] = None) -> InstagramResponse:
+    def post(self, text: str, *, image_path: str | None = None) -> InstagramResponse:
         """Instagram post at (image + caption).
 
         Args:
@@ -219,7 +217,7 @@ class InstagramClient:
 
 
 # Singleton instance
-_client_instance: Optional[InstagramClient] = None
+_client_instance: InstagramClient | None = None
 
 
 def get_instagram_client() -> InstagramClient:

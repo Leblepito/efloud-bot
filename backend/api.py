@@ -5,31 +5,34 @@ All endpoints under /api. /api/login is public; rest require auth.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
-import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from backend.auth import (
-    login as auth_login,
-    logout as auth_logout,
-    require_auth,
-    issue_token,
-    verify_password,
+    COOKIE_MAX_AGE,
     _check_rate_limit,
     _record_failed_attempt,
-    COOKIE_MAX_AGE,
+    issue_token,
+    require_auth,
+    verify_password,
+)
+from backend.auth import (
+    login as auth_login,
+)
+from backend.auth import (
+    logout as auth_logout,
 )
 from backend.bot_runner import runner
 from backend.db import db
-from backend.social.queue_storage import load_draft, save_draft, list_by_status
 from backend.social.content_queue import ContentStatus, approve_draft, reject_draft
+from backend.social.queue_storage import list_by_status, load_draft, save_draft
 
 log = logging.getLogger("efloud.api")
 
@@ -326,7 +329,8 @@ async def reports_monthly(window_days: int = 30) -> dict:
     Müşteri-yüzlü yayın T-012/T-014 statik snapshot yolundan yapılır; bu
     endpoint hiçbir zaman public'e açılmaz (UR-003 pini).
     """
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
+    from datetime import timezone as _tz
 
     from ops.daily_report.monthly import (
         MAX_WINDOW_DAYS,
@@ -751,6 +755,7 @@ async def ai_post_mortem(schedule: str = "daily") -> dict:
 
 
 from backend.signals_smc import get_smc_signal
+
 
 @router.get("/signals/smc", dependencies=[Depends(require_auth)])
 async def signals_smc(symbol: str = "BTCUSDT", timeframe: str = "15m") -> dict:

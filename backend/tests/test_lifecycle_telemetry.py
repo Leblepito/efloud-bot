@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from engine.lifecycle import Position, PositionLifecycle
 
-
 # ────────────────────────────────────────────────────────────────────
 # Section: Position dataclass fields
 # ────────────────────────────────────────────────────────────────────

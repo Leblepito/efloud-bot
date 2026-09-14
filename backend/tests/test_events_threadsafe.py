@@ -9,8 +9,6 @@ Fix: loop-dışı publish call_soon_threadsafe ile loop thread'ine aktarılır.
 import asyncio
 import threading
 
-import pytest
-
 from backend.events import EventBus
 
 

@@ -15,15 +15,19 @@ Config (under ``agent_team`` / ``llm`` / the sentiment block, as applicable):
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
-from .claude_client import ClaudeClient, DEFAULT_MODEL as CLAUDE_DEFAULT_MODEL
-from .gemini_client import GeminiClient, DEFAULT_MODEL as GEMINI_DEFAULT_MODEL
-from .minimax_client import MiniMaxClient, DEFAULT_MODEL as MINIMAX_DEFAULT_MODEL
-from .deepseek_client import DeepSeekClient, DEFAULT_MODEL as DEEPSEEK_DEFAULT_MODEL
+from .claude_client import DEFAULT_MODEL as CLAUDE_DEFAULT_MODEL
+from .claude_client import ClaudeClient
+from .deepseek_client import DEFAULT_MODEL as DEEPSEEK_DEFAULT_MODEL
+from .deepseek_client import DeepSeekClient
+from .gemini_client import DEFAULT_MODEL as GEMINI_DEFAULT_MODEL
+from .gemini_client import GeminiClient
+from .minimax_client import DEFAULT_MODEL as MINIMAX_DEFAULT_MODEL
+from .minimax_client import MiniMaxClient
 
 
-def make_llm_client(config: Optional[Dict[str, Any]] = None):
+def make_llm_client(config: dict[str, Any] | None = None):
     """Build the configured LLM client. Unknown providers fall back to Claude.
 
     Provider resolution order: ``config["provider"]`` → ``LLM_PROVIDER`` env →

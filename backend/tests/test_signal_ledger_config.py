@@ -1,6 +1,8 @@
 # backend/tests/test_signal_ledger_config.py
-import yaml
 from pathlib import Path
+
+import yaml
+
 
 def test_signal_ledger_config_defaults_off():
     cfg = yaml.safe_load(Path("configs/config.phase2_1k.yaml").read_text(encoding="utf-8"))

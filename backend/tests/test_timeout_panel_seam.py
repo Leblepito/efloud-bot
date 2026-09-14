@@ -3,8 +3,8 @@ resolve_open_signals -> ledger -> aggregate, so the 3-way timeout panel's
 mark_to_market column is NOT byte-identical to the zero column (which would
 collapse edge_sign_stable into a false 'stable' GO gate).
 """
-from engine.signal_ledger import SignalLedger
 from engine.edge_metrics import aggregate
+from engine.signal_ledger import SignalLedger
 from scripts.routines.resolve_signals import resolve_open_signals
 
 

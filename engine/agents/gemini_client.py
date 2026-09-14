@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -55,7 +55,7 @@ class GeminiClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         *,
         timeout: float = 20.0,
@@ -64,7 +64,7 @@ class GeminiClient:
         self.model = model
         self.timeout = float(timeout)
 
-    def complete_json(self, prompt: str, *, timeout: Optional[float] = None) -> Dict[str, Any]:
+    def complete_json(self, prompt: str, *, timeout: float | None = None) -> dict[str, Any]:
         """Single-shot JSON call.
 
         Returns the parsed JSON on success, or ``{}`` on any failure

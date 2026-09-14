@@ -10,7 +10,7 @@ This regression was flagged by the PR #57 code review and is fixed here.
 """
 import pytest
 
-from engine.lifecycle import Position, Entry
+from engine.lifecycle import Entry, Position
 
 
 def _make_position(mae: float = 0.0, mfe: float = 0.0) -> Position:

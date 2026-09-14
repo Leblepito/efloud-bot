@@ -22,7 +22,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -41,7 +41,7 @@ _consecutive_failures = 0
 _WARN_EVERY = 20
 
 
-def _extract_json(text: str) -> Dict[str, Any]:
+def _extract_json(text: str) -> dict[str, Any]:
     """Parse a JSON object out of an LLM's text.
 
     Tolerates, in order: reasoning models that prepend a ``<think>…</think>``
@@ -78,7 +78,7 @@ class ClaudeClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         *,
         timeout: float = 20.0,
@@ -89,7 +89,7 @@ class ClaudeClient:
         self.timeout = float(timeout)
         self.max_tokens = int(max_tokens)
 
-    def complete_json(self, prompt: str, *, timeout: Optional[float] = None) -> Dict[str, Any]:
+    def complete_json(self, prompt: str, *, timeout: float | None = None) -> dict[str, Any]:
         """Single-shot JSON call. Returns the parsed object, or ``{}`` on any failure."""
         global _consecutive_failures
         if not self.api_key:

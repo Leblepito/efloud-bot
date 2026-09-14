@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from backend.social import queue_storage
 from backend.social.content_queue import (
     ComplianceGateError,
     ContentQueueError,
@@ -23,8 +24,6 @@ from backend.social.content_queue import (
     submit_for_review,
     validate_draft,
 )
-from backend.social import queue_storage
-
 
 # --------------------------------------------------------------------------- #
 # Pure: content_queue.py

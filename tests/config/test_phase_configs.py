@@ -7,6 +7,7 @@ config setiyle uyumlu hale getirildi — value-spesifik assertion yerine YAPISAL
 test ediliyor.
 """
 from pathlib import Path
+
 import pytest
 import yaml
 

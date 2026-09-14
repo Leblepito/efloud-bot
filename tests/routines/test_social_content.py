@@ -9,7 +9,6 @@ import pytest
 
 import scripts.routines.social_content as sc
 
-
 FLEET_OK = {
     "bots": {
         "scalp": {"up": True, "tf": "5m/1h/12h"},

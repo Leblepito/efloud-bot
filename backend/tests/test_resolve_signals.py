@@ -2,6 +2,7 @@
 from engine.signal_ledger import SignalRecord
 from scripts.routines.resolve_signals import resolve_signal
 
+
 def _rec(direction="LONG", entry=100.0, sl=98.0, tp1=104.0, tp2=None,
          exit_model="single_target", rr1=2.0, rr2=None, ts=0):
     return SignalRecord(signal_id="x", ts_emitted=ts, brk_ts=ts, symbol="T/USDT",

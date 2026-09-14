@@ -3,6 +3,7 @@
 Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §5 (Phase B)
 """
 import pytest
+
 from backtest.compare_live import reconcile
 
 

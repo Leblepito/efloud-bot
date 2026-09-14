@@ -6,7 +6,8 @@ completely broker-agnostic.
 """
 from __future__ import annotations
 
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
+
 import pandas as pd
 
 
@@ -65,6 +66,6 @@ class ExchangeAdapter(Protocol):
         """Enables Hedge Mode (true) or One-way position holding (false)."""
         ...
 
-    def get_open_positions(self, symbol: Optional[str] = None) -> list[dict[str, Any]]:
+    def get_open_positions(self, symbol: str | None = None) -> list[dict[str, Any]]:
         """Returns a list of active open positions for a symbol (or all)."""
         ...

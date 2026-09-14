@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from backend.healthz import (
-    LOOP_TICK_THRESHOLD_MS,
     EXCHANGE_PING_THRESHOLD_MS,
+    LOOP_TICK_THRESHOLD_MS,
     evaluate_healthz,
 )
 from engine.safety.runtime_state import RuntimeState

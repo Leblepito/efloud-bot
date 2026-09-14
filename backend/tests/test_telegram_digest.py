@@ -20,11 +20,8 @@ from __future__ import annotations
 
 import importlib
 import json
-import os
 import sys
 from pathlib import Path
-
-import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
@@ -85,8 +82,8 @@ def test_format_en_digest_has_disclaimer_and_aggregate_keys():
     # aggregate counts must appear; per-trade signals must NOT
     assert "8" in text and "5" in text and "3" in text
     # CMP-3 perf-pct guard: wording must NOT contain _PERF_WORDS near a '%' token
-    assert "win rate" not in text.lower(), f"perf-word 'win rate' must be absent"
-    assert "net return" not in text.lower(), f"perf-word 'return' must be absent"
+    assert "win rate" not in text.lower(), "perf-word 'win rate' must be absent"
+    assert "net return" not in text.lower(), "perf-word 'return' must be absent"
     # Net P/L (CMP-3-safe wording) must be present
     assert "P/L" in text and "+1.7" in text
     # No per-trade leak
@@ -117,7 +114,7 @@ def test_format_en_digest_contains_no_dollar_amount():
 # ─────────────────────────────────────────────────────────────────────
 
 def test_compliance_gate_accepts_clean_en_digest():
-    from scripts.routines.telegram_digest import format_en_digest, compliance_gate
+    from scripts.routines.telegram_digest import compliance_gate, format_en_digest
     text = format_en_digest({
         "date": "2026-06-17", "closed_count": 4, "wins": 3, "losses": 1,
         "win_rate_pct": 75.0, "net_return_pct": 2.1,
@@ -135,7 +132,7 @@ def test_compliance_gate_rejects_missing_disclaimer():
 
 
 def test_compliance_gate_rejects_dollar_amount():
-    from scripts.routines.telegram_digest import format_en_digest, compliance_gate
+    from scripts.routines.telegram_digest import compliance_gate, format_en_digest
     text = format_en_digest({
         "date": "2026-06-17", "closed_count": 4, "wins": 3, "losses": 1,
         "win_rate_pct": 75.0, "net_return_pct": 2.1,
@@ -261,7 +258,7 @@ def test_module_not_in_runner_registry(monkeypatch):
     """SD-5 must NOT register in scripts.routines.runner.REGISTRY
     (that path constructs ccxt.binance via make_future_client)."""
     _import_digest_fresh(monkeypatch)
-    import scripts.routines.runner as runner
+    from scripts.routines import runner
     assert "telegram_digest" not in runner.REGISTRY, (
         "telegram_digest must be standalone — REGISTRY would couple to Binance"
     )

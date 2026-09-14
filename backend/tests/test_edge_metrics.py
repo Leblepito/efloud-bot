@@ -1,6 +1,7 @@
 # backend/tests/test_edge_metrics.py
-from engine.signal_ledger import SignalRecord
 from engine.edge_metrics import aggregate
+from engine.signal_ledger import SignalRecord
+
 
 def _r(net, outcome="tp1", status="resolved", conf=70, sym="A/USDT", direction="LONG"):
     return SignalRecord(signal_id=f"{sym}-{net}-{outcome}", ts_emitted=0, brk_ts=0, symbol=sym,

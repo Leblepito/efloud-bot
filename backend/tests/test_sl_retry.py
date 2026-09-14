@@ -10,6 +10,7 @@ These tests validate the fixes:
 4. On exhaustion, sl_order_id='' for reconcile repair
 """
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from exchange import BinanceClient, OrderManager, Position

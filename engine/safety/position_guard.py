@@ -15,9 +15,10 @@ Check'ler:
 
 import logging
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, List
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from typing import Any
 
 log = logging.getLogger("efloud.posguard")
 
@@ -26,8 +27,8 @@ log = logging.getLogger("efloud.posguard")
 class PauseGateDecision:
     """Result of the pause_new_entries hard gate for new market entries."""
     allowed: bool
-    reason: Optional[str] = None
-    source: Optional[str] = None
+    reason: str | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -39,8 +40,8 @@ class PauseConfig:
     """
     enabled: bool
     source: str
-    config_value: Optional[bool]
-    env_override: Optional[str]
+    config_value: bool | None
+    env_override: str | None
 
 
 _ENV_VAR_NAME = "EFLOUD_PAUSE_NEW_ENTRIES"
@@ -48,7 +49,7 @@ _ENV_TRUE = {"1", "true", "yes", "on"}
 _ENV_FALSE = {"0", "false", "no", "off", ""}
 
 
-def _parse_env_bool(raw: Optional[str]) -> Optional[bool]:
+def _parse_env_bool(raw: str | None) -> bool | None:
     if raw is None:
         return None
     norm = raw.strip().lower()
@@ -67,7 +68,7 @@ def load_pause_config(safety_cfg: Mapping[str, Any]) -> PauseConfig:
     """
     config_raw = safety_cfg.get("pause_new_entries", None)
     if config_raw is None:
-        config_value: Optional[bool] = None
+        config_value: bool | None = None
     elif isinstance(config_raw, bool):
         config_value = config_raw
     else:
@@ -359,7 +360,7 @@ class PositionGuard:
     def can_reverse_position(self,
                               existing_position,
                               current_price: float,
-                              min_profit_pct: Optional[float] = None
+                              min_profit_pct: float | None = None
                               ) -> PositionCheckResult:
         """Karda olan açık pozisyonun ters yöne çevrilmesine izin var mı?
 
@@ -453,8 +454,7 @@ class PositionGuard:
         raw = position.opened_at
         # Strip trailing Z; fromisoformat handles it natively on 3.11+, but
         # the slice keeps us safe on older interpreters and is a no-op otherwise.
-        if raw.endswith("Z"):
-            raw = raw[:-1]
+        raw = raw.removesuffix("Z")
 
         try:
             opened = datetime.fromisoformat(raw)

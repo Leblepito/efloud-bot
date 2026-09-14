@@ -1,6 +1,7 @@
 import pytest
+
 from engine.ai.sentiment import evaluate_parallel_news
-from utils.cache import SentimentCache
+
 
 @pytest.mark.asyncio
 async def test_evaluate_parallel_news_caching():

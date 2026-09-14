@@ -10,8 +10,6 @@ import pytest
 
 from engine.safety.runtime_state import (
     CRASH_LOOP_THRESHOLD,
-    CRASH_LOOP_WINDOW_MS,
-    CRASH_AUTO_CLEAR_AFTER_MS,
     RuntimeState,
 )
 

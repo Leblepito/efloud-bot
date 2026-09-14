@@ -4,7 +4,6 @@ EqLevel is the typed v2 equivalent of the existing dict-based equal_levels()
 output. liquidity_pools() builds on equal_levels() to cluster equal H/L into
 typed records consumed by tp_calc.
 """
-import pandas as pd
 import pytest
 
 from engine.smc import SMCEngine, Swing

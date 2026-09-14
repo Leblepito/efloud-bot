@@ -30,7 +30,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .base import BaseAgent
 
@@ -50,11 +50,11 @@ class SignalValidatorAgent(BaseAgent):
 
     name = "signal_validator"
 
-    def filter_context(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    def filter_context(self, ctx: dict[str, Any]) -> dict[str, Any]:
         return {k: ctx[k] for k in ("symbol", "direction", "entry", "sl",
                                      "tp1", "confluence") if k in ctx}
 
-    def build_prompt(self, ctx: Dict[str, Any]) -> str:
+    def build_prompt(self, ctx: dict[str, Any]) -> str:
         return (
             "You are SignalValidator, a focused LTF/MTF structure reviewer.\n"
             "Determine if this is institutional order flow (smart money\n"
@@ -79,11 +79,11 @@ class RiskReviewerAgent(BaseAgent):
 
     name = "risk_reviewer"
 
-    def filter_context(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    def filter_context(self, ctx: dict[str, Any]) -> dict[str, Any]:
         return {k: ctx[k] for k in ("rr", "size_notional_pct",
                                      "sl_atr_distance") if k in ctx}
 
-    def build_prompt(self, ctx: Dict[str, Any]) -> str:
+    def build_prompt(self, ctx: dict[str, Any]) -> str:
         return (
             "You are RiskReviewer, a hard-nosed position-sizer.\n"
             "You do not know the symbol — judge the NUMBERS only.\n\n"
@@ -111,11 +111,11 @@ class RegimeAgent(BaseAgent):
 
     name = "regime"
 
-    def filter_context(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    def filter_context(self, ctx: dict[str, Any]) -> dict[str, Any]:
         return {k: ctx[k] for k in ("htf_bias", "adx",
                                      "htf_slope_pct") if k in ctx}
 
-    def build_prompt(self, ctx: Dict[str, Any]) -> str:
+    def build_prompt(self, ctx: dict[str, Any]) -> str:
         return (
             "You are Regime, a macro/HTF context reader.\n"
             "Decide if the regime is trading-friendly for the proposed\n"
@@ -141,7 +141,7 @@ class OverseerAgent(BaseAgent):
 
     name = "overseer"
 
-    def build_prompt(self, ctx: Dict[str, Any]) -> str:
+    def build_prompt(self, ctx: dict[str, Any]) -> str:
         verdicts = ctx.get("agent_verdicts", [])
         return (
             "You are Overseer, the strict judge of the agent team.\n"
@@ -172,7 +172,7 @@ class PostMortemAgent(BaseAgent):
 
     name = "post_mortem"
 
-    def review(self, ctx: Dict[str, Any]) -> "AgentVerdict":  # type: ignore[override]
+    def review(self, ctx: dict[str, Any]) -> AgentVerdict:  # type: ignore[override]
         """The PostMortem agent does not follow the standard per-cycle
         review contract. It is invoked via :meth:`write_report`.
         """
@@ -218,7 +218,7 @@ class PostMortemAgent(BaseAgent):
         return str(out_path.resolve())
 
     @staticmethod
-    def _build_prompt(stats: Dict[str, Any], *, schedule: str) -> str:
+    def _build_prompt(stats: dict[str, Any], *, schedule: str) -> str:
         return (
             f"You are a {schedule} post-mortem reviewer for a Binance USDT-M\n"
             "futures trading bot. The deterministic stats below are the truth;\n"
@@ -234,7 +234,7 @@ class PostMortemAgent(BaseAgent):
 # ── Helpers (module-private) ──────────────────────────────────────────────
 
 
-def _verdict_from_payload(name: str, data: Dict[str, Any]) -> Any:  # type: ignore[name-defined]
+def _verdict_from_payload(name: str, data: dict[str, Any]) -> Any:  # type: ignore[name-defined]
     """Re-exported from base to avoid a circular import for the
     PostMortemAgent.review shim above.
     """
@@ -242,7 +242,7 @@ def _verdict_from_payload(name: str, data: Dict[str, Any]) -> Any:  # type: igno
     return _impl(name, data)
 
 
-def _read_journal_tail(path: str, max_lines: int = 500) -> List[Dict[str, Any]]:
+def _read_journal_tail(path: str, max_lines: int = 500) -> list[dict[str, Any]]:
     """Best-effort read of the last N JSONL records.
 
     Empty / missing / unparseable files are returned as ``[]`` — the
@@ -256,7 +256,7 @@ def _read_journal_tail(path: str, max_lines: int = 500) -> List[Dict[str, Any]]:
             tail = f.readlines()[-max_lines:]
     except OSError:
         return []
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for line in tail:
         line = line.strip()
         if not line:
@@ -270,7 +270,7 @@ def _read_journal_tail(path: str, max_lines: int = 500) -> List[Dict[str, Any]]:
     return out
 
 
-def _summarize_trades(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _summarize_trades(trades: list[dict[str, Any]]) -> dict[str, Any]:
     """Compute deterministic baseline stats from the journal.
 
     The LLM cannot hallucinate these — they're the ground truth. The
@@ -302,14 +302,14 @@ def _summarize_trades(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _render_markdown(*, stats: Dict[str, Any], llm_payload: Dict[str, Any],
+def _render_markdown(*, stats: dict[str, Any], llm_payload: dict[str, Any],
                      schedule: str) -> str:
     """Compose a markdown report. Always complete; LLM just fills colour."""
     common = llm_payload.get("common_loss_reasons") or []
     improvements = llm_payload.get("improvement_suggestions") or []
     forecast = llm_payload.get("win_rate_forecast")
 
-    lines: List[str] = [
+    lines: list[str] = [
         f"# Post-Mortem ({schedule})",
         "",
         f"_Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}_",

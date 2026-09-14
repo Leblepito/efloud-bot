@@ -162,6 +162,7 @@ def test_orchestrator_accepts_df_entry_and_defaults_it_to_none():
     not (tests, future code paths) must still work -- the parameter defaults to
     None and wilder_atr(None) returns None, which restores the proxy."""
     import inspect
+
     from engine.safe_orchestrator import SafeOrchestrator
     sig = inspect.signature(SafeOrchestrator._place_v2_entry_order)
     assert "df_entry" in sig.parameters

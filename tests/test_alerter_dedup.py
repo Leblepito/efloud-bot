@@ -79,6 +79,7 @@ def test_would_fire_is_read_only(tmp_path):
 
 def test_mark_fired_increments_count(tmp_path):
     import sqlite3
+
     from ops.alerter.dedup import Dedup
     d = Dedup(str(tmp_path / "d.sqlite"))
     d.mark_fired("k")

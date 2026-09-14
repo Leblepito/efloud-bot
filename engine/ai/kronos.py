@@ -11,7 +11,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # NOTE: the LLM client is INJECTED (duck-typed ``complete_json(prompt) -> dict``)
 # rather than imported here. The bot resolves it via
@@ -49,8 +49,8 @@ def run_kronos_prediction(
     period: str = "1mo",
     interval: str = "1h",
     pred_len: int = 24,
-    df: Optional[Any] = None,
-) -> Dict[str, Any]:
+    df: Any | None = None,
+) -> dict[str, Any]:
     """Run the Kronos prediction script as a subprocess and parse its output.
     
     Returns a dictionary of parsed forecast metrics or a default empty dictionary
@@ -72,9 +72,7 @@ def run_kronos_prediction(
             df_cleaned.columns = [c.lower() for c in df_cleaned.columns]
             
             # Normalize index name: DatetimeIndex named "timestamp" -> "timestamps"
-            if df_cleaned.index.name == "timestamp":
-                df_cleaned.index.name = "timestamps"
-            elif df_cleaned.index.name is None or df_cleaned.index.name != "timestamps":
+            if df_cleaned.index.name == "timestamp" or df_cleaned.index.name is None or df_cleaned.index.name != "timestamps":
                 df_cleaned.index.name = "timestamps"
                 
             df_cleaned = df_cleaned[["open", "high", "low", "close", "volume"]]
@@ -169,12 +167,12 @@ def synthesize_signal_with_kronos(
     entry: float,
     sl: float,
     tp1: float,
-    tp2: Optional[float],
+    tp2: float | None,
     confluence: int,
-    reasons: List[str],
-    kronos_data: Dict[str, Any],
+    reasons: list[str],
+    kronos_data: dict[str, Any],
     llm_client: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Synthesize the bot's SMC trade signal with the Kronos time-series prediction.
 
     ``llm_client`` is any object exposing ``complete_json(prompt) -> dict`` (built

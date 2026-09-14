@@ -11,7 +11,7 @@ loss count = 4) even though the streak was broken in the middle.
 """
 from datetime import datetime
 
-from engine.safety.breaker import CircuitBreaker, BreakerState
+from engine.safety.breaker import BreakerState, CircuitBreaker
 
 
 def _fresh():

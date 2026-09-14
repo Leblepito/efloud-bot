@@ -13,7 +13,6 @@ hold-indefinitely gap.
 from unittest.mock import MagicMock
 
 import pandas as pd
-import pytest
 import yaml
 
 from engine import SafeOrchestrator

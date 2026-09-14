@@ -19,21 +19,21 @@ import traceback
 import uuid
 from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 # ─────────────────────────────────────────────────────────────────────
 # trace_id contextvar
 # ─────────────────────────────────────────────────────────────────────
 
-_trace_id_ctx: ContextVar[Optional[str]] = ContextVar("trace_id", default=None)
+_trace_id_ctx: ContextVar[str | None] = ContextVar("trace_id", default=None)
 
 
-def get_trace_id() -> Optional[str]:
+def get_trace_id() -> str | None:
     """Return current trace_id, or None if unset."""
     return _trace_id_ctx.get()
 
 
-def set_trace_id(value: Optional[str]) -> None:
+def set_trace_id(value: str | None) -> None:
     """Set trace_id for the current async task / context."""
     _trace_id_ctx.set(value)
 

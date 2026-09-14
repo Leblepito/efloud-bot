@@ -7,10 +7,10 @@ Tests the full orchestrator flow:
 """
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 import pandas as pd
+import pytest
 
 from engine.smc_v2.zones import ZoneSpec
 
@@ -21,11 +21,9 @@ class TestOrchestratorPullbackDetection:
     @pytest.fixture
     def mock_orchestrator(self):
         """Create a mock SafeOrchestrator with minimal dependencies."""
+        from engine.journal import TradeJournal
         from engine.safe_orchestrator import SafeOrchestrator
         from engine.smc_v2.setup_state import SetupStateStore
-        from engine.smc_v2.zones import ZoneSpec
-        from engine.journal import TradeJournal
-        from engine.smc_v2.setup_state import SetupCandidate
 
         # Minimal config
         config = {
@@ -272,9 +270,9 @@ class TestOrchestratorPullbackWithConfirmation:
     @pytest.fixture
     def mock_orchestrator_with_conf(self):
         """Create orchestrator with confirmation REQUIRED."""
+        from engine.journal import TradeJournal
         from engine.safe_orchestrator import SafeOrchestrator
         from engine.smc_v2.setup_state import SetupStateStore
-        from engine.journal import TradeJournal
 
         config = {
             "structure": {

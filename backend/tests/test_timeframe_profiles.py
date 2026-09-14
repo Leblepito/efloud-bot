@@ -7,7 +7,7 @@ strictly monotonically increasing. Missing/`custom` profile → explicit fallbac
 """
 import pytest
 
-from data.timeframes import resolve_timeframes, PROFILES
+from data.timeframes import PROFILES, resolve_timeframes
 
 
 @pytest.mark.parametrize("profile,entry,mtf,htf", [

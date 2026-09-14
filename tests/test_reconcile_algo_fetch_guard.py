@@ -17,8 +17,6 @@ kayıp TP hâlâ temizlenir (repair tetiklenir).
 import math
 from unittest.mock import Mock
 
-import pytest
-
 from exchange import OrderManager, Position
 
 

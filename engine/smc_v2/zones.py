@@ -10,7 +10,7 @@ trigger. Priority order per spec §4.1:
 All functions are pure — no I/O, no logging.
 """
 from dataclasses import dataclass
-from typing import List, Literal, Tuple
+from typing import Literal
 
 from engine.smc import FVG
 
@@ -24,8 +24,8 @@ class ZoneSpec:
 
 
 def build_pullback_zones(
-    htf_fvgs: List[FVG],
-    ote_band: Tuple[float, float],
+    htf_fvgs: list[FVG],
+    ote_band: tuple[float, float],
     direction: str,
     trigger_price: float,
 ) -> ZoneSpec:

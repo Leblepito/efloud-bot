@@ -1,6 +1,6 @@
-import pytest
 from unittest.mock import patch
-from pathlib import Path
+
+import pytest
 
 from engine.ai import sentiment
 

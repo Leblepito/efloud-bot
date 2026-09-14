@@ -13,11 +13,10 @@ Scope limited to CHoCH events (BOS deferred — matches v1 signals.py
 recency-tighter BOS handling, see signals.py:200-204).
 """
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 import pandas as pd
 
-from engine.smc import StructBreak, Swing, FVG
+from engine.smc import FVG, StructBreak
 from engine.smc_v2.setup_state import SetupCandidate
 from engine.smc_v2.swing_anchor import select_htf_swing_anchor
 from engine.smc_v2.zones import build_pullback_zones
@@ -55,10 +54,10 @@ class HtfBar:
     ordinal: int
     high: float
     low: float
-    ts_ms: Optional[int] = None
+    ts_ms: int | None = None
 
 
-def _htf_cutoff_for_break(brk_ms: int, htf_bars: list) -> Optional[int]:
+def _htf_cutoff_for_break(brk_ms: int, htf_bars: list) -> int | None:
     """W2/C1 (2026-07-18): LTF kırılım anını (ms) HTF ordinal cutoff'una haritala.
 
     select_htf_swing_anchor `swing.idx < trigger_idx` (HTF ekseni) filtreler;
@@ -86,14 +85,14 @@ def _htf_cutoff_for_break(brk_ms: int, htf_bars: list) -> Optional[int]:
 def generate_setup_candidates(
     symbol: str,
     htf_bias: str,
-    ltf_structure_breaks: List[StructBreak],
+    ltf_structure_breaks: list[StructBreak],
     htf_swings: dict,
     htf_bars: list,
-    htf_fvgs: List[FVG],
-    ote_band: Tuple[float, float],
+    htf_fvgs: list[FVG],
+    ote_band: tuple[float, float],
     ltf_trigger_idx_min: int,
     anchor_time_axis: bool = False,
-) -> List[SetupCandidate]:
+) -> list[SetupCandidate]:
     """Emit SetupCandidate instances for new aligned CHoCH events.
 
     Args:
@@ -125,7 +124,7 @@ def generate_setup_candidates(
     if htf_bias == "UNDEF":
         return []
 
-    out: List[SetupCandidate] = []
+    out: list[SetupCandidate] = []
     for brk in ltf_structure_breaks:
         # PR #S3c-1 emits only for CHoCH (reversal). BOS (continuation)
         # deferred — v1 signals.py handles BOS with a tighter recency

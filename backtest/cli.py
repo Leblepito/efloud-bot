@@ -12,7 +12,7 @@ import pandas as pd
 import yaml
 
 from backtest.engine import run_backtest
-from backtest.grid import GridRunner, expand_grid, config_hash
+from backtest.grid import GridRunner, config_hash, expand_grid
 from backtest.reproducibility import capture_provenance
 from data.cache import OHLCVCache
 from data.timeframes import resolve_timeframes, tf_to_minutes

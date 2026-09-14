@@ -1,7 +1,8 @@
-import tempfile
 import shutil
-from pathlib import Path
+import tempfile
+
 from utils.cache import SentimentCache
+
 
 def test_sentiment_cache_lifecycle():
     tmpdir = tempfile.mkdtemp()

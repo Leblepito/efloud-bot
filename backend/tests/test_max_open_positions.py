@@ -6,7 +6,6 @@ Aggressive Mode v1 needs this enforced because we're going from de-facto-1
 to max=5 — without enforcement, signals could pile up beyond intended exposure.
 """
 from dataclasses import dataclass
-from typing import Optional
 
 from engine.safety.position_guard import PositionGuard
 
@@ -18,7 +17,7 @@ class _FakePos:
     is_open: bool = True
     avg_entry_price: float = 100.0
     remaining_size: float = 0.1
-    scenario_id: Optional[str] = None
+    scenario_id: str | None = None
     id: str = "fake-pos"
 
 

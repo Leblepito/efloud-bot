@@ -4,9 +4,9 @@ from __future__ import annotations
 import json
 
 from scripts.kronos_service import (
-    PROFILE_LAYERS,
     _BAND_RE,
     _DIRECTION_RE,
+    PROFILE_LAYERS,
     atomic_write_json,
     consensus,
 )

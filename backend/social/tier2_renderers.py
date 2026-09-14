@@ -26,12 +26,12 @@ operatörün mimari kararı).
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import yaml
 
@@ -150,7 +150,7 @@ def load_templates(path: str | Path | None = None) -> dict[str, Any]:
     with open(p, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict) or "templates" not in data:
-        raise RendererError(f"templates.yaml şeması hatalı: 'templates' anahtarı yok")
+        raise RendererError("templates.yaml şeması hatalı: 'templates' anahtarı yok")
     return data
 
 
@@ -196,7 +196,7 @@ def render(
     values: dict[str, Any],
     templates: dict[str, Any] | None = None,
     templates_path: str | Path | None = None,
-    chart_img_resolver: "Callable[[str, str], str] | None" = None,
+    chart_img_resolver: Callable[[str, str], str] | None = None,
 ) -> RenderedContent:
     """Bir template'i formatla + label/disclaimer kontrolü yap.
 

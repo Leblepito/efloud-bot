@@ -1,8 +1,9 @@
 import time
 from unittest.mock import MagicMock, patch
-import pytest
+
 from engine import SafeOrchestrator
-from engine.journal import TradeJournal, TradeSnapshot
+from engine.journal import TradeJournal
+
 
 def test_async_agent_review_flow(tmp_path):
     # Setup mock AgentTeam

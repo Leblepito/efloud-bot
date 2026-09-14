@@ -15,16 +15,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import datetime, timezone
+from typing import Any
 
 from backend.audit.klines import fetch_klines, symbol_to_binance
 from backend.audit.scorer import (
-    score_entry_timing,
-    score_sl_distance,
-    score_rr,
-    compose_overall,
     _atr,
+    compose_overall,
+    score_entry_timing,
+    score_rr,
+    score_sl_distance,
 )
 
 log = logging.getLogger("efloud.audit.journal")
@@ -48,7 +48,7 @@ class AuditEngine:
         """
         self.pool = pool
 
-    async def score_closed_trade(self, position) -> Optional[dict[str, Any]]:
+    async def score_closed_trade(self, position) -> dict[str, Any] | None:
         """Score a Position that just closed. Fire-and-forget; never raises.
 
         Args:
@@ -70,7 +70,7 @@ class AuditEngine:
             log.warning("audit: failed for %s (trace=%s): %s", symbol, trace, e)
             return None
 
-    async def _score_closed_trade_impl(self, position) -> Optional[dict[str, Any]]:
+    async def _score_closed_trade_impl(self, position) -> dict[str, Any] | None:
         """Inner method — exceptions caught by score_closed_trade's wrapper."""
         # ─── 1. Locate the trade row ──────────────────────────────────────
         trade = await self._fetch_trade(position)
@@ -149,7 +149,7 @@ class AuditEngine:
             )
         return verdict
 
-    async def _fetch_trade(self, position) -> Optional[dict[str, Any]]:
+    async def _fetch_trade(self, position) -> dict[str, Any] | None:
         """3-tier strategy to locate the trade row matching this Position.
 
         Tier 1: trace_id direct match (preferred).

@@ -1,8 +1,10 @@
 # backend/tests/test_resolve_open_signals.py
 import json
 from pathlib import Path
+
 from engine.signal_ledger import SignalLedger
 from scripts.routines.resolve_signals import resolve_open_signals
+
 
 class FakeFetcher:
     """Mirrors the resolver-facing interface: fetch_bars + funding_sum (the real

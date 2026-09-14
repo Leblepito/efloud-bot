@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ---------- shared helpers ----------------------------------------------------
 
 NOW = 1_700_000_000  # deterministic UTC epoch — keeps assertions reproducible

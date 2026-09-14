@@ -1,14 +1,12 @@
 """Dedicated tests for Efloud Price Action level confluence and target logic."""
 
-import logging
 from types import SimpleNamespace
-from typing import Dict, List
 from unittest.mock import MagicMock
-import pandas as pd
-import pytest
 
-from engine.signals import generate_signals
+import pandas as pd
+
 from engine.levels import Level
+from engine.signals import generate_signals
 
 
 class TestPriceActionLevelsAndTargets:

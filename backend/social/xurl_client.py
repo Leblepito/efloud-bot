@@ -35,7 +35,6 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 # Repo kök → compliance script import (DRY — duplicate BANNED list yok)
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -58,7 +57,7 @@ log = logging.getLogger("efloud.xurl")
 USER_AGENT = "efloud-xurl-client/1.0 (+https://u2algo.com)"
 
 # Module-level subprocess cache (binary discovery amortized)
-_BIN_PATH_CACHE: Optional[str] = None
+_BIN_PATH_CACHE: str | None = None
 
 # Timeout per shell-out (saniye). xurl çoğu komut <2s döner; OAuth flow biraz
 # uzun olabilir ama shell-out OAuth YAPMAZ (auth bir kere local'de yapılır,
@@ -112,11 +111,11 @@ class XurlResponse:
     ok: bool
     dry_run: bool = False
     would_execute: bool = False
-    post_id: Optional[str] = None
-    post_url: Optional[str] = None
+    post_id: str | None = None
+    post_url: str | None = None
     stdout: str = ""
     stderr: str = ""
-    exit_code: Optional[int] = None
+    exit_code: int | None = None
     raw: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -143,7 +142,7 @@ def _enabled() -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
-def _credential(name: str) -> Optional[str]:
+def _credential(name: str) -> str | None:
     """X credential env read; empty/whitespace → None (missing sayılır)."""
     raw = os.environ.get(name, "").strip()
     return raw if raw else None
@@ -161,7 +160,7 @@ def _mask_credential(value: str) -> str:
     return f"***{value[-4:]}"
 
 
-def _binary_path() -> Optional[str]:
+def _binary_path() -> str | None:
     """xurl binary'yi bul: XURL_BIN_PATH override > shutil.which("xurl").
 
     Sonuç modül-level cache'lenir (her çağrıda PATH taranmaz).
@@ -208,11 +207,11 @@ class XurlClient:
 
     def __init__(
         self,
-        enabled: Optional[bool] = None,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        access_token: Optional[str] = None,
-        access_secret: Optional[str] = None,
+        enabled: bool | None = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        access_token: str | None = None,
+        access_secret: str | None = None,
         char_limit: int = CHAR_LIMIT_DEFAULT,
         dry_run: bool = False,
         subprocess_timeout: float = SUBPROCESS_TIMEOUT_SEC,
@@ -313,7 +312,7 @@ class XurlClient:
 
     # ─── Public API ───
 
-    def post(self, text: str, *, dry_run: Optional[bool] = None, lang: str = "all") -> XurlResponse:
+    def post(self, text: str, *, dry_run: bool | None = None, lang: str = "all") -> XurlResponse:
         """Tek bir X post at.
 
         Args:
@@ -372,7 +371,7 @@ class XurlClient:
         self,
         texts: list[str],
         *,
-        dry_run: Optional[bool] = None,
+        dry_run: bool | None = None,
         lang: str = "all",
     ) -> XurlResponse:
         """X thread at (multi-post).

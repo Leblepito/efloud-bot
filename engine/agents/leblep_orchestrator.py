@@ -1,13 +1,13 @@
 import logging
 import time
-from typing import Dict, List, Any, Optional
+from typing import Any
 
 from .llm import make_llm_client
 
 log = logging.getLogger("efloud.agents.leblep")
 
 class LeblepMultiLLMOrchestrator:
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.cfg = config
         self.providers = {}
 
@@ -50,7 +50,7 @@ class LeblepMultiLLMOrchestrator:
         if not self.providers:
             log.warning("No Leblep providers passed health check - Leblep inactive")
 
-    def query_consensus(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    def query_consensus(self, prompt: str, context: dict[str, Any]) -> dict[str, Any]:
         if not self.providers:
             return {
                 "consensus_verdict": "ERROR",
@@ -98,7 +98,7 @@ class LeblepMultiLLMOrchestrator:
 
         return self._aggregate_consensus(provider_verdicts, context)
 
-    def _parse_verdict(self, raw_result: dict) -> Dict[str, Any]:
+    def _parse_verdict(self, raw_result: dict) -> dict[str, Any]:
         if not raw_result:
             return {"verdict": "ERROR", "confidence": 0.0}
         verdict = str(raw_result.get("verdict", "ERROR")).upper()
@@ -109,7 +109,7 @@ class LeblepMultiLLMOrchestrator:
         reasoning = raw_result.get("reasoning", "")
         return {"verdict": verdict, "confidence": confidence, "reasoning": reasoning}
 
-    def _aggregate_consensus(self, provider_verdicts: Dict, context: Dict) -> Dict[str, Any]:
+    def _aggregate_consensus(self, provider_verdicts: dict, context: dict) -> dict[str, Any]:
         if not provider_verdicts:
             return {"consensus_verdict": "ERROR", "confidence": 0.0, "reasoning": "No verdicts"}
 

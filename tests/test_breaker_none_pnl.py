@@ -8,7 +8,6 @@ loss accumulation.
 Run: python -m pytest tests/test_breaker_none_pnl.py -v
 """
 
-import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -21,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 
 # Match production: breaker.py reads state.json from CWD if EFLOUD_STATE_DIR
 # unset. We just set up a clean breaker directly to avoid that file dance.
-from engine.safety.breaker import CircuitBreaker, BreakerState  # noqa: E402
+from engine.safety.breaker import BreakerState, CircuitBreaker
 
 
 def _midnight_ts():

@@ -8,11 +8,7 @@ from __future__ import annotations
 
 import subprocess
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any
-
-import pytest
-
 
 # ─────────────────────────────────────────────────────────────────────
 # Helpers — record subprocess.run invocations without actually executing.

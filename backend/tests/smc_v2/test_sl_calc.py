@@ -8,10 +8,11 @@ Behavior (spec §5.1):
    - If stop_dist > max_sl_atr * ATR: RAISE SLTooFarError (don't clamp — reject)
 """
 from dataclasses import dataclass
+
 import pytest
 
-from engine.smc_v2.zones import ZoneSpec
 from engine.smc_v2.exceptions import SLTooFarError
+from engine.smc_v2.zones import ZoneSpec
 
 
 @dataclass

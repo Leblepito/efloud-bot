@@ -8,7 +8,6 @@ assert the integration surface.
 """
 from __future__ import annotations
 
-import sys
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -248,6 +247,7 @@ def test_cli_empty_journal_still_succeeds(tmp_path: Path):
 @pytest.fixture
 def api_app():
     from fastapi import FastAPI
+
     from backend.api import router
 
     app = FastAPI()
@@ -265,6 +265,7 @@ def test_endpoint_requires_auth(api_app):
 
 def test_endpoint_returns_statement_when_authed(api_app, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from backend.auth import require_auth
 
     journal = tmp_path / "journal.jsonl"
@@ -283,6 +284,7 @@ def test_endpoint_returns_statement_when_authed(api_app, tmp_path, monkeypatch):
 
 def test_endpoint_clamps_window(api_app, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from backend.auth import require_auth
 
     monkeypatch.setenv("EFLOUD_TRADE_JOURNAL", str(tmp_path / "none.jsonl"))

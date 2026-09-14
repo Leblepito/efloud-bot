@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-from backend.social import tv_manifest as m2
 from backend.social.tv_manifest import (
     ChartSnapshot,
     ManifestError,
@@ -20,13 +19,12 @@ from backend.social.tv_manifest import (
     ManifestNotFoundError,
     ManifestSchemaError,
     SnapshotNotFoundError,
+    _validate_item,
     build_index,
     load_all,
     load_latest,
     resolve_chart_image,
-    _validate_item,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sample data (operatörün deliverable kontratı)

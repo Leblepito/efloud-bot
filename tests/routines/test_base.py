@@ -1,7 +1,7 @@
-import json
-from pathlib import Path
 from unittest.mock import MagicMock
+
 from scripts.routines import _base
+
 
 def test_load_config_reads_safety_block(tmp_path):
     cfg = tmp_path / "config.yaml"

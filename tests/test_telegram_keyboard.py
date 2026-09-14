@@ -6,7 +6,6 @@ carry `callback_data = draft_id|action` (Telegram caps callback_data at 64 bytes
 """
 from __future__ import annotations
 
-import json
 from unittest import mock
 
 import pytest

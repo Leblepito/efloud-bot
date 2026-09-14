@@ -16,12 +16,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
-
-import pytest
 
 from engine.content_jobs import COMPLIANCE_TR
-from scripts.lane_e.publishers.base import PublishResult
 from scripts.lane_g_publish import (
     DryRunPublisher,
     PlatformClientPublisher,
@@ -33,8 +29,8 @@ DATE = "2026-07-26"
 
 
 def _write_bundle(out_dir: Path, event_id: str, platform: str, *,
-                  state: str = "approved", caption: Optional[str] = None,
-                  media: Optional[list[str]] = None) -> Path:
+                  state: str = "approved", caption: str | None = None,
+                  media: list[str] | None = None) -> Path:
     d = out_dir / DATE / "bundles"
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{event_id}.{platform}.json"

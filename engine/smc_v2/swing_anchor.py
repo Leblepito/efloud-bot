@@ -24,7 +24,6 @@ API contract (load-bearing for PR #S3b):
 
 Pure function — no I/O, no logging.
 """
-from typing import Optional
 
 
 def select_htf_swing_anchor(
@@ -32,7 +31,7 @@ def select_htf_swing_anchor(
     direction: str,
     trigger_idx: int,
     htf_bars: list,
-) -> Optional[float]:
+) -> float | None:
     """Select the most-recent-unbroken HTF swing on the trade's wrong side.
 
     Args:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 
 log = logging.getLogger("efloud.orphan_protection")
 
@@ -40,15 +40,15 @@ class CoverageStatus:
     sl_not_reduce_only: bool
     has_tp: bool
     raw_sl_orders: list
-    reason_if_unprotected: Optional[str]
+    reason_if_unprotected: str | None
 
 
 @dataclass(frozen=True)
 class ProtectionAction:
     symbol: str
     action: Action
-    sl_price: Optional[float] = None
-    error: Optional[str] = None
+    sl_price: float | None = None
+    error: str | None = None
 
 
 def load_orphan_protection_config(safety_cfg: dict | None) -> OrphanProtectionConfig:

@@ -20,11 +20,9 @@ These tests pin the behaviours that matter:
   6. terminal states untouched    -> CONFIRMED/EXPIRED never re-counted
 """
 import pandas as pd
-import pytest
 
 from engine.smc_v2.setup_state import SetupCandidate, SetupStateStore
 from engine.smc_v2.zones import ZoneSpec
-
 
 BAR_MS = 15 * 60 * 1000
 T0 = 1_700_000_000_000

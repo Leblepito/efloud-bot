@@ -1,7 +1,9 @@
-import numpy as np
-import pytest
 import os
+
+import numpy as np
+
 from engine.regimes.model import RegimeMLModel
+
 
 def test_regime_model_forward():
     """Verify that predictions from initialized model have correct shape and valid probabilities."""

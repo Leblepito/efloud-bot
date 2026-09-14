@@ -5,8 +5,6 @@ Draft mock'lanmaz — gerçek content_queue kullanılır (hermetic, DB yok).
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import pytest
 
 from backend.social.approval_callback import (
@@ -14,7 +12,6 @@ from backend.social.approval_callback import (
     CallbackError,
     CallbackFormatError,
     CallbackStateError,
-    ParsedCallback,
     build_callback_data,
     handle_callback,
     handle_callback_with_reason,
@@ -26,7 +23,6 @@ from backend.social.content_queue import (
     create_draft,
     submit_for_review,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers

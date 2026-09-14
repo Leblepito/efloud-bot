@@ -20,11 +20,11 @@ Her senaryo:
   - Geçerlilik şartı (bar limit, zaman limit)
 """
 
-import uuid
 import logging
-from dataclasses import dataclass, field
-from typing import List, Optional, Literal
+import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Literal
 
 log = logging.getLogger("efloud.scenario")
 
@@ -55,7 +55,7 @@ class Scenario:
 
     state: ScenarioState = "PENDING"
     created_at: str = ""
-    triggered_at: Optional[str] = None
+    triggered_at: str | None = None
     note: str = ""
 
     @property
@@ -83,7 +83,7 @@ class ScenarioPlanner:
     """
 
     def __init__(self):
-        self.scenarios: List[Scenario] = []
+        self.scenarios: list[Scenario] = []
 
     def plan_three_scenarios(
         self,
@@ -94,7 +94,7 @@ class ScenarioPlanner:
         stacked_zones: list = None,
         range_low: float = 0,
         range_high: float = 0,
-    ) -> List[Scenario]:
+    ) -> list[Scenario]:
         """
         Mevcut duruma göre 3 senaryo kur.
 
@@ -144,7 +144,7 @@ class ScenarioPlanner:
             log.info(f"   {s.kind.upper():<13} {s.name}")
         return scenarios
 
-    def _build_long_continuation(self, price: float, resistance: float) -> Optional[Scenario]:
+    def _build_long_continuation(self, price: float, resistance: float) -> Scenario | None:
         """Ana plan — trend yönünde devam (longs).
         
         Mantık: fiyat şu an geri çekilmede olabilir, HTF bullish bias var.
@@ -179,7 +179,7 @@ class ScenarioPlanner:
             note=f"HTF bullish bias aktif, hedef {tp1:.2f}"
         )
 
-    def _build_short_continuation(self, price: float, support: float) -> Optional[Scenario]:
+    def _build_short_continuation(self, price: float, support: float) -> Scenario | None:
         """Ana plan — trend yönünde devam (shorts)."""
         if support >= price * 0.995:
             risk = price * 0.015
@@ -205,7 +205,7 @@ class ScenarioPlanner:
         )
 
     def _build_invalidation_long(self, price: float, support: float,
-                                   stacked_zones: list) -> Optional[Scenario]:
+                                   stacked_zones: list) -> Scenario | None:
         """
         Bozulma — ana plan bozulursa ne olur.
         Efloud: "2300 kaybederse 2240'a düşer, orada confirmation yakalarsam ekle."
@@ -241,7 +241,7 @@ class ScenarioPlanner:
         )
 
     def _build_invalidation_short(self, price: float, resistance: float,
-                                    stacked_zones: list) -> Optional[Scenario]:
+                                    stacked_zones: list) -> Scenario | None:
         if resistance == 0 or resistance <= price:
             return None
 
@@ -272,7 +272,7 @@ class ScenarioPlanner:
         )
 
     def _build_plan_b_long(self, support: float, range_low: float,
-                            stacked_zones: list) -> Optional[Scenario]:
+                            stacked_zones: list) -> Scenario | None:
         """
         Plan B — bozulma da tutmazsa en son hedef.
         Efloud: "2240 de tutmazsa 2090'a."
@@ -314,7 +314,7 @@ class ScenarioPlanner:
         )
 
     def _build_plan_b_short(self, resistance: float, range_high: float,
-                              stacked_zones: list) -> Optional[Scenario]:
+                              stacked_zones: list) -> Scenario | None:
         if range_high == 0:
             return None
 
@@ -352,7 +352,7 @@ class ScenarioPlanner:
 
     # ── Senaryo takibi ──
 
-    def check_triggers(self, current_price: float) -> List[Scenario]:
+    def check_triggers(self, current_price: float) -> list[Scenario]:
         """
         Fiyat hangi senaryoları tetikledi?
         
@@ -382,9 +382,7 @@ class ScenarioPlanner:
                 continue
 
             is_triggered = False
-            if s.trigger_condition == "price_breaks_below" and current_price <= s.trigger_price:
-                is_triggered = True
-            elif s.trigger_condition == "price_breaks_above" and current_price >= s.trigger_price:
+            if s.trigger_condition == "price_breaks_below" and current_price <= s.trigger_price or s.trigger_condition == "price_breaks_above" and current_price >= s.trigger_price:
                 is_triggered = True
             elif s.trigger_condition == "price_reaches":
                 if s.entry_zone_bottom <= current_price <= s.entry_zone_top:
@@ -414,5 +412,5 @@ class ScenarioPlanner:
                 s.state = "INVALIDATED"
                 log.info(f"❌ SCENARIO INVALIDATED: {s.name} @ {current_price:.2f}")
 
-    def active_scenarios(self) -> List[Scenario]:
+    def active_scenarios(self) -> list[Scenario]:
         return [s for s in self.scenarios if s.state in ("ACTIVE", "PENDING", "TRIGGERED")]

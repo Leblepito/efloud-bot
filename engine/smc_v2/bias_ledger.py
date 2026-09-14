@@ -37,15 +37,15 @@ Saf fonksiyon — I/O yok, log yok.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
 
 import pandas as pd
 
-from engine.smc import FVG, StructBreak, Swing
+from engine.smc import FVG, StructBreak
 
 # Kanıt tipleri ve ağırlıkları — hepsi ÇIKARIM (kaynakta sayı yok).
-EVIDENCE_WEIGHTS: Dict[str, int] = {
+EVIDENCE_WEIGHTS: dict[str, int] = {
     "E1_CHOCH": 2,                  # karşı yönde ilk yapı kırılımı (YAPISAL)
     "E2_BOS_AFTER_CHOCH": 2,        # CHoCH sonrası karşı yönde BOS (YAPISAL)
     "E3_DISPLACEMENT_FVG": 1,       # karşı yönde displacement + FVG bıraktı
@@ -91,16 +91,16 @@ class LedgerVerdict:
     verdict: str
     score: int
     has_structural: bool
-    counted: List[Evidence] = field(default_factory=list)
-    dropped: List[Evidence] = field(default_factory=list)
-    reset_idx: Optional[int] = None
+    counted: list[Evidence] = field(default_factory=list)
+    dropped: list[Evidence] = field(default_factory=list)
+    reset_idx: int | None = None
 
 
 def _counter(bias: str) -> str:
     return "BEAR" if bias == "BULL" else "BULL"
 
 
-def find_reset_idx(bias: str, breaks: Sequence[StructBreak]) -> Optional[int]:
+def find_reset_idx(bias: str, breaks: Sequence[StructBreak]) -> int | None:
     """Defteri sıfırlayan son olayın ordinali.
 
     Trend YÖNÜNDE yeni bir BOS (yani tezi doğrulayan bir kırılım) geldiyse,
@@ -120,7 +120,7 @@ def evaluate_bias_ledger(
     window_bars: int = 20,
     transition_at: int = 3,
     flip_at: int = 5,
-    reset_idx: Optional[int] = None,
+    reset_idx: int | None = None,
 ) -> LedgerVerdict:
     """Kanıt defterini muhasebeleştir ve karar üret.
 
@@ -134,11 +134,11 @@ def evaluate_bias_ledger(
             oluşan kanıtlar sayılmaz.
     """
     cutoff = current_idx - window_bars
-    counted: List[Evidence] = []
-    dropped: List[Evidence] = []
+    counted: list[Evidence] = []
+    dropped: list[Evidence] = []
 
     # 1) Pencere ve reset filtresi
-    surviving: List[Evidence] = []
+    surviving: list[Evidence] = []
     for ev in evidence:
         if ev.idx <= cutoff:
             dropped.append(ev)
@@ -152,7 +152,7 @@ def evaluate_bias_ledger(
         surviving.append(ev)
 
     # 2) Bacak başına tek kanıt — en ağırı kazanır, eşitlikte en yenisi.
-    best_per_leg: Dict[int, Evidence] = {}
+    best_per_leg: dict[int, Evidence] = {}
     for ev in surviving:
         cur = best_per_leg.get(ev.leg_id)
         if cur is None or (ev.weight, ev.idx) > (cur.weight, cur.idx):
@@ -196,12 +196,12 @@ def collect_structural_evidence(
     bias: str,
     breaks: Sequence[StructBreak],
     df: pd.DataFrame,
-    swings: Optional[dict] = None,
-    fvgs: Optional[Sequence[FVG]] = None,
+    swings: dict | None = None,
+    fvgs: Sequence[FVG] | None = None,
     disp_mult: float = 1.5,
     body_ref_len: int = 20,
     momentum_run: int = 3,
-) -> List[Evidence]:
+) -> list[Evidence]:
     """Ham yapıdan türetilebilen kanıtları topla (E1, E2, E3, E6, E8).
 
     E4 (sweep+SFP) ve E5 (OB mitigasyonu) bu fonksiyonda ÜRETİLMEZ — onlar
@@ -224,10 +224,10 @@ def collect_structural_evidence(
 
     counter = _counter(bias)
     break_idxs = sorted(b.idx for b in breaks)
-    out: List[Evidence] = []
+    out: list[Evidence] = []
 
     # --- E1 / E2: karşı yönlü yapı kırılımları ---
-    counter_choch_idx: Optional[int] = None
+    counter_choch_idx: int | None = None
     for brk in sorted(breaks, key=lambda b: b.idx):
         if brk.direction != counter:
             continue

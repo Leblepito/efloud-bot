@@ -6,13 +6,11 @@ Each client subscribes to events.bus and forwards events as JSON over the socket
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from typing import Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from backend.auth import is_authenticated, COOKIE_NAME
+from backend.auth import COOKIE_NAME, is_authenticated
 from backend.events import bus
 
 log = logging.getLogger("efloud.ws")
@@ -21,7 +19,7 @@ log = logging.getLogger("efloud.ws")
 async def websocket_handler(websocket: WebSocket) -> None:
     # Auth via cookie
     cookie_header = websocket.headers.get("cookie", "")
-    session_token: Optional[str] = None
+    session_token: str | None = None
     for part in cookie_header.split(";"):
         part = part.strip()
         if part.startswith(f"{COOKIE_NAME}="):

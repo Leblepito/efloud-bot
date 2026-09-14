@@ -4,8 +4,8 @@
 """
 from __future__ import annotations
 
-from engine.lifecycle import Position, Entry, Exit
 from backtest.metrics import serialize_trade
+from engine.lifecycle import Entry, Exit, Position
 
 
 def _make_closed_position(tp2):

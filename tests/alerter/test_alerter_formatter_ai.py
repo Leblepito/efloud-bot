@@ -1,5 +1,5 @@
-import pytest
 from unittest.mock import patch
+
 from ops.alerter.formatter import format_alert_with_ai
 
 

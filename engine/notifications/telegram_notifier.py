@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 import requests
 
@@ -84,15 +83,15 @@ class CustomerChannelNotifier:
     are provisioned.
     """
 
-    def __init__(self, config: Optional[dict] = None) -> None:
+    def __init__(self, config: dict | None = None) -> None:
         cfg = config or {}
         self.flag_enabled: bool = bool(cfg.get("enabled", False))
         # 'daily_digest' is the only implemented (and regulation-safe) mode.
         self.mode: str = cfg.get("mode", "daily_digest")
 
-        self.token: Optional[str] = os.environ.get("EFLOUD_CUSTOMER_TG_TOKEN")
-        self.channel_id: Optional[str] = os.environ.get("EFLOUD_CUSTOMER_TG_CHANNEL_ID")
-        self.thread_id: Optional[str] = os.environ.get("EFLOUD_CUSTOMER_TG_THREAD_ID")
+        self.token: str | None = os.environ.get("EFLOUD_CUSTOMER_TG_TOKEN")
+        self.channel_id: str | None = os.environ.get("EFLOUD_CUSTOMER_TG_CHANNEL_ID")
+        self.thread_id: str | None = os.environ.get("EFLOUD_CUSTOMER_TG_THREAD_ID")
         self.parse_mode: str = os.environ.get("EFLOUD_CUSTOMER_TG_PARSE_MODE", "Markdown")
         try:
             self.timeout: float = float(

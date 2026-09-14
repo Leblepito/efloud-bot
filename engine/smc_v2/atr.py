@@ -25,13 +25,12 @@ this repo was tuned against.
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 
 
-def wilder_atr(df: Optional[pd.DataFrame], period: int = 14) -> Optional[float]:
+def wilder_atr(df: pd.DataFrame | None, period: int = 14) -> float | None:
     """Return the latest Wilder ATR(`period`) of `df`, or None if not computable.
 
     Returns None -- never 0.0 and never a guess -- when the input cannot

@@ -1,10 +1,11 @@
 import asyncio
-import os
-import json
 import datetime
+import json
 from pathlib import Path
+from typing import Any
+
 import httpx
-from typing import List, Dict, Any, Optional
+
 from utils.cache import SentimentCache
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -96,7 +97,7 @@ async def fetch_and_save_sentiment(api_key: str = None, db_url: str = None,
     return sentiment_data
 
 
-async def evaluate_single_news(news: str, use_cache: bool = True) -> Dict[str, Any]:
+async def evaluate_single_news(news: str, use_cache: bool = True) -> dict[str, Any]:
     """Evaluates sentiment for a single news piece with optional caching."""
     if use_cache:
         cached = _cache.get(news)
@@ -117,7 +118,7 @@ async def evaluate_single_news(news: str, use_cache: bool = True) -> Dict[str, A
     return sentiment_result
 
 
-async def evaluate_parallel_news(news_list: List[str], use_cache: bool = True) -> List[Dict[str, Any]]:
+async def evaluate_parallel_news(news_list: list[str], use_cache: bool = True) -> list[dict[str, Any]]:
     """Evaluates sentiment for multiple news articles concurrently (chunked)."""
     tasks = [evaluate_single_news(news, use_cache) for news in news_list]
     return await asyncio.gather(*tasks)

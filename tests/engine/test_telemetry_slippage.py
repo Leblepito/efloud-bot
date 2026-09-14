@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
 import pytest
-from unittest.mock import MagicMock
-from engine.journal import TradeJournal, TradeSnapshot
-from engine.lifecycle import Position, Entry
+
 from engine import SafeOrchestrator
+from engine.journal import TradeJournal
+from engine.lifecycle import Entry, Position
+
 
 def test_telemetry_slippage_calculation(tmp_path):
     journal_path = tmp_path / "trade_journal.jsonl"

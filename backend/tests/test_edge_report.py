@@ -1,5 +1,6 @@
 from scripts.routines.edge_report import build_report
 
+
 def test_status_line_first_and_disclaimer():
     metrics = {"overall": {"n": 23, "status": "insufficient_sample", "expectancy": None,
                            "win_rate": None, "profit_factor": None, "timeout_rate": 0.1,

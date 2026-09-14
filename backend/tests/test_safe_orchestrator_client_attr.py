@@ -15,6 +15,7 @@ This regression test is the contract: SafeOrchestrator MUST always expose
 the `client` attribute, regardless of how it's instantiated.
 """
 from unittest.mock import MagicMock
+
 import pytest
 import yaml
 

@@ -7,7 +7,6 @@ engine.smc_v2.confirmation.confirm_entry. Verifies:
 - IN_ZONE candidate transitions to CONFIRMED when engulfing pattern present
 """
 import pandas as pd
-import pytest
 
 from engine.safe_orchestrator import SafeOrchestrator
 from engine.smc_v2.zones import ZoneSpec
@@ -172,9 +171,10 @@ class TestTriggerPhaseInert:
         )
 
     def test_emits_to_store_when_wired(self, tmp_path):
-        from engine.smc_v2.setup_state import SetupStateStore
-        from engine.smc import StructBreak, Swing, FVG
         from dataclasses import dataclass
+
+        from engine.smc import FVG, StructBreak, Swing
+        from engine.smc_v2.setup_state import SetupStateStore
 
         @dataclass
         class FakeBar:
@@ -209,9 +209,10 @@ class TestTriggerPhaseInert:
 
     def test_per_symbol_cap_respected(self, tmp_path):
         """If store cap is reached, additional candidates are silently dropped."""
-        from engine.smc_v2.setup_state import SetupStateStore, SetupCandidate
-        from engine.smc import StructBreak, Swing, FVG
         from dataclasses import dataclass
+
+        from engine.smc import FVG, StructBreak, Swing
+        from engine.smc_v2.setup_state import SetupCandidate, SetupStateStore
 
         @dataclass
         class FakeBar:
@@ -255,8 +256,9 @@ class TestRunCycleTriggerPhase:
     """run_cycle invokes _emit_setup_candidates after advance, before save."""
 
     def _make_df(self, length=50, base_price=95000.0):
-        import pandas as pd
         from datetime import datetime, timezone
+
+        import pandas as pd
         idx = pd.date_range(
             end=datetime.now(timezone.utc), periods=length, freq="15min", tz="UTC",
         )
@@ -269,8 +271,9 @@ class TestRunCycleTriggerPhase:
         }, index=idx)
 
     def test_run_cycle_calls_emit_when_store_wired(self, tmp_path):
-        from engine.smc_v2.setup_state import SetupStateStore
         from unittest.mock import patch
+
+        from engine.smc_v2.setup_state import SetupStateStore
 
         store = SetupStateStore(tmp_path / "state.json")
         orc = SafeOrchestrator(

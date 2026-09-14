@@ -3,8 +3,6 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 
 def _make_pos(symbol="BTC/USDT", direction="LONG", trace_id="trace-1"):
     return SimpleNamespace(
@@ -33,7 +31,6 @@ def test_audit_after_delay_calls_engine():
 
     async def run():
         # Replace asyncio.sleep just for this call
-        import backend.bot_runner as br
         original_sleep = asyncio.sleep
         try:
             asyncio.sleep = _fast_sleep  # type: ignore
@@ -59,7 +56,6 @@ def test_audit_after_delay_swallows_exceptions():
     pos = _make_pos()
 
     async def run():
-        import backend.bot_runner as br
         original_sleep = asyncio.sleep
         try:
             asyncio.sleep = _fast_sleep  # type: ignore
@@ -73,8 +69,8 @@ def test_audit_after_delay_swallows_exceptions():
 
 def test_audit_engine_attr_present_at_init():
     """BotRunner.audit_engine is bound at __init__ (always-present sentinel)."""
-    from backend.bot_runner import BotRunner
     from backend.audit.journal import AuditEngine
+    from backend.bot_runner import BotRunner
 
     # Skip the runtime_state init (needs filesystem) by directly checking attrs
     # we set in __init__ before runtime_state line.

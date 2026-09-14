@@ -5,11 +5,11 @@ DB-yazan fonksiyonlar no-op olur (bot çalışmaya devam eder, sadece persistenc
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
-import json
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import asyncpg
 
@@ -18,7 +18,7 @@ log = logging.getLogger("efloud.db")
 
 class Database:
     def __init__(self) -> None:
-        self.pool: Optional[asyncpg.Pool] = None
+        self.pool: asyncpg.Pool | None = None
         # Multi-instance persistence (migration 012): every write is tagged with
         # this instance id and every instance-scoped read/update filters by it,
         # so two bots (V1 mid + V2 long) can share one Supabase project without
@@ -52,23 +52,23 @@ class Database:
 
     async def record_trade_open(
         self, symbol: str, direction: str, entry: float, sl: float,
-        tp1: float, tp2: Optional[float], size: float, confluence: Optional[int] = None,
-        binance_order_id: Optional[str] = None,
-        trace_id: Optional[str] = None,        # PR #57
-        bar_ts_ms: Optional[int] = None,        # PR #57
+        tp1: float, tp2: float | None, size: float, confluence: int | None = None,
+        binance_order_id: str | None = None,
+        trace_id: str | None = None,        # PR #57
+        bar_ts_ms: int | None = None,        # PR #57
         *,
         # SMC v2 telemetry (PR #S5) — keyword-only, default None so v1 callers
         # unaffected. Migration 007 added these as nullable columns.
-        entry_setup_source: Optional[str] = None,
-        tp1_target_type: Optional[str] = None,
-        tp2_target_type: Optional[str] = None,
-        bars_to_pullback: Optional[int] = None,
-        initial_sl: Optional[float] = None,
-        adx_value: Optional[float] = None,
-        atr_value: Optional[float] = None,
-        funding_rate: Optional[float] = None,
-        confluence_details: Optional[dict] = None,
-    ) -> Optional[str]:
+        entry_setup_source: str | None = None,
+        tp1_target_type: str | None = None,
+        tp2_target_type: str | None = None,
+        bars_to_pullback: int | None = None,
+        initial_sl: float | None = None,
+        adx_value: float | None = None,
+        atr_value: float | None = None,
+        funding_rate: float | None = None,
+        confluence_details: dict | None = None,
+    ) -> str | None:
         """Insert trade with no exit yet. Returns trade UUID."""
         if not self.pool:
             return None
@@ -105,11 +105,11 @@ class Database:
     async def record_trade_close(
         self, symbol: str, exit_price: float, pnl_usdt: float,
         pnl_pct: float, reason: str,
-        trace_id: Optional[str] = None,       # NEW (informational; not used in WHERE)
-        bar_ts_ms: Optional[int] = None,       # NEW (forward-compat; not yet used)
+        trace_id: str | None = None,       # NEW (informational; not used in WHERE)
+        bar_ts_ms: int | None = None,       # NEW (forward-compat; not yet used)
         *,
-        mae_pct: Optional[float] = None,
-        mfe_pct: Optional[float] = None,
+        mae_pct: float | None = None,
+        mfe_pct: float | None = None,
     ) -> None:
         """Update most recent open trade for symbol with exit details."""
         if not self.pool:
@@ -164,8 +164,8 @@ class Database:
             log.warning(f"update_trade_kronos_data failed: {e}")
 
     async def update_trade_audited_pnl(
-        self, pnl_usdt: float, *, order_id: Optional[str] = None, 
-        trace_id: Optional[str] = None, symbol: Optional[str] = None
+        self, pnl_usdt: float, *, order_id: str | None = None, 
+        trace_id: str | None = None, symbol: str | None = None
     ) -> None:
         """Update a trade row with exchange-realized P&L and recalculate pnl_pct.
         
@@ -411,7 +411,7 @@ class Database:
         except Exception as e:
             log.warning(f"upsert_breaker_state failed: {e}")
 
-    async def load_breaker_state(self) -> Optional[dict[str, Any]]:
+    async def load_breaker_state(self) -> dict[str, Any] | None:
         """Read the mirrored breaker row, or None if absent / unavailable."""
         if not self.pool:
             return None
@@ -469,7 +469,7 @@ class Database:
             log.warning(f"heartbeat failed: {e}")
             return False
 
-    async def acquire_lease(self, symbol: str, instance_id: str, ttl_seconds: int = 300) -> Optional[str]:
+    async def acquire_lease(self, symbol: str, instance_id: str, ttl_seconds: int = 300) -> str | None:
         if not self.pool:
             return None
         import uuid

@@ -1,6 +1,7 @@
 # backend/tests/test_edge_costs.py
 from engine.edge_costs import net_r
 
+
 def test_fees_subtracted_in_r_units():
     out = net_r("LONG", 100.0, 98.0, 1.0, holding_hours=1, funding_pct_sum=0.0, slippage_r=0.0)
     assert abs(out - (1.0 - 0.04)) < 1e-6

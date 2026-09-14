@@ -2,7 +2,6 @@
 
 import pytest
 
-
 TELEGRAM_HTML = """
 <div class="tgme_widget_message_text js-message_text" dir="auto">
   BTC Güncelleme: 1D grafikte market yapısı bullish (MSB gerçekleşti).<br/>OTE bölgesi çalıştı.

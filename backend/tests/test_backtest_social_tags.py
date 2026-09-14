@@ -20,9 +20,9 @@ import pandas as pd
 import pytest
 import yaml
 
+from backend.social.hypotheses import generate_hypotheses
 from backtest.cli import build_parser
 from backtest.comparison import run_v1_v2_comparison
-from backend.social.hypotheses import generate_hypotheses
 
 
 @pytest.fixture

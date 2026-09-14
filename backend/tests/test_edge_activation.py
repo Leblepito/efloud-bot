@@ -11,7 +11,6 @@ Covers the activation-checklist items implemented for go-live:
 from __future__ import annotations
 
 import time
-import pytest
 
 from engine.signal_ledger import SignalLedger, ledger_enabled
 

@@ -1,7 +1,8 @@
-import pandas as pd
 import numpy as np
-import pytest
+import pandas as pd
+
 from engine.regimes.train import build_features_and_labels, run_auto_train
+
 
 def test_build_features_and_labels():
     """Verify that build_features_and_labels parses a DataFrame and returns correct shape features/labels."""

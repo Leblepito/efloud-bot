@@ -26,7 +26,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import ccxt as _ccxt
 from exchange import BinanceClient, OrderManager, Position
 
 

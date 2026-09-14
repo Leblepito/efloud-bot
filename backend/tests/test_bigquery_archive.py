@@ -4,8 +4,8 @@ Covers all core functionality (Postgres fetches, BigQuery Client building,
 idempotent syncing, duplicate filtering, formatting) without requiring a real
 database or GCP connection.
 """
-import sys
 import json
+import sys
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -43,7 +43,6 @@ from scripts.bigquery_archive import (
     get_bigquery_client,
     sync_trades_to_bigquery,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DB/Postgres Fetch Tests

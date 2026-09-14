@@ -108,7 +108,9 @@ def test_journal_record_exit_helper_passes_mae_mfe_from_position(tmp_path):
     """When _journal_record_exit is called, the position's accumulated
     mae_pct/mfe_pct must reach the journal as keyword arguments."""
     from unittest.mock import MagicMock
+
     import yaml
+
     from engine import SafeOrchestrator
     from engine.journal import TradeJournal
 
@@ -145,8 +147,9 @@ def test_run_cycle_updates_open_position_excursion(tmp_path):
     """run_cycle must call update_excursion(high, low) on every open
     position in the symbol so MAE/MFE accumulate across bars even if no
     explicit signal fires that cycle."""
-    import yaml
     import pandas as pd
+    import yaml
+
     from engine import SafeOrchestrator
 
     with open("configs/config.phase2_1k.yaml", encoding="utf-8") as f:

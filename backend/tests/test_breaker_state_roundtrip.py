@@ -17,8 +17,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from engine.safety.breaker import CircuitBreaker, BreakerState
-
+from engine.safety.breaker import BreakerState, CircuitBreaker
 
 # ──────────────────────────────────────────────────────────────────
 # CircuitBreaker.to_dict / restore_from_dict — pure round-trip

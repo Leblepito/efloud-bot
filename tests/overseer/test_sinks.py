@@ -2,8 +2,6 @@
 clients (no duplicate transport code) and must never raise on transport error."""
 from __future__ import annotations
 
-from unittest import mock
-
 
 def test_send_overseer_message_calls_alerter_with_prefix(monkeypatch):
     """CRITICAL severity prepends 🚨 — keeps alert triage glanceable in TG."""

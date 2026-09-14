@@ -1,5 +1,6 @@
 from scripts.routines.position_audit import evaluate
 
+
 def test_bare_position_no_sltp_is_critical():
     pos = [{"symbol": "BTC/USDT", "contracts": 0.1, "side": "long"}]
     _, b = evaluate(pos, [], [{"symbol": "BTC/USDT", "size": 0.1}])  # no stop/tp orders
@@ -31,6 +32,7 @@ def test_run_unwraps_statestore_envelope_ledger(tmp_path, monkeypatch):
     false 'Position Drift' CRITICAL üretiliyordu."""
     import json
     from unittest.mock import Mock
+
     from scripts.routines import position_audit as pa
 
     monkeypatch.chdir(tmp_path)
@@ -72,6 +74,7 @@ def test_algo_backed_sl_tp_not_flagged_bare(tmp_path, monkeypatch):
     Algo taraması olmadan her korumalı pozisyon 'Bare Position' CRITICAL'iydi."""
     import json
     from unittest.mock import Mock
+
     from scripts.routines import position_audit as pa
 
     monkeypatch.chdir(tmp_path)
@@ -102,6 +105,7 @@ def test_algo_fetch_failure_skips_bare_but_keeps_drift(tmp_path, monkeypatch):
     denetimi çalışmaya devam eder."""
     import json
     from unittest.mock import Mock
+
     from scripts.routines import position_audit as pa
 
     monkeypatch.chdir(tmp_path)

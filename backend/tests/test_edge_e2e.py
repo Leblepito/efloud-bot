@@ -4,10 +4,10 @@ The per-task unit tests each use isolated fixtures; nothing exercises the full
 chain. This validates that the patch dict resolve_open_signals writes back is
 consumable by edge_metrics.aggregate and edge_report.build_report.
 """
-from engine.signal_ledger import SignalLedger
 from engine.edge_metrics import aggregate
-from scripts.routines.resolve_signals import resolve_open_signals
+from engine.signal_ledger import SignalLedger
 from scripts.routines.edge_report import build_report
+from scripts.routines.resolve_signals import resolve_open_signals
 
 
 class FakeFetcher:

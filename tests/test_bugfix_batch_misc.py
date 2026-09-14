@@ -77,8 +77,8 @@ class TestF13SlCalcNanAtr:
         return SimpleNamespace(low=99.0, high=100.0)
 
     def test_nan_atr_rejects_setup(self):
-        from engine.smc_v2.sl_calc import calc_sl
         from engine.smc_v2.exceptions import SLTooFarError
+        from engine.smc_v2.sl_calc import calc_sl
         with pytest.raises(SLTooFarError):
             calc_sl(direction="LONG", entry_price=100.0, zone=self._zone(),
                     htf_swing_anchor=98.0, atr_15m=float("nan"),
@@ -86,8 +86,8 @@ class TestF13SlCalcNanAtr:
                                            max_sl_atr=5.0))
 
     def test_zero_atr_rejects_setup(self):
-        from engine.smc_v2.sl_calc import calc_sl
         from engine.smc_v2.exceptions import SLTooFarError
+        from engine.smc_v2.sl_calc import calc_sl
         with pytest.raises(SLTooFarError):
             calc_sl(direction="SHORT", entry_price=100.0, zone=self._zone(),
                     htf_swing_anchor=102.0, atr_15m=0.0,

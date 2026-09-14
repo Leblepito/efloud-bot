@@ -67,9 +67,10 @@ def test_fetch_protection_order_ids_soft_fails():
 
 
 # ── Task 3: _verify_and_repair_protection ──
+import pandas as pd
+
 import exchange as exch_mod
 from exchange import Position
-import pandas as pd
 
 
 def _verify_mgr(snapshots):

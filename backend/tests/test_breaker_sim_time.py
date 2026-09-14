@@ -10,7 +10,7 @@ wall-clock. Live mode (no `now` arg) keeps wall-clock semantics (back-compat).
 """
 from datetime import datetime, timedelta
 
-from engine.safety.breaker import CircuitBreaker, BreakerState
+from engine.safety.breaker import BreakerState, CircuitBreaker
 
 
 def _fresh(consec_pause=120):

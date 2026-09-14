@@ -1,7 +1,10 @@
 """Test that update_trade_audited_pnl correctly updates pnl_usdt and recalculates pnl_pct."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from backend.db import Database
+
 
 def _mock_pool():
     conn = MagicMock()

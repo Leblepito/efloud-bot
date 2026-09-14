@@ -17,7 +17,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from engine.lifecycle import PositionLifecycle, Entry, Exit, Position  # noqa: E402
+from engine.lifecycle import Entry, Exit, Position
 
 
 def _make_position_with_entries(entries, exits=None, direction="LONG"):

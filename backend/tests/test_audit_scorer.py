@@ -2,14 +2,14 @@
 import pytest
 
 from backend.audit.scorer import (
-    score_entry_timing,
-    score_sl_distance,
-    score_rr,
-    compose_overall,
-    _atr,
     ENTRY_WEIGHT,
-    SL_WEIGHT,
     RR_WEIGHT,
+    SL_WEIGHT,
+    _atr,
+    compose_overall,
+    score_entry_timing,
+    score_rr,
+    score_sl_distance,
 )
 
 

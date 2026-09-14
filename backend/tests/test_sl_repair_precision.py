@@ -17,6 +17,7 @@ giving genuine regression protection rather than testing a re-implemented
 snippet.
 """
 from unittest.mock import MagicMock
+
 import pytest
 
 from exchange import BinanceClient, OrderManager, Position

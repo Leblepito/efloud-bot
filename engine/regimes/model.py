@@ -1,6 +1,7 @@
-import numpy as np
 import json
-from typing import List, Dict, Any
+
+import numpy as np
+
 
 class RegimeMLModel:
     """Pure NumPy multinomial logistic regression (softmax classifier) for market regimes.

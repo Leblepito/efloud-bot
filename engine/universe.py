@@ -12,9 +12,6 @@ Cache: dinamik listeyi config.symbols.refresh_dynamic_hours saatte bir yeniler.
 """
 
 import logging
-import time
-from pathlib import Path
-from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 
 log = logging.getLogger("efloud.universe")
@@ -46,10 +43,10 @@ class SymbolUniverse:
             self.exclude = list(syms_cfg.get("dynamic_exclude", []))
             self.refresh_hours = float(syms_cfg.get("refresh_dynamic_hours", 24))
 
-        self._cached_dynamic: List[str] = []
-        self._cached_at: Optional[datetime] = None
+        self._cached_dynamic: list[str] = []
+        self._cached_at: datetime | None = None
 
-    def resolve(self, force_refresh: bool = False) -> List[str]:
+    def resolve(self, force_refresh: bool = False) -> list[str]:
         """Aktif sembol listesi — cache'li."""
         if self.mode == "fixed":
             return list(self.fixed_core)

@@ -1,5 +1,6 @@
-from exchange import Position, OrderManager
 import pandas as pd
+
+from exchange import OrderManager, Position
 
 
 def test_position_has_reconciliation_fields_with_defaults():

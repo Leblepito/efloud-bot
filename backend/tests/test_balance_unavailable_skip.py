@@ -75,6 +75,7 @@ def _live_runner_with_failing_balance():
     """Real BotRunner driven through _scan_universe with a client whose
     get_balance() always raises — the transient Binance hiccup C1 describes."""
     from unittest.mock import MagicMock
+
     from backend.bot_runner import BotRunner
 
     runner = BotRunner()

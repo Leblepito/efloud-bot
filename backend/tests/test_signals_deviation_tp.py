@@ -13,7 +13,6 @@ boundary'sini test eder.
 
 from engine.signals import _enforce_tp2_beyond_tp1, _resolve_deviation_tp2
 
-
 # ── Base cases ────────────────────────────────────────────────────────────
 
 def test_long_deviation_tp2_clamped_to_profitable_side():

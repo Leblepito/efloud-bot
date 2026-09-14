@@ -20,8 +20,9 @@ def test_tradesnapshot_has_pnl_source_field():
     assert hasattr(snap, "realized_pnl_exchange")
 
 
-from exchange import OrderManager, Position
 import pandas as pd
+
+from exchange import OrderManager, Position
 
 
 class _AuditClient:

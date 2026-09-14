@@ -16,7 +16,6 @@ Kapsam (her test hermetic, network/subprocess çağrısı YOK):
 from __future__ import annotations
 
 import json
-import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -27,8 +26,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from backend.social import xurl_client as xc  # noqa: E402
-
+from backend.social import xurl_client as xc
 
 # ────────────────────────── Enable / credentials gating ──────────────────────────
 

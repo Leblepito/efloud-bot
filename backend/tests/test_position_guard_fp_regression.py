@@ -5,6 +5,7 @@ This test asserts that at exact cap boundary, position is ALLOWED
 (the +1e-6 epsilon absorbs FP residue).
 """
 import pytest
+
 from engine.safety.position_guard import PositionGuard
 
 
