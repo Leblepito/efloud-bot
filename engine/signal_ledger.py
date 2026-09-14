@@ -65,7 +65,13 @@ class SignalLedger:
 
     @staticmethod
     def mint_id(symbol, direction, brk_ts_ms, entry, sl, tp1) -> str:
-        h = hashlib.sha1(f"{entry}|{sl}|{tp1}".encode()).hexdigest()[:8]
+        # SHA1 here is a short non-cryptographic fingerprint used only to make
+        # signal_id unique per price triplet. usedforsecurity=False documents
+        # that intent and silences bandit B324; the digest is unchanged, so
+        # signal_ids already persisted in the ledger stay stable.
+        h = hashlib.sha1(
+            f"{entry}|{sl}|{tp1}".encode(), usedforsecurity=False
+        ).hexdigest()[:8]
         return f"{symbol}-{direction}-{int(brk_ts_ms)}-{h}"
 
     def _load(self):
