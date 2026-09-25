@@ -26,4 +26,5 @@ geliştirmede dikkate alınmaz.
 
 ## Strateji evrimi
 
-Tam karşılaştırma için: [`docs/strategy-evolution.md`](../../docs/strategy-evolution.md)
+Yukarıdaki tablo config sürümlerinin kronolojik özetidir; ayrı bir strateji-evrimi
+dosyası artık tutulmuyor.

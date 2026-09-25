@@ -30,7 +30,7 @@ TradingView Pine Script v6'ya çevirmek — hem INDIKATÖR hem de STRATEGY (back
 
 ## Geliştirme Sözleşmesi — Karpathy Prensipleri (efloud-bot'a uyarlanmış)
 
-> Ham prensip metni repo içinde: `docs/dev/karpathy-guidelines.md` (2026-07-11'de absorbe edildi — plugin kurulu olmayan ortamlarda da geçerli).
+> Ham prensip metni 2026-07-11'de bu bölüme absorbe edildi (ayrı dosya artık yok — plugin kurulu olmayan ortamlarda da geçerli).
 
 Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensibe uyar. Prensipler efloud-bot'un mevcut sert kurallarını **güçlendirir**, değiştirmez. (Kaynak: Andrej Karpathy LLM-coding pitfalls; `andrej-karpathy-skills` plugin.)
 
