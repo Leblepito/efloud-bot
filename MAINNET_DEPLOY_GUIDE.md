@@ -1,8 +1,11 @@
 # Mainnet Deploy Guide — Efloud Bot
 
-> **Tarih:** 2026-08-12
+> **Tarih:** 2026-08-12 (genel prosedür — orijinal taslak)
 > **Hazırlayan:** Hermes Agent
-> **Durum:** VPS oluşturulması bekleniyor (Hetzner API token geçersiz)
+> **Güncel durum (2026-09-25):** VPS kuruldu ve deploy edildi — bkz. `HETZNER_DEPLOYMENT_CHECKLIST.md`
+> (sunucu 2.28.139.82, 8 container healthy, Binance API bağlantısı doğrulandı). Bu dosya artık
+> yeni bir VPS kurulumu gerektiğinde (örn. ikinci sunucu, felaket kurtarma) genel prosedür
+> referansı olarak kullanılır; adım adım komutlar için `deploy/HETZNER_GUIDE.md`'yi izleyin.
 
 ---
 
@@ -197,18 +200,24 @@ SUPABASE_DB_PASSWORD = <SUPABASE_DB_PASSWORD>
 
 ---
 
-## ❌ EKSİK / BEKLEYEN DURUMLAR
+## ❌ EKSİK / BEKLEYEN DURUMLAR (orijinal taslaktan — güncel değil)
 
-| Konu | Durum | Aksiyon |
-|------|-------|---------|
-| Hetzner API Token | **Geçersiz (401)** | Manuel VPS oluşturun |
-| VPS | **Yok** | Hetzner Console'dan CPX21 oluşturun |
-| Binance IP Whitelist | **Bilinmiyor** | VPS IP'sini Binance API ayarlarına ekleyin |
-| Supabase DB şifresi | **.env'de girilecek** | Yeni Supabase kurulumundan alın |
-| Gerçek Binance sub-account ayrımı | **Config'te varsayılıyor** | 3 ayrı API key/secret mi var? (V1/V2/V3) |
-| config.phase2_long_1k.yaml / scalp_1k.yaml | **Var (local)** | VPS'te doğrulanmalı |
-| efloud-panel container | **docker-compose.prod.yml'de var** | `.env.production.panel` gerekirse ayrı oluşturun |
+Bu tablo dosyanın ilk yazıldığı 2026-08-12 tarihindeki açık maddeleri listeler. Güncel
+durum için `HETZNER_DEPLOYMENT_CHECKLIST.md`'ye bakın (VPS kuruldu, Binance API bağlı,
+IP whitelist'e eklendi).
+
+| Konu | O tarihteki durum |
+|------|-------|
+| Hetzner API Token | Geçersizdi (401) — manuel VPS oluşturuldu |
+| VPS | Yoktu — 2026-09-25'te CPX21 (2.28.139.82) oluşturuldu |
+| Binance IP Whitelist | Sunucu IP'si eklendi |
+| Supabase DB şifresi | `.env`'e girildi |
+| Gerçek Binance sub-account ayrımı | V1/V2/V3 için ayrı config dosyaları mevcut |
+| config.phase2_long_1k.yaml / scalp_1k.yaml | VPS'te kullanımda |
+| efloud-panel container | `docker-compose.prod.yml`'de tanımlı |
 
 ---
 
-**Son durum:** Testnet local'de çalışıyor ✅. Mainnet için VPS oluşturup yukarıdaki adımları takip edin. Her aşamada **Hermes onayı** ile ilerleyin.
+**Son durum:** VPS canlıda, Binance mainnet API bağlantısı doğrulandı (bkz.
+`HETZNER_DEPLOYMENT_CHECKLIST.md`). Kullanıcı hesaba USDT transferi sonrası dashboard'dan
+Start'a basacak.

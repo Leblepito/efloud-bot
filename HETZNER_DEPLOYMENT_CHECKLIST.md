@@ -29,7 +29,11 @@ ssh root@2.28.139.82
 nano /opt/efloud-bot/.env.production
 # BINANCE_API_KEY ve BINANCE_API_SECRET'ı doldur
 # Ctrl+O, Enter, Ctrl+X ile kaydet
-docker compose -f docker-compose.prod.yml restart efloud-bot
+
+# ÖNEMLİ: "restart" .env dosyasındaki değişiklikleri YENİDEN OKUMAZ (Docker Compose
+# env_file davranışı). Container'ı yeni env ile başlatmak için "up -d --force-recreate"
+# kullanılmalı:
+docker compose -f docker-compose.prod.yml up -d --force-recreate efloud-bot
 ```
 
 ### 2. Binance API Whitelist'ine IP Ekle
@@ -38,7 +42,7 @@ docker compose -f docker-compose.prod.yml restart efloud-bot
 
 ### 3. Dashboard'dan Bot'u Başlat
 - https://2-28-139-82.nip.io
-- Şifre: `53e83c7dffc50df5f262dd17af25b528`
+- Şifre: `/opt/efloud-bot/.env.production` içindeki `DASHBOARD_PASSWORD` değeri (sunucuda `grep DASHBOARD_PASSWORD .env.production` ile bak, buraya yazma)
 - "▶ Start" butonuna bas
 
 ---
@@ -64,7 +68,7 @@ docker compose -f docker-compose.prod.yml restart efloud-bot
 | V3 (Scalp) | https://v3.2-28-139-82.nip.io |
 | Panel | https://panel.2-28-139-82.nip.io |
 
-**Login Password**: `53e83c7dffc50df5f262dd17af25b528`
+**Login Password**: `.env.production` dosyasındaki `DASHBOARD_PASSWORD` (bkz. yukarıdaki not — repo'ya asla düz metin yazılmaz)
 
 ---
 
@@ -91,6 +95,8 @@ docker logs efloud-caddy
 - Caddy self-signed sertifika kullanıyor (nip.io ACME validation'ı geçemez)
 - UFW firewall: SSH (22), HTTP (80), HTTPS (443) açık
 - fail2ban: SSH brute-force koruması aktif
+- `.env.production*` içinde değişiklik yaptıktan sonra `restart` DEĞİL, `up -d --force-recreate <servis>` kullan (bkz. Adım 1)
+- Binance API key/secret girildi ve gerçek imzalı istekle doğrulandı (2026-09-25) — bağlantı sağlıklı
 
 ---
 
