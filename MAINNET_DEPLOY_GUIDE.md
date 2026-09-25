@@ -167,7 +167,7 @@ docker compose -f docker-compose.prod.yml up -d efloud-bot
 | `.env.production.long` | V2 Long Mainnet env |
 | `.env.production.scalp` | V3 Scalp Mainnet env |
 | `deploy/Caddyfile.template` | VPS IP placeholder'lı Caddyfile |
-| `setup_vps.sh` | VPS tek komut kurulum scripti |
+| `deploy/setup-server.sh` + `deploy/deploy.sh` | VPS kurulum + deploy scriptleri (bkz. `deploy/HETZNER_GUIDE.md`) |
 
 **Bu dosyalar local'de** - VPS'ye kopyalayıp secret'ları düzenleyeceksiniz.
 
@@ -188,7 +188,7 @@ SUPABASE_DB_PASSWORD = <SUPABASE_DB_PASSWORD>
 ## 📋 ÖZET: SİZİN YAPMANIZ GEREKENLER
 
 1. **Hetzner Console** → Yeni CPX21 VPS oluştur → IP not et
-2. **SSH** → VPS'e bağlan → `setup_vps.sh` çalıştır (veya adım adım)
+2. **SSH** → VPS'e bağlan → `deploy/HETZNER_GUIDE.md` adımlarını takip et (`deploy/setup-server.sh` + `deploy/deploy.sh`)
 3. **`.env.production`** dosyalarını VPS'te **nano ile açıp secret'ları doğrula**
 4. **Caddyfile**'da `<VPS_IP_DASHED>`'yi gerçek IP ile değiştir
 5. **Build & Up** → `docker compose -f docker-compose.prod.yml up -d`
