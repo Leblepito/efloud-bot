@@ -271,3 +271,68 @@ Efloud Bot is privately developed and **moving toward commercial availability** 
 ## 📄 License
 
 Proprietary — all rights reserved. Not for redistribution. **Trading involves substantial risk of loss; past performance does not guarantee future results.**
+
+
+---
+
+## 🔄 Algoritmik Trade Botu: Uçtan Uca Workflow
+
+Aşağıdaki akış, depodaki `main.py`, `engine/`, `exchange/`, `risk/`, `scripts/routines/` ve `backend/` bileşenlerinin mevcut sorumluluklarını özetler. AI katmanı danışmandır; deterministik güvenlik kontrollerini atlayamaz.
+
+```mermaid
+flowchart TD
+    A[Binance USDT-M piyasa verisi] --> B[HTF bias ve MTF yapı]
+    B --> C[SMC sinyal motoru<br/>BoS · CHoCH · OB · FVG · OTE]
+    C --> D{Sinyal doğrulandı mı?}
+    D -- Hayır --> A
+    D -- Evet --> E[İlk-görüş sinyal kaydı<br/>SignalLedger - varsayılan kapalı]
+    E --> F[AI Agent Team incelemesi<br/>danışman / shadow]
+    F --> G[Deterministik can_trade kapısı]
+    G --> H{Breaker + risk + pozisyon + drift<br/>+ orphan + margin kontrolleri geçti mi?}
+    H -- Hayır --> I[Emri reddet ve nedeni kaydet]
+    H -- Evet --> J[CCXT OrderManager<br/>ISOLATED + one-way]
+    J --> K[Entry emri]
+    K --> L[SL/TP precision, doğrulama ve gerekirse onarım]
+    L --> M[Exchange-truth reconcile<br/>realized PnL - commission - funding]
+    M --> N[Journal / API / dashboard]
+    N --> O[Routines watcher<br/>audit · alarm · edge resolver/report]
+    O --> A
+```
+
+| Aşama | Kaynak / bileşen | Üretilen çıktı | Güvenlik sözleşmesi |
+|---|---|---|---|
+| Sinyal | `engine/`, `engine/smc_v2/` | yön, entry, SL, TP ve confluence | SMC v2 config kaybında shadow/fail-closed kalır |
+| Danışman incelemesi | `engine/agents/` | `team_verdict`, confidence, score ve rol kararları | `agent_team.gating: false` varsayılanı ile emir akışını değiştirmez |
+| Emir kapısı | `engine/safe_orchestrator.py`, `risk/`, `engine/safety/` | kabul veya gerekçeli ret | AI kararı hiçbir deterministik guard'ı zayıflatamaz |
+| Uygulama | `exchange/` | entry ve koruyucu SL/TP | precision sonrası yeniden sorgulama; SL doğrulanamazsa güvenli kapanış |
+| Mutabakat | exchange reconcile + journal | gerçekleşmiş net PnL ve pozisyon durumu | yerel tahmin yerine borsa verisi esas alınır |
+| Gözlem | `scripts/routines/`, `backend/` | audit, alarm, edge raporu ve API görünümü | edge ölçümü salt-okunur ve varsayılan olarak kapalıdır |
+
+## 🧠 Trade AI Agent Workspace
+
+Runtime workspace, tek bir LLM'in ham trade bağlamını serbestçe yorumlaması yerine alanları rol bazında sınırlar. `AgentTeam`, ilk üç rolün sonuçlarını `Overseer`'a verir; `Overseer` özgün trade context'ini değil yalnızca alt-agent kararlarını görür. `PostMortemAgent` sıcak trade döngüsünün dışındadır ve API üzerinden manuel tetiklenir; yerleşik bir scheduler yoktur.
+
+```mermaid
+flowchart LR
+    CTX[Trade context] --> SV[SignalValidatorAgent<br/>symbol · direction · entry · SL · TP1 · confluence]
+    CTX --> RR[RiskReviewerAgent<br/>R:R · notional yüzdesi · SL/ATR]
+    CTX --> RG[RegimeAgent<br/>HTF bias · ADX · HTF slope]
+    SV --> OV[OverseerAgent]
+    RR --> OV
+    RG --> OV
+    OV --> OUT[team_verdict<br/>ACCEPT · REJECT · NEUTRAL · ERROR]
+    OUT --> LOG[state/agent_disagreements.jsonl]
+    OUT --> API[GET /api/ai/agents<br/>son 50 inceleme]
+    JRNL[state/trade_journal.jsonl] --> PM[PostMortemAgent<br/>manuel daily/weekly çağrı]
+    PM --> REPORT[reports/post_mortem_YYYYMMDD.md]
+```
+
+| Workspace parçası | Görev | Görmesine izin verilen veri | Kalıcı / görünür çıktı |
+|---|---|---|---|
+| `SignalValidatorAgent` | LTF/MTF yapı ve likidite tuzağı incelemesi | sembol, yön, entry, SL, TP1, confluence | rol verdict'i |
+| `RiskReviewerAgent` | R:R, notional ve SL mesafesi incelemesi | `rr`, `size_notional_pct`, `sl_atr_distance` | rol verdict'i |
+| `RegimeAgent` | Yön ile HTF/makro rejim uyumu | `htf_bias`, `adx`, `htf_slope_pct` | rol verdict'i |
+| `OverseerAgent` | Alt-agent kararlarını sentezleme | yalnızca alt-agent verdict listesi | takım verdict'i, confidence ve score |
+| `PostMortemAgent` | Kapanmış işlemlerin deterministik istatistikleri ve nitel yorumu | journal'ın son 500 satırına kadar | tarihli Markdown raporu |
+
+LLM sağlayıcısı `agent_team.provider` → `LLM_PROVIDER` → `claude` sırasıyla çözülür; desteklene
