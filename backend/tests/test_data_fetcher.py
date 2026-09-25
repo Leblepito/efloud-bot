@@ -1,6 +1,5 @@
 """Binance public OHLCV fetcher via CCXT — range fetch + gap detection."""
-from unittest.mock import MagicMock, patch
-import pandas as pd
+from unittest.mock import MagicMock
 import pytest
 
 from data.fetcher import OHLCVFetcher, FetchResult

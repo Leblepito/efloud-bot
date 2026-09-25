@@ -13,8 +13,6 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
-import tempfile
 import time
 from typing import Optional
 
@@ -356,7 +354,8 @@ def publish_to_instagram(caption: str, image_path: str | None = None, bot_id: st
     Sandbox'taki zamanlanmış görev bu dosyayı okuyup MCP ile yayınlar.
     """
     try:
-        import base64, uuid
+        import base64
+        import uuid
         pending_dir = "/tmp/ig_pending"
         os.makedirs(pending_dir, exist_ok=True)
 

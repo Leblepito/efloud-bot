@@ -1,5 +1,7 @@
 from __future__ import annotations
-import json, hashlib, logging
+import json
+import hashlib
+import logging
 from dataclasses import dataclass, asdict, fields as dc_fields
 from pathlib import Path
 

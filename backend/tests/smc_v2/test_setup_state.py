@@ -1,5 +1,4 @@
 """Tests for smc_v2.setup_state — SetupCandidate dataclass + persistence."""
-from pathlib import Path
 import pytest
 
 from engine.smc_v2.zones import ZoneSpec

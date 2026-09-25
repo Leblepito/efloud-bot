@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Token sync: design-tokens.ts → CSS :root (injected into index.html)."""
 
-import os, re, sys
+import re
+import sys
 
 ROOT = '/opt/efloud-bot'
 TS_FILE = f'{ROOT}/u2algo-site/brand-kit/css/design-tokens.ts'

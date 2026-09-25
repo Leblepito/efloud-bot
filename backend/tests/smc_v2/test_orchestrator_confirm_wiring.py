@@ -7,7 +7,6 @@ engine.smc_v2.confirmation.confirm_entry. Verifies:
 - IN_ZONE candidate transitions to CONFIRMED when engulfing pattern present
 """
 import pandas as pd
-import pytest
 
 from engine.safe_orchestrator import SafeOrchestrator
 from engine.smc_v2.zones import ZoneSpec

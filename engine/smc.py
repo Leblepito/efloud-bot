@@ -5,7 +5,7 @@ Swing, CHoCH/BOS, FVG, Order Block, Breaker, IC, SFP, Range, OTE.
 
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Optional, List, Tuple
 import logging
 

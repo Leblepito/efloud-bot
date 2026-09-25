@@ -29,7 +29,6 @@ Efloud'un raporlarının yapısı:
   - ...
 """
 
-from typing import List
 from datetime import datetime, timezone
 import logging
 
@@ -135,7 +134,7 @@ class ReportEngine:
                     tp2_str = "NONE(single-target)" if p.tp2 is None else f"{p.tp2:,.2f}"
                     lines.append(f"  - SL: {p.sl:,.2f} | TP1: {p.tp1:,.2f} | TP2: {tp2_str}")
                     if p.sl_moved_to_be:
-                        lines.append(f"  - 🛡 SL at break-even")
+                        lines.append("  - 🛡 SL at break-even")
                     if p.hedge_id:
                         lines.append(f"  - 🔒 Hedge active: {p.hedge_id}")
 
@@ -155,7 +154,7 @@ class ReportEngine:
             for s in active_scenarios:
                 kind_emoji = {"main": "🎯", "invalidation": "⚠️", "plan_b": "🔄"}.get(s.kind, "•")
                 state_emoji = {"ACTIVE": "🟢", "PENDING": "⏳", "TRIGGERED": "⚡"}.get(s.state, "")
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"### {kind_emoji} {s.kind.replace('_', ' ').title()} — {state_emoji} {s.state}")
                 lines.append(f"**{s.name}**")
                 lines.append(f"- {s.note}")
@@ -169,7 +168,7 @@ class ReportEngine:
             latest = signals[-1]
             lines.append("## Güncel Sinyal")
             emoji = "🟢" if latest.direction == "LONG" else "🔴"
-            lines.append(f"")
+            lines.append("")
             lines.append(f"{emoji} **{latest.direction}** @ {latest.entry:,.2f}")
             lines.append(f"- Confluence: **{latest.confluence}/100**")
             lines.append(f"- SL: `{latest.sl:,.2f}` | TP1: `{latest.tp1:,.2f}` | TP2: `{latest.tp2:,.2f}`")
@@ -180,7 +179,7 @@ class ReportEngine:
                          f"{'SFP✓ ' if latest.has_sfp else ''}"
                          f"Zone={latest.zone}")
             if latest.reasons:
-                lines.append(f"- Gerekçeler:")
+                lines.append("- Gerekçeler:")
                 for r in latest.reasons:
                     lines.append(f"  - {r}")
             lines.append("")

@@ -33,7 +33,7 @@ from .scenarios import ScenarioPlanner
 from .lifecycle import PositionLifecycle, Position
 from .journal import TradeJournal, TradeSnapshot
 from .report import ReportEngine
-from .regimes import RegimeDetector, RegimeAnalysis
+from .regimes import RegimeDetector
 from .safety import (
     CircuitBreaker, StateStore, PositionGuard, load_pause_config,
     OrphanProtector, load_orphan_protection_config,
@@ -1417,7 +1417,7 @@ class SafeOrchestrator:
                     except Exception as e:
                         log.warning(f"Error in synchronous AgentTeam gating review: {e!r}")
                         _agent_veto = True
-                        log.warning(f"🚫 [AgentTeam] Signal vetoed due to exception in gating review")
+                        log.warning("🚫 [AgentTeam] Signal vetoed due to exception in gating review")
             
                 if _agent_veto:
                     actions.append(f"[{symbol}] Vetoed by agent team")

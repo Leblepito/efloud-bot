@@ -1,7 +1,6 @@
 """Tests for engine.smc_v2.triggers — pure CHoCH → SetupCandidate generator."""
 from dataclasses import dataclass
 import pandas as pd
-import pytest
 
 from engine.smc import Swing, StructBreak, FVG
 

@@ -17,7 +17,7 @@ Edge cases:
 """
 
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from dataclasses import dataclass
 
 log = logging.getLogger("efloud.permissions")
@@ -118,7 +118,7 @@ class PermissionManager:
 
         if sym_info is None:
             return SymbolPermission(symbol, False,
-                                      reason=f"Symbol not listed on Binance futures",
+                                      reason="Symbol not listed on Binance futures",
                                       status="NOT_FOUND")
 
         # 3. Trading aktif mi?

@@ -6,7 +6,6 @@ Each client subscribes to events.bus and forwards events as JSON over the socket
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Optional
 

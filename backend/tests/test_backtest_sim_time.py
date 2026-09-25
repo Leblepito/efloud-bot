@@ -9,7 +9,6 @@ stamp_sim_times surfaces them onto the trade records as sim_opened_at /
 sim_closed_at.
 """
 import pandas as pd
-import pytest
 import yaml
 
 from backtest.engine import run_backtest, stamp_sim_times

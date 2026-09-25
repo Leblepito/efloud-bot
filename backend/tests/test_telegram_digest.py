@@ -20,11 +20,9 @@ from __future__ import annotations
 
 import importlib
 import json
-import os
 import sys
 from pathlib import Path
 
-import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
@@ -85,8 +83,8 @@ def test_format_en_digest_has_disclaimer_and_aggregate_keys():
     # aggregate counts must appear; per-trade signals must NOT
     assert "8" in text and "5" in text and "3" in text
     # CMP-3 perf-pct guard: wording must NOT contain _PERF_WORDS near a '%' token
-    assert "win rate" not in text.lower(), f"perf-word 'win rate' must be absent"
-    assert "net return" not in text.lower(), f"perf-word 'return' must be absent"
+    assert "win rate" not in text.lower(), "perf-word 'win rate' must be absent"
+    assert "net return" not in text.lower(), "perf-word 'return' must be absent"
     # Net P/L (CMP-3-safe wording) must be present
     assert "P/L" in text and "+1.7" in text
     # No per-trade leak

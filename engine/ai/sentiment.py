@@ -1,10 +1,9 @@
 import asyncio
-import os
 import json
 import datetime
 from pathlib import Path
 import httpx
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from utils.cache import SentimentCache
 
 ROOT = Path(__file__).resolve().parents[2]

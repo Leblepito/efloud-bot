@@ -17,7 +17,6 @@ with idx will silently fail. See test_production_shape_with_dataframe_row
 for the calling convention PR #S3b will use.
 """
 from dataclasses import dataclass
-import pytest
 
 from engine.smc import Swing
 

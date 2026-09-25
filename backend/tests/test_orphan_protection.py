@@ -11,7 +11,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from engine.safety.orphan_protection import (
-    CoverageStatus,
     OrphanProtectionConfig,
     OrphanProtector,
     ProtectionAction,

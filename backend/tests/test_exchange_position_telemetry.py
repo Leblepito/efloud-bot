@@ -5,7 +5,6 @@ forward-compatible. v1 callers omit the kwargs; v2 (PR #71) passes them.
 """
 from __future__ import annotations
 
-import pytest
 
 from exchange import Position, OrderManager
 

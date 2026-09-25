@@ -15,9 +15,8 @@ Kullanım yerleri:
 
 import logging
 from typing import Optional
-from datetime import datetime
 
-from .null_manager import NullNotificationManager
+from .null_manager import NullNotificationManager as NullNotificationManager
 
 log = logging.getLogger("efloud.notifications")
 

@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from scripts.evaluate_backtest_gates import (
     EXIT_HARD_REJECT,

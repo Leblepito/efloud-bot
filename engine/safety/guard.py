@@ -14,8 +14,8 @@ import time
 import os
 import logging
 from functools import wraps
-from datetime import datetime, timedelta, timezone
-from typing import Callable, Any, Optional
+from datetime import datetime, timezone
+from typing import Callable
 import pandas as pd
 
 log = logging.getLogger("efloud.guard")

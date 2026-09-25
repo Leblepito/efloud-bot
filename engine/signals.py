@@ -7,9 +7,6 @@ from .smc import SMCEngine
 from .confluence import calc_confluence
 from .levels import Level
 import pandas as pd
-import httpx
-import os
-import json
 from utils.cache import SentimentCache
 
 log = logging.getLogger("efloud.signals")

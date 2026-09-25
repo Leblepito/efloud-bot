@@ -17,7 +17,6 @@ import logging
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from engine.safety.position_guard import (
     PauseGateDecision,

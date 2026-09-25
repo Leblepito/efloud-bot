@@ -11,7 +11,6 @@ Operator must call /api/breaker/reset after acknowledging the DD breach.
 """
 from __future__ import annotations
 
-import pytest
 
 from backend.healthz import (
     EXCHANGE_PING_THRESHOLD_MS,

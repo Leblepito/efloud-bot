@@ -18,7 +18,6 @@ Spec §5.2:
 """
 from typing import Protocol, Tuple, Optional
 
-from engine.smc import FVG, EqLevel
 from engine.smc_v2.exceptions import InsufficientTPDistanceError
 
 

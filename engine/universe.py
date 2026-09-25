@@ -12,8 +12,6 @@ Cache: dinamik listeyi config.symbols.refresh_dynamic_hours saatte bir yeniler.
 """
 
 import logging
-import time
-from pathlib import Path
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 

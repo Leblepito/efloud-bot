@@ -1,6 +1,4 @@
 """Tests for smc_v2.zones — pullback target builder."""
-from typing import List
-import pytest
 
 from engine.smc import FVG
 

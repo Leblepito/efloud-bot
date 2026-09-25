@@ -2,7 +2,6 @@
 
 Bot worker başlatılmaz (lifespan bypass'lanır), sadece HTTP layer test edilir.
 """
-import os
 
 import pytest
 from httpx import ASGITransport, AsyncClient

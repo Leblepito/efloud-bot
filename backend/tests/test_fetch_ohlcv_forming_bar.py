@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
 
 from engine.safety.guard import validate_kline_freshness
 from exchange import BinanceClient

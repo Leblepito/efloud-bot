@@ -1,9 +1,7 @@
 """Unit tests for candle close synchronization in BotRunner and main.py loop."""
 from __future__ import annotations
 
-import time
 from unittest.mock import MagicMock, patch
-import pytest
 
 from backend.bot_runner import BotRunner
 from main import run_cycle

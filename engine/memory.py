@@ -16,8 +16,8 @@ Memory iki katmanlıdır:
 import logging
 from collections import Counter
 from dataclasses import dataclass
-from typing import List, Dict
-from .journal import TradeJournal, TradeSnapshot
+from typing import List
+from .journal import TradeJournal
 
 log = logging.getLogger("efloud.memory")
 
@@ -128,7 +128,7 @@ class LearningMemory:
         lines = [
             "# 🧠 Learning Memory Report",
             "",
-            f"## İstatistikler",
+            "## İstatistikler",
             f"- Toplam trade: **{stats['trades']}**",
             f"- Win rate: **{stats['win_rate']}%** ({stats['wins']}W / {stats['losses']}L)",
             f"- Toplam PnL: **${stats['total_pnl']:+.2f}**",

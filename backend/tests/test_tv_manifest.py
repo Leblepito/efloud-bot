@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-from backend.social import tv_manifest as m2
 from backend.social.tv_manifest import (
     ChartSnapshot,
     ManifestError,

@@ -26,7 +26,6 @@ operatörün mimari kararı).
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 from dataclasses import dataclass, field
@@ -150,7 +149,7 @@ def load_templates(path: str | Path | None = None) -> dict[str, Any]:
     with open(p, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict) or "templates" not in data:
-        raise RendererError(f"templates.yaml şeması hatalı: 'templates' anahtarı yok")
+        raise RendererError("templates.yaml şeması hatalı: 'templates' anahtarı yok")
     return data
 
 

@@ -334,9 +334,9 @@ def _validate_template(template: dict) -> None:
             raise TemplateValidationError(f"compliance.{lang}", "empty_or_not_string")
     # Compliance token kontrolü — disclaimer metni template içinde geçmeli
     if COMPLIANCE_TR not in template["prompt_template"]:
-        raise TemplateValidationError("prompt_template", f"missing_compliance_tr_token")
+        raise TemplateValidationError("prompt_template", "missing_compliance_tr_token")
     if COMPLIANCE_EN not in template["prompt_template"]:
-        raise TemplateValidationError("prompt_template", f"missing_compliance_en_token")
+        raise TemplateValidationError("prompt_template", "missing_compliance_en_token")
 
     md = template["task_metadata"]
     if not isinstance(md, dict) or "type" not in md or "version" not in md:

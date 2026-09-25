@@ -17,7 +17,7 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 
-from engine.smc import StructBreak, Swing, FVG
+from engine.smc import StructBreak, FVG
 from engine.smc_v2.setup_state import SetupCandidate
 from engine.smc_v2.swing_anchor import select_htf_swing_anchor
 from engine.smc_v2.zones import build_pullback_zones
