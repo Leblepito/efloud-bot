@@ -41,19 +41,19 @@
 # basmadan önce dashboard → Positions'ın boş (flat) olduğunu doğrula.
 #
 # Risk profili (safety: bloğuyla SENKRON — değiştirirsen İKİSİNİ birlikte güncelle):
-#   Cüzdan:           ~$1363 (2026-07-09 düzeltme; kendi izole Binance sub-account'ı) — YENİDEN DOĞRULA
+#   Cüzdan:           ~$403.55 (2026-09-28 düzeltme; kendi izole Binance sub-account'ı, canlı API ile doğrulandı)
 #   Kaldıraç:         10x (exchange.leverage; 2026-07-24 operatör talebi, WAS 5x)
 #   Sizing modu:      FIXED — $50 margin/coin × 10x = $500 notional/pozisyon (2026-07-24, WAS legacy %risk-bazlı)
 #   Eşzamanlı max:    10 pozisyon (max_total_exposure 1.0→6.0, 10×$500 desteklemek için)
 #   Daily loss:       %10 ≈ $136 → breaker TRIPS (daily_loss_limit_pct)
 #   Weekly DD:        %25 ≈ $341 → breaker HALTS (weekly_drawdown_limit_pct)
-#   Acil halt:        bakiye $1216 altına düşünce (emergency_balance_threshold)
+#   Acil halt:        bakiye $360 altına düşünce (emergency_balance_threshold)
 #
 # Önkoşullar (preflight.py ile doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi)
 #   ✓ canWithdraw = false (çekim kapalı, key sızsa fon güvende)
 #   ✓ Position mode = ONE-WAY (hedge_mode:false; bot startup'ta zorlar — set_position_mode)
-#   ✓ Bakiye ≥ $1363 Futures cüzdanında (emergency_balance_threshold $1216 üstü)
+#   ✓ Bakiye ≥ $403.55 Futures cüzdanında (emergency_balance_threshold $360 üstü)
 #   ✓ EFLOUD_ALLOW_MAINNET=1
 #
 # Çalıştırmak için (lokal):
@@ -267,7 +267,7 @@ safety:
   weekly_drawdown_limit_pct: 25.0     # 2026-06-01: 20→25 (operator) — daha geniş haftalık DD toleransı
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
-  starting_balance: 1363              # 2026-07-09 düzeltme: kendi izole Binance sub-account bakiyesi. Bkz. dosya başı.
+  starting_balance: 403.55            # 2026-09-28 düzeltme: kullanıcı sub-account'a 403 USDT yatırdı (canlı bakiye doğrulandı); starting_balance/emergency_balance_threshold önceki $1363 baseline'dan gerçek bakiyeye göre yeniden ölçeklendi (aynı ~%89.2 tampon oranı korunarak).
 
   adx_trend_threshold: 25
   adx_range_threshold: 20
@@ -304,7 +304,7 @@ safety:
   # izlenecek — "SL too wide" log satırı say.
   reject_wide_sl: true
 
-  emergency_balance_threshold: 1216   # Bakiye $1216 altı → HALT (~%10.8 kayıp, $1363 cüzdana göre). 2026-07-09 düzeltme.
+  emergency_balance_threshold: 360    # 2026-09-28: Bakiye $360 altı → HALT (~%10.8 kayıp, $403.55 cüzdana göre; aynı oran $1363/$1216 baseline'ından taşındı).
   reserve_balance: 0                   # Tüm bakiye kullanılabilir
 
   min_seconds_between_symbol_fetches: 0.5
