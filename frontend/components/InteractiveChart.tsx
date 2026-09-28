@@ -518,7 +518,7 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
     const controller = new AbortController();
     const fetchHistory = async () => {
       try {
-        let url = `https://fapi.binance.com/fapi/v1/klines?symbol=${activeSymbol}&interval=${timeframe}&limit=1000`;
+        let url = `/api/chart/klines?symbol=${activeSymbol}&interval=${timeframe}&limit=1000`;
         
         if (selectedTrade && normalizeSymbol(selectedTrade.symbol) === activeSymbol) {
           const openedMs = new Date(selectedTrade.opened_at).getTime();
@@ -535,12 +535,12 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
         }
 
         const [klineRes, fundingRes, predictedRes] = await Promise.all([
-          fetch(url, { signal: controller.signal }),
+          fetch(url, { signal: controller.signal, credentials: "include" }),
           showFundingRate
-            ? fetch(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=${activeSymbol}&limit=1000`, { signal: controller.signal })
+            ? fetch(`/api/chart/funding-rate?symbol=${activeSymbol}&limit=1000`, { signal: controller.signal, credentials: "include" })
             : Promise.resolve(null),
           showFundingRate
-            ? fetch(`https://fapi.binance.com/fapi/v1/premiumIndexKlines?symbol=${activeSymbol}&interval=${timeframe}&limit=1000`, { signal: controller.signal })
+            ? fetch(`/api/chart/premium-index-klines?symbol=${activeSymbol}&interval=${timeframe}&limit=1000`, { signal: controller.signal, credentials: "include" })
             : Promise.resolve(null),
         ]);
 

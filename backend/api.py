@@ -675,6 +675,91 @@ async def open_interest(symbol: str = "BTCUSDT") -> dict:
     }
 
 
+_CHART_ALLOWED_INTERVALS = {
+    "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h",
+    "1d", "3d", "1w", "1M",
+}
+
+
+def _clean_chart_symbol(symbol: str) -> str:
+    clean = symbol.replace("/", "").replace(":", "").upper()
+    if not clean.endswith("USDT"):
+        clean += "USDT"
+    return clean
+
+
+@router.get("/chart/klines", dependencies=[Depends(require_auth)])
+async def chart_klines(symbol: str, interval: str = "15m", limit: int = 1000, startTime: int | None = None):
+    """Binance Futures kline verisini sunucu üzerinden proxy'ler.
+
+    Tarayıcının doğrudan fapi.binance.com'a erişememesi (ISP/ağ/CORS/eklenti
+    engelleri) dashboard grafiğini kırıyordu ("Failed to fetch historical
+    chart data"). Sunucu zaten trade için Binance'a bağlanabiliyor, bu yüzden
+    grafik verisi de aynı sunucu üzerinden çekilir.
+    """
+    import httpx
+
+    clean_symbol = _clean_chart_symbol(symbol)
+    if interval not in _CHART_ALLOWED_INTERVALS:
+        raise HTTPException(status_code=400, detail="Invalid interval")
+    limit = max(1, min(int(limit), 1500))
+
+    params = {"symbol": clean_symbol, "interval": interval, "limit": limit}
+    if startTime is not None:
+        params["startTime"] = startTime
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get("https://fapi.binance.com/fapi/v1/klines", params=params)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        log.warning(f"Failed to proxy klines for {clean_symbol}: {e}")
+        raise HTTPException(status_code=502, detail="Binance klines fetch failed")
+
+
+@router.get("/chart/funding-rate", dependencies=[Depends(require_auth)])
+async def chart_funding_rate(symbol: str, limit: int = 1000):
+    import httpx
+
+    clean_symbol = _clean_chart_symbol(symbol)
+    limit = max(1, min(int(limit), 1000))
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://fapi.binance.com/fapi/v1/fundingRate",
+                params={"symbol": clean_symbol, "limit": limit},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        log.warning(f"Failed to proxy funding rate for {clean_symbol}: {e}")
+        raise HTTPException(status_code=502, detail="Binance funding rate fetch failed")
+
+
+@router.get("/chart/premium-index-klines", dependencies=[Depends(require_auth)])
+async def chart_premium_index_klines(symbol: str, interval: str = "15m", limit: int = 1000):
+    import httpx
+
+    clean_symbol = _clean_chart_symbol(symbol)
+    if interval not in _CHART_ALLOWED_INTERVALS:
+        raise HTTPException(status_code=400, detail="Invalid interval")
+    limit = max(1, min(int(limit), 1500))
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://fapi.binance.com/fapi/v1/premiumIndexKlines",
+                params={"symbol": clean_symbol, "interval": interval, "limit": limit},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        log.warning(f"Failed to proxy premium index klines for {clean_symbol}: {e}")
+        raise HTTPException(status_code=502, detail="Binance premium index klines fetch failed")
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Runtime Agent Team (canonical A6)
 # ──────────────────────────────────────────────────────────────────────
