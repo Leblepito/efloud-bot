@@ -98,7 +98,10 @@ async def chart_ws_handler(websocket: WebSocket, symbol: str, interval: str) -> 
         return
 
     clean_symbol = _clean_chart_symbol(symbol)
-    upstream_url = f"wss://fstream.binance.com/ws/{clean_symbol.lower()}@kline_{interval}"
+    # fstream.binance.com bu sunucunun IP'sinden handshake'i kabul edip veri
+    # akıtmıyor (sessiz blok); resmi alternatif domain binancefuture.com
+    # ayni mainnet futures verisini sorunsuz iletiyor.
+    upstream_url = f"wss://fstream.binancefuture.com/ws/{clean_symbol.lower()}@kline_{interval}"
 
     await websocket.accept()
 
@@ -130,7 +133,7 @@ async def chart_ws_handler(websocket: WebSocket, symbol: str, interval: str) -> 
                 await asyncio.sleep(1)
                 continue
             except Exception as e:
-                log.warning(f"Chart WS relay error for {clean_symbol}@{interval}: {e}")
+                log.warning(f"Chart WS relay error for {clean_symbol}@{interval}: {e!r}")
                 await asyncio.sleep(2)
                 continue
     finally:
