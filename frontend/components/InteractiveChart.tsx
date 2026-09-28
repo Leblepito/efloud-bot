@@ -648,8 +648,10 @@ export function InteractiveChart({ selectedSymbol, selectedTrade, onSelectSymbol
 
     fetchHistory();
 
-    // 5. Connect to Live Binance Futures Websocket
-    const wsUrl = `wss://fstream.binance.com/ws/${activeSymbol.toLowerCase()}@kline_${timeframe}`;
+    // 5. Connect to Live Binance Futures Websocket (backend relay — tarayıcının
+    // doğrudan fstream.binance.com'a bağlanması ağ/ISP gecikmesine takılabiliyordu)
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/chart/${activeSymbol.toLowerCase()}/${timeframe}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
     setWsConnected(false);

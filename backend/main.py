@@ -24,7 +24,7 @@ from backend.api import router as api_router
 from backend.bot_runner import runner
 from backend.db import db
 from backend.healthz import health_router, configure as configure_healthz
-from backend.ws import websocket_handler
+from backend.ws import websocket_handler, chart_ws_handler
 from main import load_dotenv  # reuse parent project's .env loader
 
 # Load .env (prefer system env over .env values)
@@ -193,6 +193,11 @@ app.include_router(health_router)
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
     await websocket_handler(websocket)
+
+
+@app.websocket("/ws/chart/{symbol}/{interval}")
+async def chart_ws_endpoint(websocket: WebSocket, symbol: str, interval: str):
+    await chart_ws_handler(websocket, symbol, interval)
 
 
 # ─────────────────────────────────────────────────────────────────
