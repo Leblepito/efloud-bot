@@ -20,7 +20,7 @@ class ZoneSpec:
     """A pullback target region."""
     low: float
     high: float
-    source: Literal["HTF_FVG", "OTE", "OB", "BB"]
+    source: Literal["HTF_FVG", "OTE", "OB", "BB", "EQ_RETEST"]
 
 
 def build_pullback_zones(
@@ -28,6 +28,7 @@ def build_pullback_zones(
     ote_band: Tuple[float, float],
     direction: str,
     trigger_price: float,
+    eq_price: float = None,
 ) -> ZoneSpec:
     """Pick the pullback target zone for a fresh setup.
 
@@ -37,10 +38,14 @@ def build_pullback_zones(
         ote_band: (low, high) tuple of the OTE 0.618-0.786 band; used as fallback.
         direction: "LONG" or "SHORT" — the direction of the trade being prepared.
         trigger_price: the CHoCH break price; reference for "which side is pullback".
+        eq_price: range EQ (midpoint) — Efloud notları: "Deviasyon sonrası range
+            içine giren fiyat öncesinde EQ'yu test etmeye meraklıdır. retestle
+            girilebilir". EQ, FVG'den sonra ikinci öncelik; OTE'den önce.
 
     Returns:
         ZoneSpec with source="HTF_FVG" if a counter-direction FVG exists on the
-        pullback side, else source="OTE" using the supplied band.
+        pullback side, else source="EQ_RETEST" if eq_price is on the pullback
+        side, else source="OTE" using the supplied band.
     """
     if direction == "SHORT":
         # SHORT pullback = price retraces UP into a BULL gap above trigger
@@ -52,6 +57,8 @@ def build_pullback_zones(
             # Nearest = smallest distance from trigger to FVG bot
             nearest = min(candidates, key=lambda f: f.bot - trigger_price)
             return ZoneSpec(low=nearest.bot, high=nearest.top, source="HTF_FVG")
+        if eq_price is not None and eq_price > trigger_price:
+            return ZoneSpec(low=eq_price, high=eq_price, source="EQ_RETEST")
     else:  # LONG
         # LONG pullback = price retraces DOWN into a BEAR gap below trigger
         candidates = [
@@ -65,6 +72,8 @@ def build_pullback_zones(
             # SHORT branch above (`min(f.bot - trigger_price)`).
             nearest = max(candidates, key=lambda f: f.top - trigger_price)
             return ZoneSpec(low=nearest.bot, high=nearest.top, source="HTF_FVG")
+        if eq_price is not None and eq_price < trigger_price:
+            return ZoneSpec(low=eq_price, high=eq_price, source="EQ_RETEST")
     # Fallback
     return ZoneSpec(low=ote_band[0], high=ote_band[1], source="OTE")
 

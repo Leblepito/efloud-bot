@@ -118,6 +118,13 @@ smc_v2:
   # (origin mum) olur. OB/BB bulunamazsa legacy FVG/OTE yolu korunur.
   ob_bb_entry: true
 
+  # Po3 gate (Efloud notları: "Konsolide olan fiyat sınırlı bir bölgede
+  # hareket eder... yeni bir emare görülene kadar işlem alınmaz" +
+  # "manipulation fazında işlem açılmaz"). Accumulation/Manipulation/
+  # Distribution faz tespiti; MANIPULATION fazında giriş bloklanır ama
+  # setup ölmez — displacement gelip DISTRIBUTION'a dönünce kapı açılır.
+  po3_gate: true
+
   # BT-23 (2026-07-26): emit anında hedef bölgenin YAKIN kenarı 15m Wilder
   # ATR(14)'ün bu katından uzaksa setup hiç açılmaz. 30g/10 sembol tam pipeline
   # replay: 4.0 ATR ötesinde 2401 setup'ın HİÇBİRİ CONFIRMED olmadı (1400 ölü
@@ -175,7 +182,7 @@ timeframes:
   htf: 12h         # custom/fallback (profile yoksa/custom ise kullanılır)
   mtf: 4h
   entry: 15m
-  kline_limit: 500
+  kline_limit: 750
 
 structure:
   swing_lookback: 5
@@ -188,6 +195,9 @@ fibonacci:
   ote_lower: 0.618
   ote_upper: 0.786
   ext_tp2: 1.618
+  # Efloud notları: "2.618 - 1.272 - 4.23 - 1.618 (Efloudun kullandığı değerler)".
+  # TP2 fallback'inde TP1'in ötesine düşen EN YAKIN extension seçilir.
+  ext_tp2_options: [1.272, 1.618, 2.618, 4.23]
 
 # ── Risk: $100 notional cap, ~$10 risk per trade, gevşetilmiş filtreler ──
 risk:

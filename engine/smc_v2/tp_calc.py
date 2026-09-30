@@ -92,9 +92,21 @@ def calc_tp_targets(
         if fvg_far:
             tp2, tp2_source = min(fvg_far), "FVG_FAR"
         else:
-            fib_tp2 = entry_price + config.fib_ext * risk
+            # Efloud notları: "2.618 - 1.272 - 4.23 - 1.618 (Efloudun kullandığı
+            # değerler)". Tek fib_ext yerine opsiyonel fib_ext_options listesi
+            # verilirse, TP1'in ötesine düşen EN YAKIN extension seçilir.
+            fib_options = getattr(config, "fib_ext_options", None) or []
+            fib_tp2, fib_src = None, "FIB_EXT"
+            if fib_options:
+                for ext in sorted(fib_options):
+                    cand = entry_price + ext * risk
+                    if cand > tp1:
+                        fib_tp2, fib_src = cand, f"FIB_EXT_{ext}"
+                        break
+            if fib_tp2 is None:
+                fib_tp2 = entry_price + config.fib_ext * risk
             if fib_tp2 > tp1:
-                tp2, tp2_source = fib_tp2, "FIB_EXT"
+                tp2, tp2_source = fib_tp2, fib_src
             else:
                 tp2, tp2_source = None, "NONE"
 
@@ -128,9 +140,18 @@ def calc_tp_targets(
         if fvg_far:
             tp2, tp2_source = max(fvg_far), "FVG_FAR"
         else:
-            fib_tp2 = entry_price - config.fib_ext * risk
+            fib_options = getattr(config, "fib_ext_options", None) or []
+            fib_tp2, fib_src = None, "FIB_EXT"
+            if fib_options:
+                for ext in sorted(fib_options):
+                    cand = entry_price - ext * risk
+                    if cand < tp1:
+                        fib_tp2, fib_src = cand, f"FIB_EXT_{ext}"
+                        break
+            if fib_tp2 is None:
+                fib_tp2 = entry_price - config.fib_ext * risk
             if fib_tp2 < tp1:
-                tp2, tp2_source = fib_tp2, "FIB_EXT"
+                tp2, tp2_source = fib_tp2, fib_src
             else:
                 tp2, tp2_source = None, "NONE"
 

@@ -17,7 +17,7 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 
-from engine.smc import StructBreak, FVG, OrderBlock
+from engine.smc import StructBreak, FVG, OrderBlock, SFP
 from engine.smc_v2.setup_state import SetupCandidate
 from engine.smc_v2.swing_anchor import select_htf_swing_anchor
 from engine.smc_v2.zones import build_pullback_zones, build_ob_bb_zone
@@ -114,6 +114,30 @@ def _find_causing_ob(
     return max(candidates, key=lambda ob: ob.idx)
 
 
+def _sfp_confluence(ltf_sfps, brk) -> tuple:
+    """SFP confluence bonusu (0/10) + reason. Efloud notları: "Old low/high
+    likidite temizliği olursa SFP aranmalı ve tekrar pozisyon inşasında
+    bulunulmalıdır". SFP yönü CHoCH yönüyle aynı ve kırılımdan önce olmalı."""
+    if not ltf_sfps:
+        return 0, None
+    for sfp in ltf_sfps:
+        if sfp.idx < brk.idx and sfp.direction == brk.direction:
+            return 10, f"SFP aligned (sweep {sfp.sweep_level} → {sfp.price})"
+    return 0, None
+
+
+def _rsi_confluence(rsi_value, direction) -> tuple:
+    """RSI confluence bonusu (0/5) + reason. Efloud notları: "RSI oversold
+    veya overbolda yakınsa OTE çalışabilir". LONG: RSI<=40, SHORT: RSI>=60."""
+    if rsi_value is None:
+        return 0, None
+    if direction == "LONG" and rsi_value <= 40:
+        return 5, f"RSI {rsi_value:.1f} oversold-near (LONG)"
+    if direction == "SHORT" and rsi_value >= 60:
+        return 5, f"RSI {rsi_value:.1f} overbought-near (SHORT)"
+    return 0, None
+
+
 def generate_setup_candidates(
     symbol: str,
     htf_bias: str,
@@ -126,6 +150,9 @@ def generate_setup_candidates(
     anchor_time_axis: bool = False,
     ltf_order_blocks: Optional[List[OrderBlock]] = None,
     df_entry: Optional[pd.DataFrame] = None,
+    ltf_sfps: Optional[List[SFP]] = None,
+    eq_price: Optional[float] = None,
+    rsi_value: Optional[float] = None,
 ) -> List[SetupCandidate]:
     """Emit SetupCandidate instances for new aligned CHoCH events.
 
@@ -155,6 +182,16 @@ def generate_setup_candidates(
             None → legacy FVG/OTE yolu.
         df_entry: LTF DataFrame — OB origin mumunun low/high'ını okumak için.
             ltf_order_blocks verilirken zorunlu; yoksa OB/BB yolu atlanır.
+        ltf_sfps: LTF (15m) SFP listesi (SMCEngine.sfps). Verilirse CHoCH
+            kırılımı bir SFP (swing failure pattern — likidite temizliği
+            sonrası başarısız kırılım) ile hizalanınca confluence bonusu
+            eklenir (Efloud notları: "Old low/high likidite temizliği olursa
+            SFP aranmalı ve tekrar pozisyon inşasında bulunulmalıdır").
+        eq_price: range EQ (midpoint) — deviasyon sonrası EQ retest zone'u
+            için (Efloud notları: "Deviasyon sonrası range içine giren fiyat
+            öncesinde EQ'yu test etmeye meraklıdır. retestle girilebilir").
+        rsi_value: LTF RSI(14) — OTE yakınsama confluence'ı için (Efloud
+            notları: "RSI oversold veya overbolda yakınsa OTE çalışabilir").
 
     Returns:
         List of new SetupCandidate instances (state=AWAITING_PULLBACK,
@@ -196,6 +233,9 @@ def generate_setup_candidates(
             # calc_sl min(zone.low, anchor) / max(zone.high, anchor) yaptığı
             # için anchor'ı origin mumun uç fiyatı olarak vermek yeterli.
             anchor = float(origin["low"]) if direction == "LONG" else float(origin["high"])
+            # SFP + RSI confluence (Efloud notları) — OB/BB yolunda da geçerli.
+            sfp_bonus, sfp_reason = _sfp_confluence(ltf_sfps, brk)
+            rsi_bonus, rsi_reason = _rsi_confluence(rsi_value, direction)
             out.append(SetupCandidate(
                 symbol=symbol,
                 direction=direction,
@@ -206,9 +246,11 @@ def generate_setup_candidates(
                 htf_swing_anchor=anchor,
                 bars_waited=0,
                 state="AWAITING_PULLBACK",
-                confluence_score=0,
+                confluence_score=sfp_bonus + rsi_bonus,
                 reasons=[f"CHoCH {brk.direction} aligned with HTF {htf_bias}",
-                         f"entry from {zone.source} retest (origin candle {causing_ob.idx - 1})"],
+                         f"entry from {zone.source} retest (origin candle {causing_ob.idx - 1})"]
+                + ([sfp_reason] if sfp_reason else [])
+                + ([rsi_reason] if rsi_reason else []),
             ))
             continue
 
@@ -231,12 +273,13 @@ def generate_setup_candidates(
             # No valid HTF anchor → can't compute structural SL → skip
             continue
 
-        # Build pullback zone (HTF FVG priority, OTE fallback)
+        # Build pullback zone (HTF FVG priority, EQ retest, OTE fallback)
         zone = build_pullback_zones(
             htf_fvgs=htf_fvgs,
             ote_band=ote_band,
             direction=direction,
             trigger_price=brk.price,
+            eq_price=eq_price,
         )
 
         # Skip degenerate OTE fallback (e.g. ote_band=(0,0) when HTF analyze()
@@ -245,6 +288,17 @@ def generate_setup_candidates(
         # AWAITING_PULLBACK eating cap slots until timeout. Better to drop.
         if zone.source == "OTE" and zone.low == zone.high:
             continue
+
+        # SFP confluence (Efloud notları): CHoCH bir SFP ile hizalanırsa
+        # (likidite temizliği sonrası başarısız kırılım → pozisyon inşası)
+        # confluence bonusu eklenir. SFP yönü CHoCH yönüyle aynı olmalı ve
+        # kırılımdan önce oluşmuş olmalı (lookahead yok).
+        sfp_bonus, sfp_reason = _sfp_confluence(ltf_sfps, brk)
+
+        # RSI confluence (Efloud notları): RSI oversold/overbought'a yakınsa
+        # OTE çalışabilir. LONG için RSI <= 40 (oversold yakını), SHORT için
+        # RSI >= 60 (overbought yakını) → +5 bonus.
+        rsi_bonus, rsi_reason = _rsi_confluence(rsi_value, direction)
 
         out.append(SetupCandidate(
             symbol=symbol,
@@ -259,8 +313,10 @@ def generate_setup_candidates(
             htf_swing_anchor=anchor,
             bars_waited=0,
             state="AWAITING_PULLBACK",
-            confluence_score=0,  # PR #S3c-2 may add confluence scoring
-            reasons=[f"CHoCH {brk.direction} aligned with HTF {htf_bias}"],
+            confluence_score=sfp_bonus + rsi_bonus,
+            reasons=[f"CHoCH {brk.direction} aligned with HTF {htf_bias}"]
+            + ([sfp_reason] if sfp_reason else [])
+            + ([rsi_reason] if rsi_reason else []),
         ))
 
     return out

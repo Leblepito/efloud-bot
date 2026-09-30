@@ -208,7 +208,7 @@ class SetupStateStore:
                     f"target_zone (missing keys) — symbol={item.get('symbol')}"
                 )
                 continue
-            if zone_raw["source"] not in {"HTF_FVG", "OTE", "OB", "BB"}:
+            if zone_raw["source"] not in {"HTF_FVG", "OTE", "OB", "BB", "EQ_RETEST"}:
                 log.warning(
                     f"setup_state load: dropping candidate with invalid "
                     f"target_zone.source={zone_raw['source']!r} — "

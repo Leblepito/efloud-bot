@@ -71,6 +71,25 @@ def _emit_reverse_block(symbol: str, reason: str) -> None:
         log_event(log, "REVERSE_BLOCKED_NOT_PROFITABLE", symbol=symbol)
 
 
+def _rsi_14(df: pd.DataFrame) -> Optional[float]:
+    """Wilder RSI(14) — son bar değeri. Efloud notları: "RSI oversold veya
+    overbolda yakınsa OTE çalışabilir". Yetersiz veride None döner (confluence
+    katkısı yok, gate değil)."""
+    if df is None or len(df) < 15:
+        return None
+    try:
+        delta = df["close"].diff()
+        gain = delta.clip(lower=0.0)
+        loss = -delta.clip(upper=0.0)
+        avg_gain = gain.ewm(alpha=1 / 14, min_periods=14).mean()
+        avg_loss = loss.ewm(alpha=1 / 14, min_periods=14).mean()
+        rs = avg_gain / avg_loss.replace(0.0, 1e-10)
+        rsi = 100 - (100 / (1 + rs))
+        return float(rsi.iloc[-1])
+    except Exception:
+        return None
+
+
 @dataclass
 class GuardCheck:
     allowed: bool
@@ -1151,6 +1170,12 @@ class SafeOrchestrator:
                     df_entry, ltf_swings_h, ltf_swings_l,
                     ltf_brks[-1].direction if ltf_brks else "UNDEF",
                 )
+                ltf_sfps = self.smc.sfps(df_entry, ltf_swings_h, ltf_swings_l)
+                # Range EQ (deviasyon sonrası EQ retest zone'u için) + LTF RSI
+                # (OTE yakınsama confluence'ı için) — Efloud notları.
+                ltf_range = self.smc.range_info(df_entry)
+                ltf_eq = ltf_range.eq if ltf_range is not None else None
+                ltf_rsi = _rsi_14(df_entry)
             
                 # Build htf_bars from df_htf rows (ordinal axis for swing_anchor).
                 # HtfBar dataclass hoisted to engine.smc_v2.triggers to keep
@@ -1196,6 +1221,9 @@ class SafeOrchestrator:
                         ltf_obs if self.config.get("smc_v2", {}).get("ob_bb_entry", True)
                         else None
                     ),
+                    ltf_sfps=ltf_sfps,
+                    eq_price=ltf_eq,
+                    rsi_value=ltf_rsi,
                 )
             
             # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
@@ -2004,6 +2032,11 @@ class SafeOrchestrator:
         require_confirmation = smc_v2_cfg.get("require_confirmation", True)
         effective_pullback_timeout_bars = smc_v2_cfg.get("pullback_timeout_bars", pullback_timeout_bars)
 
+        # Po3 HARD GATE (G1): manipulation fazında giriş bloklanır ama setup
+        # ÖLMEZ — displacement gelip faz DISTRIBUTION'a dönünce kapı açılır.
+        # smc_v2.po3_gate: false (default) → inert; UNDEFINED bloklamaz.
+        po3_blocked = self._v2_po3_blocked(df_15m)
+
         # Local import to avoid module-level circular dependency on smc_v2
         from engine.smc_v2.zones import is_price_in_zone
         from engine.smc_v2.setup_state import PERSISTED_STATES
@@ -2058,6 +2091,8 @@ class SafeOrchestrator:
                         # Already left zone before, this is a re-entry (pullback)
                         # Proceed with confirmation logic
                         if not require_confirmation:
+                            if po3_blocked:
+                                continue
                             cand.state = "CONFIRMED"
                             clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
                             self._place_v2_entry_order(
@@ -2083,6 +2118,8 @@ class SafeOrchestrator:
                     # No confirmation required, but need has_left_zone check
                     if cand.has_left_zone:
                         # This is a re-entry (pullback) — confirm entry
+                        if po3_blocked:
+                            continue
                         cand.state = "CONFIRMED"
                         clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
                         self._place_v2_entry_order(
@@ -2105,6 +2142,8 @@ class SafeOrchestrator:
                     since_ts=cand.trigger_bar_ts,
                 )
                 if confirmed:
+                    if po3_blocked:
+                        continue
                     cand.state = "CONFIRMED"
                     self._place_v2_entry_order(
                         cand,
@@ -2118,6 +2157,8 @@ class SafeOrchestrator:
                 if price_in_zone:
                     # Price re-entered the zone (pullback complete)
                     if not require_confirmation:
+                        if po3_blocked:
+                            continue
                         cand.state = "CONFIRMED"
                         clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
                         self._place_v2_entry_order(
@@ -2133,6 +2174,22 @@ class SafeOrchestrator:
                         # Note: has_left_zone is already True, so next IN_ZONE cycle
                         # will allow entry on confirmation without requiring another leave
                 # Price still outside zone — keep waiting
+
+    def _v2_po3_blocked(self, df_15m) -> bool:
+        """Po3 HARD GATE (G1): manipulation fazında giriş bloklanır.
+
+        smc_v2.po3_gate: false (default) → inert (modül hiç çağrılmaz).
+        UNDEFINED faz bloklamaz (yetersiz veri "manipülasyon var" demek
+        değildir — po3.py docstring'ine bakın).
+        """
+        smc_v2_cfg = self.config.get("smc_v2", {})
+        if not smc_v2_cfg.get("po3_gate", False):
+            return False
+        if df_15m is None or len(df_15m) == 0:
+            return False
+        from engine.smc_v2.po3 import classify_po3_phase, po3_blocks_entry
+        state = classify_po3_phase(df_15m)
+        return po3_blocks_entry(state)
 
     def _ledger_record_signal(self, symbol, latest, *, was_tradeable,
                               htf_bias="", regime=""):
@@ -2200,6 +2257,9 @@ class SafeOrchestrator:
         current_price: float = None,
         df_entry=None,
         ltf_order_blocks=None,
+        ltf_sfps=None,
+        eq_price=None,
+        rsi_value=None,
     ) -> None:
         """Trigger phase: detect new CHoCH events and emit SetupCandidates.
 
@@ -2230,6 +2290,9 @@ class SafeOrchestrator:
                 "anchor_time_axis", False),
             ltf_order_blocks=ltf_order_blocks,
             df_entry=df_entry,
+            ltf_sfps=ltf_sfps,
+            eq_price=eq_price,
+            rsi_value=rsi_value,
         )
         # ── BT-23 ENTRY-DISTANCE GATE (2026-07-26) ──
         # Measured on a 30d / 10-symbol full-pipeline replay (2401 emitted
@@ -2556,6 +2619,9 @@ class SafeOrchestrator:
                 config=SimpleNamespace(
                     min_rr=risk_cfg.get("min_rr", 1.8),
                     fib_ext=self.config.get("fibonacci", {}).get("ext_tp2", 1.618),
+                    # Efloud notları: 2.618/1.272/4.23/1.618 — TP2 fallback'inde
+                    # TP1'in ötesine düşen en yakın extension seçilir.
+                    fib_ext_options=self.config.get("fibonacci", {}).get("ext_tp2_options", []),
                     # BT-19: 0.0 (default) = OFF, identical to previous behaviour.
                     max_tp_gap_r=risk_cfg.get("max_tp_gap_r", 0.0),
                 ),
@@ -2665,6 +2731,8 @@ class SafeOrchestrator:
             entry_setup_source = "OB_RETEST"
         elif zone_source == "BB":
             entry_setup_source = "BB_RETEST"
+        elif zone_source == "EQ_RETEST":
+            entry_setup_source = "EQ_RETEST"
         else:
             entry_setup_source = None  # forward-compat for unknown ZoneSpec sources
 
