@@ -1144,6 +1144,13 @@ class SafeOrchestrator:
                 htf_analysis = self.smc.analyze(df_htf)
                 ltf_swings_h, ltf_swings_l = self.smc.swings(df_entry)
                 ltf_brks = self.smc.structure(df_entry, ltf_swings_h, ltf_swings_l)
+                # OB/BB entry path: CHoCH kırılımını yapan OrderBlock/BreakerBlock
+                # hedef zone olur (bkz. triggers._find_causing_ob). Trend argümanı
+                # yalnızca OB tespitinde kullanılır; yoksa UNDEF geç.
+                ltf_obs = self.smc.order_blocks(
+                    df_entry, ltf_swings_h, ltf_swings_l,
+                    ltf_brks[-1].direction if ltf_brks else "UNDEF",
+                )
             
                 # Build htf_bars from df_htf rows (ordinal axis for swing_anchor).
                 # HtfBar dataclass hoisted to engine.smc_v2.triggers to keep
@@ -1185,6 +1192,10 @@ class SafeOrchestrator:
                     ltf_trigger_idx_min=ltf_trigger_idx_min,
                     current_price=current_price,
                     df_entry=df_entry,
+                    ltf_order_blocks=(
+                        ltf_obs if self.config.get("smc_v2", {}).get("ob_bb_entry", True)
+                        else None
+                    ),
                 )
             
             # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
@@ -2188,6 +2199,7 @@ class SafeOrchestrator:
         ltf_trigger_idx_min: int,
         current_price: float = None,
         df_entry=None,
+        ltf_order_blocks=None,
     ) -> None:
         """Trigger phase: detect new CHoCH events and emit SetupCandidates.
 
@@ -2216,6 +2228,8 @@ class SafeOrchestrator:
             # sonrası config'te açar (`smc_v2.anchor_time_axis: true`).
             anchor_time_axis=self.config.get("smc_v2", {}).get(
                 "anchor_time_axis", False),
+            ltf_order_blocks=ltf_order_blocks,
+            df_entry=df_entry,
         )
         # ── BT-23 ENTRY-DISTANCE GATE (2026-07-26) ──
         # Measured on a 30d / 10-symbol full-pipeline replay (2401 emitted
@@ -2647,6 +2661,10 @@ class SafeOrchestrator:
             entry_setup_source = "FVG_PULLBACK"
         elif zone_source == "OTE":
             entry_setup_source = "OTE_RETRACE"
+        elif zone_source == "OB":
+            entry_setup_source = "OB_RETEST"
+        elif zone_source == "BB":
+            entry_setup_source = "BB_RETEST"
         else:
             entry_setup_source = None  # forward-compat for unknown ZoneSpec sources
 

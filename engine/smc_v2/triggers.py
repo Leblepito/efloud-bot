@@ -17,10 +17,10 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 
-from engine.smc import StructBreak, FVG
+from engine.smc import StructBreak, FVG, OrderBlock
 from engine.smc_v2.setup_state import SetupCandidate
 from engine.smc_v2.swing_anchor import select_htf_swing_anchor
-from engine.smc_v2.zones import build_pullback_zones
+from engine.smc_v2.zones import build_pullback_zones, build_ob_bb_zone
 
 
 def _bar_ts_to_ms(ts: str) -> int:
@@ -83,6 +83,37 @@ def _htf_cutoff_for_break(brk_ms: int, htf_bars: list) -> Optional[int]:
     return max(eligible)
 
 
+def _find_causing_ob(
+    ltf_order_blocks: List[OrderBlock],
+    brk: StructBreak,
+) -> Optional[OrderBlock]:
+    """Find the OrderBlock / BreakerBlock that launched the CHoCH break.
+
+    Price action doctrine: a CHoCH break is the impulsive move that starts
+    from the last opposite-direction block. For a BULL CHoCH (price broke
+    above the last swing high) the launch block is the most recent BEAR OB
+    formed before the break, sitting below the break price. For a BEAR CHoCH
+    it is the most recent BULL OB above the break. A mitigated OB is a
+    Breaker Block — still the retest zone, flagged via became_breaker.
+
+    Returns None when no block qualifies (caller falls back to the
+    FVG/OTE pullback path).
+    """
+    if not ltf_order_blocks:
+        return None
+    candidates = [
+        ob for ob in ltf_order_blocks
+        if ob.idx < brk.idx
+        and (
+            (brk.direction == "BULL" and ob.direction == "BEAR" and ob.top < brk.price)
+            or (brk.direction == "BEAR" and ob.direction == "BULL" and ob.bot > brk.price)
+        )
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda ob: ob.idx)
+
+
 def generate_setup_candidates(
     symbol: str,
     htf_bias: str,
@@ -93,6 +124,8 @@ def generate_setup_candidates(
     ote_band: Tuple[float, float],
     ltf_trigger_idx_min: int,
     anchor_time_axis: bool = False,
+    ltf_order_blocks: Optional[List[OrderBlock]] = None,
+    df_entry: Optional[pd.DataFrame] = None,
 ) -> List[SetupCandidate]:
     """Emit SetupCandidate instances for new aligned CHoCH events.
 
@@ -116,6 +149,12 @@ def generate_setup_candidates(
             config'te (`smc_v2.anchor_time_axis: true`) açana kadar canlı
             davranış değişmez. Haritalama yapılamazsa (ts'siz bar fikstürü)
             toggle ON olsa da legacy'ye düşülür.
+        ltf_order_blocks: LTF (15m) OrderBlock listesi (SMCEngine.order_blocks).
+            Verilirse CHoCH kırılımını yapan OB/BB hedef zone olur (FVG/OTE
+            yerine) ve SL çapası bloğun bir önceki mumu (origin) olur.
+            None → legacy FVG/OTE yolu.
+        df_entry: LTF DataFrame — OB origin mumunun low/high'ını okumak için.
+            ltf_order_blocks verilirken zorunlu; yoksa OB/BB yolu atlanır.
 
     Returns:
         List of new SetupCandidate instances (state=AWAITING_PULLBACK,
@@ -143,6 +182,35 @@ def generate_setup_candidates(
 
         # Map BULL → LONG, BEAR → SHORT
         direction = "LONG" if brk.direction == "BULL" else "SHORT"
+
+        # ── OB/BB entry path (price action doctrine) ──
+        # CHoCH kırılımını yapan OrderBlock/BreakerBlock varsa hedef zone o
+        # bloktur; SL çapası bloğun BİR ÖNCEKİ mumudur (origin mum). Böylece
+        # işleme CHoCH çizgisinden değil, kırılımı başlatan bloktan girilir
+        # ve stop, bloğun altındaki/üstündeki origin mumuna dayanır.
+        causing_ob = _find_causing_ob(ltf_order_blocks, brk) if ltf_order_blocks else None
+        if causing_ob is not None and df_entry is not None and causing_ob.idx - 1 >= 0:
+            zone = build_ob_bb_zone(causing_ob)
+            origin = df_entry.iloc[causing_ob.idx - 1]
+            # LONG: SL origin mumun LOW'unun altına; SHORT: HIGH'inin üstüne.
+            # calc_sl min(zone.low, anchor) / max(zone.high, anchor) yaptığı
+            # için anchor'ı origin mumun uç fiyatı olarak vermek yeterli.
+            anchor = float(origin["low"]) if direction == "LONG" else float(origin["high"])
+            out.append(SetupCandidate(
+                symbol=symbol,
+                direction=direction,
+                trigger_bar_ts=_bar_ts_to_ms(brk.ts),
+                trigger_price=brk.price,
+                htf_bias=htf_bias,
+                target_zone=zone,
+                htf_swing_anchor=anchor,
+                bars_waited=0,
+                state="AWAITING_PULLBACK",
+                confluence_score=0,
+                reasons=[f"CHoCH {brk.direction} aligned with HTF {htf_bias}",
+                         f"entry from {zone.source} retest (origin candle {causing_ob.idx - 1})"],
+            ))
+            continue
 
         # Select structural SL anchor (most-recent-unbroken HTF swing).
         # W2/C1: trigger_idx HTF ordinal ekseninde olmalı; legacy brk.idx

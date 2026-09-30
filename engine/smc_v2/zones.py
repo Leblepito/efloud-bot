@@ -20,7 +20,7 @@ class ZoneSpec:
     """A pullback target region."""
     low: float
     high: float
-    source: Literal["HTF_FVG", "OTE"]
+    source: Literal["HTF_FVG", "OTE", "OB", "BB"]
 
 
 def build_pullback_zones(
@@ -72,3 +72,19 @@ def build_pullback_zones(
 def is_price_in_zone(price: float, zone: ZoneSpec) -> bool:
     """Inclusive membership check."""
     return zone.low <= price <= zone.high
+
+
+def build_ob_bb_zone(ob) -> ZoneSpec:
+    """Build a ZoneSpec from an OrderBlock / BreakerBlock.
+
+    The OB/BB that caused a CHoCH break is the retest zone for the pullback
+    entry (price action doctrine: enter from the block that launched the
+    move, not at the CHoCH line). A mitigated OB (price traded through it
+    after formation) is a Breaker Block — still a valid retest zone, but
+    flagged as such so telemetry can distinguish the two.
+    """
+    return ZoneSpec(
+        low=float(ob.bot),
+        high=float(ob.top),
+        source="BB" if getattr(ob, "became_breaker", False) else "OB",
+    )

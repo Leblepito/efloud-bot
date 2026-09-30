@@ -112,6 +112,12 @@ smc_v2:
   confirm_last_bar_only: false  # C2: yalnız son kapanmış bar engulfing onayı
                                 #     (stale onay biter)
 
+  # OB/BB entry (2026-09-30, operatör onayı): CHoCH kırılımı olur olmaz
+  # kırılım çizgisinden işleme girmek yerine, kırılımı YAPAN OrderBlock /
+  # BreakerBlock bölgesinden girilir; SL çapası bloğun bir önceki mumu
+  # (origin mum) olur. OB/BB bulunamazsa legacy FVG/OTE yolu korunur.
+  ob_bb_entry: true
+
   # BT-23 (2026-07-26): emit anında hedef bölgenin YAKIN kenarı 15m Wilder
   # ATR(14)'ün bu katından uzaksa setup hiç açılmaz. 30g/10 sembol tam pipeline
   # replay: 4.0 ATR ötesinde 2401 setup'ın HİÇBİRİ CONFIRMED olmadı (1400 ölü
