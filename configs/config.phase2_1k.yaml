@@ -153,7 +153,7 @@ smc_v2:
   # doldurup expire olur. Bu anahtar bolgenin UZAK kenarini olcer (bolge
   # genisliginden bagimsiz): fiyat uzak kenari bu kadar ATR'den fazla gectiyse
   # setup acilmaz. 0.5 = yarim ATR tolerans. Anahtar YOKSA kapi kapali.
-  max_zone_overshoot_atr: 0.5
+  max_zone_overshoot_atr: 2.0
 
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:
@@ -288,6 +288,12 @@ safety:
   adx_trend_threshold: 25
   adx_range_threshold: 20
   volatile_atr_mult: 2.5
+  # 2026-10-01 OPERATÖR: allow_volatile_entries açıldı. 2026-10-01 günü rejim
+  # kapısı 119 kez VOLATILE blokajı yaptı (atr_ratio>2.5 VEYA atr_ratio>1.2+BB
+  # genişlemesi) — bot gün boyunca yalnız 1 pozisyon açabildi. Config "agresif"
+  # etiketli; SMC pullback stratejisi (OB/BB retest + likidite çizgisi SL) zaten
+  # volatil piyasa için tasarlandı. Daily %10 / weekly %25 limitler korumada.
+  allow_volatile_entries: true
   # C3 (default OFF): true → the ML regime model may overwrite the deterministic
   # regime that feeds the entry gate (can_open_new_position). FALSE = ML advisory/
   # log-only. Flip true ONLY after forward-labels training + a regime-conditioned
