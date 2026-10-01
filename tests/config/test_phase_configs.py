@@ -74,6 +74,15 @@ def test_prod_config_breaker_calibration_consistent():
     start = sb["starting_balance"]
     emerg = sb["emergency_balance_threshold"]
     daily = sb["daily_loss_limit_pct"]
+    # OPERATOR DECISION (2026-10-01): emerg == 0 means the absolute-balance HALT
+    # is INTENTIONALLY DISABLED ($360 eşiği bakiye $358.10'e düşünce bot'u kalıcı
+    # HALTED yaptı; HALTED auto-resume olmadığı için operatör kaldırılmasını
+    # emretti). Günlük/haftalık % limitler hâlâ devrede ve aşağıdan doğrulanır.
+    if emerg == 0:
+        assert daily > 0 and sb["weekly_drawdown_limit_pct"] > 0, (
+            "emergency disabled (0) — daily/weekly % breakers MUST remain active"
+        )
+        return
     # (a) emergency must sit BELOW starting_balance — else the breaker HALTs on the
     #     first balance-fetch cycle (emerg 1800 vs a $1000 wallet => instant halt).
     assert emerg < start, (

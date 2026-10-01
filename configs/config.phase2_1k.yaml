@@ -320,7 +320,7 @@ safety:
   # izlenecek — "SL too wide" log satırı say.
   reject_wide_sl: true
 
-  emergency_balance_threshold: 360    # 2026-09-28: Bakiye $360 altı → HALT (~%10.8 kayıp, $403.55 cüzdana göre; aynı oran $1363/$1216 baseline'ından taşındı).
+  emergency_balance_threshold: 0      # 2026-10-01 OPERATÖR: acil bakiye HALTI KALDIRILDI. 0 = devre dışı (breaker.check: balance < 0 mümkün değil). Gerekçe: bakiye $358.10'e düşünce $360 eşiği bot'u kalıcı HALTED yaptı — HALTED auto-resume olmadigi için restart da açmıyor, manual reset gerekiyor. Daily (%10) ve weekly (%25) breaker kontrolleri DEVREDE.
   reserve_balance: 0                   # Tüm bakiye kullanılabilir
 
   min_seconds_between_symbol_fetches: 0.5

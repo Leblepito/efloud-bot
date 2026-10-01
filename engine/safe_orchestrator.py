@@ -1422,6 +1422,17 @@ class SafeOrchestrator:
                     reasons.append(f"regime={regime_analysis.regime}")
                 log.info(f"🚫 Trading disabled: {', '.join(reasons)}")
             
+            elif signals and self._v2_entry_active(symbol):
+                # OPERATOR FIX (2026-10-01): v2 (OB/BB pullback) path owns this
+                # symbol. The v1 signals path fires a MARKET entry the instant a
+                # CHoCH appears — the "anında giriş" behaviour the operator wants
+                # gone. v1 is MUTED here; entry comes only via the v2 state
+                # machine (AWAITING_PULLBACK → zone retest → CONFIRMED → limit).
+                log.info(
+                    f"🔕 [{symbol}] v1 signal suppressed — v2 pullback path owns "
+                    f"this symbol (waiting for OB/BB retest, SL at liquidity line)"
+                )
+
             elif signals:
                 latest = signals[-1]
                 # === Runtime Agent Team pre-review (canonical A4) ===
@@ -2174,6 +2185,32 @@ class SafeOrchestrator:
                         # Note: has_left_zone is already True, so next IN_ZONE cycle
                         # will allow entry on confirmation without requiring another leave
                 # Price still outside zone — keep waiting
+
+    def _v2_entry_active(self, symbol: str) -> bool:
+        """True when the v2 (OB/BB pullback) entry path OWNS this symbol.
+
+        OPERATOR FIX (2026-10-01): the v1 signals path and the v2 setup path ran
+        in PARALLEL. v1 fires a MARKET entry the instant a CHoCH signal appears,
+        which is exactly the "girdiği an işleme giriyor" behaviour the operator
+        wants gone — the v2 path is the one that waits for the pullback into the
+        OB/BB block and stops below the liquidity (swing) line. When v2 is live
+        for a symbol, v1 must NOT place entries for it.
+
+        "Live for this symbol" reuses the SAME conditions as _place_v2_entry_order
+        (explicit whitelist membership + smc_v2_shadow:false), so the two paths
+        can never disagree: a symbol v1 is muted on is guaranteed to be a symbol
+        v2 will actually execute on. Wildcard '*' is shadow-only (never LIVE per
+        H2 fail-closed), so it does NOT mute v1.
+        """
+        if self.setup_state_store is None:
+            return False
+        engine_cfg = self.config.get("engine", {})
+        whitelist_raw = engine_cfg.get("smc_v2_symbols", [])
+        if not isinstance(whitelist_raw, list):
+            return False
+        if bool(engine_cfg.get("smc_v2_shadow", True)):
+            return False
+        return symbol in whitelist_raw
 
     def _v2_po3_blocked(self, df_15m) -> bool:
         """Po3 HARD GATE (G1): manipulation fazında giriş bloklanır.
