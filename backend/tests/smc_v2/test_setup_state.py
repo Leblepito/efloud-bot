@@ -213,10 +213,11 @@ class TestPerSymbolCap:
     """add(c) returns False (and does not append) when the per-symbol cap
     of active candidates is reached. Default cap is 3."""
 
-    def _make(self, symbol, state="AWAITING_PULLBACK"):
+    def _make(self, symbol, state="AWAITING_PULLBACK", trigger_ts=None):
         from engine.smc_v2.setup_state import SetupCandidate
         return SetupCandidate(
-            symbol=symbol, direction="SHORT", trigger_bar_ts=1700000000000,
+            symbol=symbol, direction="SHORT",
+            trigger_bar_ts=trigger_ts if trigger_ts is not None else 1700000000000,
             trigger_price=100.0, htf_bias="BEAR",
             target_zone=ZoneSpec(low=105.0, high=110.0, source="HTF_FVG"),
             htf_swing_anchor=115.0, bars_waited=0,
@@ -226,24 +227,49 @@ class TestPerSymbolCap:
     def test_add_under_cap_returns_true(self, tmp_path):
         from engine.smc_v2.setup_state import SetupStateStore
         store = SetupStateStore(tmp_path / "state.json")
-        assert store.add(self._make("BTC/USDT")) is True
-        assert store.add(self._make("BTC/USDT")) is True
-        assert store.add(self._make("BTC/USDT")) is True
+        # Distinct trigger_ts → distinct breaks, all under cap
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000001)) is True
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000002)) is True
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000003)) is True
         # Cap reached; 4th rejected
-        assert store.add(self._make("BTC/USDT")) is False
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000004)) is False
         assert len(store.candidates) == 3
+
+    def test_add_dedup_same_break_rejected(self, tmp_path):
+        """DEDUP (2026-10-02): the trigger phase re-emits the SAME break on
+        every tick while it stays in the recency window. A candidate with the
+        same (symbol, direction, trigger_bar_ts) must be rejected — otherwise
+        one break fills all per-symbol slots and later breaks starve."""
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000001)) is True
+        # Same break re-emitted → dedup reject
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000001)) is False
+        # Different break → accepted
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000002)) is True
+        assert len(store.candidates) == 2
+
+    def test_add_dedup_ignores_terminal_states(self, tmp_path):
+        """A CONFIRMED/EXPIRED candidate with the same trigger_ts does NOT
+        block a fresh re-emission (the old one is gone from the book)."""
+        from engine.smc_v2.setup_state import SetupStateStore
+        store = SetupStateStore(tmp_path / "state.json")
+        store.add(self._make("BTC/USDT", trigger_ts=1700000000001))
+        store.candidates[0].state = "EXPIRED"
+        # Same trigger_ts, but old candidate is terminal → accepted
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000001)) is True
 
     def test_cap_is_per_symbol_not_global(self, tmp_path):
         from engine.smc_v2.setup_state import SetupStateStore
         store = SetupStateStore(tmp_path / "state.json")
         # 3 each for two symbols → 6 total, all accepted
-        for _ in range(3):
-            assert store.add(self._make("BTC/USDT")) is True
-        for _ in range(3):
-            assert store.add(self._make("ETH/USDT")) is True
+        for i in range(3):
+            assert store.add(self._make("BTC/USDT", trigger_ts=1700000000001 + i)) is True
+        for i in range(3):
+            assert store.add(self._make("ETH/USDT", trigger_ts=1700000000001 + i)) is True
         assert len(store.candidates) == 6
         # But a 4th for BTC fails
-        assert store.add(self._make("BTC/USDT")) is False
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000004)) is False
 
     def test_cap_counts_only_active_states(self, tmp_path):
         """If 2 BTC candidates are CONFIRMED/EXPIRED, a new AWAITING_PULLBACK
@@ -255,16 +281,16 @@ class TestPerSymbolCap:
         store.candidates.append(self._make("BTC/USDT", state="CONFIRMED"))
         store.candidates.append(self._make("BTC/USDT", state="EXPIRED"))
         # 1 active + 2 terminal = 3 total, but cap counts 1 active → 2 more allowed
-        assert store.add(self._make("BTC/USDT")) is True
-        assert store.add(self._make("BTC/USDT")) is True
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000002)) is True
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000003)) is True
         # Now 3 active → 4th rejected
-        assert store.add(self._make("BTC/USDT")) is False
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000004)) is False
 
     def test_custom_cap_via_constructor(self, tmp_path):
         from engine.smc_v2.setup_state import SetupStateStore
         store = SetupStateStore(tmp_path / "state.json", max_pending_per_symbol=1)
-        assert store.add(self._make("BTC/USDT")) is True
-        assert store.add(self._make("BTC/USDT")) is False
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000001)) is True
+        assert store.add(self._make("BTC/USDT", trigger_ts=1700000000002)) is False
 
     def test_zero_cap_rejected_at_construction(self, tmp_path):
         """max_pending_per_symbol=0 is a nonsense value (rejects everything

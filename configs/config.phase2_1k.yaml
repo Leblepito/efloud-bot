@@ -143,7 +143,14 @@ smc_v2:
   # cikti" ilerlemesi her 8 barda cope gidiyordu; giris zinciri (bolgeye gir ->
   # cik -> tekrar gir -> engulfing onayi = 4 olay) 2 saate sigmiyor. 24 bar
   # recency_bars: 40'in altinda kalir, yani aday CHoCH hala gecerliyken yasar.
-  pullback_timeout_bars: 24
+  pullback_timeout_bars: 12
+
+  # 2026-10-02 OPERATÖR: max_pending_per_symbol 3 → 6. Dedup fix'i
+  # (setup_state.add) aynı kırılımın slot işgalini engelliyor; cap artık
+  # farklı kırılımların birikmesine izin veriyor. pullback_timeout_bars 24→12:
+  # eski adaylar daha hızlı EXPIRED olup cap'i boşaltıyor (12 bar = 3 saat,
+  # recency_bars 40'ın altında — aday CHoCH hâlâ geçerliyken yaşar).
+  max_pending_per_symbol: 6
 
   # BT-25 adim 2 (2026-07-27): max_entry_dist_atr TEK TARAFLI -- sadece "bolge
   # cok ILERIDE" durumunu eler. Fiyatin coktan ICINDEN GECTIGI bolge negatif

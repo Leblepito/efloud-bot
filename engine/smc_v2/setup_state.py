@@ -109,7 +109,27 @@ class SetupStateStore:
 
         Returns False (and does not append) if the per-symbol cap is reached
         for candidates in active states (AWAITING_PULLBACK, IN_ZONE).
+
+        DEDUP (2026-10-02, operator-approved): the trigger phase re-emits the
+        SAME structure break on every orchestrator tick while it stays inside
+        the recency window (40 bars = 10h). Without dedup, one break filled
+        all 3 per-symbol slots in ~90s and every later break was silently
+        dropped — the bot stopped entering entirely. A candidate is a
+        duplicate when (symbol, direction, trigger_bar_ts) all match an
+        existing active candidate; duplicates are rejected with a debug log.
         """
+        for c in self.candidates:
+            if (
+                c.symbol == candidate.symbol
+                and c.direction == candidate.direction
+                and c.trigger_bar_ts == candidate.trigger_bar_ts
+                and c.state in PERSISTED_STATES
+            ):
+                log.debug(
+                    f"[v2 dedup] {candidate.symbol} {candidate.direction} "
+                    f"trigger_ts={candidate.trigger_bar_ts} already pending — skip"
+                )
+                return False
         active_for_symbol = sum(
             1 for c in self.candidates
             if c.symbol == candidate.symbol and c.state in PERSISTED_STATES
