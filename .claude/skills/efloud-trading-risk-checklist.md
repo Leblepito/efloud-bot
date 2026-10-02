@@ -1,13 +1,13 @@
 ---
 name: efloud-trading-risk-checklist
-description: Mandatory checklist before changing config.yaml risk: or safety: blocks, leverage, position sizing, confluence threshold, or any trading-behavior parameter. Use whenever a parameter that affects live PnL is being tuned.
+description: Mandatory checklist before changing configs/config.phase2_1k.yaml risk: or safety: blocks, leverage, position sizing, confluence threshold, or any trading-behavior parameter. Use whenever a parameter that affects live PnL is being tuned.
 ---
 
 # efloud-trading-risk-checklist
 
-`config.yaml` `risk:` and `safety:` blocks directly determine money lost or
-preserved. A single typo = real loss. Follow this checklist **before** the change
-is committed.
+`configs/config.phase2_1k.yaml` `risk:` and `safety:` blocks directly determine
+money lost or preserved. A single typo = real loss. Follow this checklist
+**before** the change is committed.
 
 ## 1. Impact analysis
 
@@ -26,6 +26,9 @@ Identify which metric the change moves:
 | `max_total_exposure` | Portfolio leverage cap |
 | `leverage` | Liquidation distance |
 | `margin_mode` | Liquidation cascade isolation |
+| `emergency_balance_threshold` | **KALDIRILDI (0)** — mutlak bakiye HALTI yok; koruma % limitlerle |
+| `allow_volatile_entries` | **AÇIK (true)** — volatil rejimde giriş serbest |
+| `max_zone_overshoot_atr` | **2.0** — bölge aşım toleransı |
 
 State explicitly: "This change moves <metric> by <direction>, expected effect <X>."
 
@@ -35,7 +38,7 @@ State explicitly: "This change moves <metric> by <direction>, expected effect <X
   ```bash
   python test_backtest_multi.py
   # or
-  python -m backtest.engine --config config.yaml --period 90d
+  python -m backtest.engine --config configs/config.phase2_1k.yaml --period 90d
   ```
 - Compare: total return, Sharpe, max DD, win rate, profit factor, # trades.
 - If max DD increases or Sharpe drops > 10% — STOP, rethink.

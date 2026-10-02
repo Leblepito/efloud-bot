@@ -12,6 +12,12 @@ Site "Güncellemeler" bölümü bu dosyadan beslenir
 ## [Unreleased]
 
 ### Eklendi
+- **BOS (Break of Structure) kırılımları da giriş üretiyor:** bot artık yalnız
+  CHoCH (dönüş) değil, BOS (trend devamı) kırılımlarında da pozisyon arıyor.
+  Her iki kırılım türü de aynı bekle-onayla akışından geçiyor: HTF bias uyumu →
+  kırılımı yapan OB/BB bölgesi → geri çekilmede retest → engulfing teyidi →
+  limit emir (SL likidite çizgisinde). Büyük pump/devam hareketlerinde fırsat
+  kaçırma azaltıldı.
 - **TradingView "EFloud Signals v2" + "EFloud Strategy v2" (Pine v6):** bot'un
   SMC v2 bekle-onayla durum makinesi artık grafikte — 0-100 confluence skoru,
   Order Block / FVG / OTE bölge zinciri, TP1/TP2 merdiveni, grafik üstü panel.
@@ -28,6 +34,19 @@ Site "Güncellemeler" bölümü bu dosyadan beslenir
 - Türkçe ve Rusça dokümantasyon paketleri (README.tr.md / README.ru.md).
 
 ### Değişti
+- **Acil bakiye HALTI kaldırıldı:** mutlak bakiye eşiği devre dışı bırakıldı
+  (emergency_balance_threshold=0). Fon koruması artık günlük %10 ve haftalık
+  %25 kayıp limitleriyle sağlanıyor; düşük bakiyede bot kalıcı HALTED
+  durumunda kalmıyor.
+- **Volatil rejimde girişler açıldı:** yüksek volatilite (ATR genişlemesi)
+  artık girişleri engellemiyor — SMC pullback stratejisi volatil piyasa için
+  tasarlandığından girişler rejim kapısına takılmıyor.
+- **Bölge aşım toleransı genişletildi:** hedef bölgenin uzak kenarını aşan
+  fiyatlar için tolerans 0.5 → 2.0 ATR'ye çıkarıldı; bölgeye yakın geri
+  çekilmelerde setup'lar daha az eleniyor.
+- **CHoCH sonrası giriş OB/BB bölgesinden:** kırılım anında market emri yerine
+  kırılımı yapan Order Block / Breaker Block bölgesine geri çekilme bekleniyor
+  ve giriş o bölgeden yapılıyor.
 - TradingView "u2algo SMC — Wave 1" göstergesinin yerini gelişmiş
   "EFloud Signals v2" aldı.
 - Aylık performans özeti otomasyonu (yayın öncesi iç doğrulama aşamasında).
