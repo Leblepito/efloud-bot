@@ -1,7 +1,7 @@
-"""Trigger phase for SMC v2: CHoCH detection → SetupCandidate emission.
+"""Trigger phase for SMC v2: CHoCH/BOS detection → SetupCandidate emission.
 
 Per spec §4.3 step 3:
-  For each new CHoCH on LTF (15m) aligned with HTF (4h) bias:
+  For each new CHoCH or BOS on LTF (15m) aligned with HTF (4h) bias:
     1. select_htf_swing_anchor → structural SL reference
     2. build_pullback_zones → target zone (HTF FVG priority, OTE fallback)
     3. Emit SetupCandidate(state=AWAITING_PULLBACK, bars_waited=0)
@@ -9,8 +9,11 @@ Per spec §4.3 step 3:
 Pure function. Returns list of new candidates. Caller (orchestrator) appends
 to SetupStateStore — store.add() enforces per-symbol cap.
 
-Scope limited to CHoCH events (BOS deferred — matches v1 signals.py
-recency-tighter BOS handling, see signals.py:200-204).
+OPERATOR (2026-10-02): BOS (continuation) breaks are now ALSO emitted, not
+just CHoCH (reversal). Previously BOS was deferred to v1 signals.py, but v1
+is muted while v2 owns the symbol — so BOS setups never entered at all and
+big-pump continuations were missed. Both kinds now wait for the pullback
+into the OB/BB block and enter from the retest, SL at the liquidity line.
 """
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
@@ -87,12 +90,12 @@ def _find_causing_ob(
     ltf_order_blocks: List[OrderBlock],
     brk: StructBreak,
 ) -> Optional[OrderBlock]:
-    """Find the OrderBlock / BreakerBlock that launched the CHoCH break.
+    """Find the OrderBlock / BreakerBlock that launched the structure break.
 
-    Price action doctrine: a CHoCH break is the impulsive move that starts
-    from the last opposite-direction block. For a BULL CHoCH (price broke
+    Price action doctrine: a CHoCH/BOS break is the impulsive move that starts
+    from the last opposite-direction block. For a BULL break (price broke
     above the last swing high) the launch block is the most recent BEAR OB
-    formed before the break, sitting below the break price. For a BEAR CHoCH
+    formed before the break, sitting below the break price. For a BEAR break
     it is the most recent BULL OB above the break. A mitigated OB is a
     Breaker Block — still the retest zone, flagged via became_breaker.
 
@@ -154,7 +157,7 @@ def generate_setup_candidates(
     eq_price: Optional[float] = None,
     rsi_value: Optional[float] = None,
 ) -> List[SetupCandidate]:
-    """Emit SetupCandidate instances for new aligned CHoCH events.
+    """Emit SetupCandidate instances for new aligned CHoCH/BOS events.
 
     Args:
         symbol: trading pair
@@ -203,11 +206,11 @@ def generate_setup_candidates(
 
     out: List[SetupCandidate] = []
     for brk in ltf_structure_breaks:
-        # PR #S3c-1 emits only for CHoCH (reversal). BOS (continuation)
-        # deferred — v1 signals.py handles BOS with a tighter recency
-        # window (signals.py:200-204).
-        if brk.kind != "CHoCH":
-            continue
+        # OPERATOR (2026-10-02): BOTH CHoCH (reversal) and BOS (continuation)
+        # breaks emit setups. v1 signals.py is muted while v2 owns the symbol,
+        # so deferring BOS to v1 meant BOS setups never entered — big-pump
+        # continuations were missed. The HTF-bias alignment filter below keeps
+        # BOS trend-aligned by construction (BOS is already in trend direction).
 
         # Aligned with HTF bias only
         if brk.direction != htf_bias:

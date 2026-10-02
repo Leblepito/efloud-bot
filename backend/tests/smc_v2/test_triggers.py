@@ -83,20 +83,41 @@ class TestGenerateSetupCandidatesShort:
         )
         assert candidates == []
 
-    def test_skips_bos_only_choch_in_pr_s3c_1(self):
+    def test_emits_bos_continuation_breaks(self):
+        # OPERATOR (2026-10-02): BOS (continuation) breaks now emit setups too.
+        # v1 signals.py is muted while v2 owns the symbol, so deferring BOS to
+        # v1 meant BOS setups never entered — big-pump continuations missed.
         from engine.smc_v2.triggers import generate_setup_candidates
         ltf_brks = [
             StructBreak(kind="BOS", direction="BEAR", price=100.0,
                         idx=25, ts="t25", broken_level=95.0),
         ]
+        htf_swings = {
+            "swing_highs": [
+                Swing(price=120.0, idx=10, ts="t10", is_high=True),
+            ],
+            "swing_lows": [],
+        }
+        htf_bars = [
+            FakeBar(ordinal=15, high=115, low=100),
+            FakeBar(ordinal=20, high=118, low=105),
+        ]
+        htf_fvgs = [
+            FVG(top=115.0, bot=110.0, idx=12, ts="t12", direction="BULL"),
+        ]
         candidates = generate_setup_candidates(
             symbol="BTC/USDT", htf_bias="BEAR",
             ltf_structure_breaks=ltf_brks,
-            htf_swings={"swing_highs": [], "swing_lows": []},
-            htf_bars=[], htf_fvgs=[], ote_band=(0.0, 0.0),
+            htf_swings=htf_swings,
+            htf_bars=htf_bars,
+            htf_fvgs=htf_fvgs,
+            ote_band=(105.0, 108.0),
             ltf_trigger_idx_min=20,
         )
-        assert candidates == []
+        assert len(candidates) == 1
+        assert candidates[0].direction == "SHORT"
+        assert candidates[0].state == "AWAITING_PULLBACK"
+        assert candidates[0].target_zone.source == "HTF_FVG"
 
     def test_skips_stale_choch_before_trigger_window(self):
         from engine.smc_v2.triggers import generate_setup_candidates
@@ -198,7 +219,7 @@ class TestMultipleBreaks:
             htf_fvgs=htf_fvgs, ote_band=ote_band,
             ltf_trigger_idx_min=20,
         )
-        assert len(candidates) == 2
+        assert len(candidates) == 3
         assert all(c.direction == "SHORT" for c in candidates)
 
 
