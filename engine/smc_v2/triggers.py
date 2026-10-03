@@ -23,7 +23,7 @@ import pandas as pd
 from engine.smc import StructBreak, FVG, OrderBlock, SFP
 from engine.smc_v2.setup_state import SetupCandidate
 from engine.smc_v2.swing_anchor import select_htf_swing_anchor
-from engine.smc_v2.zones import build_pullback_zones, build_ob_bb_zone
+from engine.smc_v2.zones import build_pullback_zones, build_ob_bb_zone, ZoneSpec
 
 
 def _bar_ts_to_ms(ts: str) -> int:
