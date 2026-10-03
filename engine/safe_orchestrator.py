@@ -2075,6 +2075,7 @@ class SafeOrchestrator:
         log.info(f"[v2-debug] {symbol} tick body: cands={len(self.setup_state_store.candidates)} is_new_bar={is_new_bar}")
 
         for cand in self.setup_state_store.candidates:
+            log.info(f"[v2-debug] {symbol} loop cand={cand.symbol} state={cand.state}")
             if cand.symbol != symbol:
                 continue
             if cand.state not in PERSISTED_STATES:
