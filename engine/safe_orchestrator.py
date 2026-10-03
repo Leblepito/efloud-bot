@@ -2337,6 +2337,7 @@ class SafeOrchestrator:
             ob_bb_zone_atr_pad=self.config.get("smc_v2", {}).get(
                 "ob_bb_zone_atr_pad", 0.0),
         )
+        log.info(f"[v2-debug] {symbol} emit: bias={htf_bias} brks={len(ltf_structure_breaks)} obs={len(ltf_order_blocks) if ltf_order_blocks else 0} idx_min={ltf_trigger_idx_min} new={len(new_candidates)}")
         # ── BT-23 ENTRY-DISTANCE GATE (2026-07-26) ──
         # Measured on a 30d / 10-symbol full-pipeline replay (2401 emitted
         # setups): NOT ONE setup whose target zone was further than 4.0x the
