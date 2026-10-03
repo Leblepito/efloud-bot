@@ -133,7 +133,7 @@ smc_v2:
   # cap_dropped 3256->1010, CONFIRMED 594->597 (hiçbir sembolde kayıp yok).
   # 6.0 seçildi (4.0 değil): uçurum 4.0'da ölçüldü, 1.5x pay bırakıldı.
   # 0.0 = kapalı (diğer configlerin varsayılanı — ölçülmediler).
-  max_entry_dist_atr: 6.0
+  max_entry_dist_atr: 8.0
 
   # BT-25 adim 1 (2026-07-27): pullback bekleme suresi 8 -> 24 bar (6 saat).
   # Kod varsayilani 8 bar; config'te bu anahtar YOKTU, yani canli bot 2 saatte
@@ -160,7 +160,7 @@ smc_v2:
   # doldurup expire olur. Bu anahtar bolgenin UZAK kenarini olcer (bolge
   # genisliginden bagimsiz): fiyat uzak kenari bu kadar ATR'den fazla gectiyse
   # setup acilmaz. 0.5 = yarim ATR tolerans. Anahtar YOKSA kapi kapali.
-  max_zone_overshoot_atr: 2.0
+  max_zone_overshoot_atr: 6.0
 
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:
@@ -224,7 +224,13 @@ risk:
                                       # +110%/DD5.4/PF2.34/WR53.7 (step=8). conf=50 PF
                                       # ustura-ince (fee'siz); conf=80 her metrikte domine.
                                       # docs/audit/03_strategy_review.md (S1).
-  recency_bars: 40
+  # 2026-10-03 OPERATÖR: recency_bars 40 → 168 (42 saat). Canlı teşhis:
+  # BTC'de son 24 saatte 3 BULL + 1 BEAR kırılımı oldu ama hepsi 40 bar (10s)
+  # penceresinin dışında kaldığı için 0 aday üretildi — bot 1400 cycle işleme
+  # girmedi. Kullanıcının price-action notuna göre 15m grafik 3.5 günlük bakış
+  # açısıyla hazırlanmalı; 168 bar (42s) hem "son 24 saat" ihtiyacını karşılar
+  # hem de 3.5 günün yarısı — çok eski kırılımları kabul etmez.
+  recency_bars: 168
   sl_atr_buffer: 0.5
   daily_filter_strict: false
 
