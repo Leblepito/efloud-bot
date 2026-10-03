@@ -2072,6 +2072,7 @@ class SafeOrchestrator:
             self._v2_last_bar_ts = {}
         is_new_bar = self._v2_last_bar_ts.get(symbol) != current_bar_ts
         self._v2_last_bar_ts[symbol] = current_bar_ts
+        log.info(f"[v2-debug] {symbol} tick body: cands={len(self.setup_state_store.candidates)} is_new_bar={is_new_bar}")
 
         for cand in self.setup_state_store.candidates:
             if cand.symbol != symbol:
