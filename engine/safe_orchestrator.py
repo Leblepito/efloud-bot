@@ -1146,6 +1146,7 @@ class SafeOrchestrator:
             # even on no-trade ticks (operator observability).
             if self.setup_state_store is not None:
                 current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
+                log.info(f"[v2-debug] {symbol} advance tick: price={current_price:.2f} bar_ts={current_bar_ts} cands={len(self.setup_state_store.candidates)}")
                 self._advance_setup_state_tick(
                     symbol=symbol,
                     current_price=current_price,
