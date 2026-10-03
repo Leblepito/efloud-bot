@@ -2090,6 +2090,7 @@ class SafeOrchestrator:
                 continue
 
             price_in_zone = is_price_in_zone(current_price, cand.target_zone)
+            log.info(f"[v2-debug] {symbol} cand {cand.direction} state={cand.state} price={current_price:.2f} zone={cand.target_zone.low:.2f}-{cand.target_zone.high:.2f} in_zone={price_in_zone} bars={cand.bars_waited}")
 
             # === AWAITING_PULLBACK state ===
             if cand.state == "AWAITING_PULLBACK":
