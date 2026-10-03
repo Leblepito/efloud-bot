@@ -162,6 +162,14 @@ smc_v2:
   # setup acilmaz. 0.5 = yarim ATR tolerans. Anahtar YOKSA kapi kapali.
   max_zone_overshoot_atr: 6.0
 
+  # 2026-10-03 OPERATÖR: OB/BB zone'ları tek mum genişliğinde (0.1-0.7%) —
+  # fiyat bu dar bölgelere nadiren geri çekiliyor, bot 1400 cycle işleme
+  # giremedi. Kullanıcının notuna göre "EQ'lar spesifik olarak değil alan
+  # olarak güzel çalışır". Zone'u her iki taraftan 0.5 ATR genişlet —
+  # "kırılımı yapan bloktan giriş" prensibi korunur, fiyatın zone'a girme
+  # olasılığı artar. 0.0 = kapalı (değişiklik yok).
+  ob_bb_zone_atr_pad: 0.5
+
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:
   mode: fixed

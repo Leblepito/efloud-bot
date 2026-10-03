@@ -2330,6 +2330,8 @@ class SafeOrchestrator:
             ltf_sfps=ltf_sfps,
             eq_price=eq_price,
             rsi_value=rsi_value,
+            ob_bb_zone_atr_pad=self.config.get("smc_v2", {}).get(
+                "ob_bb_zone_atr_pad", 0.0),
         )
         # ── BT-23 ENTRY-DISTANCE GATE (2026-07-26) ──
         # Measured on a 30d / 10-symbol full-pipeline replay (2401 emitted

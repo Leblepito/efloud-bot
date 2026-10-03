@@ -156,6 +156,7 @@ def generate_setup_candidates(
     ltf_sfps: Optional[List[SFP]] = None,
     eq_price: Optional[float] = None,
     rsi_value: Optional[float] = None,
+    ob_bb_zone_atr_pad: float = 0.0,
 ) -> List[SetupCandidate]:
     """Emit SetupCandidate instances for new aligned CHoCH/BOS events.
 
@@ -231,6 +232,23 @@ def generate_setup_candidates(
         causing_ob = _find_causing_ob(ltf_order_blocks, brk) if ltf_order_blocks else None
         if causing_ob is not None and df_entry is not None and causing_ob.idx - 1 >= 0:
             zone = build_ob_bb_zone(causing_ob)
+            # 2026-10-03 OPERATÖR: OB/BB zone'ları tek mum genişliğinde (0.1-0.7%)
+            # — fiyat bu dar bölgelere nadiren geri çekiliyor, bot 1400 cycle
+            # işleme giremedi. Kullanıcının notuna göre "EQ'lar spesifik olarak
+            # değil alan olarak güzel çalışır". Zone'u her iki taraftan ATR pad
+            # ile genişlet (config: smc_v2.ob_bb_zone_atr_pad, varsayılan 0.0 =
+            # değişiklik yok). "Kırılımı yapan bloktan giriş" prensibi korunur.
+            _pad_atr = float(ob_bb_zone_atr_pad or 0.0)
+            if _pad_atr > 0.0 and df_entry is not None and len(df_entry) >= 15:
+                from engine.smc_v2.atr import wilder_atr
+                _atr = wilder_atr(df_entry, period=14)
+                if _atr and _atr > 0.0:
+                    _pad = _atr * _pad_atr
+                    zone = ZoneSpec(
+                        low=zone.low - _pad,
+                        high=zone.high + _pad,
+                        source=zone.source,
+                    )
             origin = df_entry.iloc[causing_ob.idx - 1]
             # LONG: SL origin mumun LOW'unun altına; SHORT: HIGH'inin üstüne.
             # calc_sl min(zone.low, anchor) / max(zone.high, anchor) yaptığı
