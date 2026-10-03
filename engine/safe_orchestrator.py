@@ -1146,7 +1146,6 @@ class SafeOrchestrator:
             # even on no-trade ticks (operator observability).
             if self.setup_state_store is not None:
                 current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
-                log.info(f"[v2-debug] {symbol} advance tick: price={current_price:.2f} bar_ts={current_bar_ts} cands={len(self.setup_state_store.candidates)}")
                 self._advance_setup_state_tick(
                     symbol=symbol,
                     current_price=current_price,
@@ -2072,10 +2071,8 @@ class SafeOrchestrator:
             self._v2_last_bar_ts = {}
         is_new_bar = self._v2_last_bar_ts.get(symbol) != current_bar_ts
         self._v2_last_bar_ts[symbol] = current_bar_ts
-        log.info(f"[v2-debug] {symbol} tick body: cands={len(self.setup_state_store.candidates)} is_new_bar={is_new_bar}")
 
         for cand in self.setup_state_store.candidates:
-            log.info(f"[v2-debug] {symbol} loop cand={cand.symbol} state={cand.state}")
             if cand.symbol != symbol:
                 continue
             if cand.state not in PERSISTED_STATES:
@@ -2092,7 +2089,6 @@ class SafeOrchestrator:
                 continue
 
             price_in_zone = is_price_in_zone(current_price, cand.target_zone)
-            log.info(f"[v2-debug] {symbol} cand {cand.direction} state={cand.state} price={current_price:.2f} zone={cand.target_zone.low:.2f}-{cand.target_zone.high:.2f} in_zone={price_in_zone} bars={cand.bars_waited}")
 
             # === AWAITING_PULLBACK state ===
             if cand.state == "AWAITING_PULLBACK":
@@ -2337,7 +2333,6 @@ class SafeOrchestrator:
             ob_bb_zone_atr_pad=self.config.get("smc_v2", {}).get(
                 "ob_bb_zone_atr_pad", 0.0),
         )
-        log.info(f"[v2-debug] {symbol} emit: bias={htf_bias} brks={len(ltf_structure_breaks)} obs={len(ltf_order_blocks) if ltf_order_blocks else 0} idx_min={ltf_trigger_idx_min} new={len(new_candidates)}")
         # ── BT-23 ENTRY-DISTANCE GATE (2026-07-26) ──
         # Measured on a 30d / 10-symbol full-pipeline replay (2401 emitted
         # setups): NOT ONE setup whose target zone was further than 4.0x the
