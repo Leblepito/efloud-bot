@@ -169,6 +169,8 @@ smc_v2:
   # "kırılımı yapan bloktan giriş" prensibi korunur, fiyatın zone'a girme
   # olasılığı artar. 0.0 = kapalı (değişiklik yok).
   ob_bb_zone_atr_pad: 0.5
+  origin_swing_lookback: 12
+  ote_zone_entry: true
 
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:

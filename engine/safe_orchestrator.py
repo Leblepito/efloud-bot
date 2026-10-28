@@ -2332,6 +2332,10 @@ class SafeOrchestrator:
             rsi_value=rsi_value,
             ob_bb_zone_atr_pad=self.config.get("smc_v2", {}).get(
                 "ob_bb_zone_atr_pad", 0.0),
+            origin_swing_lookback=int(self.config.get("smc_v2", {}).get(
+                "origin_swing_lookback", 0) or 0),
+            ote_zone_entry=bool(self.config.get("smc_v2", {}).get(
+                "ote_zone_entry", False)),
         )
         # ── BT-23 ENTRY-DISTANCE GATE (2026-07-26) ──
         # Measured on a 30d / 10-symbol full-pipeline replay (2401 emitted

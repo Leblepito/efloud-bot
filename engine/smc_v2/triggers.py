@@ -117,6 +117,27 @@ def _find_causing_ob(
     return max(candidates, key=lambda ob: ob.idx)
 
 
+def _impulse_leg(df_entry, brk, direction, lookback):
+    """Kırılımı başlatan impulsun başlangıç swing'i ve karşı ucu.
+
+    LONG: kırılımdan önceki `lookback` mum + kırılım mumu içindeki en düşük low
+    (impulsun ilk swing low'u / likidite çizgisi), uç = aralıktaki en yüksek high.
+    SHORT: tersi. Dönüş: (origin_price, extreme_price) ya da None.
+    """
+    if df_entry is None or lookback <= 0 or brk.idx <= 0:
+        return None
+    end = min(int(brk.idx) + 1, len(df_entry))
+    start = max(0, int(brk.idx) - int(lookback))
+    if end - start < 2:
+        return None
+    win = df_entry.iloc[start:end]
+    lo = float(win["low"].min())
+    hi = float(win["high"].max())
+    if direction == "LONG":
+        return lo, hi
+    return hi, lo
+
+
 def _sfp_confluence(ltf_sfps, brk) -> tuple:
     """SFP confluence bonusu (0/10) + reason. Efloud notları: "Old low/high
     likidite temizliği olursa SFP aranmalı ve tekrar pozisyon inşasında
@@ -157,6 +178,8 @@ def generate_setup_candidates(
     eq_price: Optional[float] = None,
     rsi_value: Optional[float] = None,
     ob_bb_zone_atr_pad: float = 0.0,
+    origin_swing_lookback: int = 0,
+    ote_zone_entry: bool = False,
 ) -> List[SetupCandidate]:
     """Emit SetupCandidate instances for new aligned CHoCH/BOS events.
 
@@ -254,6 +277,22 @@ def generate_setup_candidates(
             # calc_sl min(zone.low, anchor) / max(zone.high, anchor) yaptığı
             # için anchor'ı origin mumun uç fiyatı olarak vermek yeterli.
             anchor = float(origin["low"]) if direction == "LONG" else float(origin["high"])
+            # OPERATÖR (2026-10-28): SL çapası impulsun BAŞLANGIÇ swing'i
+            # (ilk swing low/high, likidite çizgisi); tek origin mum dar kalıp
+            # wick ile avlanıyordu. origin_swing_lookback>0 ile aktif.
+            _leg = _impulse_leg(df_entry, brk, direction, origin_swing_lookback)
+            if _leg is not None:
+                _o, _x = _leg
+                anchor = min(anchor, _o) if direction == "LONG" else max(anchor, _o)
+                if ote_zone_entry and _x != _o:
+                    _rng = abs(_x - _o)
+                    if direction == "LONG":
+                        _ol, _oh = _x - 0.786 * _rng, _x - 0.618 * _rng
+                    else:
+                        _ol, _oh = _x + 0.618 * _rng, _x + 0.786 * _rng
+                    if _ol <= zone.high and _oh >= zone.low:
+                        zone = ZoneSpec(low=min(zone.low, _ol), high=max(zone.high, _oh),
+                                        source=zone.source)
             # SFP + RSI confluence (Efloud notları) — OB/BB yolunda da geçerli.
             sfp_bonus, sfp_reason = _sfp_confluence(ltf_sfps, brk)
             rsi_bonus, rsi_reason = _rsi_confluence(rsi_value, direction)
@@ -272,6 +311,31 @@ def generate_setup_candidates(
                          f"entry from {zone.source} retest (origin candle {causing_ob.idx - 1})"]
                 + ([sfp_reason] if sfp_reason else [])
                 + ([rsi_reason] if rsi_reason else []),
+            ))
+            continue
+
+        _leg2 = _impulse_leg(df_entry, brk, direction, origin_swing_lookback) if ote_zone_entry else None
+        if _leg2 is not None and _leg2[0] != _leg2[1]:
+            _o, _x = _leg2
+            _rng = abs(_x - _o)
+            if direction == "LONG":
+                _zl, _zh = _x - 0.786 * _rng, _x - 0.618 * _rng
+            else:
+                _zl, _zh = _x + 0.618 * _rng, _x + 0.786 * _rng
+            out.append(SetupCandidate(
+                symbol=symbol,
+                direction=direction,
+                trigger_bar_ts=_bar_ts_to_ms(brk.ts),
+                trigger_price=brk.price,
+                htf_bias=htf_bias,
+                target_zone=ZoneSpec(low=_zl, high=_zh, source="OTE"),
+                htf_swing_anchor=_o,
+                bars_waited=0,
+                state="AWAITING_PULLBACK",
+                confluence_score=_sfp_confluence(ltf_sfps, brk)[0]
+                + _rsi_confluence(rsi_value, direction)[0],
+                reasons=[f"CHoCH {brk.direction} aligned with HTF {htf_bias}",
+                         "entry from impulse-leg OTE (origin swing anchor)"],
             ))
             continue
 
