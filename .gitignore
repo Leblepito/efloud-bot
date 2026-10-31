@@ -119,3 +119,4 @@ node_modules
 .claude/
 .agents/
 skills-lock.json
+hermes_tasks/
