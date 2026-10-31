@@ -1,0 +1,48 @@
+{
+  "generated_from": "CHANGELOG.md",
+  "generated_at": "2026-06-11",
+  "entries": [
+    {
+      "date": null,
+      "label": "Yakında",
+      "items": [
+        {
+          "type": "Eklendi",
+          "text": "TradingView \"u2algo SMC — Wave 1\" göstergesi (ücretsiz): çekirdek sinyal mantığı tamamlandı ve derleme doğrulamasından geçti; strateji (backtest) sürümü üzerinde çalışılıyor. Yayın, doğrulama tamamlanınca duyurulacak."
+        },
+        {
+          "type": "Eklendi",
+          "text": "Aylık performans özeti otomasyonu (yayın öncesi iç doğrulama aşamasında)."
+        }
+      ]
+    },
+    {
+      "date": "2026-06-11",
+      "label": "2026-06-11",
+      "items": [
+        {
+          "type": "Eklendi",
+          "text": "Hizmet çalışma süresi (uptime) ölçümü: \"servis aktif\" ve \"trading aktif\" ayrı metrikler olarak izleniyor; güvenlik kaynaklı duraklatmalar (safety suspension) hata olarak değil, ayrı kategori olarak etiketleniyor."
+        },
+        {
+          "type": "Eklendi",
+          "text": "Site \"Güncellemeler\" bölümü (bu liste)."
+        },
+        {
+          "type": "Eklendi",
+          "text": "Hizmet taahhütleri: SLA ve hizmet sürekliliği dokümanları hazırlandı (erken erişim açılmadan önce yayınlanacak)."
+        }
+      ]
+    },
+    {
+      "date": "2026-06-10",
+      "label": "2026-06-10",
+      "items": [
+        {
+          "type": "Eklendi",
+          "text": "Performans kanıt altyapısı: günlük kapanış bazlı, normalize edilmiş equity eğrisi — hesap büyüklüğü hiçbir zaman paylaşılmaz, yalnız kapanmış işlemler sayılır. Doğrulanmış raporlar hazır oldukça sitede yayınlanacak."
+        }
+      ]
+    }
+  ]
+}

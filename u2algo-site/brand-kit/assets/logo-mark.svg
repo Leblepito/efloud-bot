@@ -1,0 +1,105 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#050510" />
+      <stop offset="0.5" stop-color="#0A0A2E" />
+      <stop offset="1" stop-color="#050510" />
+    </linearGradient>
+    <linearGradient id="main" x1="80" y1="400" x2="440" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5E9" />
+      <stop offset="0.5" stop-color="#6366F1" />
+      <stop offset="1" stop-color="#7C3AED" />
+    </linearGradient>
+    <linearGradient id="curveFill" x1="80" y1="420" x2="440" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5E9" stop-opacity="0.12" />
+      <stop offset="0.5" stop-color="#6366F1" stop-opacity="0.06" />
+      <stop offset="1" stop-color="#7C3AED" stop-opacity="0.02" />
+    </linearGradient>
+    <linearGradient id="curveStroke" x1="80" y1="400" x2="440" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5E9" stop-opacity="0.2" />
+      <stop offset="0.3" stop-color="#0EA5E9" stop-opacity="0.7" />
+      <stop offset="0.7" stop-color="#6366F1" stop-opacity="0.7" />
+      <stop offset="1" stop-color="#7C3AED" stop-opacity="0.4" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="peakGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)" />
+
+  <!-- Subtle grid -->
+  <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+    <path d="M32 0V32H0" fill="none" stroke="white" stroke-opacity="0.02" stroke-width="0.5" />
+  </pattern>
+  <rect width="512" height="512" rx="96" fill="url(#grid)" />
+
+  <!-- Rising curve — the core visual element -->
+  <path
+    d="M 60 400 C 100 396, 140 385, 180 360 C 230 328, 270 275, 310 220 C 340 178, 375 145, 420 110 C 440 96, 452 88, 458 84"
+    stroke="url(#curveStroke)"
+    stroke-width="3"
+    fill="none"
+    stroke-linecap="round"
+  />
+
+  <!-- Area fill under curve -->
+  <path
+    d="M 60 400 C 100 396, 140 385, 180 360 C 230 328, 270 275, 310 220 C 340 178, 375 145, 420 110 C 440 96, 452 88, 458 84 L 458 420 L 60 420 Z"
+    fill="url(#curveFill)"
+  />
+
+  <!-- u character — positioned on the curve's lower section -->
+  <text
+    x="100"
+    y="340"
+    font-family="'Inter','Segoe UI',system-ui,-apple-system,sans-serif"
+    font-size="180"
+    font-weight="200"
+    fill="white"
+    fill-opacity="0.95"
+    filter="url(#glow)"
+  >u</text>
+
+  <!-- Superscript 2 — riding the curve upward -->
+  <text
+    x="268"
+    y="215"
+    font-family="'Inter','Segoe UI',system-ui,-apple-system,sans-serif"
+    font-size="80"
+    font-weight="700"
+    fill="white"
+    fill-opacity="0.95"
+  >2</text>
+
+  <!-- Peak indicator — glowing dot at curve apex -->
+  <g filter="url(#peakGlow)">
+    <circle cx="458" cy="84" r="6" fill="#7C3AED" opacity="0.9" />
+  </g>
+  <circle cx="458" cy="84" r="3" fill="white" opacity="0.9" />
+
+  <!-- Subtle brand watermark -->
+  <text
+    x="256"
+    y="460"
+    font-family="'Inter','Segoe UI',system-ui,-apple-system,sans-serif"
+    font-size="22"
+    font-weight="300"
+    fill="white"
+    fill-opacity="0.08"
+    text-anchor="middle"
+    letter-spacing="8"
+  >ALGO</text>
+</svg>

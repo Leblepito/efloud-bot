@@ -76,6 +76,7 @@ configs/     Bot config'leri (phase2_1k = canlı, testnet = deneme)
 deploy/      Caddy, deploy/setup scriptleri, .env örnekleri, yedekleme
 ops/         Alerter (Telegram), overseer, günlük rapor
 scripts/     Rutinler (scripts/routines), sosyal medya pipeline'ı, yardımcı araçlar
+u2algo-site/ Pazarlama sitesi (Railway servisi `u2algo-site`, root dir /u2algo-site)
 pine/        TradingView Pine Script v6 göstergeleri
 tests/, backend/tests/   pytest testleri
 ```

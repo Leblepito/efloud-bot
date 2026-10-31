@@ -120,3 +120,4 @@ node_modules
 .agents/
 skills-lock.json
 hermes_tasks/
+.env.railway

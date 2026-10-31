@@ -1,0 +1,54 @@
+<svg width="180" height="44" viewBox="0 0 180 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="h-grad" x1="0" y1="44" x2="50" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5E9" />
+      <stop offset="0.5" stop-color="#6366F1" />
+      <stop offset="1" stop-color="#7C3AED" />
+    </linearGradient>
+    <linearGradient id="h-curve" x1="0" y1="36" x2="44" y2="4" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5E9" stop-opacity="0.6" />
+      <stop offset="1" stop-color="#7C3AED" stop-opacity="0.6" />
+    </linearGradient>
+  </defs>
+
+  <!-- Mini rising curve behind u² -->
+  <path
+    d="M 2 36 C 8 35, 14 32, 20 27 C 26 22, 30 16, 36 10 C 39 7, 41 5, 43 4"
+    stroke="url(#h-curve)"
+    stroke-width="1.5"
+    fill="none"
+    stroke-linecap="round"
+  />
+
+  <!-- u character -->
+  <text
+    x="4" y="33"
+    font-family="'Inter','Segoe UI',system-ui,-apple-system,sans-serif"
+    font-size="30"
+    font-weight="200"
+    fill="url(#h-grad)"
+  >u</text>
+
+  <!-- Superscript 2 -->
+  <text
+    x="24" y="18"
+    font-family="'Inter','Segoe UI',system-ui,-apple-system,sans-serif"
+    font-size="14"
+    font-weight="700"
+    fill="url(#h-grad)"
+  >2</text>
+
+  <!-- Peak dot -->
+  <circle cx="43" cy="4" r="2" fill="#7C3AED" opacity="0.8" />
+
+  <!-- Algo text -->
+  <text
+    x="48" y="32"
+    font-family="'Inter','Segoe UI',system-ui,-apple-system,sans-serif"
+    font-size="26"
+    font-weight="600"
+    fill="white"
+    fill-opacity="0.92"
+    letter-spacing="-0.5"
+  >Algo</text>
+</svg>

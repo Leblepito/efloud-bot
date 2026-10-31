@@ -78,7 +78,7 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
    - Bug fix: Instagram `render_promo_card` import hatası, YouTube `video_path=None`
    - Test: 229 test, sıfır regresyon
 
-2. **u2algo-site & Railway Servisi** (2026-10-31: bu repodan çıkarıldı; ayrı repoya taşınması Hermes görevi — `hermes_tasks/2026-10-31-repo-sync.md`):
+2. **u2algo-site & Railway Servisi** (Railway root dir `/u2algo-site`; bu repoda KALMALI):
    - Next.js 15 ve Node.js 20 tabanlı pazarlama sayfası Railway üzerinde `considerate-intuition` projesi (`u2algo-site` servisi) altında yayındadır.
    - Canlı URL: `https://u2algo-site-production.up.railway.app`
 
