@@ -246,8 +246,6 @@ A: AUTOSTART=0 — bilinçli tasarım. `POST /api/bot/start` ile başlat (bkz. �
 |---|---|
 | `HERMES.md` | Operatör kılavuzu (deploy, config, incident) |
 | `CLAUDE.md` | Proje belleği, mimari, Pine Script kuralları |
-| `RISK_MAP.md` | Risk haritası |
-| `MAINNET_DEPLOY_GUIDE.md` | Mainnet deploy prosedürü |
 | `HETZNER_DEPLOYMENT_CHECKLIST.md` | Hetzner deploy checklist |
 | `docs/runbooks/` | Operasyon runbook'ları |
 | `skills/social-publishing/SKILL.md` | Sosyal medya pipeline'ı |

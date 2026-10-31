@@ -2,8 +2,6 @@
 
 u2algo'nun müşteri-görünür değişiklikleri bu dosyada listelenir.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · tarihler UTC.
-Site "Güncellemeler" bölümü bu dosyadan beslenir
-(`u2algo-site/scripts/changelog-to-updates.js` → `u2algo-site/updates.json`).
 
 > Not: Bu dosya yalnız ürün/müşteri perspektifinden yazılır — iç operasyon,
 > altyapı ve güvenlik detayları burada yer almaz. Geçmiş performans gelecek
@@ -12,6 +10,14 @@ Site "Güncellemeler" bölümü bu dosyadan beslenir
 ## [Unreleased]
 
 ### Eklendi
+- **Dashboard History sekmesi:** tüm kapanmış işlemler (500'e kadar), win-rate ve net PnL. Geçmiş işlemler artık canlı botun state dizininden okunuyor (önceden boş görünüyordu).
+- **Tek komutla kurulum:** `docker compose up -d --build` (docker-compose.yml + sadeleştirilmiş .env.example, varsayılan testnet).
+- **v2 SL çapası:** impulsun başlangıç swing'i; impulse OTE bölgesi girişi.
+
+### Kaldırıldı
+- Backtest modülü ve araştırma scriptleri, u2algo-site, mobile, deneysel config'ler, eski deploy belgeleri.
+
+### Eklendi (önceki)
 - **BOS (Break of Structure) kırılımları da giriş üretiyor:** bot artık yalnız
   CHoCH (dönüş) değil, BOS (trend devamı) kırılımlarında da pozisyon arıyor.
   Her iki kırılım türü de aynı bekle-onayla akışından geçiyor: HTF bias uyumu →

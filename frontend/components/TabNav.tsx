@@ -1,10 +1,11 @@
 "use client";
 
-export type TabKey = "overview" | "positions" | "research" | "config";
+export type TabKey = "overview" | "positions" | "history" | "research" | "config";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "positions", label: "Positions" },
+  { key: "history", label: "History" },
   { key: "research", label: "Research" },
   { key: "config", label: "Config" },
 ];

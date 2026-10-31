@@ -84,7 +84,6 @@ main.py                              ← entry point
 | Container start | `docker-compose.prod.yml` |
 | Config | `configs/config.phase2_1k.yaml` |
 | Migrations | `backend/migrations/001..008_*.sql` |
-| Backtest CLI | `python -m backtest.cli {single,portfolio,grid,compare}` |
 | v1 signal logic | `engine/signals.py` |
 | v2 trigger (CHoCH+BOS) | `engine/smc_v2/triggers.py` |
 | v2 entry helper | `engine/safe_orchestrator.py:_place_v2_entry_order` |
@@ -307,8 +306,6 @@ docker logs efloud-bot --since 4h > emergency_$(date +%s).log
 - `HERMES.md`: Operatör kılavuzu (bu dosya).
 - `docs/runbooks/`: operasyon runbook'ları (breaker-reset, on-call, disaster-recovery...).
 - `skills/social-publishing/SKILL.md`: Sosyal medya pipeline'ı — tüm AI modellerinin okuyabileceği kalıcı doküman.
-- `MAINNET_DEPLOY_GUIDE.md` + `HETZNER_DEPLOYMENT_CHECKLIST.md`: kurulum ve deploy.
-- `RISK_MAP.md`: risk haritası.
 
 ## 13. Sosyal Medya Yayın Pipeline'ı (YENİ — 2026-07-26)
 

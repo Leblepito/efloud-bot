@@ -279,7 +279,21 @@ def read_journal_history(journal_path: str, limit: int = 100) -> list[dict]:
 
 def _journal_path() -> str:
     import os as _os
-    return _os.environ.get("EFLOUD_TRADE_JOURNAL", "./state/trade_journal.jsonl")
+    env = _os.environ.get("EFLOUD_TRADE_JOURNAL")
+    if env:
+        return env
+    cfg = runner.cfg
+    if not cfg:
+        try:
+            import yaml as _yaml
+            from backend.bot_runner import CONFIG_PATH_DEFAULT
+            with open(_os.environ.get("EFLOUD_CONFIG_PATH", CONFIG_PATH_DEFAULT),
+                      encoding="utf-8") as fh:
+                cfg = _yaml.safe_load(fh) or {}
+        except Exception:
+            cfg = {}
+    state_dir = (cfg.get("operation") or {}).get("state_dir") or "./state"
+    return str(Path(state_dir) / "trade_journal.jsonl")
 
 
 @router.get("/history", dependencies=[Depends(require_auth)])

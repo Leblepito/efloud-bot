@@ -114,7 +114,8 @@ async def test_orders_empty_when_no_bot(client):
 
 
 @pytest.mark.asyncio
-async def test_history_empty_no_db(client):
+async def test_history_empty_no_db(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("EFLOUD_TRADE_JOURNAL", str(tmp_path / "none.jsonl"))
     await client.post("/api/login", json={"password": "test-password-123"})
     r = await client.get("/api/history")
     assert r.status_code == 200

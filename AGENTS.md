@@ -42,6 +42,11 @@ Bot sinyali → chart PNG (ENTRY/SL/TP) → MP4 klip → X/IG/YT paketleri.
 
 Detay: `skills/social-publishing/SKILL.md`
 
+## Kurulum
+
+Yeni kullanıcı: `cp .env.example .env && docker compose up -d --build` (README.md). VPS: `deploy/deploy.sh` + `docker-compose.prod.yml`.
+Backtest modülü 2026-10-31'de kaldırıldı.
+
 ## Test
 
 ```bash

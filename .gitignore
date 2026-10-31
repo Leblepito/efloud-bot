@@ -114,3 +114,8 @@ node_modules
 # repoya girmemeli. .env.testnet.example (secret'siz) tracked kalir.
 .env.testnet
 !.env.testnet.example
+
+# AI agent araçları (lokalde kalır, repoya girmez)
+.claude/
+.agents/
+skills-lock.json
