@@ -449,8 +449,8 @@ def analyze(df: pd.DataFrame, cfg: Optional[LuxConfig] = None) -> LuxResult:
 # Trade model (LuxAlgo yayın görselleri)
 # ═══════════════════════════════════════════════
 #   LONG : bullish kırılımın yarattığı BULL OB'ye geri çekilmede giriş
-#          (discount tarafı), SL OB altı + Strong Low altı,
-#          TP = equilibrium / karşı (BEAR) OB / likidite (EQH, trailing top).
+#          (discount tarafı), SL OB kenarı (+ATR payı calc_sl'de),
+#          TP = karşı FVG / karşı (BEAR) OB / equilibrium / likidite (EQH, trailing top).
 #   SHORT: ayna — "Entry at Premium", SL "Above Strong Highs & Swing OB",
 #          TP "50% level ... at the Equilibrium" ya da karşı BULL OB.
 
@@ -496,14 +496,7 @@ def generate_candidates(
                 continue
             if direction == "SHORT" and ob.bot < z.equilibrium:
                 continue
-        if direction == "LONG":
-            anchor = ob.bot
-            if not brk.internal and lux.strong_low is not None:
-                anchor = min(anchor, lux.strong_low)
-        else:
-            anchor = ob.top
-            if not brk.internal and lux.strong_high is not None:
-                anchor = max(anchor, lux.strong_high)
+        anchor = ob.bot if direction == "LONG" else ob.top
         try:
             trig_ms = int(pd.Timestamp(brk.ts).timestamp() * 1000)
         except (ValueError, TypeError):
@@ -543,6 +536,7 @@ def tp_targets(direction: str, entry: float, sl: float, lux: LuxResult,
     obs = lux.active_obs()
     if direction == "LONG":
         cands += [(ob.bot, "LUX_OB") for ob in obs if ob.bias == BEAR and ob.bot > entry]
+        cands += [(f.bot, "LUX_FVG") for f in lux.active_fvgs() if f.bias == BEAR and f.bot > entry]
         cands += [(e.price_b, "LUX_EQH") for e in lux.equals if e.kind == "EQH" and e.price_b > entry]
         if z is not None:
             if z.equilibrium > entry:
@@ -553,6 +547,7 @@ def tp_targets(direction: str, entry: float, sl: float, lux: LuxResult,
         ok = [x for x in cands if x[0] - entry >= min_dist]
     else:
         cands += [(ob.top, "LUX_OB") for ob in obs if ob.bias == BULL and ob.top < entry]
+        cands += [(f.top, "LUX_FVG") for f in lux.active_fvgs() if f.bias == BULL and f.top < entry]
         cands += [(e.price_b, "LUX_EQL") for e in lux.equals if e.kind == "EQL" and e.price_b < entry]
         if z is not None:
             if z.equilibrium < entry:

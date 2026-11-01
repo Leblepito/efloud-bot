@@ -329,3 +329,14 @@ def test_luxalgo_pullback_timeout_override(tmp_path, lux_on, expired_after):
                                        current_bar_ts=t0 + i * 900_000,
                                        df_15m=_flat())
     assert c.state == "EXPIRED"
+
+
+def test_tp_targets_use_opposite_fvg():
+    res = lx.LuxResult("BULL", "BULL", [], [], [], [lx.LuxFVG(118, 112, 5, "BEAR")],
+                       [], None, None, None)
+    tp1, _, tags = lx.tp_targets("LONG", entry=100, sl=96, lux=res, min_rr=2.0)
+    assert (tp1, tags["tp1_source"]) == (112, "LUX_FVG")
+    res = lx.LuxResult("BEAR", "BEAR", [], [], [], [lx.LuxFVG(88, 82, 5, "BULL")],
+                       [], None, None, None)
+    tp1, _, tags = lx.tp_targets("SHORT", entry=100, sl=104, lux=res, min_rr=2.0)
+    assert (tp1, tags["tp1_source"]) == (88, "LUX_FVG")
