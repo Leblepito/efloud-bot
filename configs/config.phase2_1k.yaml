@@ -194,6 +194,8 @@ smc_v2:
     require_premium_discount: true
     kinds: [CHoCH, BOS]
     tp_mode: luxalgo
+    min_confluence: 1           # OB + >=1 ek konsept (SWING_OB/OTE/EQ/FVG/SWEEP) — Efloud notlari
+    tp_wick_buffer_r: 0.15       # likidite/wick TP hedefi wick uc degil, 0.15R iceride
     pullback_timeout_bars: 48     # entry-TF bar (scalp 4s / mid 12s / long 2g)
     htf: {}
 

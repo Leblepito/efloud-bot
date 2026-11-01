@@ -454,6 +454,54 @@ def analyze(df: pd.DataFrame, cfg: Optional[LuxConfig] = None) -> LuxResult:
 #   SHORT: ayna — "Entry at Premium", SL "Above Strong Highs & Swing OB",
 #          TP "50% level ... at the Equilibrium" ya da karşı BULL OB.
 
+OTE_BAND = (0.618, 0.786)
+FIB_EXT_RATIOS = (1.272, 1.618, 2.618)
+
+
+def _overlaps(lo1: float, hi1: float, lo2: float, hi2: float) -> bool:
+    return lo1 <= hi2 and lo2 <= hi1
+
+
+def zone_confluence(direction: str, brk: "LuxBreak", ob: "LuxOrderBlock",
+                    lux: "LuxResult") -> List[str]:
+    """Efloud notları: "PA konseptleri çoklu değerlendirilmek zorunda".
+
+    OB'nin yanında hangi ek konseptler aynı bölgede çakışıyor:
+      SWING_OB — swing high/low bölgesindeki OB (ara bölge OB'sinden güçlü)
+      OTE      — OB, dealing range'in 0.618-0.786 retracement bandıyla çakışıyor
+      EQ       — OB, range ortalaması (equilibrium) alanıyla çakışıyor
+      FVG      — OB'den sonra oluşan, doldurulmamış aynı yönlü imbalance bölgeyle çakışıyor
+      SWEEP    — OB, kendinden önceki swing pivotunun likiditesini süpürmüş (SFP)
+    """
+    tags: List[str] = []
+    if not brk.internal:
+        tags.append("SWING_OB")
+    z = lux.zones
+    long_ = direction == "LONG"
+    if z is not None:
+        rng = z.top - z.bottom
+        if long_:
+            band = (z.top - rng * OTE_BAND[1], z.top - rng * OTE_BAND[0])
+        else:
+            band = (z.bottom + rng * OTE_BAND[0], z.bottom + rng * OTE_BAND[1])
+        if _overlaps(ob.bot, ob.top, band[0], band[1]):
+            tags.append("OTE")
+        if _overlaps(ob.bot, ob.top, z.eq_low, z.eq_high):
+            tags.append("EQ")
+    want = BULL if long_ else BEAR
+    for f in lux.active_fvgs():
+        if f.bias == want and f.idx >= ob.idx and _overlaps(ob.bot, ob.top, f.bot, f.top):
+            tags.append("FVG")
+            break
+    piv = lux.swing_low_pivots if long_ else lux.swing_high_pivots
+    prior = [p for p in piv if p[0] < ob.idx]
+    if prior:
+        price = prior[-1][1]
+        if (long_ and ob.bot < price) or (not long_ and ob.top > price):
+            tags.append("SWEEP")
+    return tags
+
+
 def generate_candidates(
     symbol: str,
     lux: LuxResult,
@@ -463,6 +511,7 @@ def generate_candidates(
     use_swing: bool = True,
     require_premium_discount: bool = True,
     allowed_kinds=("CHoCH", "BOS"),
+    min_confluence: int = 0,
 ):
     """Kırılım → OB retest SetupCandidate'leri (state=AWAITING_PULLBACK).
 
@@ -497,6 +546,9 @@ def generate_candidates(
             if direction == "SHORT" and ob.bot < z.equilibrium:
                 continue
         anchor = ob.bot if direction == "LONG" else ob.top
+        conf = zone_confluence(direction, brk, ob, lux)
+        if len(conf) < min_confluence:
+            continue
         try:
             trig_ms = int(pd.Timestamp(brk.ts).timestamp() * 1000)
         except (ValueError, TypeError):
@@ -512,15 +564,16 @@ def generate_candidates(
             htf_swing_anchor=float(anchor),
             bars_waited=0,
             state="AWAITING_PULLBACK",
-            confluence_score=10 if not brk.internal else 0,
+            confluence_score=(10 if not brk.internal else 0) + len(conf),
             reasons=[f"LUX {scope} {brk.kind} {brk.direction} aligned with HTF {htf_bias}",
-                     f"entry from LUX {scope} OB [{ob.bot:.8g}-{ob.top:.8g}] (bar {ob.idx})"],
+                     f"entry from LUX {scope} OB [{ob.bot:.8g}-{ob.top:.8g}] (bar {ob.idx})",
+                     f"confluence={'+'.join(conf) if conf else 'NONE'}"],
         ))
     return out
 
 
 def tp_targets(direction: str, entry: float, sl: float, lux: LuxResult,
-               min_rr: float):
+               min_rr: float, wick_buffer_r: float = 0.0):
     """TP1/TP2 — karşı OB yakın kenarı, equilibrium, EQH/EQL, trailing extreme.
 
     TP1 = min_rr×risk'i karşılayan EN YAKIN aday; TP2 = TP1'in ötesindeki
@@ -531,29 +584,32 @@ def tp_targets(direction: str, entry: float, sl: float, lux: LuxResult,
 
     risk = abs(entry - sl)
     min_dist = min_rr * risk
+    buf = max(0.0, wick_buffer_r) * risk
     cands = []
     z = lux.zones
     obs = lux.active_obs()
     if direction == "LONG":
         cands += [(ob.bot, "LUX_OB") for ob in obs if ob.bias == BEAR and ob.bot > entry]
         cands += [(f.bot, "LUX_FVG") for f in lux.active_fvgs() if f.bias == BEAR and f.bot > entry]
-        cands += [(e.price_b, "LUX_EQH") for e in lux.equals if e.kind == "EQH" and e.price_b > entry]
+        cands += [(e.price_b - buf, "LUX_EQH") for e in lux.equals if e.kind == "EQH" and e.price_b - buf > entry]
+        cands += [(p - buf, "LUX_LIQ_HIGH") for _, p in lux.swing_high_pivots if p - buf > entry]
         if z is not None:
             if z.equilibrium > entry:
                 cands.append((z.equilibrium, "LUX_EQUILIBRIUM"))
-            if z.top > entry:
-                cands.append((z.top, "LUX_TRAIL_TOP"))
+            if z.top - buf > entry:
+                cands.append((z.top - buf, "LUX_TRAIL_TOP"))
         cands.sort(key=lambda x: x[0])
         ok = [x for x in cands if x[0] - entry >= min_dist]
     else:
         cands += [(ob.top, "LUX_OB") for ob in obs if ob.bias == BULL and ob.top < entry]
         cands += [(f.top, "LUX_FVG") for f in lux.active_fvgs() if f.bias == BULL and f.top < entry]
-        cands += [(e.price_b, "LUX_EQL") for e in lux.equals if e.kind == "EQL" and e.price_b < entry]
+        cands += [(e.price_b + buf, "LUX_EQL") for e in lux.equals if e.kind == "EQL" and e.price_b + buf < entry]
+        cands += [(p + buf, "LUX_LIQ_LOW") for _, p in lux.swing_low_pivots if p + buf < entry]
         if z is not None:
             if z.equilibrium < entry:
                 cands.append((z.equilibrium, "LUX_EQUILIBRIUM"))
-            if z.bottom < entry:
-                cands.append((z.bottom, "LUX_TRAIL_BOTTOM"))
+            if z.bottom + buf < entry:
+                cands.append((z.bottom + buf, "LUX_TRAIL_BOTTOM"))
         cands.sort(key=lambda x: x[0], reverse=True)
         ok = [x for x in cands if entry - x[0] >= min_dist]
 
@@ -567,4 +623,11 @@ def tp_targets(direction: str, entry: float, sl: float, lux: LuxResult,
     # — ör. OB kenarı == equilibrium — ikinci hedef sayılmaz).
     beyond = [x for x in ok[1:] if (x[0] > tp1 if direction == "LONG" else x[0] < tp1)]
     tp2, s2 = (beyond[0] if beyond else (None, "NONE"))
+    if tp2 is None and z is not None and z.top > z.bottom:
+        rng = z.top - z.bottom
+        exts = [z.bottom + rng * r if direction == "LONG" else z.top - rng * r
+                for r in FIB_EXT_RATIOS]
+        far = [x for x in exts if (x > tp1 if direction == "LONG" else x < tp1)]
+        if far:
+            tp2, s2 = (min(far) if direction == "LONG" else max(far)), "FIB_EXT"
     return tp1, tp2, {"tp1_source": s1, "tp2_source": s2}

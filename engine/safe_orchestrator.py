@@ -1232,6 +1232,7 @@ class SafeOrchestrator:
                         require_premium_discount=bool(
                             _lux_cfg.get("require_premium_discount", True)),
                         allowed_kinds=tuple(_lux_cfg.get("kinds", ["CHoCH", "BOS"])),
+                        min_confluence=int(_lux_cfg.get("min_confluence", 0)),
                     )
                     self._lux_log_scan(symbol, _htf_bias, _lux_ltf, _lux_cands)
 
@@ -2735,7 +2736,8 @@ class SafeOrchestrator:
             _lux_now = _lx.analyze(df_entry, _lx.LuxConfig.from_dict(_lux_cfg))
             _lux_tp = lambda: _lx.tp_targets(  # noqa: E731
                 cand.direction, entry_price, sl, _lux_now,
-                float(risk_cfg.get("min_rr", 1.8)))
+                float(risk_cfg.get("min_rr", 1.8)),
+                wick_buffer_r=float(_lux_cfg.get("tp_wick_buffer_r", 0.0)))
         try:
             tp1, tp2, tp_tags = _lux_tp() if _lux_tp is not None else calc_tp_targets(
                 direction=cand.direction,

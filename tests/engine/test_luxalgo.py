@@ -340,3 +340,38 @@ def test_tp_targets_use_opposite_fvg():
                        [], None, None, None)
     tp1, _, tags = lx.tp_targets("SHORT", entry=100, sl=104, lux=res, min_rr=2.0)
     assert (tp1, tags["tp1_source"]) == (88, "LUX_FVG")
+
+
+def test_confluence_swing_ob_and_fvg_and_filter():
+    df = _down_then_up()
+    res = lx.analyze(df, CFG)
+    base = lx.generate_candidates("X", res, "BULL", 0, require_premium_discount=False)
+    assert base
+    strict = lx.generate_candidates("X", res, "BULL", 0, require_premium_discount=False,
+                                    min_confluence=99)
+    assert strict == []
+    assert all(any(r.startswith("confluence=") for r in c.reasons) for c in base)
+
+
+def test_zone_confluence_tags_ote_fvg_sweep():
+    ob = lx.LuxOrderBlock(104, 100, 10, "", "BULL", False, 11)
+    brk = lx.LuxBreak("CHoCH", "BULL", 110, 5, 12, "", True, ob)
+    res = lx.LuxResult("BULL", "BULL", [brk], [], [ob], [lx.LuxFVG(105, 101, 11, "BULL")],
+                       [], lx.LuxZones(120, 80), None, 80,
+                       swing_low_pivots=[(3, 102.0)])
+    tags = lx.zone_confluence("LONG", brk, ob, res)
+    assert "FVG" in tags and "SWEEP" in tags and "SWING_OB" not in tags
+    assert "OTE" not in tags  # OTE bandi 88.4-95.6 civarinda
+
+
+def test_tp_wick_buffer_and_fib_ext_tp2():
+    res = lx.LuxResult("BULL", "BULL", [], [], [], [], [], lx.LuxZones(110, 90), None, 90,
+                       swing_high_pivots=[(1, 106.0)])
+    tp1, tp2, tags = lx.tp_targets("LONG", entry=100, sl=98, lux=res, min_rr=2.0,
+                                   wick_buffer_r=0.25)
+    assert tp1 == pytest.approx(105.5) and tags["tp1_source"] == "LUX_LIQ_HIGH"
+    assert tags["tp2_source"] in ("LUX_EQUILIBRIUM", "LUX_TRAIL_TOP", "FIB_EXT")
+    res2 = lx.LuxResult("BULL", "BULL", [], [], [], [], [], lx.LuxZones(110, 90), None, 90,
+                        swing_high_pivots=[(1, 106.0)])
+    tp1, tp2, tags = lx.tp_targets("LONG", entry=100, sl=98, lux=res2, min_rr=2.0)
+    assert tp1 == 106.0 and tags["tp2_source"] in ("LUX_TRAIL_TOP", "FIB_EXT")
