@@ -367,3 +367,14 @@ ama fiyat etiketlerini bozduğu için sinyal chart'larında KULLANILMAZ.
 `skills/social-publishing/SKILL.md` — tüm modüller, API'ler, testler, cron pattern'leri.
 
 **Bot canlı, kararlı, kod %100 hazır. Acele yok, risk yok.**
+
+---
+
+## 14. Çoklu ajan düzeni
+
+- **Kilo Code:** orchestrator; görevleri `agents/tasks/` altına yazar ve `agents/TASKBOARD.md` üzerinden takip eder.
+- **Claude:** kod, test, hata düzeltmesi ve inceleme. Hermes kod kusurlarını bulgularla Claude'a devreder; bot kaynak mantığını değiştirmez.
+- **Hermes Agent:** terminal ve operasyon; görevleri okuyup yürütür, doğrular ve sonuçlarını görev dosyasına işler. `hermes_tasks/` yereldir, commit edilmez. `agents/` protokolü varsa `agents/README.md` ve taskboard önceliklidir; yoksa eksikliği bildir, protokol varmış gibi davranma.
+- **Güvenlik:** sır değerleri ve secret içeren çıktı asla raporlanmaz veya commit edilmez. Canlıya dokunan işlemlerde Telegram üzerinden açık kullanıcı onayı, deploy/restart/config/breaker reset öncesi güncel açık pozisyon kontrolü gerekir. Açık pozisyon varsa görev açıkça izin vermedikçe dur ve ayrıca onay iste. `emergency_balance_threshold=0` değişmez.
+- **Sonuç:** secret'sız komutlar, kısaltılmış çıktılar, commit hash ve healthz yanıtı görevde bulunur; doğrulanamayanlar işaretlenir. Aynı komut iki kez başarısız olursa üçüncü kez denenmez, görev blocked yapılır.
+- Repo `skills/` altındaki operasyon rehberleri Hermes skill biçimindedir. Hermes'in bunları otomatik görmesi için ilgili dış skill dizini yapılandırılmalı veya ayrı kurulmalıdır; repo dosyalarının varlığı otomatik yüklemeyi garanti etmez. Bkz. https://hermes-agent.nousresearch.com/docs/user-guide/features/skills.
