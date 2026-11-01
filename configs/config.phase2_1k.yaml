@@ -133,7 +133,7 @@ smc_v2:
   # cap_dropped 3256->1010, CONFIRMED 594->597 (hiçbir sembolde kayıp yok).
   # 6.0 seçildi (4.0 değil): uçurum 4.0'da ölçüldü, 1.5x pay bırakıldı.
   # 0.0 = kapalı (diğer configlerin varsayılanı — ölçülmediler).
-  max_entry_dist_atr: 8.0
+  max_entry_dist_atr: 12.0  # 2026-11-01: LuxAlgo modunda gevsetildi (8.0 -> 12.0); cok SL olursa 8.0 veya 6.0 a geri dusur
 
   # BT-25 adim 1 (2026-07-27): pullback bekleme suresi 8 -> 24 bar (6 saat).
   # Kod varsayilani 8 bar; config'te bu anahtar YOKTU, yani canli bot 2 saatte
