@@ -42,6 +42,12 @@ from .safety import (
 )
 from utils.logging import new_trace_id, set_trace_id, log_event
 
+def _is_lux_cand(cand) -> bool:
+    """LuxAlgo yolundan gelen aday mı? (reasons[0] 'LUX ' ile başlar)"""
+    reasons = getattr(cand, "reasons", None) or []
+    return bool(reasons) and str(reasons[0]).startswith("LUX ")
+
+
 log = logging.getLogger("efloud.safe_orch")
 
 
@@ -1227,6 +1233,7 @@ class SafeOrchestrator:
                             _lux_cfg.get("require_premium_discount", True)),
                         allowed_kinds=tuple(_lux_cfg.get("kinds", ["CHoCH", "BOS"])),
                     )
+                    self._lux_log_scan(symbol, _htf_bias, _lux_ltf, _lux_cands)
 
                 self._emit_setup_candidates(
                     symbol=symbol,
@@ -2117,6 +2124,9 @@ class SafeOrchestrator:
             # on a new bar, so this fires on the same tick it crosses the limit.
             if cand.bars_waited > effective_pullback_timeout_bars:
                 cand.state = "EXPIRED"
+                if _is_lux_cand(cand):
+                    log.info(f"[lux] expired {cand.symbol} {cand.direction} "
+                             f"after {cand.bars_waited} bars (state was waiting for pullback)")
                 continue
 
             price_in_zone = is_price_in_zone(current_price, cand.target_zone)
@@ -2312,6 +2322,29 @@ class SafeOrchestrator:
             log.warning(f"signal_ledger record skipped (best-effort): {e!r}")
             return None
 
+    def _lux_log_scan(self, symbol, htf_bias, lux, cands) -> None:
+        """[lux] scan satırı — yalnız özet DEĞİŞTİĞİNDE basılır (30 sn'lik
+        tick'lerde log seli olmasın). Deploy sonrası her sembol için ilk taramada
+        bir satır görünür: LuxAlgo yolunun çalıştığının kanıtı."""
+        z = lux.zones
+        last = lux.breaks[-1] if lux.breaks else None
+        sig = (htf_bias, lux.swing_trend, lux.internal_trend,
+               last.idx if last else -1, len(cands))
+        seen = getattr(self, "_lux_scan_sig", None)
+        if seen is None:
+            seen = self._lux_scan_sig = {}
+        if seen.get(symbol) == sig:
+            return
+        seen[symbol] = sig
+        last_txt = (f"{'int' if last.internal else 'swing'}-{last.kind}-{last.direction}"
+                    if last else "none")
+        log.info(
+            f"[lux] scan {symbol} htf_bias={htf_bias} ltf_swing={lux.swing_trend} "
+            f"ltf_internal={lux.internal_trend} last_break={last_txt} "
+            f"active_obs={len(lux.active_obs())} cands={len(cands)} "
+            f"eq={(f'{z.equilibrium:.8g}' if z else 'NA')}"
+        )
+
     def _emit_setup_candidates(
         self,
         symbol: str,
@@ -2470,7 +2503,14 @@ class SafeOrchestrator:
             # add() returns False if per-symbol cap reached — silently dropped
             # (matches spec §6 setup_cap rejection counter; orchestrator
             # could log this in a future patch if operator visibility wanted)
-            self.setup_state_store.add(cand)
+            _added = self.setup_state_store.add(cand)
+            if _added is True and _is_lux_cand(cand):
+                _z = cand.target_zone
+                log.info(
+                    f"[lux] setup+ {symbol} {cand.direction} "
+                    f"zone=[{_z.low:.8g}-{_z.high:.8g}] "
+                    f"sl_anchor={cand.htf_swing_anchor:.8g} | {cand.reasons[0]}"
+                )
 
     def _place_v2_entry_order(
         self,
