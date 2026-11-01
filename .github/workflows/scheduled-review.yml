@@ -60,6 +60,11 @@ jobs:
 
       - name: Create auto-fix PR
         if: steps.ruff_fix.outputs.no_changes == 'false'
+        # Never let PR creation abort the run: the daily findings report below
+        # is the primary deliverable. `gh pr create` fails hard when the repo
+        # setting "Allow GitHub Actions to create and approve pull requests"
+        # is off, which previously skipped the report + Hermes trigger.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -122,6 +127,7 @@ jobs:
 
       - name: Create npm fix PR
         if: steps.npm_fix.outputs.no_changes == 'false'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -180,6 +186,7 @@ jobs:
 
       - name: Commit gitleaks baseline
         if: steps.gitleaks_baseline.outputs.NEW == 'true'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -231,11 +238,12 @@ jobs:
       - name: File or update tracking issue
         id: issue_report
         if: >-
+          always() && (
           steps.ruff.outcome == 'failure' ||
           steps.bandit.outcome == 'failure' ||
           steps.pip_audit.outcome == 'failure' ||
           steps.npm_audit.outcome == 'failure' ||
-          steps.gitleaks.outcome == 'failure'
+          steps.gitleaks.outcome == 'failure' )
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -253,7 +261,7 @@ jobs:
 
       # --- Trigger Hermes review agent on the issue (auto-fix attempt) -----
       - name: Trigger Hermes review agent
-        if: steps.issue_report.outputs.issue_number != ''
+        if: always() && steps.issue_report.outputs.issue_number != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
