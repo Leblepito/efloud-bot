@@ -1203,9 +1203,35 @@ class SafeOrchestrator:
                 else:
                     ote_low, ote_high = 0.0, 0.0
             
+                # LuxAlgo SMC senkronu (smc_v2.luxalgo.enabled, default KAPALI):
+                # BOS/CHoCH + OB + premium/discount LuxAlgo tanımlarıyla hesaplanır,
+                # HTF bias LuxAlgo swing trend'idir; adaylar aynı v2 state
+                # machine'den (pullback → IN_ZONE → confirm) geçer.
+                _lux_cfg = self.config.get("smc_v2", {}).get("luxalgo", {}) or {}
+                _lux_cands = None
+                _htf_bias = htf_analysis.get("trend", "UNDEF")
+                if _lux_cfg.get("enabled", False):
+                    from engine.smc_v2 import luxalgo as _lx
+                    _lux_ltf = _lx.analyze(df_entry, _lx.LuxConfig.from_dict(_lux_cfg))
+                    _lux_htf = _lx.analyze(df_htf, _lx.LuxConfig.from_dict(
+                        {**_lux_cfg, **(_lux_cfg.get("htf") or {})}))
+                    _htf_bias = _lux_htf.swing_trend
+                    _lux_cands = _lx.generate_candidates(
+                        symbol=symbol,
+                        lux=_lux_ltf,
+                        htf_bias=_htf_bias,
+                        trigger_idx_min=ltf_trigger_idx_min,
+                        use_internal=bool(_lux_cfg.get("use_internal", True)),
+                        use_swing=bool(_lux_cfg.get("use_swing", True)),
+                        require_premium_discount=bool(
+                            _lux_cfg.get("require_premium_discount", True)),
+                        allowed_kinds=tuple(_lux_cfg.get("kinds", ["CHoCH", "BOS"])),
+                    )
+
                 self._emit_setup_candidates(
                     symbol=symbol,
-                    htf_bias=htf_analysis.get("trend", "UNDEF"),
+                    htf_bias=_htf_bias,
+                    precomputed_candidates=_lux_cands,
                     ltf_structure_breaks=ltf_brks,
                     htf_swings={
                         "swing_highs": htf_analysis.get("swing_highs", []),
@@ -2297,8 +2323,12 @@ class SafeOrchestrator:
         ltf_sfps=None,
         eq_price=None,
         rsi_value=None,
+        precomputed_candidates=None,
     ) -> None:
         """Trigger phase: detect new CHoCH events and emit SetupCandidates.
+
+        precomputed_candidates: verilirse (LuxAlgo yolu) generate_setup_candidates
+        ATLANIR, bu liste aynı emit kapılarından (BT-23/BT-25 + cap) geçer.
 
         Per spec §4.3 step 3. Calls engine.smc_v2.triggers.generate_setup_candidates
         and appends each candidate to self.setup_state_store via store.add()
@@ -2312,7 +2342,8 @@ class SafeOrchestrator:
         # Local import to avoid circular dep with smc_v2 package
         from engine.smc_v2.triggers import generate_setup_candidates
 
-        new_candidates = generate_setup_candidates(
+        new_candidates = precomputed_candidates if precomputed_candidates is not None \
+            else generate_setup_candidates(
             symbol=symbol,
             htf_bias=htf_bias,
             ltf_structure_breaks=ltf_structure_breaks,
@@ -2651,8 +2682,17 @@ class SafeOrchestrator:
             log.info(f"[v2 reject] {cand.symbol}: sl_too_far ({e})")
             return None
 
+        _lux_cfg = self.config.get("smc_v2", {}).get("luxalgo", {}) or {}
+        _lux_tp = None
+        if _lux_cfg.get("enabled", False) and _lux_cfg.get("tp_mode", "luxalgo") == "luxalgo" \
+                and df_entry is not None:
+            from engine.smc_v2 import luxalgo as _lx
+            _lux_now = _lx.analyze(df_entry, _lx.LuxConfig.from_dict(_lux_cfg))
+            _lux_tp = lambda: _lx.tp_targets(  # noqa: E731
+                cand.direction, entry_price, sl, _lux_now,
+                float(risk_cfg.get("min_rr", 1.8)))
         try:
-            tp1, tp2, tp_tags = calc_tp_targets(
+            tp1, tp2, tp_tags = _lux_tp() if _lux_tp is not None else calc_tp_targets(
                 direction=cand.direction,
                 entry_price=entry_price,
                 sl_price=sl,
