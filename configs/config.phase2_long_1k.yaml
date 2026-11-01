@@ -257,3 +257,30 @@ signal_ledger:
 backtest:
   commission_pct: 0.04        # Binance USD-M taker, TEK bacak (round-trip 0.08%)
   funding_pct_per_8h: 0.01    # ortalama simetrik drag (metrics.apply_funding_costs)
+
+# ── SMC v2 ──
+smc_v2:
+  # ── LuxAlgo SMC modu (2026-11-01, operatör kararı: "luxalgo mantığını
+  # kullanalım"). Açıkken v2 setup üretimi (BOS/CHoCH + OB + premium/discount),
+  # HTF bias ve TP hedefleri engine/smc_v2/luxalgo.py'den gelir; efloud
+  # triggers yolu (OB/BB, OTE, FVG, origin swing) devre dışı kalır. Onay mumu,
+  # calc_sl ATR sınırları, BT-23/BT-25 kapıları ve risk/safety aynen geçerli.
+  # ⚠️ NET-cost backtest YAPILMADI (backtest modülü 562a6a3'te repo'dan
+  # kaldırıldı). Geri dönüş: enabled: false (tek satır).
+  luxalgo:
+    enabled: true
+    swing_length: 50
+    internal_length: 5
+    eq_length: 3
+    eq_threshold: 0.1
+    ob_filter: ATR
+    ob_mitigation: HIGHLOW
+    internal_confluence_filter: false
+    fvg_auto_threshold: true
+    use_internal: true
+    use_swing: true
+    require_premium_discount: true
+    kinds: [CHoCH, BOS]
+    tp_mode: luxalgo
+    pullback_timeout_bars: 48     # entry-TF bar (scalp 4s / mid 12s / long 2g)
+    htf: {}

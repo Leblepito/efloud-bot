@@ -273,3 +273,59 @@ def test_default_config_on_500_bar_random_walk_smoke():
         except InsufficientTPDistanceError:
             continue
         assert (tp1 > entry) if c.direction == "LONG" else (tp1 < entry)
+
+
+# ── Canlı aktivasyon (2026-11-01) ────────────────────────────────────────
+
+LIVE_CONFIGS = ["configs/config.phase2_1k.yaml",
+                "configs/config.phase2_long_1k.yaml",
+                "configs/config.phase2_scalp_1k.yaml"]
+
+
+@pytest.mark.parametrize("path", LIVE_CONFIGS)
+def test_live_v2_configs_run_luxalgo_mode(path):
+    import pathlib
+    import yaml
+    root = pathlib.Path(__file__).resolve().parents[2]
+    cfg = yaml.safe_load((root / path).read_text(encoding="utf-8"))
+    assert cfg["engine"]["smc_version"] == "v2"
+    lux = cfg["smc_v2"]["luxalgo"]
+    assert lux["enabled"] is True and lux["tp_mode"] == "luxalgo"
+    assert lx.LuxConfig.from_dict(lux).swing_length == 50
+    assert int(lux["pullback_timeout_bars"]) >= 1
+
+
+def _flat(n=60):
+    return pd.DataFrame({"open": [100.0] * n, "high": [101.0] * n,
+                         "low": [99.0] * n, "close": [100.0] * n})
+
+
+def _far_cand():
+    from engine.smc_v2.setup_state import SetupCandidate
+    from engine.smc_v2.zones import ZoneSpec
+    return SetupCandidate(symbol="X", direction="LONG", trigger_bar_ts=0,
+                          trigger_price=100.0, htf_bias="BULL",
+                          target_zone=ZoneSpec(50.0, 51.0, "OB"),
+                          htf_swing_anchor=49.0, bars_waited=0,
+                          state="AWAITING_PULLBACK", confluence_score=0)
+
+
+@pytest.mark.parametrize("lux_on,expired_after", [(False, 13), (True, 49)])
+def test_luxalgo_pullback_timeout_override(tmp_path, lux_on, expired_after):
+    from engine.safe_orchestrator import SafeOrchestrator
+    from engine.smc_v2.setup_state import SetupStateStore
+    orch = SafeOrchestrator.__new__(SafeOrchestrator)
+    orch.config = {"smc_v2": {"pullback_timeout_bars": 12,
+                              "luxalgo": {"enabled": lux_on,
+                                          "pullback_timeout_bars": 48}}}
+    store = SetupStateStore(path=tmp_path / "c.json")
+    c = _far_cand()
+    store.candidates = [c]
+    orch.setup_state_store = store
+    t0 = 1_700_000_000_000
+    for i in range(expired_after):
+        assert c.state != "EXPIRED", i
+        orch._advance_setup_state_tick(symbol="X", current_price=100.0,
+                                       current_bar_ts=t0 + i * 900_000,
+                                       df_15m=_flat())
+    assert c.state == "EXPIRED"

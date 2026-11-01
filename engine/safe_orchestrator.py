@@ -2068,6 +2068,11 @@ class SafeOrchestrator:
         smc_v2_cfg = self.config.get("smc_v2", {})
         require_confirmation = smc_v2_cfg.get("require_confirmation", True)
         effective_pullback_timeout_bars = smc_v2_cfg.get("pullback_timeout_bars", pullback_timeout_bars)
+        # LuxAlgo modu: swing OB retest'leri efloud zone'larından daha geç gelir;
+        # luxalgo.pullback_timeout_bars verilirse o geçerlidir.
+        _lux_cfg = smc_v2_cfg.get("luxalgo") or {}
+        if _lux_cfg.get("enabled", False) and _lux_cfg.get("pullback_timeout_bars"):
+            effective_pullback_timeout_bars = int(_lux_cfg["pullback_timeout_bars"])
 
         # Po3 HARD GATE (G1): manipulation fazında giriş bloklanır ama setup
         # ÖLMEZ — displacement gelip faz DISTRIBUTION'a dönünce kapı açılır.
