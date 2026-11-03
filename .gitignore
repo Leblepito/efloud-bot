@@ -122,6 +122,8 @@ node_modules
 skills-lock.json
 hermes_tasks/
 .env.railway
+# LLM sağlayıcı anahtarı için yerel taşıma dosyası — VPS'e elle kopyalanır, asla commit edilmez
+.env.openrouter
 
 # Desk working notes (tickets, briefs, journal) — local only
 /desk/
