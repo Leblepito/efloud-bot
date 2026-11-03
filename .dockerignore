@@ -28,3 +28,5 @@ backtest/results/
 Thumbs.db
 # OHLCV parquet cache - build context'e girmesin (GB'larca olabilir)
 cache/*
+**/.venv*
+desk/

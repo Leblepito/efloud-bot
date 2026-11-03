@@ -1,0 +1,9 @@
+{
+  "name": "efloud-desk",
+  "description": "efloud-bot operating desk: specialist roles (market analyst, strategist, risk manager, execution ops, trade reviewer, Pine engineer), SMC/LuxAlgo and ops skills, and a live-write gate hook. Advisory/ops layer only; the deterministic engine remains the only order sender.",
+  "version": "0.1.0",
+  "author": {"name": "AntiGravity Ventures"},
+  "repository": "https://github.com/Leblepito/efloud-bot",
+  "keywords": ["efloud", "smc", "luxalgo", "binance", "trading-desk", "agents"],
+  "hooks": "./hooks/live-write-gate.json"
+}
