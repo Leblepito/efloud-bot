@@ -44,6 +44,49 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## day-trader-skill (MIT)
+
+`scripts/desk/plan_replay.py` and `skills/plan-replay/SKILL.md` are adapted from
+`trader-timemachine` in [day-trader-skill](https://github.com/Jakeschincariol/day-trader-skill)
+by Jake Schincariol (reviewed at `3d0f4ef`), used under the MIT license. Changes:
+Binance USDT-M bars, UTC time-of-day slots instead of NYSE sessions, horizon in bars,
+long and short plans, fees folded into R. The other ten skills target US equities and
+were not imported.
+
+```
+MIT License
+
+Copyright (c) 2026 Jake Schincariol
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Referenced, not vendored
+
+- [TradingAgents](https://github.com/TauricResearch/TradingAgents) (Apache-2.0, Tauric
+  Research) — installed only into an isolated research venv from
+  `requirements-research.txt` (pinned `c454491`) and called by
+  `scripts/desk/tradingagents_brief.py`. No TradingAgents code is copied into this repo.
+- [tradingview-mcp](https://github.com/tradesdontlie/tradingview-mcp) (MIT, tradesdontlie)
+  — installed by the operator on the desktop per `skills/tradingview-mcp/SKILL.md`
+  (pinned `c05b8f5`). No code is copied into this repo.
+
 ## LuxAlgo — Smart Money Concepts (CC BY-NC-SA 4.0)
 
 `engine/smc_v2/luxalgo.py` ports the logic of the TradingView script

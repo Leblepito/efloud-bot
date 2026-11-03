@@ -91,3 +91,25 @@ kök `config.yaml`'da açık, ama **canlı prod config'de (`configs/config.phase
   nedeniyle açılamadı; LuxAlgo mantığı repodaki port'tan (`engine/smc_v2/luxalgo.py`)
   okundu.
 - TradingView Desktop MCP araçları yalnız operatörün masaüstü oturumunda var.
+
+## 7. Ek inceleme (2026-11-03, ikinci tur): tradingview-mcp, day-trader-skill, TradingAgents
+
+Üçü de shallow clone, **hiçbir kodu çalıştırılmadı**; sabitlenen commit'ler aşağıda.
+
+| Repo @ commit | Lisans | Güvenlik bulgusu | Karar |
+| --- | --- | --- | --- |
+| tradesdontlie/tradingview-mcp @ `c05b8f5` | MIT | Kurulumda kod yok (2 bağımlılık). CDP `127.0.0.1:9222`, **kimlik doğrulamasız**. **Yüksek risk:** `ui_evaluate` (oturumu açık TradingView'da keyfi JS), `ui_click`/`ui_keyboard` (Trading Panel dahil her buton), `tv_update` (upstream `main`'e fast-forward = incelenmemiş kod). Paketteki `performance-analyst` agent'ı `tools: "*"`. | Repoya kopyalanmadı. `skills/tradingview-mcp`: sabit commit'le kurulum + riskli araçlar için deny listesi + "TradingView'a broker bağlama" uyarısı + LuxAlgo parity prosedürü. Yalnız operatörün masaüstünde çalışır. |
+| Jakeschincariol/day-trader-skill @ `3d0f4ef` | MIT | Temiz: tek `subprocess` = `pdftotext`; ağ = Yahoo/SEC/House/Nasdaq (salt okuma); gizli talimat/Unicode yok. `trader-broker` IBKR/Alpaca emir gönderir (onaylı). | 11 skill'in 10'u ABD hissesine bağlı (NYSE seansı, ORB, PDT; `trader-risk` kriptoyu bloklar) → alınmadı. **Time Machine** Binance'e uyarlandı: `scripts/desk/plan_replay.py` + `skills/plan-replay` (20 test). efloud'da offline backtest olmadığı için gerçek boşluk dolduruyor. |
+| TauricResearch/TradingAgents @ `c454491` | Apache-2.0 | Emir yürütme yok (analiz + 5'li rating). pickle/eval yok; `subprocess` sadece kendi login'i. ChatGPT OAuth token'ı `~/.tradingagents` 0600 (opsiyonel). CLI `api.tauric.ai` duyurularını çeker (kütüphane çekmez). Haber/Reddit/Stocktwits metni LLM'e girer → prompt injection yüzeyi. **`pandas>=3.0.6` ↔ bizim `pandas==3.0.3` çakışması.** | Bot ortamına/imajına **kurulmadı**. İzole `.venv-research` + `requirements-research.txt` (pinli). Adaptör `scripts/desk/tradingagents_brief.py` (25 test, kütüphane olmadan test edilir) → `desk/briefs/` altına advisory brief + motor bias'ı ile karşılaştırma. Yeni rol `research-analyst`. |
+
+**Agent'ların skill'leri otomatik kullanması:** her agent frontmatter'ında `skills:` listesi var;
+Claude Code bu skill'lerin tam içeriğini agent başlarken bağlama enjekte eder
+(code.claude.com/docs/en/sub-agents → "Preload skills into subagents"). Plugin skill'lerinin
+`skills:` içinde yalın mı `efloud-desk:` önekli mi yazılacağı dokümante değil; yalın ad
+kullanıldı ve her agent'a "yoksa Skill aracıyla çağır" yedeği eklendi.
+`tests/hooks/test_desk_plugin.py` her listelenen skill'in var olduğunu doğrular.
+
+**LuxAlgo lisansı:** TradingView'ı bağlamak lisans sorusunu değiştirmez; lisans metni
+(CC BY-NC-SA 4.0) port'un docstring'inde ve script'in kaynak başlığında zaten var.
+tradingview-mcp'nin buradaki değeri **parity kontrolü** (indikatör çıktısı vs `analyze()`).
+Hukuki karar §5'te açık kalıyor.

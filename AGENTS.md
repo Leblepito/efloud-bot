@@ -36,8 +36,13 @@ Python (CCXT, FastAPI) + TradingView Pine Script v6.
 ## Desk Plugin — çok-ajanlı masa (YENİ 2026-11-03)
 
 Repo kökü bir Claude Code plugin'idir (`efloud-desk`, `.claude-plugin/`): roller
-`agents/` (market-analyst, strategist, risk-manager, execution-ops, trade-reviewer,
-pine-engineer), skill'ler `skills/`, canlı-yazma kapısı `hooks/live_write_gate.py`.
+`agents/` (market-analyst, research-analyst, strategist, risk-manager, execution-ops,
+trade-reviewer, pine-engineer), skill'ler `skills/`, canlı-yazma kapısı
+`hooks/live_write_gate.py`. Her agent kendi skill'lerini `skills:` frontmatter'ı ile
+otomatik yükler. Araştırma araçları: `scripts/desk/plan_replay.py` (Monte Carlo plan
+oranları), `scripts/desk/tradingagents_brief.py` (TradingAgents advisory brief — izole
+`.venv-research`, `requirements-research.txt`). TradingView Desktop MCP:
+`skills/tradingview-mcp/SKILL.md`.
 Tüm roller önce `skills/desk-operating-model/SKILL.md`'yi okur: motor tek emir
 göndericisidir, canlı sistem değişiklikleri ticket + Risk PASS + operatör onayı ister.
 SMC/LuxAlgo referansı: `skills/luxalgo-smc/SKILL.md`.
