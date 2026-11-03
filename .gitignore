@@ -124,6 +124,8 @@ hermes_tasks/
 .env.railway
 # LLM sağlayıcı anahtarı için yerel taşıma dosyası — VPS'e elle kopyalanır, asla commit edilmez
 .env.openrouter
+# Araştırma döngüsü env dosyası (SADECE OPENROUTER_API_KEY + FRED_API_KEY) — asla commit edilmez
+.env.research
 
 # Desk working notes (tickets, briefs, journal) — local only
 /desk/
