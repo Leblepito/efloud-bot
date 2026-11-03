@@ -83,7 +83,7 @@ main.py                              ← entry point
 | FastAPI server | `backend/main.py` (port 8080) |
 | Container start | `docker-compose.prod.yml` |
 | Config | `configs/config.phase2_1k.yaml` |
-| Migrations | `backend/migrations/001..008_*.sql` |
+| Migrations | `backend/migrations/001..015_*.sql` (tek runner: `backend/migrate.py`) |
 | v1 signal logic | `engine/signals.py` |
 | v2 trigger (CHoCH+BOS) | `engine/smc_v2/triggers.py` |
 | v2 entry helper | `engine/safe_orchestrator.py:_place_v2_entry_order` |
