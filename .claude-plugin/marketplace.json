@@ -1,0 +1,13 @@
+{
+  "name": "efloud",
+  "owner": {"name": "AntiGravity Ventures"},
+  "metadata": {"description": "efloud-bot desk plugin", "version": "0.1.0"},
+  "plugins": [
+    {
+      "name": "efloud-desk",
+      "source": "./",
+      "description": "efloud-bot operating desk roles, skills and live-write gate.",
+      "version": "0.1.0"
+    }
+  ]
+}

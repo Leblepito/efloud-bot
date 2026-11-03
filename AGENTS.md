@@ -33,6 +33,19 @@ Python (CCXT, FastAPI) + TradingView Pine Script v6.
 | `engine/smc_v2/triggers.py` | v2 trigger (CHoCH+BOS → SetupCandidate) |
 | `engine/safe_orchestrator.py` | Ana orchestrator (v1 susturma + v2 entry) |
 
+## Desk Plugin — çok-ajanlı masa (YENİ 2026-11-03)
+
+Repo kökü bir Claude Code plugin'idir (`efloud-desk`, `.claude-plugin/`): roller
+`agents/` (market-analyst, strategist, risk-manager, execution-ops, trade-reviewer,
+pine-engineer), skill'ler `skills/`, canlı-yazma kapısı `hooks/live_write_gate.py`.
+Tüm roller önce `skills/desk-operating-model/SKILL.md`'yi okur: motor tek emir
+göndericisidir, canlı sistem değişiklikleri ticket + Risk PASS + operatör onayı ister.
+SMC/LuxAlgo referansı: `skills/luxalgo-smc/SKILL.md`.
+
+Kurulum (Claude Code): `/plugin marketplace add Leblepito/efloud-bot` →
+`/plugin install efloud-desk@efloud`. Tasarım + runtime yol haritası:
+`docs/handoff/2026-11-03-multi-agent-desk-design.md`.
+
 ## Sosyal Medya Pipeline'ı (YENİ 2026-07-26)
 
 Tek komut: `python -m scripts.daily_social_run --date $(date -u +%F)`
