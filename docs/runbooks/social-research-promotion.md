@@ -175,7 +175,5 @@ exist before the PR is merged:
 
 ## References
 
-- Plan: `docs/superpowers/plans/2026-05-28-social-learning-backtest-frontend.md`
-- Integration note: `docs/handoff/2026-05-28_unified-social-learning-hedge-integration.md`
-- Roadmap: `docs/ROADMAP_AI_INTEGRATION.md`
 - Live ops disciplines: `CLAUDE.md` §3, §5, §9
+- Sosyal medya pipeline'ı: `skills/social-publishing/SKILL.md`

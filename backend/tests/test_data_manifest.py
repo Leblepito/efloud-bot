@@ -1,6 +1,4 @@
 """Cache manifest — JSON registry of (symbol, tf) → metadata."""
-import json
-import pytest
 
 from data.manifest import CacheManifest
 

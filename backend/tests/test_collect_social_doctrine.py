@@ -9,8 +9,6 @@ calls in tests, all writes confined to the supplied archive path.
 from __future__ import annotations
 
 import json
-import sys
-import types
 
 import pytest
 

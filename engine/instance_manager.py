@@ -1,11 +1,9 @@
 import logging
-import os
 import uuid
 import asyncio
 import re
 import json
 import time
-from typing import Optional
 
 log = logging.getLogger("efloud.instance")
 

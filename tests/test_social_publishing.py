@@ -231,6 +231,7 @@ class TestHiggsfieldBackend:
     def test_dispatcher_falls_back_to_ffmpeg_when_higgsfield_unavailable(self, tmp_path):
         if not ffmpeg_available():
             pytest.skip("ffmpeg not installed")
+        pytest.importorskip("matplotlib")  # optional dep, see TestRenderTradeChart
         still = render_trade_chart(_levels(), tmp_path / "c.png", fmt="vertical",
                                    candles=_candles())
         path, backend = render_clip(still, tmp_path / "o.mp4", backend="higgsfield",
@@ -241,6 +242,7 @@ class TestHiggsfieldBackend:
 @pytest.mark.skipif(not ffmpeg_available(), reason="ffmpeg not installed")
 class TestFfmpegBackend:
     def test_renders_playable_mp4_with_expected_geometry(self, tmp_path):
+        pytest.importorskip("matplotlib")  # optional dep, see TestRenderTradeChart
         still = render_trade_chart(_levels(), tmp_path / "c.png", fmt="vertical",
                                    candles=_candles())
         out, backend = render_clip(still, tmp_path / "clip.mp4", backend="ffmpeg",

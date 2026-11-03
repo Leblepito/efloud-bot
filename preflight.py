@@ -107,7 +107,7 @@ def main():
 
     print(f"  Key:    set ({len(KEY)} char)")
     print(f"  Secret: set ({len(SEC)} char)")
-    print(f"  ALLOW_MAINNET: 1\n")
+    print("  ALLOW_MAINNET: 1\n")
 
     ex = ccxt.binance({
         "apiKey": KEY,
@@ -133,7 +133,7 @@ def main():
     # 1. Public ping
     try:
         server_time = ex.fetch_time()
-        print(f"  [1/5] Mainnet bağlantı: ✅ (server time OK)")
+        print("  [1/5] Mainnet bağlantı: ✅ (server time OK)")
     except Exception as e:
         print(f"  [1/5] Mainnet bağlantı: ❌ {type(e).__name__}: {e}")
         sys.exit(1)
@@ -144,7 +144,7 @@ def main():
         can_trade = info.get("canTrade", False)
         can_deposit = info.get("canDeposit", False)
         can_withdraw = info.get("canWithdraw", False)
-        print(f"  [2/5] API auth: ✅")
+        print("  [2/5] API auth: ✅")
         print(f"        canTrade:    {can_trade} {'✅' if can_trade else '❌ Futures trading kapalı!'}")
         print(f"        canDeposit:  {can_deposit}")
         print(f"        canWithdraw: {can_withdraw} {'⚠️ AÇIK — kapatman önerilir' if can_withdraw else '✅ kapalı (güvenli)'}")
@@ -204,13 +204,13 @@ def main():
             print(f"  [4/5] Position mode: ✅ {'HEDGE' if is_hedge else 'ONE-WAY'}")
         else:
             if hedge_mode:
-                print(f"  [4/5] Position mode: ⚠️ ONE-WAY — Config'de HEDGE_MODE aktif, fakat hesap One-way modda. "
-                      f"Bot başlatıldığında otomatik olarak HEDGE moda geçmeye çalışacaktır. "
-                      f"(ÖNEMLİ: Hesapta açık emir veya pozisyon varsa geçiş başarısız olur!)")
+                print("  [4/5] Position mode: ⚠️ ONE-WAY — Config'de HEDGE_MODE aktif, fakat hesap One-way modda. "
+                      "Bot başlatıldığında otomatik olarak HEDGE moda geçmeye çalışacaktır. "
+                      "(ÖNEMLİ: Hesapta açık emir veya pozisyon varsa geçiş başarısız olur!)")
             else:
-                print(f"  [4/5] Position mode: ⚠️ HEDGE — Config'de ONE-WAY aktif, fakat hesap Hedge modda. "
-                      f"Bot başlatıldığında otomatik olarak ONE-WAY moda geçmeye çalışacaktır. "
-                      f"(ÖNEMLİ: Hesapta açık emir veya pozisyon varsa geçiş başarısız olur!)")
+                print("  [4/5] Position mode: ⚠️ HEDGE — Config'de ONE-WAY aktif, fakat hesap Hedge modda. "
+                      "Bot başlatıldığında otomatik olarak ONE-WAY moda geçmeye çalışacaktır. "
+                      "(ÖNEMLİ: Hesapta açık emir veya pozisyon varsa geçiş başarısız olur!)")
     except Exception as e:
         print(f"  [4/5] Position mode: ⚠️ kontrol edilemedi ({e})")
 
@@ -225,7 +225,7 @@ def main():
         # ADVISORY preflight check — Binance's own rejection + the startup abort
         # in _enforce_margin_setup are the authoritative guards. Treat a ⚠️ here
         # as inconclusive and verify flatness manually (runbook step 4).
-        print(f"  [5/5] Flat-book gate: ⚠️ pozisyon/emir sorgulanamadı — manuel doğrula")
+        print("  [5/5] Flat-book gate: ⚠️ pozisyon/emir sorgulanamadı — manuel doğrula")
         mode_change_needed = False
     elif not algo_ok:
         # Regular orders/positions counted fine, but the algo-order (SL/TP)

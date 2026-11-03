@@ -43,7 +43,7 @@ Hata Tag'leri (standartlaştırılmış):
 """
 
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Tuple
 import pandas as pd
 from .journal import TradeSnapshot
 
@@ -237,7 +237,7 @@ class PostMortemAnalyzer:
         lines = []
         lines.append(f"# {emoji} Trade Post-Mortem: {snap.trade_id}")
         lines.append("")
-        lines.append(f"## Özet")
+        lines.append("## Özet")
         lines.append(f"- **{snap.direction}** {snap.symbol} {snap.timeframe}")
         lines.append(f"- Entry: `${snap.entry_price:.2f}` → Exit: `${snap.exit_price:.2f}` "
                      f"({snap.exit_reason})")
@@ -248,7 +248,7 @@ class PostMortemAnalyzer:
                      f"MAE: {snap.max_adverse_excursion_pct:.2f}%")
         lines.append("")
 
-        lines.append(f"## Entry Context")
+        lines.append("## Entry Context")
         lines.append(f"- HTF bias: `{snap.htf_bias}`")
         lines.append(f"- Intent: {snap.intent_label_entry} ({snap.intent_score_entry}/100)")
         lines.append(f"- Confluence: **{snap.confluence_score}/100**")
@@ -262,13 +262,13 @@ class PostMortemAnalyzer:
         lines.append("")
 
         if errors:
-            lines.append(f"## 🚨 Tespit Edilen Hatalar")
+            lines.append("## 🚨 Tespit Edilen Hatalar")
             for e in errors:
                 lines.append(f"- `{e}`")
             lines.append("")
 
         if lessons:
-            lines.append(f"## 📚 Dersler")
+            lines.append("## 📚 Dersler")
             for l in lessons:
                 lines.append(f"- {l}")
             lines.append("")

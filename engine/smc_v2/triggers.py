@@ -1,7 +1,7 @@
-"""Trigger phase for SMC v2: CHoCH detection → SetupCandidate emission.
+"""Trigger phase for SMC v2: CHoCH/BOS detection → SetupCandidate emission.
 
 Per spec §4.3 step 3:
-  For each new CHoCH on LTF (15m) aligned with HTF (4h) bias:
+  For each new CHoCH or BOS on LTF (15m) aligned with HTF (4h) bias:
     1. select_htf_swing_anchor → structural SL reference
     2. build_pullback_zones → target zone (HTF FVG priority, OTE fallback)
     3. Emit SetupCandidate(state=AWAITING_PULLBACK, bars_waited=0)
@@ -9,18 +9,21 @@ Per spec §4.3 step 3:
 Pure function. Returns list of new candidates. Caller (orchestrator) appends
 to SetupStateStore — store.add() enforces per-symbol cap.
 
-Scope limited to CHoCH events (BOS deferred — matches v1 signals.py
-recency-tighter BOS handling, see signals.py:200-204).
+OPERATOR (2026-10-02): BOS (continuation) breaks are now ALSO emitted, not
+just CHoCH (reversal). Previously BOS was deferred to v1 signals.py, but v1
+is muted while v2 owns the symbol — so BOS setups never entered at all and
+big-pump continuations were missed. Both kinds now wait for the pullback
+into the OB/BB block and enter from the retest, SL at the liquidity line.
 """
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import pandas as pd
 
-from engine.smc import StructBreak, Swing, FVG
+from engine.smc import StructBreak, FVG, OrderBlock, SFP
 from engine.smc_v2.setup_state import SetupCandidate
 from engine.smc_v2.swing_anchor import select_htf_swing_anchor
-from engine.smc_v2.zones import build_pullback_zones
+from engine.smc_v2.zones import build_pullback_zones, build_ob_bb_zone, ZoneSpec
 
 
 def _bar_ts_to_ms(ts: str) -> int:
@@ -83,6 +86,82 @@ def _htf_cutoff_for_break(brk_ms: int, htf_bars: list) -> Optional[int]:
     return max(eligible)
 
 
+def _find_causing_ob(
+    ltf_order_blocks: List[OrderBlock],
+    brk: StructBreak,
+) -> Optional[OrderBlock]:
+    """Find the OrderBlock / BreakerBlock that launched the structure break.
+
+    Price action doctrine: a CHoCH/BOS break is the impulsive move that starts
+    from the last opposite-direction block. For a BULL break (price broke
+    above the last swing high) the launch block is the most recent BEAR OB
+    formed before the break, sitting below the break price. For a BEAR break
+    it is the most recent BULL OB above the break. A mitigated OB is a
+    Breaker Block — still the retest zone, flagged via became_breaker.
+
+    Returns None when no block qualifies (caller falls back to the
+    FVG/OTE pullback path).
+    """
+    if not ltf_order_blocks:
+        return None
+    candidates = [
+        ob for ob in ltf_order_blocks
+        if ob.idx < brk.idx
+        and (
+            (brk.direction == "BULL" and ob.direction == "BEAR" and ob.top < brk.price)
+            or (brk.direction == "BEAR" and ob.direction == "BULL" and ob.bot > brk.price)
+        )
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda ob: ob.idx)
+
+
+def _impulse_leg(df_entry, brk, direction, lookback):
+    """Kırılımı başlatan impulsun başlangıç swing'i ve karşı ucu.
+
+    LONG: kırılımdan önceki `lookback` mum + kırılım mumu içindeki en düşük low
+    (impulsun ilk swing low'u / likidite çizgisi), uç = aralıktaki en yüksek high.
+    SHORT: tersi. Dönüş: (origin_price, extreme_price) ya da None.
+    """
+    if df_entry is None or lookback <= 0 or brk.idx <= 0:
+        return None
+    end = min(int(brk.idx) + 1, len(df_entry))
+    start = max(0, int(brk.idx) - int(lookback))
+    if end - start < 2:
+        return None
+    win = df_entry.iloc[start:end]
+    lo = float(win["low"].min())
+    hi = float(win["high"].max())
+    if direction == "LONG":
+        return lo, hi
+    return hi, lo
+
+
+def _sfp_confluence(ltf_sfps, brk) -> tuple:
+    """SFP confluence bonusu (0/10) + reason. Efloud notları: "Old low/high
+    likidite temizliği olursa SFP aranmalı ve tekrar pozisyon inşasında
+    bulunulmalıdır". SFP yönü CHoCH yönüyle aynı ve kırılımdan önce olmalı."""
+    if not ltf_sfps:
+        return 0, None
+    for sfp in ltf_sfps:
+        if sfp.idx < brk.idx and sfp.direction == brk.direction:
+            return 10, f"SFP aligned (sweep {sfp.sweep_level} → {sfp.price})"
+    return 0, None
+
+
+def _rsi_confluence(rsi_value, direction) -> tuple:
+    """RSI confluence bonusu (0/5) + reason. Efloud notları: "RSI oversold
+    veya overbolda yakınsa OTE çalışabilir". LONG: RSI<=40, SHORT: RSI>=60."""
+    if rsi_value is None:
+        return 0, None
+    if direction == "LONG" and rsi_value <= 40:
+        return 5, f"RSI {rsi_value:.1f} oversold-near (LONG)"
+    if direction == "SHORT" and rsi_value >= 60:
+        return 5, f"RSI {rsi_value:.1f} overbought-near (SHORT)"
+    return 0, None
+
+
 def generate_setup_candidates(
     symbol: str,
     htf_bias: str,
@@ -93,8 +172,16 @@ def generate_setup_candidates(
     ote_band: Tuple[float, float],
     ltf_trigger_idx_min: int,
     anchor_time_axis: bool = False,
+    ltf_order_blocks: Optional[List[OrderBlock]] = None,
+    df_entry: Optional[pd.DataFrame] = None,
+    ltf_sfps: Optional[List[SFP]] = None,
+    eq_price: Optional[float] = None,
+    rsi_value: Optional[float] = None,
+    ob_bb_zone_atr_pad: float = 0.0,
+    origin_swing_lookback: int = 0,
+    ote_zone_entry: bool = False,
 ) -> List[SetupCandidate]:
-    """Emit SetupCandidate instances for new aligned CHoCH events.
+    """Emit SetupCandidate instances for new aligned CHoCH/BOS events.
 
     Args:
         symbol: trading pair
@@ -116,6 +203,22 @@ def generate_setup_candidates(
             config'te (`smc_v2.anchor_time_axis: true`) açana kadar canlı
             davranış değişmez. Haritalama yapılamazsa (ts'siz bar fikstürü)
             toggle ON olsa da legacy'ye düşülür.
+        ltf_order_blocks: LTF (15m) OrderBlock listesi (SMCEngine.order_blocks).
+            Verilirse CHoCH kırılımını yapan OB/BB hedef zone olur (FVG/OTE
+            yerine) ve SL çapası bloğun bir önceki mumu (origin) olur.
+            None → legacy FVG/OTE yolu.
+        df_entry: LTF DataFrame — OB origin mumunun low/high'ını okumak için.
+            ltf_order_blocks verilirken zorunlu; yoksa OB/BB yolu atlanır.
+        ltf_sfps: LTF (15m) SFP listesi (SMCEngine.sfps). Verilirse CHoCH
+            kırılımı bir SFP (swing failure pattern — likidite temizliği
+            sonrası başarısız kırılım) ile hizalanınca confluence bonusu
+            eklenir (Efloud notları: "Old low/high likidite temizliği olursa
+            SFP aranmalı ve tekrar pozisyon inşasında bulunulmalıdır").
+        eq_price: range EQ (midpoint) — deviasyon sonrası EQ retest zone'u
+            için (Efloud notları: "Deviasyon sonrası range içine giren fiyat
+            öncesinde EQ'yu test etmeye meraklıdır. retestle girilebilir").
+        rsi_value: LTF RSI(14) — OTE yakınsama confluence'ı için (Efloud
+            notları: "RSI oversold veya overbolda yakınsa OTE çalışabilir").
 
     Returns:
         List of new SetupCandidate instances (state=AWAITING_PULLBACK,
@@ -127,11 +230,11 @@ def generate_setup_candidates(
 
     out: List[SetupCandidate] = []
     for brk in ltf_structure_breaks:
-        # PR #S3c-1 emits only for CHoCH (reversal). BOS (continuation)
-        # deferred — v1 signals.py handles BOS with a tighter recency
-        # window (signals.py:200-204).
-        if brk.kind != "CHoCH":
-            continue
+        # OPERATOR (2026-10-02): BOTH CHoCH (reversal) and BOS (continuation)
+        # breaks emit setups. v1 signals.py is muted while v2 owns the symbol,
+        # so deferring BOS to v1 meant BOS setups never entered — big-pump
+        # continuations were missed. The HTF-bias alignment filter below keeps
+        # BOS trend-aligned by construction (BOS is already in trend direction).
 
         # Aligned with HTF bias only
         if brk.direction != htf_bias:
@@ -143,6 +246,98 @@ def generate_setup_candidates(
 
         # Map BULL → LONG, BEAR → SHORT
         direction = "LONG" if brk.direction == "BULL" else "SHORT"
+
+        # ── OB/BB entry path (price action doctrine) ──
+        # CHoCH kırılımını yapan OrderBlock/BreakerBlock varsa hedef zone o
+        # bloktur; SL çapası bloğun BİR ÖNCEKİ mumudur (origin mum). Böylece
+        # işleme CHoCH çizgisinden değil, kırılımı başlatan bloktan girilir
+        # ve stop, bloğun altındaki/üstündeki origin mumuna dayanır.
+        causing_ob = _find_causing_ob(ltf_order_blocks, brk) if ltf_order_blocks else None
+        if causing_ob is not None and df_entry is not None and causing_ob.idx - 1 >= 0:
+            zone = build_ob_bb_zone(causing_ob)
+            # 2026-10-03 OPERATÖR: OB/BB zone'ları tek mum genişliğinde (0.1-0.7%)
+            # — fiyat bu dar bölgelere nadiren geri çekiliyor, bot 1400 cycle
+            # işleme giremedi. Kullanıcının notuna göre "EQ'lar spesifik olarak
+            # değil alan olarak güzel çalışır". Zone'u her iki taraftan ATR pad
+            # ile genişlet (config: smc_v2.ob_bb_zone_atr_pad, varsayılan 0.0 =
+            # değişiklik yok). "Kırılımı yapan bloktan giriş" prensibi korunur.
+            _pad_atr = float(ob_bb_zone_atr_pad or 0.0)
+            if _pad_atr > 0.0 and df_entry is not None and len(df_entry) >= 15:
+                from engine.smc_v2.atr import wilder_atr
+                _atr = wilder_atr(df_entry, period=14)
+                if _atr and _atr > 0.0:
+                    _pad = _atr * _pad_atr
+                    zone = ZoneSpec(
+                        low=zone.low - _pad,
+                        high=zone.high + _pad,
+                        source=zone.source,
+                    )
+            origin = df_entry.iloc[causing_ob.idx - 1]
+            # LONG: SL origin mumun LOW'unun altına; SHORT: HIGH'inin üstüne.
+            # calc_sl min(zone.low, anchor) / max(zone.high, anchor) yaptığı
+            # için anchor'ı origin mumun uç fiyatı olarak vermek yeterli.
+            anchor = float(origin["low"]) if direction == "LONG" else float(origin["high"])
+            # OPERATÖR (2026-10-28): SL çapası impulsun BAŞLANGIÇ swing'i
+            # (ilk swing low/high, likidite çizgisi); tek origin mum dar kalıp
+            # wick ile avlanıyordu. origin_swing_lookback>0 ile aktif.
+            _leg = _impulse_leg(df_entry, brk, direction, origin_swing_lookback)
+            if _leg is not None:
+                _o, _x = _leg
+                anchor = min(anchor, _o) if direction == "LONG" else max(anchor, _o)
+                if ote_zone_entry and _x != _o:
+                    _rng = abs(_x - _o)
+                    if direction == "LONG":
+                        _ol, _oh = _x - 0.786 * _rng, _x - 0.618 * _rng
+                    else:
+                        _ol, _oh = _x + 0.618 * _rng, _x + 0.786 * _rng
+                    if _ol <= zone.high and _oh >= zone.low:
+                        zone = ZoneSpec(low=min(zone.low, _ol), high=max(zone.high, _oh),
+                                        source=zone.source)
+            # SFP + RSI confluence (Efloud notları) — OB/BB yolunda da geçerli.
+            sfp_bonus, sfp_reason = _sfp_confluence(ltf_sfps, brk)
+            rsi_bonus, rsi_reason = _rsi_confluence(rsi_value, direction)
+            out.append(SetupCandidate(
+                symbol=symbol,
+                direction=direction,
+                trigger_bar_ts=_bar_ts_to_ms(brk.ts),
+                trigger_price=brk.price,
+                htf_bias=htf_bias,
+                target_zone=zone,
+                htf_swing_anchor=anchor,
+                bars_waited=0,
+                state="AWAITING_PULLBACK",
+                confluence_score=sfp_bonus + rsi_bonus,
+                reasons=[f"CHoCH {brk.direction} aligned with HTF {htf_bias}",
+                         f"entry from {zone.source} retest (origin candle {causing_ob.idx - 1})"]
+                + ([sfp_reason] if sfp_reason else [])
+                + ([rsi_reason] if rsi_reason else []),
+            ))
+            continue
+
+        _leg2 = _impulse_leg(df_entry, brk, direction, origin_swing_lookback) if ote_zone_entry else None
+        if _leg2 is not None and _leg2[0] != _leg2[1]:
+            _o, _x = _leg2
+            _rng = abs(_x - _o)
+            if direction == "LONG":
+                _zl, _zh = _x - 0.786 * _rng, _x - 0.618 * _rng
+            else:
+                _zl, _zh = _x + 0.618 * _rng, _x + 0.786 * _rng
+            out.append(SetupCandidate(
+                symbol=symbol,
+                direction=direction,
+                trigger_bar_ts=_bar_ts_to_ms(brk.ts),
+                trigger_price=brk.price,
+                htf_bias=htf_bias,
+                target_zone=ZoneSpec(low=_zl, high=_zh, source="OTE"),
+                htf_swing_anchor=_o,
+                bars_waited=0,
+                state="AWAITING_PULLBACK",
+                confluence_score=_sfp_confluence(ltf_sfps, brk)[0]
+                + _rsi_confluence(rsi_value, direction)[0],
+                reasons=[f"CHoCH {brk.direction} aligned with HTF {htf_bias}",
+                         "entry from impulse-leg OTE (origin swing anchor)"],
+            ))
+            continue
 
         # Select structural SL anchor (most-recent-unbroken HTF swing).
         # W2/C1: trigger_idx HTF ordinal ekseninde olmalı; legacy brk.idx
@@ -163,12 +358,13 @@ def generate_setup_candidates(
             # No valid HTF anchor → can't compute structural SL → skip
             continue
 
-        # Build pullback zone (HTF FVG priority, OTE fallback)
+        # Build pullback zone (HTF FVG priority, EQ retest, OTE fallback)
         zone = build_pullback_zones(
             htf_fvgs=htf_fvgs,
             ote_band=ote_band,
             direction=direction,
             trigger_price=brk.price,
+            eq_price=eq_price,
         )
 
         # Skip degenerate OTE fallback (e.g. ote_band=(0,0) when HTF analyze()
@@ -177,6 +373,17 @@ def generate_setup_candidates(
         # AWAITING_PULLBACK eating cap slots until timeout. Better to drop.
         if zone.source == "OTE" and zone.low == zone.high:
             continue
+
+        # SFP confluence (Efloud notları): CHoCH bir SFP ile hizalanırsa
+        # (likidite temizliği sonrası başarısız kırılım → pozisyon inşası)
+        # confluence bonusu eklenir. SFP yönü CHoCH yönüyle aynı olmalı ve
+        # kırılımdan önce oluşmuş olmalı (lookahead yok).
+        sfp_bonus, sfp_reason = _sfp_confluence(ltf_sfps, brk)
+
+        # RSI confluence (Efloud notları): RSI oversold/overbought'a yakınsa
+        # OTE çalışabilir. LONG için RSI <= 40 (oversold yakını), SHORT için
+        # RSI >= 60 (overbought yakını) → +5 bonus.
+        rsi_bonus, rsi_reason = _rsi_confluence(rsi_value, direction)
 
         out.append(SetupCandidate(
             symbol=symbol,
@@ -191,8 +398,10 @@ def generate_setup_candidates(
             htf_swing_anchor=anchor,
             bars_waited=0,
             state="AWAITING_PULLBACK",
-            confluence_score=0,  # PR #S3c-2 may add confluence scoring
-            reasons=[f"CHoCH {brk.direction} aligned with HTF {htf_bias}"],
+            confluence_score=sfp_bonus + rsi_bonus,
+            reasons=[f"CHoCH {brk.direction} aligned with HTF {htf_bias}"]
+            + ([sfp_reason] if sfp_reason else [])
+            + ([rsi_reason] if rsi_reason else []),
         ))
 
     return out

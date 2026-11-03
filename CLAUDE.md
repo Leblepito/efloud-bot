@@ -1,6 +1,6 @@
 # EFloud-Bot — TradingView Pine Script Projesi
 
-> **🚀 Sonraki Claude için Başlangıç Noktası:** Bu README projenin giriş noktasıdır. **Son çalışma (2026-08-12, audit-fixes):** repo-geneli audit + bugfix turu — 10 bayat test onarıldı, `u2algo_publisher.py`'daki sızmış canlı kimlik bilgileri env'e taşındı (⚠️ Telegram token REVOKE + `./deploy/rotate-credentials.sh` gerekli), birleşik panel Faz 2 (XSS escape, alan-adı düzeltmeleri, DASHBOARD_USERNAME), backend event-loop bloklaması ve login rate-limit sertleştirmesi, `/api/equity` şema birleştirmesi, 4 frontend fix'i. **Açık işler:** backtest'te breaker `can_trade` duvar-saati tutarsızlığı (engine/safety — operatör onayı bekliyor, PR'a bakın), MPA filtreleri hâlâ kablolanmadı, `_to_delete/` 669 junk dosya. *(Eski not: 2025-01-20 SL/TP Precision + Candle-Close Sync işi master'da doğrulandı; `feat/v2-nipio-dashboard` branch'i artık yok.)* **Dashboard:** `https://bot.ualgotrade.com` / panel: `https://bot.u2algo.com`. **Ana iş:** Bot mantığını TradingView Pine Script'e çevirmek (hem indicator hem strategy). **Kritik kurallar:** (1) Python kaynak mantığı DEĞİŞTİRME — sadece oku ve referans al, (2) Pine v6 syntax ZORUNLU, (3) Her değişiklik TDD + risk-ops review + backtest-gate.
+> **🚀 Sonraki Claude için Başlangıç Noktası:** Bu README projenin giriş noktasıdır. **Son çalışma (2026-10-02, operatör revizyonları):** BOS kırılımları da setup üretiyor (`658a905` — CHoCH ile aynı pullback giriş akışı), acil bakiye HALTI kaldırıldı (`b2154c5` — emergency_balance_threshold=0), v1 MARKET girişi v2 canlı sembolde susturuldu (`b2154c5`), bölge aşım toleransı 0.5→2.0 ATR + volatil rejim girişleri açıldı (`228382d`). **v2 AKTİF:** `smc_version=v2`, `smc_v2_symbols` dolu, `smc_v2_shadow=false`. *(Önceki: 2026-08-12 audit-fixes — 10 bayat test onarıldı, sızmış kimlik bilgileri env'e taşındı, birleşik panel Faz 2, backend event-loop + login rate-limit, /api/equity şema birleştirmesi.)* **Dashboard:** `https://2-28-139-82.nip.io` / panel: `https://bot.u2algo.com`. **Ana iş:** Bot mantığını TradingView Pine Script'e çevirmek (hem indicator hem strategy). **Kritik kurallar:** (1) Python kaynak mantığı DEĞİŞTİRME — sadece oku ve referans al, (2) Pine v6 syntax ZORUNLU, (3) Her değişiklik TDD + risk-ops review + backtest-gate.
 
 ## Cowork/Sandbox Git Uyarısı (2026-07-03)
 
@@ -30,7 +30,7 @@ TradingView Pine Script v6'ya çevirmek — hem INDIKATÖR hem de STRATEGY (back
 
 ## Geliştirme Sözleşmesi — Karpathy Prensipleri (efloud-bot'a uyarlanmış)
 
-> Ham prensip metni repo içinde: `docs/dev/karpathy-guidelines.md` (2026-07-11'de absorbe edildi — plugin kurulu olmayan ortamlarda da geçerli).
+> Ham prensip metni 2026-07-11'de bu bölüme absorbe edildi (ayrı dosya artık yok — plugin kurulu olmayan ortamlarda da geçerli).
 
 Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensibe uyar. Prensipler efloud-bot'un mevcut sert kurallarını **güçlendirir**, değiştirmez. (Kaynak: Andrej Karpathy LLM-coding pitfalls; `andrej-karpathy-skills` plugin.)
 
@@ -78,7 +78,7 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
    - Bug fix: Instagram `render_promo_card` import hatası, YouTube `video_path=None`
    - Test: 229 test, sıfır regresyon
 
-2. **u2algo-site & Railway Servisi**:
+2. **u2algo-site & Railway Servisi** (Railway root dir `/u2algo-site`; bu repoda KALMALI):
    - Next.js 15 ve Node.js 20 tabanlı pazarlama sayfası Railway üzerinde `considerate-intuition` projesi (`u2algo-site` servisi) altında yayındadır.
    - Canlı URL: `https://u2algo-site-production.up.railway.app`
 

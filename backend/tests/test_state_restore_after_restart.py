@@ -13,14 +13,12 @@ sourced from lifecycle) silently passes, the bot reopens, and SL/TP orders stack
 """
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from exchange import BinanceClient, OrderManager, Position as ExPosition
 from engine import SafeOrchestrator
-from engine.safety.position_guard import PositionGuard
 
 
 @pytest.fixture

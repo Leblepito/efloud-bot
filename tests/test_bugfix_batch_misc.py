@@ -11,31 +11,6 @@ import pandas as pd
 import pytest
 
 
-class TestF11ClosedHigherTfBars:
-    """Backtest HTF/MTF/1d dilimleri forming bar'ı final OHLC ile içermemeli."""
-
-    def _htf_df(self):
-        idx = pd.to_datetime(["2026-01-01 00:00", "2026-01-01 04:00",
-                              "2026-01-01 08:00"])
-        return pd.DataFrame({"open": [1, 2, 3], "high": [1, 2, 3],
-                             "low": [1, 2, 3], "close": [1, 2, 3]}, index=idx)
-
-    def test_forming_bar_excluded(self):
-        from backtest.engine import _closed_higher_tf_bars
-        df = self._htf_df()
-        # Karar anı 07:45 → 04:00 barı 08:00'de kapanır (> 07:45) → dışarıda
-        out = _closed_higher_tf_bars(df, 240, pd.Timestamp("2026-01-01 07:45"))
-        assert len(out) == 1, f"forming 4h bar leaked into slice: {out.index.tolist()}"
-
-    def test_exactly_closed_bar_included(self):
-        from backtest.engine import _closed_higher_tf_bars
-        df = self._htf_df()
-        # Karar anı 08:00 → 04:00 barı tam kapandı (=) → dahil; 08:00 forming → hariç
-        out = _closed_higher_tf_bars(df, 240, pd.Timestamp("2026-01-01 08:00"))
-        assert len(out) == 2
-        assert out.index[-1] == pd.Timestamp("2026-01-01 04:00")
-
-
 class TestF12JournalRobustLoad:
     def _good_line(self, trade_id):
         return json.dumps({

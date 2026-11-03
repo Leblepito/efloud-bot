@@ -320,7 +320,7 @@ class TestRunCycleAdvanceCall:
         """Construct a minimal valid OHLCV DataFrame for run_cycle.
         Real shape: DatetimeIndex (UTC), columns [open,high,low,close,volume]."""
         import pandas as pd
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timezone
         idx = pd.date_range(
             end=datetime.now(timezone.utc), periods=length, freq="15min", tz="UTC",
         )

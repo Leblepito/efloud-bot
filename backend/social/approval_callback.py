@@ -21,7 +21,6 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable
 
 from backend.social.content_queue import (  # type: ignore
     ContentDraft,

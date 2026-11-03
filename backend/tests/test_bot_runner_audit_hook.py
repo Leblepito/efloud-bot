@@ -3,7 +3,6 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
 
 def _make_pos(symbol="BTC/USDT", direction="LONG", trace_id="trace-1"):
@@ -33,7 +32,6 @@ def test_audit_after_delay_calls_engine():
 
     async def run():
         # Replace asyncio.sleep just for this call
-        import backend.bot_runner as br
         original_sleep = asyncio.sleep
         try:
             asyncio.sleep = _fast_sleep  # type: ignore
@@ -59,7 +57,6 @@ def test_audit_after_delay_swallows_exceptions():
     pos = _make_pos()
 
     async def run():
-        import backend.bot_runner as br
         original_sleep = asyncio.sleep
         try:
             asyncio.sleep = _fast_sleep  # type: ignore

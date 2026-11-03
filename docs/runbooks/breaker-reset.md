@@ -7,8 +7,13 @@
 ## Ne zaman
 
 healthz `200 {"status":"suspended","failures":["breaker_halted"]}` — breaker HALTED
-(haftalık DD / emergency balance / ardışık kayıp eşiği). **Bu bir hata değil güvenlik
-durağıdır:** restart ÇÖZMEZ (autoheal bilerek dokunmaz — `healthz-contract.md`).
+(haftalık DD / ardışık kayıp eşiği). **Bu bir hata değil güvenlik durağıdır:**
+restart ÇÖZMEZ (autoheal bilerek dokunmaz — `healthz-contract.md`).
+
+> **2026-10-01 operatör kararı:** acil bakiye HALTI kaldırıldı
+> (`emergency_balance_threshold=0`). Artık "Emergency: balance < threshold"
+> nedeniyle HALTED olmaz; HALTED yalnız haftalık DD veya ardışık kayıp
+> eşiğinden tetiklenir.
 
 ## Reset ÖNCESİ zorunlu değerlendirme
 

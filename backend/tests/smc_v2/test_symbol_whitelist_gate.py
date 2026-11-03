@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from engine.safe_orchestrator import SafeOrchestrator
 from engine.smc_v2.setup_state import SetupCandidate, SetupStateStore

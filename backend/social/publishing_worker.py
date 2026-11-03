@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Optional
 
 from backend.db import db
-from backend.social.queue_storage import load_draft, save_draft, list_by_status
+from backend.social.queue_storage import save_draft, list_by_status
 from backend.social.content_queue import ContentStatus, ContentDraft
 from backend.social.xurl_client import XurlClient
 from backend.social.instagram_client import InstagramClient

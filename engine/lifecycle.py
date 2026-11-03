@@ -25,7 +25,6 @@ import uuid
 from dataclasses import dataclass, field
 from typing import List, Optional, Literal
 from datetime import datetime, timezone
-import pandas as pd
 
 log = logging.getLogger("efloud.lifecycle")
 

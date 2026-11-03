@@ -203,8 +203,12 @@ Kendi domain'in (örn `bot.example.com`) varsa:
 # Log tail (canlı)
 docker compose -f docker-compose.prod.yml logs -f --tail=100
 
-# Restart
+# Restart (kod/config değişmedi, sadece process'i tazelemek için)
 docker compose -f docker-compose.prod.yml restart
+
+# .env.production* dosyasını değiştirdiysen "restart" YETMEZ — env_file yeniden okunmaz.
+# Yeni env ile başlatmak için:
+docker compose -f docker-compose.prod.yml up -d --force-recreate efloud-bot
 
 # Update (yeni commit pull + rebuild + restart)
 bash deploy/deploy.sh

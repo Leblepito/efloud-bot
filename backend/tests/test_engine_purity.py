@@ -4,7 +4,6 @@ or network calls when freshness_check=False, persist=False, NullNotifications.
 Spec: docs/superpowers/specs/2026-05-04-backtest-design.md §6.1
 """
 from unittest.mock import patch
-import socket
 import pandas as pd
 import pytest
 import yaml
