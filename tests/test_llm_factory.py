@@ -36,7 +36,7 @@ def test_minimax_via_env_lever(monkeypatch):
 def test_explicit_claude():
     client = make_llm_client({"provider": "claude", "model": "claude-haiku-4-5-20251001"})
     assert isinstance(client, ClaudeClient)
-    assert client.model == "claude-haiku-4-5-20251001"
+    assert client.model == "claude-haiku-4-5-20251001"  # gitleaks:allow (model ID, not a secret)
 
 
 def test_explicit_gemini_fallback():

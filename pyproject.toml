@@ -26,16 +26,6 @@ norecursedirs = [
     "u2algo-site",
     "backup_rollout",
 ]
-# Stale CLI scripts at repo root that import the retired backtest.runner module.
-# Excluded so pytest discovery doesn't break on import; tracked for follow-up
-# cleanup (rename/move under scripts/diag/ or delete).
-addopts = [
-    "--ignore=test_backtest.py",
-    "--ignore=test_backtest_multi.py",
-    "--ignore=test_real_backtest.py",
-    "--ignore=test_real_data.py",
-]
-
 # Shared excludes for the scheduled review/security automations
 # (.github/workflows/scheduled-review.yml). Mirrors norecursedirs above.
 [tool.ruff]
