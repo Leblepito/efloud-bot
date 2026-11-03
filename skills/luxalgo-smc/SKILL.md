@@ -19,6 +19,12 @@ and u2algo is a commercial product. Whether this use is permitted is an open
 do not copy this logic into published or sold Pine scripts, marketing material
 or customer-facing products, and flag any change that would widen its use.
 
+A copy of the LuxAlgo script whose copyright line was changed to another name
+(e.g. "© u2Algo", reviewed 2026-11-03: same functions, defaults and title
+`Smart Money Concepts [LuxAlgo]`) is still LuxAlgo's work: it does not change the
+licence, and removing the original attribution breaches the BY term. Never adopt
+or publish such a file as u2Algo's own.
+
 ## Processing order per closed bar (matches Pine)
 
 `deleteOrderBlocks(internal)` → `deleteOrderBlocks(swing)` →
