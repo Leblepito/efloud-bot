@@ -1,0 +1,33 @@
+# efloud advisory research cycle — 5 saatlik döngü (systemd unit'i)
+#
+# Kurulum (VPS):
+#   cp deploy/research-cycle.service /etc/systemd/system/
+#   cp deploy/research-cycle.timer   /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now research-cycle.timer
+#   systemctl list-timers research-cycle.timer
+#
+# Elle bir koşu:
+#   systemctl start research-cycle.service
+#   journalctl -u research-cycle.service -n 50 --no-pager
+#
+# ADVISORY ONLY: üretilen brief'ler emir/sizing/SL/TP girdisi DEĞİLDİR.
+
+[Unit]
+Description=efloud advisory research cycle (LuxAlgo MTF structure + TradingAgents brief)
+Documentation=file:/opt/efloud-bot/docs/runbooks/research-cycle.md
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/efloud-bot
+ExecStart=/opt/efloud-bot/deploy/research-cycle.sh
+# TradingAgents bir koşuda çok sayıda LLM çağrısı yapar; 30 dk tavan.
+TimeoutStartSec=1800
+# Bir sonraki timer tick'ine sarkarsa iptal et (systemd aynı unit'i üst üste başlatmaz).
+Nice=10
+# Loglar: journal + repo içi dosya (logs/ gitignore'lu).
+StandardOutput=append:/opt/efloud-bot/logs/research_cycle.log
+StandardError=append:/opt/efloud-bot/logs/research_cycle.log
