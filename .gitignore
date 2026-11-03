@@ -123,4 +123,4 @@ hermes_tasks/
 .env.railway
 
 # Desk working notes (tickets, briefs, journal) — local only
-desk/
+/desk/

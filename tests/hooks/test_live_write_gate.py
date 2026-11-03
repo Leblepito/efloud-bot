@@ -22,7 +22,7 @@ def run_gate(command: str, cwd: Path | None = None, tool: str = "Bash") -> dict 
     event = {"tool_name": tool, "tool_input": {"command": command}, "cwd": str(cwd or ROOT)}
     out = subprocess.run(
         [sys.executable, "-I", str(GATE)],
-        input=json.dumps(event), capture_output=True, text=True, timeout=10,
+        input=json.dumps(event), capture_output=True, text=True, timeout=10, check=False,
     )
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout) if out.stdout.strip() else None
@@ -125,7 +125,7 @@ def test_non_bash_tools_ignored():
 @pytest.mark.parametrize("payload", ["", "not json", "[]", '{"tool_name": "Bash"}'])
 def test_malformed_input_never_crashes(payload):
     out = subprocess.run([sys.executable, "-I", str(GATE)], input=payload,
-                         capture_output=True, text=True, timeout=10)
+                         capture_output=True, text=True, timeout=10, check=False)
     assert out.returncode == 0
     assert out.stdout.strip() == ""
 
