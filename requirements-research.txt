@@ -1,0 +1,7 @@
+# Research-only dependencies — install into a SEPARATE venv, never into the bot image.
+#   python -m venv .venv-research && .venv-research/bin/pip install -r requirements-research.txt
+#
+# TradingAgents needs pandas>=3.0.6, which conflicts with constraints.txt (pandas==3.0.3),
+# so it must not share the bot's environment. Pinned to the commit that was security-reviewed
+# on 2026-11-03 (docs/handoff/2026-11-03-multi-agent-desk-design.md); bump only after re-review.
+tradingagents @ git+https://github.com/TauricResearch/TradingAgents@c4544913a14ed3df5f1ed7b9e8483270ce20682a
