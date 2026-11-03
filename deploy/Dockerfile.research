@@ -1,0 +1,37 @@
+# efloud-research — izole araştırma ortamı (advisory only)
+#
+# NEDEN AYRI İMAJ: TradingAgents `pandas>=3.0.6` ister, bot imajı `pandas==3.0.3`
+# (constraints.txt) pinler. Ortak ortam = bot bağımlılıklarının kayması. Bu imaj
+# bot imajından TAMAMEN ayrıdır ve bot kodu içermez — kod çalışma anında
+# read-only bind mount ile gelir (bkz. deploy/research-cycle.sh).
+#
+# CI/bot ile AYNI Python sürümü: 3.11.
+#
+# Build (repo kökünden, deploy/ altından DEĞİL):
+#   docker build -f deploy/Dockerfile.research -t efloud-research:latest .
+#
+# Build çıktısı ~1.5 GB. requirements-research.txt değişmedikçe yeniden build
+# gerekmez; deploy/research-cycle.sh hash'e bakıp gerekirse kendisi build eder.
+
+FROM python:3.11-slim
+
+# tradingagents pinned bir git commit'inden kurulur → build sırasında git şart.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Deps ayrı katmanda: repo değişince yeniden indirilmez, requirements değişince yeniden kurulur.
+COPY requirements-research.txt /tmp/requirements-research.txt
+RUN python -m pip install --no-cache-dir --upgrade pip \
+    && python -m pip install --no-cache-dir -r /tmp/requirements-research.txt
+
+# KÖK OLARAK ÇALIŞIR — bilinçli tercih: host'taki ./desk dizini root'a ait (755) ve
+# araştırma brief'leri oraya yazılır. Konteyner tek seferlik (`--rm`), port açmaz,
+# repo read-only mount edilir, yalnız desk/ yazılabilir. Non-root isteniyorsa:
+# host'ta `chown -R 10002:10002 desk` + `docker run --user 10002:10002`.
+#
+# Entrypoint yalnız çağrı kolaylığıdır; argümanlar wrapper'dan gelir.
+ENTRYPOINT ["python", "scripts/desk/research_cycle.py"]
+CMD ["--symbols", "BTC/USDT,ETH/USDT", "--out", "desk/briefs"]
