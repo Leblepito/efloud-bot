@@ -113,3 +113,18 @@ kullanıldı ve her agent'a "yoksa Skill aracıyla çağır" yedeği eklendi.
 (CC BY-NC-SA 4.0) port'un docstring'inde ve script'in kaynak başlığında zaten var.
 tradingview-mcp'nin buradaki değeri **parity kontrolü** (indikatör çıktısı vs `analyze()`).
 Hukuki karar §5'te açık kalıyor.
+
+## 8. Operatör kararları (2026-11-03, üçüncü tur)
+
+1. **"SMC pine son dosyası" (u2Algo) → kullanılmadı.** Dosya LuxAlgo'nun SMC script'inin
+   kendisi: aynı fonksiyonlar (`storeOrdeBlock` yazım hatası dahil), aynı varsayılanlar
+   (swing 50, OB 5, EQ 3/0.1), başlık hâlâ `Smart Money Concepts [LuxAlgo]`, lisans satırı
+   CC BY-NC-SA 4.0; yalnız telif satırı `© u2Algo` yapılmış. Lisans sorusunu değiştirmez;
+   atfın kaldırılması BY şartını da ihlal eder. Repoya eklenmedi. Gerçek seçenekler:
+   LuxAlgo'dan ticari izin, ya da bağımsız (clean-room) bir u2Algo SMC implementasyonu.
+2. **AI takımı gözlem modunda** — canlı config `agent_team: {enabled: true, gating: false,
+   provider: claude, model: claude-sonnet-5-5}`. Her açılan işlemin kararı journal'a yazılır;
+   `scripts/desk/agent_verdict_edge.py` kararlara göre kârlılığı ölçer. Etkisi VPS'te
+   container yeniden oluşturulunca başlar (execution-ops ticket'ı).
+3. **5 saatlik araştırma döngüsü** — `scripts/desk/research_cycle.py`: 15m/1h/4h yapı +
+   TradingAgents (quick Sonnet 5.5, deep Opus 5.5), sahibi Hermes veya VPS zamanlayıcısı.
