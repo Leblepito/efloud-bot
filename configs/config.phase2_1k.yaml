@@ -305,6 +305,19 @@ llm:
   provider: minimax
   model: MiniMax-M2.7-highspeed       # fast low-latency variant; advisory needs no heavy reasoning
 
+# ── Agent team — OBSERVATION mode (operator decision 2026-11-03) ──────────────
+# Every opened trade gets an async team review (Regime/SignalValidator/RiskReviewer/
+# Overseer); the verdict (ACCEPT/REJECT/NEUTRAL/ERROR) is written to the trade's
+# journal row (agent_review) so its edge can be measured later with
+# scripts/desk/agent_verdict_edge.py. gating:false → it NEVER blocks or changes a
+# trade; flipping it needs a recorded shadow period + operator sign-off.
+# One LLM call set per OPENED trade (not per signal). Key: ANTHROPIC_API_KEY.
+agent_team:
+  enabled: true
+  gating: false
+  provider: claude
+  model: claude-sonnet-5-5
+
 # ── Kronos advisory layer (time-series forecast + LLM synthesis) ──────────────
 # ADDITIVE & ADVISORY-ONLY: produces commentary + a categorical band for Telegram
 # (and the DB when present). It NEVER feeds trade/sizing/SL-TP/confluence logic.

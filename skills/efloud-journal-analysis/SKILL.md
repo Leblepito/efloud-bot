@@ -11,5 +11,7 @@ description: Trade journal PnL, stop serisi, SL mesafesi ve süre analizi yap.
 3. Pencereyi UTC olarak ve hangi timestamp'e göre filtrelendiğini raporla. `realized_pnl` kaynağının tahmin veya borsa neti olduğunu ayır; kaynak etiketi de eski olabilir. Stop serisini `exit_reason` üzerinden tanımla, negatif PnL ile stop'u karıştırma. SL mesafesi `sl_initial` ve giriş fiyatından türetilir; bu alan sonradan güncellenmiş olabileceğinden orijinal risk olduğu garanti değildir. Tutma süresi UTC entry ile exit farkıdır.
 4. Eksik/hatalı satır, zaman, fiyat, SL, PnL ve exit reason sayılarını bildir; elde olmayan metrikleri sıfır veya borsa tarafından doğrulanmış diye sunma. Canlı pozisyon kayıtlarını kapanmış işlem toplamlarına katma.
 
+5. AI takımı (gözlem modu, `agent_team.gating: false`) her açılan işlemin journal satırına `agent_review.team_verdict` yazar. Karara göre kârlılık: `python scripts/desk/agent_verdict_edge.py --journal <journal> [--since 2026-11-04] [--json]` — ACCEPT/REJECT/NEUTRAL/ERROR/NO_REVIEW grupları, kazanma oranı, PnL ve "REJECT'ler alınmasaydı" farkı. 30'dan az işlem "small sample"dır; gating kararı için kanıt değil, hipotezdir.
+
 ## Doğrulama
 Script'in sentetik testleri ve gerçek veri analizinin zaman penceresi, kayıt sayısı, PnL/provenans, ardışık stop, SL mesafesi, tutma süresi ve eksik verileri görev dosyasında olsun. Borsa mutabakatı yapılmadıysa ayrı belirt. Secret'sız komut, commit hash ve healthz yanıtını ekle.
