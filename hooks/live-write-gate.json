@@ -1,0 +1,17 @@
+{
+  "description": "efloud-desk: ask before any Bash command that looks like a live-state write (Binance orders/leverage/margin, bot control API, prod deploy, Supabase apply)",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/live_write_gate.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
