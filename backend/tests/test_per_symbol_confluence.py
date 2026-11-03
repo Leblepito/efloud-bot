@@ -10,7 +10,6 @@ the per-symbol value if present, else falls back to the global `min_confluence`.
 These tests don't run the full SMC pipeline — they isolate the threshold
 lookup logic via a small helper exposed for testing.
 """
-import pytest
 
 from engine.signals import resolve_min_confluence
 

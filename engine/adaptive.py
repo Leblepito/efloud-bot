@@ -20,11 +20,11 @@ Her adaptasyon için:
 import json
 import logging
 from pathlib import Path
-from dataclasses import dataclass, asdict, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass, asdict
+from typing import Dict, List
 from datetime import datetime, timezone
 
-from .memory import LearningMemory, Pattern
+from .memory import LearningMemory
 
 log = logging.getLogger("efloud.adaptive")
 

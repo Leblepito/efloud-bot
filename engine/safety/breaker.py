@@ -99,6 +99,7 @@ class CircuitBreaker:
         self.trades_this_week: List[dict] = []
         self.consecutive_losses = 0
         self.peak_balance = starting_balance
+        self.peak_set_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.current_balance = starting_balance
 
     def sync_balance(self, live_balance: float):
@@ -117,6 +118,7 @@ class CircuitBreaker:
         self.current_balance = float(live_balance)
         if self.current_balance > self.peak_balance:
             self.peak_balance = self.current_balance
+            self.peak_set_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def record_trade(self, pnl: float, timestamp: Optional[datetime] = None,
                      trade_id: Optional[str] = None):
@@ -269,7 +271,13 @@ class CircuitBreaker:
                         resume_at=tomorrow)
             return self.status
 
-        # 2. Weekly drawdown
+        # 2. Weekly drawdown (peak is a 7-day high-watermark: a peak older than
+        # 7 days is rebased to the current balance, so the limit is truly weekly)
+        _now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+        if (_now_naive - self.peak_set_at) > timedelta(days=7) and self.current_balance < self.peak_balance:
+            log.info(f"Weekly peak {self.peak_balance:.2f} older than 7d -> rebased to {self.current_balance:.2f}")
+            self.peak_balance = self.current_balance
+            self.peak_set_at = now
         dd_pct = ((self.peak_balance - self.current_balance) / self.peak_balance) * 100
         if dd_pct >= self.weekly_limit:
             self._halt(f"Weekly drawdown {dd_pct:.2f}% reached limit {self.weekly_limit}%")
@@ -320,6 +328,7 @@ class CircuitBreaker:
         self.consecutive_losses = 0
         # Drawdown reset: peak'i current ile eşitle ki yeniden HALT olmasın
         self.peak_balance = self.current_balance
+        self.peak_set_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def _cleanup_old_trades(self, now: datetime):
         """24h+ ve 7d+ eski trade kayıtlarını temizle."""
@@ -336,6 +345,7 @@ class CircuitBreaker:
             "consecutive_losses": self.consecutive_losses,
             "current_balance": round(self.current_balance, 2),
             "peak_balance": round(self.peak_balance, 2),
+            "peak_set_at": self.peak_set_at.isoformat(),
             # tripped_at / resume_at make the HALTED/TRIPPED state recoverable
             # after a restart. Without them, restore_from_dict could not tell a
             # cooldown that already elapsed from one still pending, and a HALT's
@@ -364,6 +374,7 @@ class CircuitBreaker:
         # Legacy numeric/counter fields — restored regardless of state.
         self.current_balance = d.get("current_balance", self.current_balance)
         self.peak_balance = d.get("peak_balance", self.peak_balance)
+        self.peak_set_at = _parse_dt(d.get("peak_set_at")) or self.peak_set_at
         self.consecutive_losses = d.get("consecutive_losses", self.consecutive_losses)
 
         state_str = d.get("state")

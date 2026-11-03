@@ -33,7 +33,7 @@ from .scenarios import ScenarioPlanner
 from .lifecycle import PositionLifecycle, Position
 from .journal import TradeJournal, TradeSnapshot
 from .report import ReportEngine
-from .regimes import RegimeDetector, RegimeAnalysis
+from .regimes import RegimeDetector
 from .safety import (
     CircuitBreaker, StateStore, PositionGuard, load_pause_config,
     OrphanProtector, load_orphan_protection_config,
@@ -41,6 +41,12 @@ from .safety import (
     StaleDataError, cleanup_orphan_hedges
 )
 from utils.logging import new_trace_id, set_trace_id, log_event
+
+def _is_lux_cand(cand) -> bool:
+    """LuxAlgo yolundan gelen aday mı? (reasons[0] 'LUX ' ile başlar)"""
+    reasons = getattr(cand, "reasons", None) or []
+    return bool(reasons) and str(reasons[0]).startswith("LUX ")
+
 
 log = logging.getLogger("efloud.safe_orch")
 
@@ -69,6 +75,25 @@ def _emit_reverse_block(symbol: str, reason: str) -> None:
     kirletmez. Salt log emisyonu."""
     if "REVERSE_BLOCKED_NOT_PROFITABLE" in reason:
         log_event(log, "REVERSE_BLOCKED_NOT_PROFITABLE", symbol=symbol)
+
+
+def _rsi_14(df: pd.DataFrame) -> Optional[float]:
+    """Wilder RSI(14) — son bar değeri. Efloud notları: "RSI oversold veya
+    overbolda yakınsa OTE çalışabilir". Yetersiz veride None döner (confluence
+    katkısı yok, gate değil)."""
+    if df is None or len(df) < 15:
+        return None
+    try:
+        delta = df["close"].diff()
+        gain = delta.clip(lower=0.0)
+        loss = -delta.clip(upper=0.0)
+        avg_gain = gain.ewm(alpha=1 / 14, min_periods=14).mean()
+        avg_loss = loss.ewm(alpha=1 / 14, min_periods=14).mean()
+        rs = avg_gain / avg_loss.replace(0.0, 1e-10)
+        rsi = 100 - (100 / (1 + rs))
+        return float(rsi.iloc[-1])
+    except Exception:
+        return None
 
 
 @dataclass
@@ -1144,6 +1169,19 @@ class SafeOrchestrator:
                 htf_analysis = self.smc.analyze(df_htf)
                 ltf_swings_h, ltf_swings_l = self.smc.swings(df_entry)
                 ltf_brks = self.smc.structure(df_entry, ltf_swings_h, ltf_swings_l)
+                # OB/BB entry path: CHoCH kırılımını yapan OrderBlock/BreakerBlock
+                # hedef zone olur (bkz. triggers._find_causing_ob). Trend argümanı
+                # yalnızca OB tespitinde kullanılır; yoksa UNDEF geç.
+                ltf_obs = self.smc.order_blocks(
+                    df_entry, ltf_swings_h, ltf_swings_l,
+                    ltf_brks[-1].direction if ltf_brks else "UNDEF",
+                )
+                ltf_sfps = self.smc.sfps(df_entry, ltf_swings_h, ltf_swings_l)
+                # Range EQ (deviasyon sonrası EQ retest zone'u için) + LTF RSI
+                # (OTE yakınsama confluence'ı için) — Efloud notları.
+                ltf_range = self.smc.range_info(df_entry)
+                ltf_eq = ltf_range.eq if ltf_range is not None else None
+                ltf_rsi = _rsi_14(df_entry)
             
                 # Build htf_bars from df_htf rows (ordinal axis for swing_anchor).
                 # HtfBar dataclass hoisted to engine.smc_v2.triggers to keep
@@ -1171,9 +1209,37 @@ class SafeOrchestrator:
                 else:
                     ote_low, ote_high = 0.0, 0.0
             
+                # LuxAlgo SMC senkronu (smc_v2.luxalgo.enabled, default KAPALI):
+                # BOS/CHoCH + OB + premium/discount LuxAlgo tanımlarıyla hesaplanır,
+                # HTF bias LuxAlgo swing trend'idir; adaylar aynı v2 state
+                # machine'den (pullback → IN_ZONE → confirm) geçer.
+                _lux_cfg = self.config.get("smc_v2", {}).get("luxalgo", {}) or {}
+                _lux_cands = None
+                _htf_bias = htf_analysis.get("trend", "UNDEF")
+                if _lux_cfg.get("enabled", False):
+                    from engine.smc_v2 import luxalgo as _lx
+                    _lux_ltf = _lx.analyze(df_entry, _lx.LuxConfig.from_dict(_lux_cfg))
+                    _lux_htf = _lx.analyze(df_htf, _lx.LuxConfig.from_dict(
+                        {**_lux_cfg, **(_lux_cfg.get("htf") or {})}))
+                    _htf_bias = _lux_htf.swing_trend
+                    _lux_cands = _lx.generate_candidates(
+                        symbol=symbol,
+                        lux=_lux_ltf,
+                        htf_bias=_htf_bias,
+                        trigger_idx_min=ltf_trigger_idx_min,
+                        use_internal=bool(_lux_cfg.get("use_internal", True)),
+                        use_swing=bool(_lux_cfg.get("use_swing", True)),
+                        require_premium_discount=bool(
+                            _lux_cfg.get("require_premium_discount", True)),
+                        allowed_kinds=tuple(_lux_cfg.get("kinds", ["CHoCH", "BOS"])),
+                        min_confluence=int(_lux_cfg.get("min_confluence", 0)),
+                    )
+                    self._lux_log_scan(symbol, _htf_bias, _lux_ltf, _lux_cands)
+
                 self._emit_setup_candidates(
                     symbol=symbol,
-                    htf_bias=htf_analysis.get("trend", "UNDEF"),
+                    htf_bias=_htf_bias,
+                    precomputed_candidates=_lux_cands,
                     ltf_structure_breaks=ltf_brks,
                     htf_swings={
                         "swing_highs": htf_analysis.get("swing_highs", []),
@@ -1185,6 +1251,13 @@ class SafeOrchestrator:
                     ltf_trigger_idx_min=ltf_trigger_idx_min,
                     current_price=current_price,
                     df_entry=df_entry,
+                    ltf_order_blocks=(
+                        ltf_obs if self.config.get("smc_v2", {}).get("ob_bb_entry", True)
+                        else None
+                    ),
+                    ltf_sfps=ltf_sfps,
+                    eq_price=ltf_eq,
+                    rsi_value=ltf_rsi,
                 )
             
             # ═══ STEP 0: Per-bar MAE/MFE tracking ═══
@@ -1383,6 +1456,17 @@ class SafeOrchestrator:
                     reasons.append(f"regime={regime_analysis.regime}")
                 log.info(f"🚫 Trading disabled: {', '.join(reasons)}")
             
+            elif signals and self._v2_entry_active(symbol):
+                # OPERATOR FIX (2026-10-01): v2 (OB/BB pullback) path owns this
+                # symbol. The v1 signals path fires a MARKET entry the instant a
+                # CHoCH appears — the "anında giriş" behaviour the operator wants
+                # gone. v1 is MUTED here; entry comes only via the v2 state
+                # machine (AWAITING_PULLBACK → zone retest → CONFIRMED → limit).
+                log.info(
+                    f"🔕 [{symbol}] v1 signal suppressed — v2 pullback path owns "
+                    f"this symbol (waiting for OB/BB retest, SL at liquidity line)"
+                )
+
             elif signals:
                 latest = signals[-1]
                 # === Runtime Agent Team pre-review (canonical A4) ===
@@ -1417,7 +1501,7 @@ class SafeOrchestrator:
                     except Exception as e:
                         log.warning(f"Error in synchronous AgentTeam gating review: {e!r}")
                         _agent_veto = True
-                        log.warning(f"🚫 [AgentTeam] Signal vetoed due to exception in gating review")
+                        log.warning("🚫 [AgentTeam] Signal vetoed due to exception in gating review")
             
                 if _agent_veto:
                     actions.append(f"[{symbol}] Vetoed by agent team")
@@ -1992,6 +2076,16 @@ class SafeOrchestrator:
         smc_v2_cfg = self.config.get("smc_v2", {})
         require_confirmation = smc_v2_cfg.get("require_confirmation", True)
         effective_pullback_timeout_bars = smc_v2_cfg.get("pullback_timeout_bars", pullback_timeout_bars)
+        # LuxAlgo modu: swing OB retest'leri efloud zone'larından daha geç gelir;
+        # luxalgo.pullback_timeout_bars verilirse o geçerlidir.
+        _lux_cfg = smc_v2_cfg.get("luxalgo") or {}
+        if _lux_cfg.get("enabled", False) and _lux_cfg.get("pullback_timeout_bars"):
+            effective_pullback_timeout_bars = int(_lux_cfg["pullback_timeout_bars"])
+
+        # Po3 HARD GATE (G1): manipulation fazında giriş bloklanır ama setup
+        # ÖLMEZ — displacement gelip faz DISTRIBUTION'a dönünce kapı açılır.
+        # smc_v2.po3_gate: false (default) → inert; UNDEFINED bloklamaz.
+        po3_blocked = self._v2_po3_blocked(df_15m)
 
         # Local import to avoid module-level circular dependency on smc_v2
         from engine.smc_v2.zones import is_price_in_zone
@@ -2031,6 +2125,9 @@ class SafeOrchestrator:
             # on a new bar, so this fires on the same tick it crosses the limit.
             if cand.bars_waited > effective_pullback_timeout_bars:
                 cand.state = "EXPIRED"
+                if _is_lux_cand(cand):
+                    log.info(f"[lux] expired {cand.symbol} {cand.direction} "
+                             f"after {cand.bars_waited} bars (state was waiting for pullback)")
                 continue
 
             price_in_zone = is_price_in_zone(current_price, cand.target_zone)
@@ -2047,6 +2144,8 @@ class SafeOrchestrator:
                         # Already left zone before, this is a re-entry (pullback)
                         # Proceed with confirmation logic
                         if not require_confirmation:
+                            if po3_blocked:
+                                continue
                             cand.state = "CONFIRMED"
                             clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
                             self._place_v2_entry_order(
@@ -2072,6 +2171,8 @@ class SafeOrchestrator:
                     # No confirmation required, but need has_left_zone check
                     if cand.has_left_zone:
                         # This is a re-entry (pullback) — confirm entry
+                        if po3_blocked:
+                            continue
                         cand.state = "CONFIRMED"
                         clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
                         self._place_v2_entry_order(
@@ -2094,6 +2195,8 @@ class SafeOrchestrator:
                     since_ts=cand.trigger_bar_ts,
                 )
                 if confirmed:
+                    if po3_blocked:
+                        continue
                     cand.state = "CONFIRMED"
                     self._place_v2_entry_order(
                         cand,
@@ -2107,6 +2210,8 @@ class SafeOrchestrator:
                 if price_in_zone:
                     # Price re-entered the zone (pullback complete)
                     if not require_confirmation:
+                        if po3_blocked:
+                            continue
                         cand.state = "CONFIRMED"
                         clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
                         self._place_v2_entry_order(
@@ -2122,6 +2227,48 @@ class SafeOrchestrator:
                         # Note: has_left_zone is already True, so next IN_ZONE cycle
                         # will allow entry on confirmation without requiring another leave
                 # Price still outside zone — keep waiting
+
+    def _v2_entry_active(self, symbol: str) -> bool:
+        """True when the v2 (OB/BB pullback) entry path OWNS this symbol.
+
+        OPERATOR FIX (2026-10-01): the v1 signals path and the v2 setup path ran
+        in PARALLEL. v1 fires a MARKET entry the instant a CHoCH signal appears,
+        which is exactly the "girdiği an işleme giriyor" behaviour the operator
+        wants gone — the v2 path is the one that waits for the pullback into the
+        OB/BB block and stops below the liquidity (swing) line. When v2 is live
+        for a symbol, v1 must NOT place entries for it.
+
+        "Live for this symbol" reuses the SAME conditions as _place_v2_entry_order
+        (explicit whitelist membership + smc_v2_shadow:false), so the two paths
+        can never disagree: a symbol v1 is muted on is guaranteed to be a symbol
+        v2 will actually execute on. Wildcard '*' is shadow-only (never LIVE per
+        H2 fail-closed), so it does NOT mute v1.
+        """
+        if self.setup_state_store is None:
+            return False
+        engine_cfg = self.config.get("engine", {})
+        whitelist_raw = engine_cfg.get("smc_v2_symbols", [])
+        if not isinstance(whitelist_raw, list):
+            return False
+        if bool(engine_cfg.get("smc_v2_shadow", True)):
+            return False
+        return symbol in whitelist_raw
+
+    def _v2_po3_blocked(self, df_15m) -> bool:
+        """Po3 HARD GATE (G1): manipulation fazında giriş bloklanır.
+
+        smc_v2.po3_gate: false (default) → inert (modül hiç çağrılmaz).
+        UNDEFINED faz bloklamaz (yetersiz veri "manipülasyon var" demek
+        değildir — po3.py docstring'ine bakın).
+        """
+        smc_v2_cfg = self.config.get("smc_v2", {})
+        if not smc_v2_cfg.get("po3_gate", False):
+            return False
+        if df_15m is None or len(df_15m) == 0:
+            return False
+        from engine.smc_v2.po3 import classify_po3_phase, po3_blocks_entry
+        state = classify_po3_phase(df_15m)
+        return po3_blocks_entry(state)
 
     def _ledger_record_signal(self, symbol, latest, *, was_tradeable,
                               htf_bias="", regime=""):
@@ -2176,6 +2323,29 @@ class SafeOrchestrator:
             log.warning(f"signal_ledger record skipped (best-effort): {e!r}")
             return None
 
+    def _lux_log_scan(self, symbol, htf_bias, lux, cands) -> None:
+        """[lux] scan satırı — yalnız özet DEĞİŞTİĞİNDE basılır (30 sn'lik
+        tick'lerde log seli olmasın). Deploy sonrası her sembol için ilk taramada
+        bir satır görünür: LuxAlgo yolunun çalıştığının kanıtı."""
+        z = lux.zones
+        last = lux.breaks[-1] if lux.breaks else None
+        sig = (htf_bias, lux.swing_trend, lux.internal_trend,
+               last.idx if last else -1, len(cands))
+        seen = getattr(self, "_lux_scan_sig", None)
+        if seen is None:
+            seen = self._lux_scan_sig = {}
+        if seen.get(symbol) == sig:
+            return
+        seen[symbol] = sig
+        last_txt = (f"{'int' if last.internal else 'swing'}-{last.kind}-{last.direction}"
+                    if last else "none")
+        log.info(
+            f"[lux] scan {symbol} htf_bias={htf_bias} ltf_swing={lux.swing_trend} "
+            f"ltf_internal={lux.internal_trend} last_break={last_txt} "
+            f"active_obs={len(lux.active_obs())} cands={len(cands)} "
+            f"eq={(f'{z.equilibrium:.8g}' if z else 'NA')}"
+        )
+
     def _emit_setup_candidates(
         self,
         symbol: str,
@@ -2188,8 +2358,16 @@ class SafeOrchestrator:
         ltf_trigger_idx_min: int,
         current_price: float = None,
         df_entry=None,
+        ltf_order_blocks=None,
+        ltf_sfps=None,
+        eq_price=None,
+        rsi_value=None,
+        precomputed_candidates=None,
     ) -> None:
         """Trigger phase: detect new CHoCH events and emit SetupCandidates.
+
+        precomputed_candidates: verilirse (LuxAlgo yolu) generate_setup_candidates
+        ATLANIR, bu liste aynı emit kapılarından (BT-23/BT-25 + cap) geçer.
 
         Per spec §4.3 step 3. Calls engine.smc_v2.triggers.generate_setup_candidates
         and appends each candidate to self.setup_state_store via store.add()
@@ -2203,7 +2381,8 @@ class SafeOrchestrator:
         # Local import to avoid circular dep with smc_v2 package
         from engine.smc_v2.triggers import generate_setup_candidates
 
-        new_candidates = generate_setup_candidates(
+        new_candidates = precomputed_candidates if precomputed_candidates is not None \
+            else generate_setup_candidates(
             symbol=symbol,
             htf_bias=htf_bias,
             ltf_structure_breaks=ltf_structure_breaks,
@@ -2216,6 +2395,17 @@ class SafeOrchestrator:
             # sonrası config'te açar (`smc_v2.anchor_time_axis: true`).
             anchor_time_axis=self.config.get("smc_v2", {}).get(
                 "anchor_time_axis", False),
+            ltf_order_blocks=ltf_order_blocks,
+            df_entry=df_entry,
+            ltf_sfps=ltf_sfps,
+            eq_price=eq_price,
+            rsi_value=rsi_value,
+            ob_bb_zone_atr_pad=self.config.get("smc_v2", {}).get(
+                "ob_bb_zone_atr_pad", 0.0),
+            origin_swing_lookback=int(self.config.get("smc_v2", {}).get(
+                "origin_swing_lookback", 0) or 0),
+            ote_zone_entry=bool(self.config.get("smc_v2", {}).get(
+                "ote_zone_entry", False)),
         )
         # ── BT-23 ENTRY-DISTANCE GATE (2026-07-26) ──
         # Measured on a 30d / 10-symbol full-pipeline replay (2401 emitted
@@ -2314,7 +2504,14 @@ class SafeOrchestrator:
             # add() returns False if per-symbol cap reached — silently dropped
             # (matches spec §6 setup_cap rejection counter; orchestrator
             # could log this in a future patch if operator visibility wanted)
-            self.setup_state_store.add(cand)
+            _added = self.setup_state_store.add(cand)
+            if _added is True and _is_lux_cand(cand):
+                _z = cand.target_zone
+                log.info(
+                    f"[lux] setup+ {symbol} {cand.direction} "
+                    f"zone=[{_z.low:.8g}-{_z.high:.8g}] "
+                    f"sl_anchor={cand.htf_swing_anchor:.8g} | {cand.reasons[0]}"
+                )
 
     def _place_v2_entry_order(
         self,
@@ -2531,8 +2728,18 @@ class SafeOrchestrator:
             log.info(f"[v2 reject] {cand.symbol}: sl_too_far ({e})")
             return None
 
+        _lux_cfg = self.config.get("smc_v2", {}).get("luxalgo", {}) or {}
+        _lux_tp = None
+        if _lux_cfg.get("enabled", False) and _lux_cfg.get("tp_mode", "luxalgo") == "luxalgo" \
+                and df_entry is not None:
+            from engine.smc_v2 import luxalgo as _lx
+            _lux_now = _lx.analyze(df_entry, _lx.LuxConfig.from_dict(_lux_cfg))
+            _lux_tp = lambda: _lx.tp_targets(  # noqa: E731
+                cand.direction, entry_price, sl, _lux_now,
+                float(risk_cfg.get("min_rr", 1.8)),
+                wick_buffer_r=float(_lux_cfg.get("tp_wick_buffer_r", 0.0)))
         try:
-            tp1, tp2, tp_tags = calc_tp_targets(
+            tp1, tp2, tp_tags = _lux_tp() if _lux_tp is not None else calc_tp_targets(
                 direction=cand.direction,
                 entry_price=entry_price,
                 sl_price=sl,
@@ -2542,6 +2749,9 @@ class SafeOrchestrator:
                 config=SimpleNamespace(
                     min_rr=risk_cfg.get("min_rr", 1.8),
                     fib_ext=self.config.get("fibonacci", {}).get("ext_tp2", 1.618),
+                    # Efloud notları: 2.618/1.272/4.23/1.618 — TP2 fallback'inde
+                    # TP1'in ötesine düşen en yakın extension seçilir.
+                    fib_ext_options=self.config.get("fibonacci", {}).get("ext_tp2_options", []),
                     # BT-19: 0.0 (default) = OFF, identical to previous behaviour.
                     max_tp_gap_r=risk_cfg.get("max_tp_gap_r", 0.0),
                 ),
@@ -2647,6 +2857,12 @@ class SafeOrchestrator:
             entry_setup_source = "FVG_PULLBACK"
         elif zone_source == "OTE":
             entry_setup_source = "OTE_RETRACE"
+        elif zone_source == "OB":
+            entry_setup_source = "OB_RETEST"
+        elif zone_source == "BB":
+            entry_setup_source = "BB_RETEST"
+        elif zone_source == "EQ_RETEST":
+            entry_setup_source = "EQ_RETEST"
         else:
             entry_setup_source = None  # forward-compat for unknown ZoneSpec sources
 

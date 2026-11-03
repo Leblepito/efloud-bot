@@ -17,7 +17,7 @@ Efloud'un kullandığı tüm seviyeleri tespit eder:
 """
 
 import pandas as pd
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 import logging
 

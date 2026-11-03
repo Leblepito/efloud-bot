@@ -16,22 +16,27 @@ const reasonStyle: Record<string, string> = {
 export function TradesTable({
   onSelectTrade,
   selectedId,
+  limit = 50,
+  title = "Recent Trades",
 }: {
+  limit?: number;
+  title?: string;
   onSelectTrade?: (trade: any) => void;
   /** Trade id currently open in the inspector — gets a green left-accent highlight. */
   selectedId?: string;
 }) {
-  const { data, isLoading } = useHistory(50);
+  const { data, isLoading } = useHistory(limit);
   const rows = data ?? [];
   const total = rows.reduce((acc, t) => acc + (t.pnl_usdt ?? 0), 0);
   const wins = rows.filter((t) => (t.pnl_usdt ?? 0) > 0).length;
   const losses = rows.filter((t) => (t.pnl_usdt ?? 0) < 0).length;
+  const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : null;
 
   return (
     <div className="border border-border bg-bg-elevated">
       <div className="px-5 py-3 border-b border-border flex flex-wrap items-baseline justify-between gap-3">
         <div className="text-[10px] uppercase tracking-widest text-text-secondary font-mono">
-          Recent Trades
+          {title} <span className="text-text-muted">({rows.length})</span>
         </div>
         <div className="text-[11px] font-mono tabular-nums text-text-muted flex gap-6">
           <span>
@@ -39,6 +44,7 @@ export function TradesTable({
             {" / "}
             <span className="text-accent-red">{losses}L</span>
           </span>
+          {winRate != null && <span>win {winRate.toFixed(0)}%</span>}
           <span className={total >= 0 ? "text-accent-green" : "text-accent-red"}>
             net {usd(total)}
           </span>
@@ -103,7 +109,11 @@ export function TradesTable({
                       <span className="text-text-muted">—</span>
                     )}
                   </td>
-                  <td className="px-5 py-2 text-right text-text-muted">{fromNow(t.closed_at)}</td>
+                  <td className="px-5 py-2 text-right text-text-muted" title={t.closed_at ?? ""}>
+                    {limit > 50 && t.closed_at
+                      ? new Date(t.closed_at).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })
+                      : fromNow(t.closed_at)}
+                  </td>
                 </tr>
               );
             })}

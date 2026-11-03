@@ -24,9 +24,6 @@ def render_alert_html(alert: StructuredAlert) -> str:
         lines.append(f"\n⚠️ <b>Action Required:</b> <i>{alert.action_required}</i>")
     return "\n".join(lines)
 
-import os
-import json
-import httpx
 import logging
 
 log = logging.getLogger("efloud.alerter.formatter")

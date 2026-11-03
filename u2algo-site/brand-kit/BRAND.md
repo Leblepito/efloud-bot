@@ -132,7 +132,7 @@ landing-reference/      — eski landing component'leri (DESEN referansı, kopya
 ---
 
 ## 7. GTM Compliance Hatırlatması
-Marka görseli ne olursa olsun, içerik kuralı değişmez (docs/marketing/GO_TO_MARKET):
+Marka görseli ne olursa olsun, içerik kuralı değişmez:
 - Getiri garantisi / "kesin kazanır" / fon toplama YASAK.
 - "Yatırım tavsiyesi değildir" + risk disclosure ZORUNLU.
 - landing-reference içindeki ROICalculator/Testimonials gibi bileşenler kullanılacaksa GTM'e göre süzülmeli (uydurma metrik/yorum yok).

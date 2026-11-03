@@ -8,7 +8,7 @@ These tests encode the fix for the 2026-05 SL/TP missing orders bug:
 from __future__ import annotations
 
 import logging
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

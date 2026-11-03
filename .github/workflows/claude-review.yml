@@ -1,14 +1,14 @@
 name: Claude Code Review (risk/safety + SMC strategy)
 
-# CI-resident counterpart to the interactive Claude Code subagents in
-# .claude/agents/{risk-safety-auditor,smc-strategy-reviewer}.md. Read-only —
+# Agent prompts: scripts/ci/agents/{risk-safety-auditor,smc-strategy-reviewer}.md. Read-only —
 # posts a review comment, never pushes commits or auto-merges. Mainnet/risk
 # config changes still require a human merge decision; this only automates
 # producing the review, not the approval.
 on:
   pull_request:
     paths:
-      - 'engine/safety.py'
+      - 'engine/safety/**'
+      - 'configs/**'
       - 'engine/risk/**'
       - 'engine/lifecycle.py'
       - 'exchange/**'
@@ -38,7 +38,8 @@ jobs:
         with:
           filters: |
             risk_safety:
-              - 'engine/safety.py'
+              - 'engine/safety/**'
+              - 'configs/**'
               - 'engine/risk/**'
               - 'engine/lifecycle.py'
               - 'exchange/**'

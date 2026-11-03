@@ -42,7 +42,7 @@ from typing import Dict, List, Optional, Sequence
 
 import pandas as pd
 
-from engine.smc import FVG, StructBreak, Swing
+from engine.smc import FVG, StructBreak
 
 # Kanıt tipleri ve ağırlıkları — hepsi ÇIKARIM (kaynakta sayı yok).
 EVIDENCE_WEIGHTS: Dict[str, int] = {

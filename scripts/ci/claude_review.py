@@ -1,7 +1,7 @@
 """CI-resident runner for the Claude Code review subagents.
 
-Mirrors `.claude/agents/{smc-strategy-reviewer,risk-safety-auditor}.md`
-(interactive Claude Code subagents) so the same review runs headlessly on
+Agent prompts live in `scripts/ci/agents/{smc-strategy-reviewer,risk-safety-auditor}.md`
+(tracked in git; `.claude/` is gitignored, so it is absent on the CI runner) so the review runs headlessly on
 PRs that touch risk-critical or SMC-strategy paths. Read-only: posts a
 review comment on the PR, never writes code or auto-merges.
 
@@ -18,7 +18,7 @@ import sys
 
 import anthropic
 
-AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", ".claude", "agents")
+AGENTS_DIR = os.path.join(os.path.dirname(__file__), "agents")
 
 # Cap the diff sent to the model — large PRs get truncated rather than
 # failing outright or blowing the context budget.

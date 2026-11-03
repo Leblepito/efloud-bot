@@ -16,7 +16,6 @@ Atomik yazım: önce .tmp'ye yaz, sonra rename (crash-safe).
 
 import json
 import os
-import tempfile
 import threading
 import shutil
 from pathlib import Path

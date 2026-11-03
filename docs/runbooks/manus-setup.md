@@ -230,8 +230,8 @@ Her template:
 
 ## 8. Referanslar
 
-- P-002 plan: `LLTODO/plans/P-002-marketing-growth-pipeline.md` (§2 Faz A M3, §4 S5 secrets).
-- LLTODO M3 kartı: `LLTODO/tasks/IN_PROGRESS/M3-manus-rest-client.md`.
+- P-002 plan ve M3 görev kartı arşivi kaldırıldı (LLTODO/ klasörü repo temizliğinde silindi);
+  güncel operasyon kuralları için `CLAUDE.md` ve `skills/social-publishing/SKILL.md`.
 - Manus API docs: <https://open.manus.im/docs> (v2 aktif).
 - Client modülü: `backend/social/manus_client.py` (410 satır).
 - Test: `backend/tests/test_manus_client.py` (41 test, hermetic — network YOK).

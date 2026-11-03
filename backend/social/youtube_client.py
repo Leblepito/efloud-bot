@@ -41,7 +41,7 @@ except ImportError:
     log.warning("gTTS not available - YouTube client will be limited")
 
 try:
-    from moviepy.editor import CompositeVideoClip, ImageClip, AudioFileClip, TextClip, ColorClip
+    from moviepy.editor import CompositeVideoClip, ImageClip, AudioFileClip, ColorClip
     _MOVIEPY_AVAILABLE = True
 except ImportError:
     log.warning("moviepy not available - YouTube client will be limited")

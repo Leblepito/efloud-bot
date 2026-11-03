@@ -67,14 +67,14 @@ def _build_setup_state_store(cfg: dict, state_dir: str):
     When v2 active: returns SetupStateStore at {state_dir}/setup_candidates.json
     with max_pending_per_symbol from smc_v2 block (default 3 per spec §9).
     """
-    print(f"[DEBUG] _build_setup_state_store called")
+    print("[DEBUG] _build_setup_state_store called")
     print(f"[DEBUG] cfg.get('engine') = {cfg.get('engine')}")
     smc_version = cfg.get("engine", {}).get("smc_version")
     print(f"[DEBUG] smc_version = {smc_version!r}")
     if smc_version != "v2":
-        print(f"[DEBUG] smc_version != 'v2', returning None")
+        print("[DEBUG] smc_version != 'v2', returning None")
         return None
-    print(f"[DEBUG] Creating SetupStateStore...")
+    print("[DEBUG] Creating SetupStateStore...")
     from engine.smc_v2.setup_state import SetupStateStore
     smc_v2_cfg = cfg.get("smc_v2", {})
     store = SetupStateStore(
@@ -664,9 +664,9 @@ def main():
             success = client.set_position_mode(hedge_mode)
             if not success:
                 log.critical(
-                    f"⛔ CRITICAL: Position mode setup failed! Binance rejected the change. "
-                    f"Make sure you have NO open positions and NO open orders on your entire Futures account, "
-                    f"then restart the bot."
+                    "⛔ CRITICAL: Position mode setup failed! Binance rejected the change. "
+                    "Make sure you have NO open positions and NO open orders on your entire Futures account, "
+                    "then restart the bot."
                 )
                 sys.exit(1)
         except Exception as e:

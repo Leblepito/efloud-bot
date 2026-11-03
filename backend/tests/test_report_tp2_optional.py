@@ -5,7 +5,7 @@ PR #S5.5 substitutes a string literal for the None case.
 """
 from __future__ import annotations
 
-from engine.lifecycle import Position, PositionLifecycle
+from engine.lifecycle import PositionLifecycle
 
 
 def _open_single_target_position():
@@ -18,7 +18,6 @@ def _open_single_target_position():
 
 def test_report_renders_single_target_position_without_crash():
     """Build the position-summary report line; must not raise on tp2=None."""
-    from engine import report
     lc, p = _open_single_target_position()
 
     # Find the function — render markdown that exercises line 134's format string.

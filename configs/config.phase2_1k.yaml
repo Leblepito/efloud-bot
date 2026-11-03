@@ -41,19 +41,19 @@
 # basmadan önce dashboard → Positions'ın boş (flat) olduğunu doğrula.
 #
 # Risk profili (safety: bloğuyla SENKRON — değiştirirsen İKİSİNİ birlikte güncelle):
-#   Cüzdan:           ~$1363 (2026-07-09 düzeltme; kendi izole Binance sub-account'ı) — YENİDEN DOĞRULA
+#   Cüzdan:           ~$403.55 (2026-09-28 düzeltme; kendi izole Binance sub-account'ı, canlı API ile doğrulandı)
 #   Kaldıraç:         10x (exchange.leverage; 2026-07-24 operatör talebi, WAS 5x)
 #   Sizing modu:      FIXED — $50 margin/coin × 10x = $500 notional/pozisyon (2026-07-24, WAS legacy %risk-bazlı)
 #   Eşzamanlı max:    10 pozisyon (max_total_exposure 1.0→6.0, 10×$500 desteklemek için)
 #   Daily loss:       %10 ≈ $136 → breaker TRIPS (daily_loss_limit_pct)
 #   Weekly DD:        %25 ≈ $341 → breaker HALTS (weekly_drawdown_limit_pct)
-#   Acil halt:        bakiye $1216 altına düşünce (emergency_balance_threshold)
+#   Acil halt:        bakiye $360 altına düşünce (emergency_balance_threshold)
 #
 # Önkoşullar (preflight.py ile doğrulanmış olmalı):
 #   ✓ canTrade = true (futures yetkisi)
 #   ✓ canWithdraw = false (çekim kapalı, key sızsa fon güvende)
 #   ✓ Position mode = ONE-WAY (hedge_mode:false; bot startup'ta zorlar — set_position_mode)
-#   ✓ Bakiye ≥ $1363 Futures cüzdanında (emergency_balance_threshold $1216 üstü)
+#   ✓ Bakiye ≥ $403.55 Futures cüzdanında (emergency_balance_threshold $360 üstü)
 #   ✓ EFLOUD_ALLOW_MAINNET=1
 #
 # Çalıştırmak için (lokal):
@@ -112,6 +112,19 @@ smc_v2:
   confirm_last_bar_only: false  # C2: yalnız son kapanmış bar engulfing onayı
                                 #     (stale onay biter)
 
+  # OB/BB entry (2026-09-30, operatör onayı): CHoCH kırılımı olur olmaz
+  # kırılım çizgisinden işleme girmek yerine, kırılımı YAPAN OrderBlock /
+  # BreakerBlock bölgesinden girilir; SL çapası bloğun bir önceki mumu
+  # (origin mum) olur. OB/BB bulunamazsa legacy FVG/OTE yolu korunur.
+  ob_bb_entry: true
+
+  # Po3 gate (Efloud notları: "Konsolide olan fiyat sınırlı bir bölgede
+  # hareket eder... yeni bir emare görülene kadar işlem alınmaz" +
+  # "manipulation fazında işlem açılmaz"). Accumulation/Manipulation/
+  # Distribution faz tespiti; MANIPULATION fazında giriş bloklanır ama
+  # setup ölmez — displacement gelip DISTRIBUTION'a dönünce kapı açılır.
+  po3_gate: true
+
   # BT-23 (2026-07-26): emit anında hedef bölgenin YAKIN kenarı 15m Wilder
   # ATR(14)'ün bu katından uzaksa setup hiç açılmaz. 30g/10 sembol tam pipeline
   # replay: 4.0 ATR ötesinde 2401 setup'ın HİÇBİRİ CONFIRMED olmadı (1400 ölü
@@ -120,7 +133,7 @@ smc_v2:
   # cap_dropped 3256->1010, CONFIRMED 594->597 (hiçbir sembolde kayıp yok).
   # 6.0 seçildi (4.0 değil): uçurum 4.0'da ölçüldü, 1.5x pay bırakıldı.
   # 0.0 = kapalı (diğer configlerin varsayılanı — ölçülmediler).
-  max_entry_dist_atr: 6.0
+  max_entry_dist_atr: 12.0  # 2026-11-01: LuxAlgo modunda gevsetildi (8.0 -> 12.0); cok SL olursa 8.0 veya 6.0 a geri dusur
 
   # BT-25 adim 1 (2026-07-27): pullback bekleme suresi 8 -> 24 bar (6 saat).
   # Kod varsayilani 8 bar; config'te bu anahtar YOKTU, yani canli bot 2 saatte
@@ -130,7 +143,14 @@ smc_v2:
   # cikti" ilerlemesi her 8 barda cope gidiyordu; giris zinciri (bolgeye gir ->
   # cik -> tekrar gir -> engulfing onayi = 4 olay) 2 saate sigmiyor. 24 bar
   # recency_bars: 40'in altinda kalir, yani aday CHoCH hala gecerliyken yasar.
-  pullback_timeout_bars: 24
+  pullback_timeout_bars: 12
+
+  # 2026-10-02 OPERATÖR: max_pending_per_symbol 3 → 6. Dedup fix'i
+  # (setup_state.add) aynı kırılımın slot işgalini engelliyor; cap artık
+  # farklı kırılımların birikmesine izin veriyor. pullback_timeout_bars 24→12:
+  # eski adaylar daha hızlı EXPIRED olup cap'i boşaltıyor (12 bar = 3 saat,
+  # recency_bars 40'ın altında — aday CHoCH hâlâ geçerliyken yaşar).
+  max_pending_per_symbol: 6
 
   # BT-25 adim 2 (2026-07-27): max_entry_dist_atr TEK TARAFLI -- sadece "bolge
   # cok ILERIDE" durumunu eler. Fiyatin coktan ICINDEN GECTIGI bolge negatif
@@ -140,7 +160,44 @@ smc_v2:
   # doldurup expire olur. Bu anahtar bolgenin UZAK kenarini olcer (bolge
   # genisliginden bagimsiz): fiyat uzak kenari bu kadar ATR'den fazla gectiyse
   # setup acilmaz. 0.5 = yarim ATR tolerans. Anahtar YOKSA kapi kapali.
-  max_zone_overshoot_atr: 0.5
+  max_zone_overshoot_atr: 6.0
+
+  # 2026-10-03 OPERATÖR: OB/BB zone'ları tek mum genişliğinde (0.1-0.7%) —
+  # fiyat bu dar bölgelere nadiren geri çekiliyor, bot 1400 cycle işleme
+  # giremedi. Kullanıcının notuna göre "EQ'lar spesifik olarak değil alan
+  # olarak güzel çalışır". Zone'u her iki taraftan 0.5 ATR genişlet —
+  # "kırılımı yapan bloktan giriş" prensibi korunur, fiyatın zone'a girme
+  # olasılığı artar. 0.0 = kapalı (değişiklik yok).
+  ob_bb_zone_atr_pad: 0.5
+  origin_swing_lookback: 12
+  ote_zone_entry: true
+
+  # ── LuxAlgo SMC modu (2026-11-01, operatör kararı: "luxalgo mantığını
+  # kullanalım"). Açıkken v2 setup üretimi (BOS/CHoCH + OB + premium/discount),
+  # HTF bias ve TP hedefleri engine/smc_v2/luxalgo.py'den gelir; efloud
+  # triggers yolu (OB/BB, OTE, FVG, origin swing) devre dışı kalır. Onay mumu,
+  # calc_sl ATR sınırları, BT-23/BT-25 kapıları ve risk/safety aynen geçerli.
+  # ⚠️ NET-cost backtest YAPILMADI (backtest modülü 562a6a3'te repo'dan
+  # kaldırıldı). Geri dönüş: enabled: false (tek satır).
+  luxalgo:
+    enabled: true
+    swing_length: 50
+    internal_length: 5
+    eq_length: 3
+    eq_threshold: 0.1
+    ob_filter: ATR
+    ob_mitigation: HIGHLOW
+    internal_confluence_filter: false
+    fvg_auto_threshold: true
+    use_internal: true
+    use_swing: true
+    require_premium_discount: true
+    kinds: [CHoCH, BOS]
+    tp_mode: luxalgo
+    min_confluence: 1           # OB + >=1 ek konsept (SWING_OB/OTE/EQ/FVG/SWEEP) — Efloud notlari
+    tp_wick_buffer_r: 0.15       # likidite/wick TP hedefi wick uc degil, 0.15R iceride
+    pullback_timeout_bars: 48     # entry-TF bar (scalp 4s / mid 12s / long 2g)
+    htf: {}
 
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:
@@ -169,7 +226,7 @@ timeframes:
   htf: 12h         # custom/fallback (profile yoksa/custom ise kullanılır)
   mtf: 4h
   entry: 15m
-  kline_limit: 500
+  kline_limit: 750
 
 structure:
   swing_lookback: 5
@@ -182,6 +239,9 @@ fibonacci:
   ote_lower: 0.618
   ote_upper: 0.786
   ext_tp2: 1.618
+  # Efloud notları: "2.618 - 1.272 - 4.23 - 1.618 (Efloudun kullandığı değerler)".
+  # TP2 fallback'inde TP1'in ötesine düşen EN YAKIN extension seçilir.
+  ext_tp2_options: [1.272, 1.618, 2.618, 4.23]
 
 # ── Risk: $100 notional cap, ~$10 risk per trade, gevşetilmiş filtreler ──
 risk:
@@ -201,7 +261,13 @@ risk:
                                       # +110%/DD5.4/PF2.34/WR53.7 (step=8). conf=50 PF
                                       # ustura-ince (fee'siz); conf=80 her metrikte domine.
                                       # docs/audit/03_strategy_review.md (S1).
-  recency_bars: 40
+  # 2026-10-03 OPERATÖR: recency_bars 40 → 168 (42 saat). Canlı teşhis:
+  # BTC'de son 24 saatte 3 BULL + 1 BEAR kırılımı oldu ama hepsi 40 bar (10s)
+  # penceresinin dışında kaldığı için 0 aday üretildi — bot 1400 cycle işleme
+  # girmedi. Kullanıcının price-action notuna göre 15m grafik 3.5 günlük bakış
+  # açısıyla hazırlanmalı; 168 bar (42s) hem "son 24 saat" ihtiyacını karşılar
+  # hem de 3.5 günün yarısı — çok eski kırılımları kabul etmez.
+  recency_bars: 168
   sl_atr_buffer: 0.5
   daily_filter_strict: false
 
@@ -239,6 +305,19 @@ llm:
   provider: minimax
   model: MiniMax-M2.7-highspeed       # fast low-latency variant; advisory needs no heavy reasoning
 
+# ── Agent team — OBSERVATION mode (operator decision 2026-11-03) ──────────────
+# Every opened trade gets an async team review (Regime/SignalValidator/RiskReviewer/
+# Overseer); the verdict (ACCEPT/REJECT/NEUTRAL/ERROR) is written to the trade's
+# journal row (agent_review) so its edge can be measured later with
+# scripts/desk/agent_verdict_edge.py. gating:false → it NEVER blocks or changes a
+# trade; flipping it needs a recorded shadow period + operator sign-off.
+# One LLM call set per OPENED trade (not per signal). Key: ANTHROPIC_API_KEY.
+agent_team:
+  enabled: true
+  gating: false
+  provider: claude
+  model: claude-sonnet-5-5
+
 # ── Kronos advisory layer (time-series forecast + LLM synthesis) ──────────────
 # ADDITIVE & ADVISORY-ONLY: produces commentary + a categorical band for Telegram
 # (and the DB when present). It NEVER feeds trade/sizing/SL-TP/confluence logic.
@@ -267,11 +346,17 @@ safety:
   weekly_drawdown_limit_pct: 25.0     # 2026-06-01: 20→25 (operator) — daha geniş haftalık DD toleransı
   consecutive_loss_limit: 3
   consecutive_pause_min: 120
-  starting_balance: 1363              # 2026-07-09 düzeltme: kendi izole Binance sub-account bakiyesi. Bkz. dosya başı.
+  starting_balance: 403.55            # 2026-09-28 düzeltme: kullanıcı sub-account'a 403 USDT yatırdı (canlı bakiye doğrulandı); starting_balance/emergency_balance_threshold önceki $1363 baseline'dan gerçek bakiyeye göre yeniden ölçeklendi (aynı ~%89.2 tampon oranı korunarak).
 
   adx_trend_threshold: 25
   adx_range_threshold: 20
   volatile_atr_mult: 2.5
+  # 2026-10-01 OPERATÖR: allow_volatile_entries açıldı. 2026-10-01 günü rejim
+  # kapısı 119 kez VOLATILE blokajı yaptı (atr_ratio>2.5 VEYA atr_ratio>1.2+BB
+  # genişlemesi) — bot gün boyunca yalnız 1 pozisyon açabildi. Config "agresif"
+  # etiketli; SMC pullback stratejisi (OB/BB retest + likidite çizgisi SL) zaten
+  # volatil piyasa için tasarlandı. Daily %10 / weekly %25 limitler korumada.
+  allow_volatile_entries: true
   # C3 (default OFF): true → the ML regime model may overwrite the deterministic
   # regime that feeds the entry gate (can_open_new_position). FALSE = ML advisory/
   # log-only. Flip true ONLY after forward-labels training + a regime-conditioned
@@ -304,7 +389,7 @@ safety:
   # izlenecek — "SL too wide" log satırı say.
   reject_wide_sl: true
 
-  emergency_balance_threshold: 1216   # Bakiye $1216 altı → HALT (~%10.8 kayıp, $1363 cüzdana göre). 2026-07-09 düzeltme.
+  emergency_balance_threshold: 0      # 2026-10-01 OPERATÖR: acil bakiye HALTI KALDIRILDI. 0 = devre dışı (breaker.check: balance < 0 mümkün değil). Gerekçe: bakiye $358.10'e düşünce $360 eşiği bot'u kalıcı HALTED yaptı — HALTED auto-resume olmadigi için restart da açmıyor, manual reset gerekiyor. Daily (%10) ve weekly (%25) breaker kontrolleri DEVREDE.
   reserve_balance: 0                   # Tüm bakiye kullanılabilir
 
   min_seconds_between_symbol_fetches: 0.5

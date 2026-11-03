@@ -13,6 +13,7 @@ uvicorn[standard]>=0.32.0
 asyncpg>=0.30.0
 itsdangerous>=2.2.0
 python-multipart>=0.0.12
+websockets>=13.0
 
 # Social media publishing (Wave 2A - optional)
 requests>=2.32.0

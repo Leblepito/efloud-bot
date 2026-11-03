@@ -77,6 +77,20 @@ export default function Dashboard() {
           </section>
         </div>
 
+        <div className={activeTab === "history" ? "space-y-6" : "hidden"}>
+          <section>
+            <EquityChart />
+          </section>
+          <section>
+            <TradesTable
+              limit={500}
+              title="Trade History"
+              onSelectTrade={setSelectedTrade}
+              selectedId={selectedTrade?.id}
+            />
+          </section>
+        </div>
+
         <div className={activeTab === "research" ? "space-y-6" : "hidden"}>
           <section>
             <SocialLearningCenter />

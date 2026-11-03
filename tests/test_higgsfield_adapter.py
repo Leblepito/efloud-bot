@@ -229,6 +229,7 @@ class TestRenderClipIntegration:
 
         if not ffmpeg_available():
             pytest.skip("ffmpeg not installed")
+        pytest.importorskip("matplotlib")  # optional dep (not in requirements.txt)
         from scripts.chart_render import TradeLevels, render_trade_chart
         import pandas as pd
 

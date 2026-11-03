@@ -22,7 +22,7 @@ Saf fonksiyon — I/O yok, log yok.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Optional
 
 import pandas as pd
 

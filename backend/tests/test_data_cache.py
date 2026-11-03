@@ -2,7 +2,7 @@
 import pandas as pd
 import pytest
 
-from data.cache import OHLCVCache, hash_dataframe
+from data.cache import OHLCVCache
 
 
 @pytest.fixture
