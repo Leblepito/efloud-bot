@@ -2,9 +2,9 @@
 #
 # Kurulum: bkz. deploy/research-cycle.service başlığı ve docs/runbooks/research-cycle.md
 #
-# Kadans: OnBootSec=5min (boot'tan 5 dk sonra bir kez) + OnUnitActiveSec=5h
-# (son koşudan 5 saat sonra). Persistent=true → VPS kapalı/reboot olduysa
-# kaçırılan koşu açılışta telafi edilir.
+# Kadans: OnBootSec=5min (boot'tan 5 dk sonra bir kez — reboot sonrası telafi budur)
+# + OnUnitActiveSec=5h (son koşudan 5 saat sonra). Persistent= KULLANILMAZ: yalnız
+# OnCalendar= timer'larında etkilidir, bu monotonic timer'da no-op olurdu.
 
 [Unit]
 Description=Run the efloud advisory research cycle every 5 hours
@@ -13,7 +13,6 @@ Documentation=file:/opt/efloud-bot/docs/runbooks/research-cycle.md
 [Timer]
 OnBootSec=5min
 OnUnitActiveSec=5h
-Persistent=true
 Unit=research-cycle.service
 # Boot'ta servisler oturana kadar bekle (bot/autoheal ile çakışmasın).
 AccuracySec=1min

@@ -26,6 +26,10 @@ WorkingDirectory=/opt/efloud-bot
 ExecStart=/opt/efloud-bot/deploy/research-cycle.sh
 # TradingAgents bir koşuda çok sayıda LLM çağrısı yapar; 30 dk tavan.
 TimeoutStartSec=1800
+# systemd zaman aşımında/stop'ta yalnız `docker run` istemcisini öldürür; konteyner
+# yaşamaya (ve LLM kredisi harcamaya) devam edebilir, sonraki koşu --name çakışmasına
+# düşer. Servis her durduğunda konteyneri kaldır ("-" = konteyner yoksa hata sayma).
+ExecStopPost=-/usr/bin/docker rm -f efloud-research-run
 # Bir sonraki timer tick'ine sarkarsa iptal et (systemd aynı unit'i üst üste başlatmaz).
 Nice=10
 # Loglar: journal + repo içi dosya (logs/ gitignore'lu).
