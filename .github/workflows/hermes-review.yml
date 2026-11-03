@@ -52,28 +52,6 @@ jobs:
           NUM=$(gh issue list --search "Scheduled review/security findings in:title" --state open --json number --jq '.[0].number' --repo "${{ github.repository }}")
           echo "issue_number=${NUM}" >> "$GITHUB_OUTPUT"
 
-      # On the daily cron there is no explicit issue_number input — look up
-      # the open tracking issue the scheduled-review workflow files/updates.
-      - name: Resolve target issue
-        id: target_issue
-        if: github.event_name == 'schedule'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          NUM=$(gh issue list --search "Scheduled review/security findings in:title" --state open --json number --jq '.[0].number' --repo "${{ github.repository }}")
-          echo "issue_number=${NUM}" >> "$GITHUB_OUTPUT"
-
-      # On the daily cron there is no explicit issue_number input — look up
-      # the open tracking issue the scheduled-review workflow files/updates.
-      - name: Resolve target issue
-        id: target_issue
-        if: github.event_name == 'schedule'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          NUM=$(gh issue list --search "Scheduled review/security findings in:title" --state open --json number --jq '.[0].number' --repo "${{ github.repository }}")
-          echo "issue_number=${NUM}" >> "$GITHUB_OUTPUT"
-
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
