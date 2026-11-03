@@ -27,14 +27,14 @@ Framework: [TradingAgents](https://github.com/TauricResearch/TradingAgents)
 ```bash
 python -m venv .venv-research
 .venv-research/bin/pip install -r requirements-research.txt
-export ANTHROPIC_API_KEY=...            # or another provider's key
+export OPENROUTER_API_KEY=...           # tek anahtar; başka sağlayıcı için onun anahtarı
 .venv-research/bin/python scripts/desk/tradingagents_brief.py --symbol BTC/USDT --engine-bias BULL
 ```
 
 Options: `--date YYYY-MM-DD` (default today UTC), `--provider` (default
-`anthropic`; also `openai`, `google`, `minimax`, `deepseek`, `openrouter`, …),
-`--deep-model` / `--quick-model` (defaults `claude-opus-5-5` / `claude-sonnet-5-5`,
-override with `TRADINGAGENTS_*` env vars), `--out desk/briefs`.
+`openrouter`; also `anthropic`, `openai`, `google`, `minimax`, `deepseek`, …),
+`--deep-model` / `--quick-model` (defaults `deepseek/deepseek-v4-pro` /
+`deepseek/deepseek-v4.1-flash`, override with `TRADINGAGENTS_*` env vars), `--out desk/briefs`.
 
 Output: `desk/briefs/<date>-<SYM>USDT-tradingagents.{md,json}` with `rating`,
 `lean` (BULL/NEUTRAL/BEAR), `engine_comparison` (agree / disagree / neutral /
@@ -46,9 +46,12 @@ and memory stay under `desk/tradingagents/`.
 `scripts/desk/research_cycle.py` runs every 5 hours per symbol: the engine's
 LuxAlgo-port structure on **15m / 1h / 4h** (trend, last BOS/CHoCH, zone, active
 OBs, alignment), then TradingAgents with the **4h swing trend** as the engine bias.
-Models: quick tier (analysts, debate, trader, risk team) = **Sonnet 5.5**; deep tier
-(research manager + portfolio manager — where conflicting views are resolved, i.e.
-the "ask Opus when it gets hard" step) = **Opus 5.5**. Output:
+Models: quick tier (analysts, debate, trader, risk team) =
+**deepseek/deepseek-v4.1-flash**; deep tier (research manager + portfolio manager —
+where conflicting views are resolved, i.e. the "ask the stronger model when it gets
+hard" step) = **deepseek/deepseek-v4-pro**. Both via OpenRouter, tek anahtar:
+`OPENROUTER_API_KEY` (operator decision 2026-11-03 — VPS'te Anthropic anahtarı yok,
+`claude-*` modeli her çağrıda 401 verir). Output:
 `desk/briefs/<YYYY-MM-DD-HHMM>-<SYM>USDT-research.{md,json}`.
 
 ```bash
@@ -62,7 +65,9 @@ Schedule (owner: Hermes, or the operator on the VPS):
 - or cron: `0 */5 * * * cd <repo> && .venv-research/bin/python scripts/desk/research_cycle.py >> logs/research_cycle.log 2>&1`
   (runs at 00/05/10/15/20 UTC; the last gap of the day is 4 h).
 
-Cost: every TradingAgents run makes many LLM calls, and the deep tier is Opus.
+Cost: every TradingAgents run makes many LLM calls (four analysts, debate rounds,
+risk team) — the deep tier is the pro model, the most expensive part. OpenRouter
+billing: https://openrouter.ai/activity.
 Start with BTC and ETH (the default); add symbols only after checking the bill.
 A symbol whose data or LLM call fails is reported as **unavailable** and the cycle
 continues.

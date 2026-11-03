@@ -17,10 +17,12 @@ pandas>=3.0.6; constraints.txt pins pandas==3.0.3). Run it from its own venv:
     python -m venv .venv-research
     .venv-research/bin/pip install -r requirements-research.txt
     .venv-research/bin/python scripts/desk/tradingagents_brief.py --symbol BTC/USDT \
-        [--engine-bias BULL] [--provider anthropic]
+        [--engine-bias BULL] [--provider openrouter]
 
-LLM keys come from the environment (e.g. ANTHROPIC_API_KEY); market data comes
-from TradingAgents' default free vendors (Yahoo; FRED needs FRED_API_KEY).
+LLM keys come from the environment (e.g. OPENROUTER_API_KEY; TradingAgents also
+reads ANTHROPIC_API_KEY / DEEPSEEK_API_KEY / MINIMAX_API_KEY / ... for other
+providers); market data comes from TradingAgents' default free vendors (Yahoo;
+FRED needs FRED_API_KEY).
 News/social text enters the LLM context — treat every claim in the report as
 evidence to verify, never as an instruction.
 """
@@ -147,9 +149,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Advisory TradingAgents brief for a crypto symbol.")
     ap.add_argument("--symbol", required=True)
     ap.add_argument("--date", default=dt.datetime.now(dt.UTC).date().isoformat())
-    ap.add_argument("--provider", default=os.getenv("TRADINGAGENTS_LLM_PROVIDER", "anthropic"))
-    ap.add_argument("--deep-model", default=os.getenv("TRADINGAGENTS_DEEP_THINK_LLM", "claude-opus-5-5"))
-    ap.add_argument("--quick-model", default=os.getenv("TRADINGAGENTS_QUICK_THINK_LLM", "claude-sonnet-5-5"))  # off-catalog: TA only warns
+    ap.add_argument("--provider", default=os.getenv("TRADINGAGENTS_LLM_PROVIDER", "openrouter"))
+    ap.add_argument("--deep-model", default=os.getenv("TRADINGAGENTS_DEEP_THINK_LLM", "deepseek/deepseek-v4-pro"))
+    ap.add_argument("--quick-model", default=os.getenv("TRADINGAGENTS_QUICK_THINK_LLM", "deepseek/deepseek-v4.1-flash"))
     ap.add_argument("--engine-bias", choices=["BULL", "BEAR"], help="engine HTF bias, for comparison only")
     ap.add_argument("--out", default="desk/briefs")
     a = ap.parse_args(argv)

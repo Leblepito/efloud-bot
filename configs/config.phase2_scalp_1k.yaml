@@ -171,10 +171,11 @@ operation:
   state_dir: ./state_scalp
   reports_dir: ./reports_scalp
 
-# ── Advisory LLM backend — V1 ile aynı ──
+# ── Advisory LLM backend — V1 ile aynı (openrouter / deepseek flash) ──
+# Key: OPENROUTER_API_KEY. Operator decision 2026-11-03: tek anahtar, tek sağlayıcı.
 llm:
-  provider: minimax
-  model: MiniMax-M2.7-highspeed
+  provider: openrouter
+  model: deepseek/deepseek-v4.1-flash
 
 # ── Kronos advisory layer — V1 ile aynı: OFF ──
 kronos:

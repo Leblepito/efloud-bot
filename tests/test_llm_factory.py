@@ -5,10 +5,16 @@ validation) all resolve the same provider from config. Default is Claude
 (``provider: claude``); Gemini stays selectable as a fallback. Both backends
 duck-type the ``complete_json(prompt) -> dict`` contract.
 """
-from engine.agents.llm import make_llm_client
+from engine.agents.llm import (
+    make_llm_client,
+    provider_key_present,
+    resolve_provider,
+    PROVIDER_KEY_ENV,
+)
 from engine.agents.claude_client import ClaudeClient
 from engine.agents.gemini_client import GeminiClient
 from engine.agents.minimax_client import MiniMaxClient
+from engine.agents.openrouter_client import OpenRouterClient, DEFAULT_MODEL as OR_DEFAULT_MODEL
 
 
 def test_default_is_claude():
@@ -72,3 +78,66 @@ def test_config_provider_overrides_env(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "gemini")
     # explicit config beats the env fallback
     assert isinstance(make_llm_client({"provider": "claude"}), ClaudeClient)
+
+
+# ── OpenRouter (operator decision 2026-11-03) ──────────────────────────────────
+
+
+def test_explicit_openrouter():
+    client = make_llm_client({"provider": "openrouter"})
+    assert isinstance(client, OpenRouterClient)
+    assert client.model == OR_DEFAULT_MODEL
+
+
+def test_openrouter_model_override():
+    client = make_llm_client({"provider": "openrouter", "model": "deepseek/deepseek-v4-pro"})
+    assert isinstance(client, OpenRouterClient)
+    assert client.model == "deepseek/deepseek-v4-pro"
+
+
+def test_openrouter_via_env_lever(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openrouter")
+    assert isinstance(make_llm_client(), OpenRouterClient)
+    assert isinstance(make_llm_client({"provider": "OPENROUTER"}), OpenRouterClient)
+
+
+def test_openrouter_api_key_from_env(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-fixture-key")
+    assert OpenRouterClient().api_key == "test-fixture-key"
+
+
+# ── provider_key_present: the startup/sentiment gate ──────────────────────────
+
+
+def test_resolve_provider_precedence(monkeypatch):
+    assert resolve_provider({}) == "claude"
+    assert resolve_provider(None) == "claude"
+    monkeypatch.setenv("LLM_PROVIDER", "OpenRouter")
+    assert resolve_provider({}) == "openrouter"
+    assert resolve_provider({"provider": "Claude"}) == "claude"  # config wins
+
+
+def test_key_present_reads_the_resolved_provider_env(monkeypatch):
+    # A hard-coded ANTHROPIC/GEMINI check used to skip a working OpenRouter
+    # deployment; the gate must follow the resolved provider's env var.
+    for env_name in PROVIDER_KEY_ENV.values():
+        monkeypatch.delenv(env_name, raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "x")
+    assert provider_key_present({"provider": "openrouter"}) is True
+    assert provider_key_present({"provider": "claude"}) is False
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    assert provider_key_present({"provider": "openrouter"}) is False
+
+
+def test_key_present_honours_an_inline_config_key(monkeypatch):
+    for env_name in PROVIDER_KEY_ENV.values():
+        monkeypatch.delenv(env_name, raising=False)
+    assert provider_key_present({"provider": "openrouter", "api_key": "inline"}) is True
+
+
+def test_key_present_unknown_provider_falls_back_to_default_backend(monkeypatch):
+    for env_name in PROVIDER_KEY_ENV.values():
+        monkeypatch.delenv(env_name, raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    # unknown provider → claude client → claude key is the one that matters
+    assert provider_key_present({"provider": "bogus"}) is True
