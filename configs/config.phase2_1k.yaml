@@ -296,14 +296,17 @@ operation:
   reports_dir: ./reports_1k
 
 # ── Advisory LLM backend (sentiment + structure validation + agent team) ──
-# Provider: minimax (active) | claude | gemini. Key from the provider's env var
-# (MINIMAX_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY) — never in config.
+# Provider: openrouter (active) | claude | gemini | minimax | deepseek. Key from the
+# provider's env var (OPENROUTER_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY /
+# MINIMAX_API_KEY) — never in config.
 # Global lever: env LLM_PROVIDER=<provider> flips every call site at once
 # (incl. the no-config ones: structure validation + alerter formatter).
+# NOTE: this block WINS over LLM_PROVIDER (config provider is checked first), so a
+# provider switch means editing here as well.
 # Advisory only & fail-safe: any LLM outage → deterministic fallback, never blocks a trade.
 llm:
-  provider: minimax
-  model: MiniMax-M2.7-highspeed       # fast low-latency variant; advisory needs no heavy reasoning
+  provider: openrouter
+  model: deepseek/deepseek-v4.1-flash # fast low-latency tier; advisory needs no heavy reasoning
 
 # ── Agent team — OBSERVATION mode (operator decision 2026-11-03) ──────────────
 # Every opened trade gets an async team review (Regime/SignalValidator/RiskReviewer/
@@ -311,12 +314,12 @@ llm:
 # journal row (agent_review) so its edge can be measured later with
 # scripts/desk/agent_verdict_edge.py. gating:false → it NEVER blocks or changes a
 # trade; flipping it needs a recorded shadow period + operator sign-off.
-# One LLM call set per OPENED trade (not per signal). Key: ANTHROPIC_API_KEY.
+# One LLM call set per OPENED trade (not per signal). Key: OPENROUTER_API_KEY.
 agent_team:
   enabled: true
   gating: false
-  provider: claude
-  model: claude-sonnet-5-5
+  provider: openrouter
+  model: deepseek/deepseek-v4.1-flash
 
 # ── Kronos advisory layer (time-series forecast + LLM synthesis) ──────────────
 # ADDITIVE & ADVISORY-ONLY: produces commentary + a categorical band for Telegram

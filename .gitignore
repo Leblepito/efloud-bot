@@ -118,6 +118,7 @@ node_modules
 # AI agent araçları (lokalde kalır, repoya girmez)
 .claude/
 .agents/
+.abacusai/
 skills-lock.json
 hermes_tasks/
 .env.railway

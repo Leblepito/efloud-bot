@@ -804,11 +804,18 @@ async def ai_agents_recent() -> dict:
     team = _get_agent_team()
     if team is None:
         return {"enabled": False, "reviews": [], "message": "agent team not initialised"}
-    from engine.agents.gemini_client import DEFAULT_MODEL
+    # Report the provider/model the team ACTUALLY resolved (via make_llm_client),
+    # not a hard-coded Gemini alias — the operator uses this endpoint to confirm
+    # which backend the advisory layer is really calling.
+    from engine.agents.llm import resolve_provider
+
+    client = getattr(team, "client", None)
+    model = team.cfg.get("model") or getattr(client, "model", None) or "unknown"
     return {
         "enabled": bool(team.cfg.get("enabled", False)),
         "gating": bool(team.cfg.get("gating", False)),
-        "model": team.cfg.get("model", DEFAULT_MODEL),
+        "provider": resolve_provider(team.cfg),
+        "model": model,
         "reviews": team.recent_reviews(limit=20),
     }
 

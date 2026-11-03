@@ -96,10 +96,14 @@ def test_mtf_only_mode_skips_tradingagents(tmp_path):
     assert docs[0]["tradingagents"] is None and docs[0]["status"] == "ok"
 
 
-def test_default_models_are_sonnet_quick_opus_deep():
+def test_default_models_are_deepseek_flash_quick_pro_deep():
+    """Operator decision 2026-11-03: the research cycle runs on OpenRouter —
+    deepseek flash for the quick tier, deepseek pro where conflicts are resolved.
+    No Anthropic key exists on the VPS, so a claude-* default would 401."""
     a = rc.parse_args([])
-    assert a.quick_model == "claude-sonnet-5-5"
-    assert a.deep_model == "claude-opus-5-5"
+    assert a.provider == "openrouter"
+    assert a.quick_model == "deepseek/deepseek-v4.1-flash"
+    assert a.deep_model == "deepseek/deepseek-v4-pro"
     assert a.symbols == "BTC/USDT,ETH/USDT"
 
 

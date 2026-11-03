@@ -898,12 +898,20 @@ class BotRunner:
         await asyncio.sleep(5.0)
         
         while not self.stopped:
-            # Provider resolved by the LLM factory (default Claude). Skip only
-            # when no provider key is available at all.
+            # Provider resolved by the LLM factory (config → LLM_PROVIDER env →
+            # claude). Skip only when the *resolved* provider has no key — a
+            # hard-coded ANTHROPIC/GEMINI check would silently skip a working
+            # OpenRouter/MiniMax deployment.
             llm_cfg = self.cfg.get("agent_team") or self.cfg.get("llm") or {}
-            has_key = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("GEMINI_API_KEY"))
-            if not has_key:
-                log.warning("⚠️ No LLM API key configured. Skipping periodic sentiment analysis update.")
+            from engine.agents.llm import provider_key_present, resolve_provider, PROVIDER_KEY_ENV
+
+            _provider = resolve_provider(llm_cfg)
+            if not provider_key_present(llm_cfg):
+                log.warning(
+                    "⚠️ No LLM API key configured for provider '%s' (%s unset). "
+                    "Skipping periodic sentiment analysis update.",
+                    _provider, PROVIDER_KEY_ENV.get(_provider, "ANTHROPIC_API_KEY"),
+                )
             else:
                 try:
                     log.info("♻️ Triggering macro sentiment analysis (LLM)...")

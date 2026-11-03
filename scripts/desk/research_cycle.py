@@ -8,8 +8,10 @@ Per symbol:
      premium/discount position, active order blocks. The 4h swing trend is the HTF
      bias; alignment across the three is reported.
   3. TradingAgents (isolated venv) with the 4h bias as `--engine-bias`. Quick tier
-     (analysts, debate, trader, risk team) = Sonnet 5.5; deep tier (research manager
-     + portfolio manager, where conflicting views are resolved) = Opus 5.5.
+     (analysts, debate, trader, risk team) = deepseek/deepseek-v4.1-flash; deep tier
+     (research manager + portfolio manager, where conflicting views are resolved)
+     = deepseek/deepseek-v4-pro. Both via OpenRouter (one key: OPENROUTER_API_KEY) —
+     operator decision 2026-11-03; no Anthropic key exists on the VPS.
   4. One combined brief: desk/briefs/<YYYY-MM-DD-HHMM>-<SYM>USDT-research.{md,json}.
 
 ADVISORY ONLY: never an order, size, SL/TP, config change or gating input. The
@@ -154,9 +156,9 @@ def parse_args(argv=None):
     ap.add_argument("--config", default=str(ROOT / "configs" / "config.phase2_1k.yaml"),
                     help="live config; its smc_v2.luxalgo block sets the structure parameters")
     ap.add_argument("--out", default="desk/briefs")
-    ap.add_argument("--provider", default="anthropic")
-    ap.add_argument("--quick-model", default="claude-sonnet-5-5")
-    ap.add_argument("--deep-model", default="claude-opus-5-5")
+    ap.add_argument("--provider", default="openrouter")
+    ap.add_argument("--quick-model", default="deepseek/deepseek-v4.1-flash")
+    ap.add_argument("--deep-model", default="deepseek/deepseek-v4-pro")
     ap.add_argument("--no-tradingagents", action="store_true", help="MTF structure only, no LLM calls")
     return ap.parse_args(argv)
 

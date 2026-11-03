@@ -316,9 +316,10 @@ safety:
 agent_team:
   enabled: true          # team runs (verdicts are logged + persisted)
   gating: false          # REJECT does NOT block the signal (shadow)
-  provider: claude       # explicit — was implicit (default fallback) before,
-                         # left `model` as a dead Gemini alias; see [[efloud-audit-2026-06-02]]
-  model: claude-sonnet-5
+  provider: openrouter   # explicit — tek anahtar (OPENROUTER_API_KEY) ile tüm modeller;
+                         # MiniMax/Anthropic anahtarı canlıda yok, bu yüzden 2026-11-03'te
+                         # openrouter + deepseek flash'a alındı (bkz. [[efloud-audit-2026-06-02]])
+  model: deepseek/deepseek-v4.1-flash
   post_mortem:
     enabled: true
     # schedule: API-tetiklemeli (POST /api/ai/post-mortem). Bot içinde
