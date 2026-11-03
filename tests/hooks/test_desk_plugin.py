@@ -35,6 +35,15 @@ def test_agent_names_match_file_names_and_are_unique():
     assert len(names) == len(set(names))
 
 
+def test_every_agent_preloads_existing_skills():
+    skill_names = {frontmatter(p)["name"] for p in (ROOT / "skills").glob("*/SKILL.md")}
+    for path in (ROOT / "agents").glob("*.md"):
+        preload = frontmatter(path).get("skills")
+        assert isinstance(preload, list) and preload, f"{path.name} must preload skills (YAML list)"
+        missing = set(preload) - skill_names
+        assert not missing, f"{path.name} preloads unknown skills: {missing}"
+
+
 def test_plugin_manifest_points_at_existing_hook():
     plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
     hook_cfg = json.loads((ROOT / plugin["hooks"]).read_text())

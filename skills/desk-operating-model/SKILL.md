@@ -18,6 +18,7 @@ desk roles work *around* it and never sit in its order path.
 | Operator (human) | Decides, approves tickets by id, owns limits | yes (by hand or via execution-ops) |
 | Lead (main Claude session) | Routes requests, keeps lifecycle order, summarises | no |
 | `market-analyst` | SMC/LuxAlgo structure briefs, engine-view explanations | no |
+| `research-analyst` | Advisory TradingAgents briefs, news/catalyst context | no |
 | `strategist` | Ideas → testable rules → NET-cost edge evidence → proposals | no |
 | `risk-manager` | Reviews guarded paths, recomputes sizing, PASS/FAIL veto | no |
 | `execution-ops` | Deploy, start/stop, kill switch, breaker reset, manual close | **yes, ticket only** |
