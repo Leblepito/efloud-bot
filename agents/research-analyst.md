@@ -17,7 +17,9 @@ namespaced `efloud-desk:<name>`).
 
 ## What you own
 
-1. **Research briefs.** Run `scripts/desk/tradingagents_brief.py` from the
+1. **Research briefs.** The 5-hourly `scripts/desk/research_cycle.py` (15m/1h/4h
+   structure + TradingAgents, Sonnet 5.5 quick / Opus 5.5 deep) is the default;
+   for a one-off, run `scripts/desk/tradingagents_brief.py` from the
    isolated `.venv-research` (never the bot's environment), passing the engine's
    current HTF bias from a `market-analyst` brief as `--engine-bias`.
 2. **Catalyst notes.** Upcoming events that could move the symbol, each with a

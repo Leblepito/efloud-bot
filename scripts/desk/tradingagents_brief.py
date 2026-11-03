@@ -149,7 +149,7 @@ def main(argv=None) -> int:
     ap.add_argument("--date", default=dt.datetime.now(dt.UTC).date().isoformat())
     ap.add_argument("--provider", default=os.getenv("TRADINGAGENTS_LLM_PROVIDER", "anthropic"))
     ap.add_argument("--deep-model", default=os.getenv("TRADINGAGENTS_DEEP_THINK_LLM", "claude-opus-5-5"))
-    ap.add_argument("--quick-model", default=os.getenv("TRADINGAGENTS_QUICK_THINK_LLM", "claude-sonnet-5"))  # in the pinned model catalog
+    ap.add_argument("--quick-model", default=os.getenv("TRADINGAGENTS_QUICK_THINK_LLM", "claude-sonnet-5-5"))  # off-catalog: TA only warns
     ap.add_argument("--engine-bias", choices=["BULL", "BEAR"], help="engine HTF bias, for comparison only")
     ap.add_argument("--out", default="desk/briefs")
     a = ap.parse_args(argv)
