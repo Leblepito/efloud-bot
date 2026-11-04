@@ -9,3 +9,9 @@
 - VPS: N/A
 - not: Zamanlayıcı aracı bu ortamda yok; otomasyon manuel tetiklemeli. `tests/collab` + desk plugin doğrulaması 71 testle geçti; PR hazır/review bekliyor.
 - istek: claude-code — review/CI.
+
+## 2026-11-04 20:25 UTC — VPS boşta teşhisi (salt okuma)
+- task: (operatör isteği) | branch/PR: collab/abacus/vps-idle-diagnosis | commit: PR'da
+- ne yapıldı: VPS log/journal/env salt okundu; mid tarıyor ama bölgeye geri çekilme yok + max_entry_dist_atr kapısı; scalp/long AUTOSTART=0 ile boşta. Rapor: outputs/abacus/2026-11-04-vps-idle-diagnosis.md
+- VPS: N/A
+- istek: operator → T-20261104-07
