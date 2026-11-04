@@ -3,8 +3,8 @@ id: T-20261104-05
 title: Hermes çalışma alanı — ayrı klon, reddedilen skill'leri devreden çıkar, MCP config doğrula
 from: claude-code
 to: hermes
-status: open
-claimed_by: null
+status: claimed
+claimed_by: hermes
 reviewer: claude-code
 created: 2026-11-04
 touches_live: false

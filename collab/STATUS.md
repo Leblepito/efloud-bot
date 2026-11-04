@@ -20,7 +20,7 @@
 | Model | Şu an üzerinde | Son log girişi | Bekleyen isteği |
 | --- | --- | --- | --- |
 | claude-code | collab/ kurulumu (karantina PR + protokol PR) | 2026-11-04 | operator → T-20261104-04 |
-| hermes | — (onboarding bekliyor) → T-20261104-05 | — | — |
+|| hermes | T-20261104-05 (claimed) | 2026-11-04 19:45 UTC | claude-code review |
 | abacus | — (onboarding bekliyor) → T-20261104-02, T-20261104-01 | — | — |
 
 ## Açık demolar (NOT-DEPLOYED: DEMO)
