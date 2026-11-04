@@ -3,7 +3,7 @@ id: T-20261104-08
 title: "İstek: LuxAlgo bölge erken-uyarı (Telegram, salt-okunur) — alerter kuralı"
 from: claude-code
 to: claude-code
-status: claimed
+status: done
 claimed_by: claude-code
 reviewer: hermes
 parent: null
@@ -24,12 +24,12 @@ reddetme sebebiyle birlikte. Teşhis raporundaki öneri (a).
 - `engine/safe_orchestrator.py` `_lux_trace` / `_lux_log_scan` log satırları.
 
 ## Beklenen çıktı (Definition of Done)
-- [ ] TDD: önce kural testleri (`tests/` altında alerter için), sonra kural.
-- [ ] Bayrak default OFF (alerter config/env); kapalıyken davranış birebir aynı.
-- [ ] Yaklaşma uyarısı için motor tarafına gerekiyorsa yalnız **log satırı** eklenir (karar/kapı değişmez);
+- [x] TDD: önce kural testleri (`tests/` altında alerter için), sonra kural.
+- [x] Bayrak default OFF (alerter config/env); kapalıyken davranış birebir aynı.
+- [x] Yaklaşma uyarısı için motor tarafına gerekiyorsa yalnız **log satırı** eklenir (karar/kapı değişmez);
       bu durumda PR "risk-ops review" ister.
-- [ ] Dedup: aday başına olay başına 1 mesaj; saatlik üst sınır.
-- [ ] PR + başka modelden review; deploy operatör kararı.
+- [x] Dedup: aday başına olay başına 1 mesaj; saatlik üst sınır.
+- [x] PR + başka modelden review; deploy operatör kararı.
 
 ## Kısıtlar
 - Emir/size/SL/TP/kapı mantığına dokunma. TradingView'den motora girdi YOK (öneri b reddedildi, rapor §4).
@@ -39,4 +39,7 @@ reddetme sebebiyle birlikte. Teşhis raporundaki öneri (a).
 - 2026-11-04 claude-code: task açıldı (OB-entry-gap teşhisinin takibi).
 - 2026-11-04 claude-code: claim — operatör (a) seçeneğini onayladı; branch `collab/claude-code/T-20261104-08-lux-zone-alert`. Alerter prod'da dry-run → T-20261104-10.
 
+- 2026-11-05 claude-code: #275 merge (`57b0a19`) — code review CHANGES→düzeltildi, risk-ops PASS, CI yeşil, operatör onayı. Açma adımları PR #275 açıklamasında (operatör). Abacus post-merge review: T-20261105-02.
+
 ## Review
+VERDICT: risk-ops PASS (risk-safety-auditor, 2026-11-05); code review CHANGES → giderildi. Bağımsız model review'u T-20261105-02'de.

@@ -71,3 +71,10 @@
 - ne yapıldı: veri çekme sıklığı/websocket sorusu (gerçekler dosya:satırla) ve #275/#277 review isteği Abacus'a; OB-entry-gap raporuna 15m kapanış-örnekleme düzeltmesi; #274 operatör talimatıyla merge (`1e9ad91`).
 - VPS: N/A
 - istek: abacus → T-20261105-01, T-20261105-02
+
+## 2026-11-05 01:45 UTC+3 — #275 merge, T-08 kapandı
+- task: T-20261104-08 | branch/PR: #275 (merge `57b0a19`), collab/claude-code/T-20261104-08-close | commit: PR'da
+- ne yapıldı: risk-ops PASS + CI yeşil sonrası operatör onayıyla #275 merge; T-08 done. Uyarılar varsayılan KAPALI; VPS hâlâ eski sürümde.
+- VPS: N/A
+- not: Açmak için: VPS deploy (ticket) + `EFLOUD_ALERTER_LUX_ALERTS=1` + isteğe bağlı `smc_v2.luxalgo.near_alert_atr` — hepsi operatör.
+- istek: operator → deploy kararı · abacus → T-20261105-02
