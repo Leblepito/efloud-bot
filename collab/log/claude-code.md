@@ -27,3 +27,9 @@
 - VPS: N/A
 - not: VPS'te yalnız `docker logs` / `docker exec … cat|python -c` ile okuma yapıldı; hiçbir dosya yazılmadı, bot start/stop yok. scalp/long botların idle olduğu bulundu → T-20261104-07 (operatör).
 - istek: operator → T-20261104-07 · any → T-20261104-09 (review: abacus)
+
+## 2026-11-04 20:30 UTC — T-08 claim + alerter dry-run bulgusu
+- task: T-20261104-08, T-20261104-10 | branch/PR: collab/claude-code/ob-entry-gap (#273) | commit: PR'da
+- ne yapıldı: T-08 claim (kod ayrı PR: `collab/claude-code/T-20261104-08-lux-zone-alert`); prod alerter'ın Telegram env adı uyuşmazlığıyla dry-run'da olduğu bulundu → T-10 (operatör); rapora not.
+- VPS: N/A
+- istek: operator → T-20261104-10

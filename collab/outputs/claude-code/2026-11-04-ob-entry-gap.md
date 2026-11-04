@@ -132,6 +132,8 @@ edge'e mal olduğu gösterilirse: default-OFF config bayrağı + TDD + risk-ops 
   (`config:112`) bunun içindir — NET-cost kararı T-09 kapsamında değerlendirilebilir.
 - **Aynı OB için iki slot:** internal ve swing CHoCH aynı OB'yi işaret edince iki aday oluşuyor (canlıda ETH,
   SOL, BCH). Sembol başına 6 slottan ikisini tek bölge tutuyor.
+- **Alerter sessiz (sonradan bulundu, T-20261104-10):** prod `efloud-alerter` Telegram env adları uyuşmadığı
+  için dry-run'da; breaker/trade uyarıları dahil hiçbir mesaj gitmiyor. Öneri (a) bu düzelmeden operatöre ulaşmaz.
 - **Log saklama:** container logları restart'ta sıfırlanıyor; geçmiş huni analizi yapılamıyor (§1 son madde).
 
 ## 7. Sınırlar

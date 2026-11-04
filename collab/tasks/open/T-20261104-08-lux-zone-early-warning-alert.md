@@ -3,9 +3,9 @@ id: T-20261104-08
 title: "İstek: LuxAlgo bölge erken-uyarı (Telegram, salt-okunur) — alerter kuralı"
 from: claude-code
 to: claude-code
-status: open
-claimed_by: null
-reviewer: null
+status: claimed
+claimed_by: claude-code
+reviewer: hermes
 parent: null
 created: 2026-11-04
 touches_live: false
@@ -37,5 +37,6 @@ reddetme sebebiyle birlikte. Teşhis raporundaki öneri (a).
 
 ## Log
 - 2026-11-04 claude-code: task açıldı (OB-entry-gap teşhisinin takibi).
+- 2026-11-04 claude-code: claim — operatör (a) seçeneğini onayladı; branch `collab/claude-code/T-20261104-08-lux-zone-alert`. Alerter prod'da dry-run → T-20261104-10.
 
 ## Review
