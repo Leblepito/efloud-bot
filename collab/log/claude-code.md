@@ -27,3 +27,41 @@
 - VPS: N/A
 - not: Task dosyası T-09 henüz #273'te (master'da değil) → durum güncellemesi #273 merge sonrası.
 - istek: abacus → review · operator → baz akış NET-negatif bulgusunu değerlendir
+## 2026-11-04 19:45 UTC — OB/BB giriş açığı teşhisi (chart OB'leri vs. motor)
+- task: (operatör isteği, claude-code oturumu) → takip T-20261104-07/08/09 | branch/PR: collab/claude-code/ob-entry-gap | commit: PR'da
+- ne yapıldı: TradingView LuxAlgo kutuları (MCP, salt-okuma) + Binance 15m/12h verisiyle motorun kendi fonksiyonlarını bar-bar replay (10 sembol, 14 gün) + VPS log/state (salt-okuma) → `outputs/claude-code/2026-11-04-ob-entry-gap.md`; erken-uyarı önerisi (a) kabul, TV→motor girdisi (b) şimdilik red.
+- VPS: N/A
+- not: VPS'te yalnız `docker logs` / `docker exec … cat|python -c` ile okuma yapıldı; hiçbir dosya yazılmadı, bot start/stop yok. scalp/long botların idle olduğu bulundu → T-20261104-07 (operatör).
+- istek: operator → T-20261104-07 · any → T-20261104-09 (review: abacus)
+
+## 2026-11-04 20:30 UTC — T-08 claim + alerter dry-run bulgusu
+- task: T-20261104-08, T-20261104-10 | branch/PR: collab/claude-code/ob-entry-gap (#273) | commit: PR'da
+- ne yapıldı: T-08 claim (kod ayrı PR: `collab/claude-code/T-20261104-08-lux-zone-alert`); prod alerter'ın Telegram env adı uyuşmazlığıyla dry-run'da olduğu bulundu → T-10 (operatör); rapora not.
+- VPS: N/A
+- istek: operator → T-20261104-10
+
+## 2026-11-04 20:45 UTC — T-10 kapandı (alerter aktif)
+- task: T-20261104-10 | branch/PR: collab/claude-code/ob-entry-gap (#273) | commit: PR'da
+- ne yapıldı: operatör env'i düzeltti; alerter'ın dry-run'dan çıktığı salt-okuma ile doğrulandı; task done'a taşındı; STATUS'a alerter satırı.
+- VPS: N/A
+- not: scalp/long botlar hâlâ idle (son 10 dk 0 döngü) → T-20261104-07 açık.
+- istek: operator → T-20261104-07
+
+## 2026-11-04 21:05 UTC — Abacus PR review: #271 merge, #272 APPROVE
+- task: T-20261104-02, T-20261104-01 | branch/PR: #271 (merge `6bea1e4`), #272 (yorum) | commit: PR'da
+- ne yapıldı: #271 APPROVE + squash-merge (collab-state, CI yeşil, operatör onayı); T-02 done'a taşındı. #272 APPROVE — sayılar private store'dan bağımsız sayımla doğrulandı; MODELS.md nedeniyle merge operatörde.
+- VPS: N/A
+- not: Abacus ve claude-code aynı GitHub kimliği (Leblepito) → resmi approve verilemiyor; T-20261104-04'e karar notu.
+- istek: operator → #272 merge
+## 2026-11-04 20:10 UTC — modeller arası bildirim: `inbox:<model>` PR etiketi
+- task: (operatör isteği) | branch/PR: collab/claude-code/inbox-notify | commit: PR'da
+- ne yapıldı: SHARED.md §3 OKU adımı önce `inbox:<sen>` etiketli PR'ları okur (merge beklemeden), işleyince etiketi kaldırır; §5'e bildirim kuralı; GitHub'da 4 etiket oluşturuldu; layout testi.
+- VPS: N/A
+- not: Claude side-session not klasörü yalnız Claude'a görünür — kanal değil (SHARED §5).
+- istek: hermes, abacus → bu PR'ı review et (protokol dosyası → merge operatör)
+
+## 2026-11-05 01:10 UTC+3 — Abacus'a iki task + 15m örnekleme düzeltmesi
+- task: T-20261105-01, T-20261105-02 | branch/PR: collab/claude-code/ob-entry-gap (#273) | commit: PR'da
+- ne yapıldı: veri çekme sıklığı/websocket sorusu (gerçekler dosya:satırla) ve #275/#277 review isteği Abacus'a; OB-entry-gap raporuna 15m kapanış-örnekleme düzeltmesi; #274 operatör talimatıyla merge (`1e9ad91`).
+- VPS: N/A
+- istek: abacus → T-20261105-01, T-20261105-02
