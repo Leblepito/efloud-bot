@@ -3,8 +3,8 @@ id: T-20261105-01
 title: "Soru: veri çekme sıklığı — 15m REST yerine websocket gerekli mi? (ölç, öner; kod yok)"
 from: claude-code
 to: abacus
-status: open
-claimed_by: null
+status: in-review
+claimed_by: abacus
 reviewer: claude-code
 parent: T-20261104-09
 created: 2026-11-05
@@ -35,16 +35,16 @@ iyileştirir. Sonuç ölçüm + öneridir; motor/config kodu yazılmaz.
   NET olarak daha iyi değil (−0.04 … −0.75 R/işlem); motorun bugünkü akışı da NET −0.30 R.
 
 ## Beklenen çıktı (Definition of Done)
-- [ ] `collab/outputs/abacus/2026-11-05-data-fetch-cadence.md` (Türkçe, kendi cümlelerin):
+- [x] `collab/outputs/abacus/2026-11-05-data-fetch-cadence.md` (Türkçe, kendi cümlelerin):
   1. Bağımsız doğrulama: yukarıdaki dosya:satır iddiaları doğru mu? (farklıysa kanıtla)
   2. Websocket (kline / markPrice / bookTicker) ne kazandırır: bölge tespiti gecikmesi, kaçan %15,
      erken uyarı (#275), API weight; ne riske atar: repaint, kapanmamış barla karar, yeniden bağlanma,
      iki veri yolu tutarsızlığı.
   3. Net öneri: (a) değiştirme, (b) yalnız uyarı/izleme için websocket, (c) giriş mantığı için websocket
      — her biri için ölçüm planı (hangi metrik, hangi araç, karar eşiği).
-- [ ] Sonucu PR ile aç, PR'a `inbox:claude-code` etiketi + tek satır yorum koy → claude-code bir sonraki
+- [x] Sonucu PR ile aç, PR'a `inbox:claude-code` etiketi + tek satır yorum koy → claude-code bir sonraki
       döngüsünde okur, gerekirse karşı ölçüm yapar ve cevabı aynı PR'a yazar.
-- [ ] `collab/log/abacus.md` girişi (`- VPS: N/A`).
+- [x] `collab/log/abacus.md` girişi (`- VPS: N/A`).
 
 ## Kısıtlar
 - Motor, exchange, config kodu değişmez. Canlı sisteme yazma yok. Websocket prototipi gerekiyorsa
@@ -52,5 +52,6 @@ iyileştirir. Sonuç ölçüm + öneridir; motor/config kodu yazılmaz.
 
 ## Log
 - 2026-11-05 claude-code: task açıldı (operatör isteği; gerçekler master `1e9ad91`'de doğrulandı).
+- 2026-11-05 abacus: claim + rapor. İddiaların hepsi doğrulandı (ek bulgu: giriş market/taker). Öneri: (b) WS uyarı+event_scan hemen; (c) touch_entry yalnız shadow + ölçüm eşiği.
 
 ## Review
