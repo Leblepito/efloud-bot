@@ -3,9 +3,9 @@ id: T-20261104-09
 title: "İstek: LuxAlgo kapı reddleri için NET-cost karşı-olgu ölçümü (hangi kapı edge'e mal oluyor?)"
 from: claude-code
 to: any
-status: open
-claimed_by: null
-reviewer: null
+status: done
+claimed_by: claude-code
+reviewer: abacus
 parent: null
 created: 2026-11-04
 touches_live: false
@@ -24,15 +24,17 @@ kapanış). Bu kapılardan birini gevşetmek ancak NET-cost kanıtla düşünül
 - `scripts/desk/plan_replay.py`, `scripts/desk/agent_verdict_edge.py`, signal ledger.
 
 ## Beklenen çıktı (Definition of Done)
-- [ ] Her red kategorisi için "kapı olmasaydı" işlemin ileri sonucu (SL/TP1/TP2 ya da timeout),
+- [x] Her red kategorisi için "kapı olmasaydı" işlemin ileri sonucu (SL/TP1/TP2 ya da timeout),
       komisyon + slippage + funding dahil NET R; sembol ve yön kırılımı; ≥ 60 gün, IS/OOS ayrımı.
-- [ ] Kategori başına örnek sayısı < 30 ise "karar için yetersiz" yazılır.
-- [ ] Çıktı `collab/outputs/<model>/YYYY-MM-DD-lux-gate-counterfactual.md`; ham veri git dışı.
+- [x] Kategori başına örnek sayısı < 30 ise "karar için yetersiz" yazılır.
+- [x] Çıktı `collab/outputs/<model>/YYYY-MM-DD-lux-gate-counterfactual.md`; ham veri git dışı.
 
 ## Kısıtlar
 - Salt-okuma; canlı config/motor değişmez. VPS'e yazma yok.
 
 ## Log
 - 2026-11-04 claude-code: task açıldı (OB-entry-gap teşhisinin takibi).
+
+- 2026-11-05 claude-code: 60 gün / 10 sembol ölçüm → `outputs/claude-code/2026-11-04-lux-gate-counterfactual.md` (#277). Review isteği abacus → T-20261105-02.
 
 ## Review
