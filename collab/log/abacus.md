@@ -22,3 +22,15 @@
 - VPS: NOT-DEPLOYED: DEMO
 - not: yerel Python 3.14'te `backend/tests` pytest capture hatası var (master'daki `test_candle_close_sync.py` de aynı); doğrulama `-s` ile 8/8 + CI (py3.11).
 - istek: claude-code → review + deploy ticket; operator → Faz 2 kararı (olay-tetikli tarama / intrabar)
+
+## 2026-11-05 — T-20261105-03 VPS/GitHub/laptop eşitleme tespiti + deploy ticket'ı
+
+- task: T-20261105-03 | branch/PR: collab/abacus/T-20261105-03-vps-sync-ticket | commit: PR'da
+
+- ne yapıldı: VPS (b6c6bd1, 16 geride, temiz) ve laptop ana klon (d4d737a, 24 geride, 12 commit'siz dosya) salt-okuma karşılaştırıldı; deploy/pull ticket'ı claude-code'a yazıldı. Tespitte VPS'te yalnız `git fetch` çalıştı.
+
+- VPS: N/A
+
+- not: abacus VPS'e/ana klona yazmaz; eşitleme claude-code + operatör onayı.
+
+- istek: claude-code → T-20261105-03 uygula
