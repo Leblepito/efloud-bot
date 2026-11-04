@@ -7,7 +7,10 @@ metnini LLM'e verir. Bu yüzden runner'ın sınırları test edilir:
     motor kodunu değiştirmemeli),
   * LLM anahtarı yalnız `.env.research`'tan gelir — `.env.production` (Binance
     API anahtarları) ASLA konteynere verilmez,
-  * zamanlayıcı 5 saatlik kadansı ve `Persistent=true`'yu korur,
+  * zamanlayıcı 5 saatlik kadansı korur (monotonic timer: `Persistent=` yalnız
+    OnCalendar timer'larında etkilidir, burada no-op olduğu için kullanılmaz),
+  * servis durduğunda/zaman aşımına uğradığında konteyner temizlenir (systemd yalnız
+    `docker run` istemcisini öldürür; konteyner LLM harcamaya devam edebilirdi),
   * örnek env dosyası Binance sırrı içermez.
 """
 from __future__ import annotations
@@ -79,7 +82,10 @@ def test_timer_keeps_the_five_hour_cadence():
     text = _read(TIMER)
     assert "OnBootSec=5min" in text
     assert "OnUnitActiveSec=5h" in text
-    assert "Persistent=true" in text
+    # Persistent= only affects OnCalendar= timers; on a monotonic timer it is a no-op
+    # that falsely promises catch-up runs. OnBootSec covers reboots instead.
+    directives = [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    assert not any(d.startswith("Persistent=") for d in directives)
     assert "Unit=research-cycle.service" in text
 
 
@@ -88,6 +94,13 @@ def test_service_runs_the_wrapper_as_a_oneshot():
     assert "Type=oneshot" in text
     assert "ExecStart=/opt/efloud-bot/deploy/research-cycle.sh" in text
     assert "TimeoutStartSec=" in text, "LLM koşusu için üst sınır şart"
+
+
+def test_service_removes_the_container_when_it_stops_or_times_out():
+    """systemd kills only the docker CLI on timeout; without this the container keeps
+    running (and spending LLM credit) and the next run hits a --name conflict."""
+    text = _read(SERVICE)
+    assert "ExecStopPost=-/usr/bin/docker rm -f efloud-research-run" in text
 
 
 def test_image_is_built_on_the_same_python_as_ci():

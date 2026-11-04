@@ -61,7 +61,8 @@ hard" step) = **deepseek/deepseek-v4-pro**. Both via OpenRouter, tek anahtar:
 
 Schedule (owner: Hermes, or the operator on the VPS):
 
-- systemd timer, exact 5 h cadence: `OnBootSec=5min`, `OnUnitActiveSec=5h`, `Persistent=true`.
+- systemd timer, exact 5 h cadence: `OnBootSec=5min`, `OnUnitActiveSec=5h` (no `Persistent=`: it only affects `OnCalendar=` timers;
+  `OnBootSec` covers reboots). The service removes a leftover container on stop/timeout.
 - or cron: `0 */5 * * * cd <repo> && .venv-research/bin/python scripts/desk/research_cycle.py >> logs/research_cycle.log 2>&1`
   (runs at 00/05/10/15/20 UTC; the last gap of the day is 4 h).
 
