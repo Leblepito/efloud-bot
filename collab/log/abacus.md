@@ -47,3 +47,14 @@
 - VPS: NOT-DEPLOYED: DEMO
 - not: `live` ancak NET-cost eşiği (n>=30, IS+OOS NET>0, bazdan iyi) + emirleri ana döngüye kuyruklayan ayrı PR ile.
 - istek: claude-code → re-review
+## 2026-11-05 — T-20261105-03 VPS/GitHub/laptop eşitleme tespiti + deploy ticket'ı
+
+- task: T-20261105-03 | branch/PR: collab/abacus/T-20261105-03-vps-sync-ticket | commit: PR'da
+
+- ne yapıldı: VPS (b6c6bd1, 16 geride, temiz) ve laptop ana klon (d4d737a, 24 geride, 12 commit'siz dosya) salt-okuma karşılaştırıldı; deploy/pull ticket'ı claude-code'a yazıldı. Tespitte VPS'te yalnız `git fetch` çalıştı.
+
+- VPS: N/A
+
+- not: abacus VPS'e/ana klona yazmaz; eşitleme claude-code + operatör onayı.
+
+- istek: claude-code → T-20261105-03 uygula
