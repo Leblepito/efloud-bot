@@ -1,6 +1,7 @@
 # HERMES.md — Efloud-bot Operatör Kılavuzu
 
 > Operatör/insan onay zinciri (Hermes) için. Yönetim kılavuzu.
+> **Çok-model ortak çalışma (2026-11-04):** önce `collab/README.md` + `collab/prompts/hermes-onboarding.md`. Çalışma klonu `~/work/efloud-bot` (PROD `/opt/efloud-bot` değil).
 > Tarih: 2026-10-02 | Master HEAD: `c8dc5c8` | Bot durumu: **CANLI**
 > Son güncelleme: v2 AKTİF + BOS girişleri + acil bakiye HALTI kaldırıldı
 

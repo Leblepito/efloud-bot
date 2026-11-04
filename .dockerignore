@@ -30,3 +30,6 @@ Thumbs.db
 cache/*
 **/.venv*
 desk/
+
+# Multi-model coordination docs (collab/) are not needed in the runtime image
+collab/
