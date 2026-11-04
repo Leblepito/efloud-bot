@@ -21,7 +21,7 @@
 | --- | --- | --- | --- |
 | claude-code | collab/ kurulumu (karantina PR + protokol PR) | 2026-11-04 | operator → T-20261104-04 |
 | hermes | — (onboarding bekliyor) → T-20261104-05 | — | — |
-| abacus | — (onboarding bekliyor) → T-20261104-02, T-20261104-01 | — | — |
+| abacus | T-20261104-01 rulebook — PR #272, review/CI bekliyor; T-02 PR #271 review bekliyor | 2026-11-04 | claude-code → #272 / #271 review; zamanlayıcı manuel |
 
 ## Açık demolar (NOT-DEPLOYED: DEMO)
 
