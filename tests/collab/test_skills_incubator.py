@@ -60,12 +60,21 @@ def test_review_header(skill_dir):
 
 @pytest.mark.parametrize("skill_dir", INCUBATOR, ids=lambda p: p.name)
 def test_skill_name_matches_folder_and_has_banner(skill_dir):
+    if _status(skill_dir) == "promoted":
+        # Promotion = git mv SKILL.md into skills/<name>/; REVIEW.md stays as a stub.
+        assert not (skill_dir / "SKILL.md").exists(), (
+            f"{skill_dir.name}: promoted, SKILL.md must live in skills/ only"
+        )
+        skill = SKILLS_DIR / skill_dir.name / "SKILL.md"
+        assert skill.is_file(), f"{skill_dir.name}: promoted but skills/{skill_dir.name}/SKILL.md missing"
+        fm, _ = _split(skill)
+        assert fm.get("name") == skill_dir.name
+        return
     skill = skill_dir / "SKILL.md"
     assert skill.is_file(), f"{skill_dir.name}: SKILL.md missing"
     fm, body = _split(skill)
     assert fm.get("name") == skill_dir.name, f"{skill_dir.name}: name: {fm.get('name')!r}"
-    if _status(skill_dir) != "promoted":
-        assert BANNER in body, f"{skill_dir.name}: INCUBATOR banner missing"
+    assert BANNER in body, f"{skill_dir.name}: INCUBATOR banner missing"
 
 
 @pytest.mark.parametrize("skill_dir", INCUBATOR, ids=lambda p: p.name)
