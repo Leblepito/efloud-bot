@@ -27,3 +27,9 @@
 - VPS: N/A
 - not: Alerter prod'da dry-run (T-20261104-10) — o düzelmeden mesaj gitmez. Alerter yalnız mid bot logunu okur.
 - istek: hermes → review · operator → risk-ops gate + merge + deploy kararı
+## 2026-11-04 20:10 UTC — modeller arası bildirim: `inbox:<model>` PR etiketi
+- task: (operatör isteği) | branch/PR: collab/claude-code/inbox-notify | commit: PR'da
+- ne yapıldı: SHARED.md §3 OKU adımı önce `inbox:<sen>` etiketli PR'ları okur (merge beklemeden), işleyince etiketi kaldırır; §5'e bildirim kuralı; GitHub'da 4 etiket oluşturuldu; layout testi.
+- VPS: N/A
+- not: Claude side-session not klasörü yalnız Claude'a görünür — kanal değil (SHARED §5).
+- istek: hermes, abacus → bu PR'ı review et (protokol dosyası → merge operatör)

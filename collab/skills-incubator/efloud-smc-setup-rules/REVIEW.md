@@ -30,3 +30,15 @@ kanalda en sık tekrar eden kural (129/892 mesaj).
    `volatile_atr_mult`) ile eşle ya da açık soru bırak.
 
 **Birleşme önerisi:** `efloud-smc-concepts` ile tek skill → `efloud-telegram-methodology` (T-20261104-03).
+
+
+## abacus — 2026-11-04 — VERDICT: CHANGES
+
+Bağımsız ilk inceleme (Claude değerlendirmeleri okunmadan):
+
+- **Giriş akışı canlı LuxAlgo akışıyla aynı değil:** Skill confirmation candle close'u doğrudan entry trigger olarak anlatıyor (SKILL.md:47-57, 63-68, 128-132). Gerçekte LuxAlgo setup'ı LTF BOS/CHoCH + HTF bias + kırılım OB'sinden üretir (`engine/smc_v2/luxalgo.py:516-570`); fiyat retest/zone aşamalarından geçer ve teyit, zone içindeki entry-TF engulfing'dir (`engine/smc_v2/confirmation.py:1-14, 80-95`; `engine/safe_orchestrator.py:2239-2244`). Canlı config'te LuxAlgo açık (`configs/config.phase2_1k.yaml:175-198`). Trigger ve confirmation aşamaları ayrılmalı.
+- **Canlı risk/TP kurallarıyla uyuşmayan reçeteler:** R:R ≥1:1.5, 50-75% TP1 ve sabit TP1/TP2/TP3 yüzdeleri (SKILL.md:52, 86-97) güncel config'in `smc_tp_targeting`, min TP1 R:R ve blended gate davranışını açıklamıyor (`configs/config.phase2_1k.yaml:250-258`). `engine/smc_v2/luxalgo.py:575-633` hedefleri karşıt OB/FVG/EQH/EQL ve swing/liquidity adaylarından türetiyor; sabit üç kademe varsayımı yok.
+- **Kanıtsız/ters yönlendirebilecek kurallar:** 8-12 bar timeout (SKILL.md:74-76), volume filtresi (SKILL.md:52, 77), "profitable ise bias reverse" (SKILL.md:78), karşıt talep yok kontrolü ve breakout retest metodu, taslakta kaynak mesajlara atfedilmiş ancak canlı LuxAlgo entry koduyla eşdeğer değil. Kodda opposite direction setup'ların guard tarafından reddedildiği v2 notu var (`engine/safe_orchestrator.py:2587-2594`). Her kural kaynak/hipotez olarak ayrılmalı.
+- **Eski yol ile aktif yol ayrımı:** Bu genel SMC kuralları v1 motoruna kısmen yakın olabilir (`engine/smc.py`, `engine/signals.py`), fakat skill bunu canlı aktif kural seti gibi sunuyor; aktif `smc_v2.luxalgo.enabled: true` ayrımı başta belirtilmeli.
+
+**Claude karşılaştırması:** VERDICT aynı; aktif confirmation farkı, kaynaksız R:R tablosu ve TP yüzdeleri konusunda örtüşüyoruz. Claude daha kesin runtime ayrıntılarıyla timeout'un LuxAlgo modunda 48 bar'a override edildiğini (`config:199`, orchestrator:2079-2081), mevcut motorun 2 hedefte 50/50 ve tek hedefte tam çıkış kullandığını, BE hareketinin zaten uygulandığını gösteriyor. Benim eklediğim noktalar: `profitable ise reverse` canlı guard ile çelişebilir ve aktif LuxAlgo'nın hedefleri sabit TP1/2/3 yerine aday seviyelerden hesaplanıyor. Claude'un `concepts` ile tek skill'de birleştirme önerisine katılıyorum.
