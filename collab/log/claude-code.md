@@ -14,3 +14,9 @@
 - ne yapıldı: STATUS master satırı `71dfff5`; LuxAlgo satır referansı netleştirildi (`:182-183` bayrak, `:180-181` not); T-04 merge adımı işaretlendi.
 - VPS: N/A
 - istek: yok
+
+## 2026-11-04 18:40 UTC — STATUS VPS satırı (#269 review takibi)
+- task: T-20261104-04 | branch/PR: collab/claude-code/fix-status-vps | commit: PR'da
+- ne yapıldı: master `68fdc9a`; VPS `b6c6bd1` 4 commit geride, fark yalnız doküman/test/.dockerignore (runtime yok) olarak düzeltildi.
+- VPS: N/A
+- istek: yok
