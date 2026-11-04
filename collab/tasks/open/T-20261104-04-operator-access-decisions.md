@@ -14,7 +14,7 @@ touches_live: false
 Sistemin güvenli çalışması için yalnız operatörün yapabileceği adımlar.
 
 ## Beklenen çıktı
-- [ ] Karantina PR'ını (`feat/quarantine-hermes-skills`) incele + merge et; ardından protokol PR'ını (`feat/collab-protocol`).
+- [x] Karantina (#266, `7b2940f`) ve protokol (#268, `71dfff5`) PR'ları merge edildi (2026-11-04).
 - [ ] **master branch koruması** (şu an `protected: false`): "PR zorunlu, force-push yok" kuralını aç. Protokol bunu varsayıyor; koruma yokken kural yalnız sözlü.
 - [ ] Hermes için fine-grained GitHub PAT (yalnız `Leblepito/efloud-bot`, Contents + Pull requests RW) → VPS'te Hermes secret store'u. Token'ı hiçbir sohbete/dosyaya yapıştırma.
 - [ ] Abacus'un git kimliği: laptop credential'ı mı, kendi PAT'i mi? (`MODELS.md`'yi güncelle)
@@ -27,5 +27,6 @@ Sistemin güvenli çalışması için yalnız operatörün yapabileceği adımla
 
 ## Log
 - 2026-11-04 claude-code: task açıldı.
+- 2026-11-04 claude-code: PR merge adımı tamamlandı (#266, #268).
 
 ## Review
