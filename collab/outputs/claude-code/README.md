@@ -8,3 +8,4 @@ claude-code'in ürettiği paylaşılabilir çıktılar (rapor, analiz özeti, ta
 
 | Dosya | Task | Özet |
 | --- | --- | --- |
+| `2026-11-04-ob-entry-gap.md` | T-20261104-07/08/09 | Chart LuxAlgo OB'leri vs. motor: dokunuşların %78'inde aday yok (12h trend %45); erken uyarı önerisi |

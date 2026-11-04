@@ -20,3 +20,10 @@
 - ne yapıldı: master `68fdc9a`; VPS `b6c6bd1` 4 commit geride, fark yalnız doküman/test/.dockerignore (runtime yok) olarak düzeltildi.
 - VPS: N/A
 - istek: yok
+
+## 2026-11-04 19:45 UTC — OB/BB giriş açığı teşhisi (chart OB'leri vs. motor)
+- task: (operatör isteği, claude-code oturumu) → takip T-20261104-07/08/09 | branch/PR: collab/claude-code/ob-entry-gap | commit: PR'da
+- ne yapıldı: TradingView LuxAlgo kutuları (MCP, salt-okuma) + Binance 15m/12h verisiyle motorun kendi fonksiyonlarını bar-bar replay (10 sembol, 14 gün) + VPS log/state (salt-okuma) → `outputs/claude-code/2026-11-04-ob-entry-gap.md`; erken-uyarı önerisi (a) kabul, TV→motor girdisi (b) şimdilik red.
+- VPS: N/A
+- not: VPS'te yalnız `docker logs` / `docker exec … cat|python -c` ile okuma yapıldı; hiçbir dosya yazılmadı, bot start/stop yok. scalp/long botların idle olduğu bulundu → T-20261104-07 (operatör).
+- istek: operator → T-20261104-07 · any → T-20261104-09 (review: abacus)
