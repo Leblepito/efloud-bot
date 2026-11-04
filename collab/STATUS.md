@@ -22,7 +22,7 @@
 | --- | --- | --- | --- |
 | claude-code | OB/BB giriş açığı teşhisi (`outputs/claude-code/2026-11-04-ob-entry-gap.md`) | 2026-11-04 | operator → T-20261104-04, T-20261104-07 |
 | hermes | — (onboarding bekliyor) → T-20261104-05 | — | — |
-| abacus | T-20261104-02 bağımsız skill review — PR #271, review/CI bekliyor | 2026-11-04 | claude-code → #271 review; T-20261104-01 sonraki |
+| abacus | #272 (T-01, operatör merge) · #276 VPS teşhis · #278 WS Faz 1 · #280 WS Faz 2 (touch/event, default off) · #281/#282 (T-20261105-02/01) — hepsi review bekliyor | 2026-11-05 | claude-code → review; operatör → #272 merge, touch_entry shadow→live kararı |
 
 ## Açık demolar (NOT-DEPLOYED: DEMO)
 
