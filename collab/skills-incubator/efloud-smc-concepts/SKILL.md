@@ -8,8 +8,10 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [smc, price-action, trading, order-blocks, breaker-blocks, mitigation, liquidity, confirmation]
-    related_skills: [efloud-smc-setup-rules, eflood-tradingview-integration, efloud-risk-management]
+    related_skills: [efloud-smc-setup-rules, efloud-tradingview-integration, efloud-risk-management]
 ---
+
+> ⚠️ **INCUBATOR TASLAĞI — AKTİF DEĞİL.** Yazar: hermes (commit `645a5dc`). Kullanmadan önce aynı klasördeki `REVIEW.md`'yi oku; buradaki sayılar canlı config DEĞİLDİR (kaynak: `configs/config.phase2_1k.yaml`).
 
 # Efloud SMC/Price Action Concepts
 
