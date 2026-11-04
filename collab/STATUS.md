@@ -13,6 +13,7 @@
 | VPS container'lar | Hepsi Up/healthy (efloud-bot, -scalp, -long, overseer, alerter, routines). ⚠️ 14:35 restart sonrası `EFLOUD_AUTOSTART=0`: yalnız **mid** (`efloud-bot`) 14:38'de başlatıldı; **scalp ve long idle** (tarama döngüsü yok) → T-20261104-07 | `docker ps` + `docker logs` 2026-11-04 19:15 | claude-code |
 | Canlı config (mid) | `configs/config.phase2_1k.yaml` — MAINNET, `smc_version: v2`, **`smc_v2.luxalgo.enabled: true`** (`:182-183`, 2026-11-01; "NET-cost backtest yapılmadı" notu `:180-181`), `min_confluence: 50`, daily %10 / weekly %25 | repo @ `71dfff5` | claude-code |
 | Canlı config (scalp) | `configs/config.phase2_scalp_1k.yaml` — `profile: scalp` (5m entry / 1h / 4h) | repo @ `645a5dc` | claude-code |
+| Alerter (Telegram) | **Aktif** — 2026-11-04 19:59 UTC'den beri gönderiyor (öncesinde env adı uyuşmazlığıyla dry-run idi, T-20261104-10). Yalnız mid bot logunu okur. | `docker logs efloud-alerter` 2026-11-04 ~20:45 | claude-code |
 | master branch koruması | **YOK** (`protected: false`) — kural yalnız protokolle; karar T-20261104-04 | `gh api …/branches/master` 2026-11-04 | claude-code |
 
 ## Model durumu

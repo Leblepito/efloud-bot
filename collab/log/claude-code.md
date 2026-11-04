@@ -33,3 +33,10 @@
 - ne yapıldı: T-08 claim (kod ayrı PR: `collab/claude-code/T-20261104-08-lux-zone-alert`); prod alerter'ın Telegram env adı uyuşmazlığıyla dry-run'da olduğu bulundu → T-10 (operatör); rapora not.
 - VPS: N/A
 - istek: operator → T-20261104-10
+
+## 2026-11-04 20:45 UTC — T-10 kapandı (alerter aktif)
+- task: T-20261104-10 | branch/PR: collab/claude-code/ob-entry-gap (#273) | commit: PR'da
+- ne yapıldı: operatör env'i düzeltti; alerter'ın dry-run'dan çıktığı salt-okuma ile doğrulandı; task done'a taşındı; STATUS'a alerter satırı.
+- VPS: N/A
+- not: scalp/long botlar hâlâ idle (son 10 dk 0 döngü) → T-20261104-07 açık.
+- istek: operator → T-20261104-07

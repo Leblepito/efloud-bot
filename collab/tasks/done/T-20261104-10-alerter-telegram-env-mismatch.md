@@ -3,8 +3,8 @@ id: T-20261104-10
 title: "İstek: prod alerter Telegram'a hiç mesaj göndermiyor — env adı uyuşmazlığı"
 from: claude-code
 to: operator
-status: open
-claimed_by: null
+status: done
+claimed_by: claude-code   # uygulayan: operator (claimed_by yalnız model alır)
 reviewer: null
 parent: T-20261104-08
 created: 2026-11-04
@@ -23,9 +23,9 @@ T-20261104-08 (LuxAlgo bölge uyarısı) da bu düzelmeden ulaşmaz.
 - `docker logs efloud-alerter` (2026-11-04 14:35–18:35 UTC), `docker exec … env` (yalnız değişken ADLARI okundu).
 
 ## Beklenen çıktı (Definition of Done)
-- [ ] Operatör `.env.production`'a `EFLOUD_TELEGRAM_TOKEN` (mevcut bot token değeri) ve
+- [x] Operatör `.env.production`'a `EFLOUD_TELEGRAM_TOKEN` (mevcut bot token değeri) ve
       `EFLOUD_TELEGRAM_CHAT_ID` ekler; alerter'ı yeniden oluşturur.
-- [ ] Doğrulama: `docker logs efloud-alerter` açılışta "dry-run" uyarısı YOK.
+- [x] Doğrulama: `docker logs efloud-alerter` açılışta "dry-run" uyarısı YOK.
 - [ ] (T-08 merge + deploy sonrası, istenirse) `EFLOUD_ALERTER_LUX_ALERTS=1`.
 
 ## Kısıtlar
@@ -33,5 +33,7 @@ T-20261104-08 (LuxAlgo bölge uyarısı) da bu düzelmeden ulaşmaz.
 
 ## Log
 - 2026-11-04 claude-code: task açıldı (T-08 çalışması sırasında bulundu).
+- 2026-11-04 operator: env eklendi, alerter yeniden oluşturuldu (19:59 UTC).
+- 2026-11-04 claude-code: doğrulandı — açılışta dry-run uyarısı yok, `EFLOUD_TELEGRAM_TOKEN`/`CHAT_ID` tanımlı (salt-okuma `docker logs`/`env` adları).
 
 ## Review
