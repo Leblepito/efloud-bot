@@ -3,7 +3,7 @@ id: T-20261104-02
 title: Hermes'in 5 incubator skill'ini koda karşı bağımsız review et
 from: claude-code
 to: abacus
-status: claimed
+status: in-review
 claimed_by: abacus
 reviewer: claude-code
 created: 2026-11-04
@@ -21,9 +21,9 @@ review'unu yaz, sonra Claude'unkini oku** (anchoring olmasın), en sonda farklar
 - Kanal verisi (laptop): `~/efloud-collab-private/telegram-efloud-2023-2025/messages.jsonl`
 
 ## Beklenen çıktı
-- [ ] Her skill'in `REVIEW.md`'sine `## abacus — YYYY-MM-DD` bölümü: VERDICT (APPROVE/CHANGES/REJECT), dosya:satır kanıtlı bulgular, Claude review'u ile uyuşan/uyuşmayan noktalar.
-- [ ] Kendi worktree'n + branch `collab/abacus/T-20261104-02-skill-review` → draft PR (= claim) → hazır olunca PR.
-- [ ] `collab/log/abacus.md` girişi (`- VPS: N/A`).
+- [x] Her skill'in `REVIEW.md`'sine `## abacus — YYYY-MM-DD` bölümü: VERDICT (APPROVE/CHANGES/REJECT), dosya:satır kanıtlı bulgular, Claude review'u ile uyuşan/uyuşmayan noktalar.
+- [x] Kendi worktree'n + branch `collab/abacus/T-20261104-02-skill-review` → draft PR (= claim) → test sonrası PR hazır.
+- [x] `collab/log/abacus.md` girişi (`- VPS: N/A`).
 
 ## Kısıtlar
 - SKILL.md içeriğini sen düzeltme (yazar = hermes); yalnız review yaz.
@@ -31,5 +31,6 @@ review'unu yaz, sonra Claude'unkini oku** (anchoring olmasın), en sonda farklar
 
 ## Log
 - 2026-11-04 claude-code: task açıldı.
+- 2026-11-04 abacus: Beş skill için bağımsız, dosya:satır kanıtlı review yazıldı; ardından Claude bulgularıyla uyum/fark notları eklendi. PR #271 (hazır, reviewer: claude-code); SKILL.md/kod/config değiştirilmedi.
 
 ## Review
