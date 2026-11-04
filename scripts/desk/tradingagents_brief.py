@@ -57,8 +57,14 @@ def to_yahoo(symbol: str) -> str:
     raise BriefError(f"not a USD/USDT/USDC-quoted crypto symbol: {symbol!r}")
 
 
-def build_config(base: dict, provider: str, deep_model: str, quick_model: str, out_dir) -> dict:
-    """Copy TradingAgents' DEFAULT_CONFIG; keep its state under the desk folder, no checkpoints."""
+def build_config(base: dict, provider: str, deep_model: str, quick_model: str, out_dir,
+                 max_tokens=None) -> dict:
+    """Copy TradingAgents' DEFAULT_CONFIG; keep its state under the desk folder, no checkpoints.
+
+    ``max_tokens`` caps every completion. Without it TradingAgents requests the model
+    maximum (e.g. 131072), which OpenRouter reserves credit for -> HTTP 402 on a
+    low-credit key even when the real answer is short.
+    """
     cfg = copy.deepcopy(base)
     root = Path(out_dir) / "tradingagents"
     cfg.update({
@@ -70,6 +76,8 @@ def build_config(base: dict, provider: str, deep_model: str, quick_model: str, o
         "memory_log_path": str(root / "memory.md"),
         "checkpoint_enabled": False,
     })
+    if max_tokens:
+        cfg["max_tokens"] = int(max_tokens)
     return cfg
 
 
@@ -152,13 +160,16 @@ def main(argv=None) -> int:
     ap.add_argument("--provider", default=os.getenv("TRADINGAGENTS_LLM_PROVIDER", "openrouter"))
     ap.add_argument("--deep-model", default=os.getenv("TRADINGAGENTS_DEEP_THINK_LLM", "deepseek/deepseek-v4-pro"))
     ap.add_argument("--quick-model", default=os.getenv("TRADINGAGENTS_QUICK_THINK_LLM", "deepseek/deepseek-v4.1-flash"))
+    ap.add_argument("--max-tokens", type=int, default=int(os.getenv("TRADINGAGENTS_MAX_TOKENS", "8192")),
+                    help="cap per completion (avoids model-max credit reservation / HTTP 402)")
     ap.add_argument("--engine-bias", choices=["BULL", "BEAR"], help="engine HTF bias, for comparison only")
     ap.add_argument("--out", default="desk/briefs")
     a = ap.parse_args(argv)
     try:
         factory = default_graph_factory()
         from tradingagents.default_config import DEFAULT_CONFIG
-        cfg = build_config(DEFAULT_CONFIG, a.provider, a.deep_model, a.quick_model, Path(a.out).parent)
+        cfg = build_config(DEFAULT_CONFIG, a.provider, a.deep_model, a.quick_model, Path(a.out).parent,
+                           max_tokens=a.max_tokens)
         doc = run_brief(a.symbol, a.date, cfg, graph_factory=factory, engine_bias=a.engine_bias)
     except BriefError as exc:
         print(f"refused: {exc}", file=sys.stderr)

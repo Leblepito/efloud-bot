@@ -42,6 +42,15 @@ def test_non_crypto_or_unsupported_quote_is_refused(bad):
         tb.to_yahoo(bad)
 
 
+def test_config_caps_max_tokens(tmp_path):
+    cfg = tb.build_config({"max_tokens": None}, provider="openrouter", deep_model="d",
+                          quick_model="q", out_dir=tmp_path, max_tokens=8192)
+    assert cfg["max_tokens"] == 8192
+    keep = tb.build_config({"max_tokens": None}, provider="openrouter", deep_model="d",
+                           quick_model="q", out_dir=tmp_path)
+    assert keep["max_tokens"] is None, "no cap requested -> leave TradingAgents' value"
+
+
 def test_config_isolates_state_under_desk_and_disables_checkpoints(tmp_path):
     base = {"llm_provider": "openai", "deep_think_llm": "x", "quick_think_llm": "y",
             "results_dir": "/home/u/.tradingagents/logs", "memory_log_path": "/home/u/.tradingagents/m.md",
