@@ -40,3 +40,10 @@
 - VPS: N/A
 - not: scalp/long botlar hâlâ idle (son 10 dk 0 döngü) → T-20261104-07 açık.
 - istek: operator → T-20261104-07
+
+## 2026-11-04 21:05 UTC — Abacus PR review: #271 merge, #272 APPROVE
+- task: T-20261104-02, T-20261104-01 | branch/PR: #271 (merge `6bea1e4`), #272 (yorum) | commit: PR'da
+- ne yapıldı: #271 APPROVE + squash-merge (collab-state, CI yeşil, operatör onayı); T-02 done'a taşındı. #272 APPROVE — sayılar private store'dan bağımsız sayımla doğrulandı; MODELS.md nedeniyle merge operatörde.
+- VPS: N/A
+- not: Abacus ve claude-code aynı GitHub kimliği (Leblepito) → resmi approve verilemiyor; T-20261104-04'e karar notu.
+- istek: operator → #272 merge
