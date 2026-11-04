@@ -48,6 +48,15 @@ def _is_lux_cand(cand) -> bool:
     return bool(reasons) and str(reasons[0]).startswith("LUX ")
 
 
+def _tf_ms(tf: str) -> int:
+    """'15m' / '4h' / '1d' → ms (bilinmeyen birim: 15m)."""
+    units = {"m": 60_000, "h": 3_600_000, "d": 86_400_000, "w": 604_800_000}
+    try:
+        return int(str(tf)[:-1]) * units[str(tf)[-1]]
+    except (KeyError, ValueError, IndexError):
+        return 900_000
+
+
 log = logging.getLogger("efloud.safe_orch")
 
 
@@ -1152,12 +1161,13 @@ class SafeOrchestrator:
             # even on no-trade ticks (operator observability).
             if self.setup_state_store is not None:
                 current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
-                self._advance_setup_state_tick(
-                    symbol=symbol,
-                    current_price=current_price,
-                    current_bar_ts=current_bar_ts,
-                    df_15m=df_entry,
-                )
+                with self._v2_state_lock():
+                    self._advance_setup_state_tick(
+                        symbol=symbol,
+                        current_price=current_price,
+                        current_bar_ts=current_bar_ts,
+                        df_15m=df_entry,
+                    )
             
                 # SMC v2 trigger phase: detect new CHoCH → emit SetupCandidates.
                 # Per spec §4.3 step 3. Runs AFTER advance (existing candidates
@@ -2072,6 +2082,8 @@ class SafeOrchestrator:
         # Inert default — no v1 behavior change
         if self.setup_state_store is None:
             return
+        if df_15m is not None:
+            self.__dict__.setdefault("_v2_last_df", {})[symbol] = df_15m
 
         smc_v2_cfg = self.config.get("smc_v2", {})
         require_confirmation = smc_v2_cfg.get("require_confirmation", True)
@@ -2262,6 +2274,92 @@ class SafeOrchestrator:
                         # Note: has_left_zone is already True, so next IN_ZONE cycle
                         # will allow entry on confirmation without requiring another leave
                 # Price still outside zone — keep waiting
+
+    def _v2_state_lock(self):
+        """Kapanış taraması ile intrabar dokunuş yolunu serileştiren kilit."""
+        lock = self.__dict__.get("_v2_lock")
+        if lock is None:
+            import threading
+            lock = self.__dict__.setdefault("_v2_lock", threading.RLock())
+        return lock
+
+    def touch_entry_mode(self) -> str:
+        """smc_v2.touch_entry: off (varsayılan) | shadow (yalnız log).
+
+        `live` bilinçli olarak YOK: NET-cost kapısı (n>=30, IS+OOS NET>0, bazdan iyi)
+        geçilmeden ve emir yolu eşzamanlılık çözümü olmadan (emirler ana döngüye
+        kuyruklanmadan) intrabar emir açılmaz. Bilinmeyen değer = off.
+        """
+        raw = (self.config.get("smc_v2") or {}).get("touch_entry", "off")
+        return "shadow" if str(raw or "off").strip().lower() == "shadow" else "off"
+
+    def touch_watch_symbols(self) -> list:
+        """Dokunuş beklenen (bekleyen v2 adayı olan) semboller."""
+        if self.setup_state_store is None or self.touch_entry_mode() == "off":
+            return []
+        from engine.smc_v2.setup_state import PERSISTED_STATES
+        with self._v2_state_lock():
+            return sorted({c.symbol for c in self.setup_state_store.candidates
+                           if c.state in PERSISTED_STATES})
+
+    def on_intrabar_touch(
+        self,
+        symbol: str,
+        price: float,
+        bar_high: float,
+        bar_low: float,
+        bar_open_ts: int,
+        now_ms: Optional[int] = None,
+    ) -> int:
+        """Fitil/temas GÖLGE gözlemi (T-20261104-12). YALNIZ LOG — emir yok, durum değişmez.
+
+        Oluşan entry barının fitili (WS high/low) ya da anlık fiyat bekleyen bir
+        adayın hedef bölgesine değerse aday başına bir kez `[touch shadow] would-enter`
+        satırı basılır. Fiyat bölgeyi ters yönde delip geçmişse (LONG: < low,
+        SHORT: > high) ya da son kapanış taraması bayatsa (> 2 entry barı) basılmaz.
+        Dönüş: basılan satır sayısı.
+        """
+        if self.touch_entry_mode() != "shadow" or self.setup_state_store is None:
+            return 0
+        df = self.__dict__.get("_v2_last_df", {}).get(symbol)
+        if df is None or len(df) == 0:
+            return 0
+        tf_ms = _tf_ms(self.config.get("timeframes", {}).get("entry", "15m"))
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000) if now_ms is None else int(now_ms)
+        last_open = int(df.index[-1].timestamp() * 1000)
+        if now_ms - (last_open + tf_ms) > 2 * tf_ms:
+            return 0
+        lo, hi = min(bar_low, price), max(bar_high, price)
+
+        from engine.smc_v2.setup_state import PERSISTED_STATES
+        logged = 0
+        with self._v2_state_lock():
+            for cand in list(self.setup_state_store.candidates):
+                if cand.symbol != symbol or cand.state not in PERSISTED_STATES:
+                    continue
+                if int(bar_open_ts) <= int(cand.trigger_bar_ts or 0):
+                    continue
+                z = cand.target_zone
+                if lo > z.high or hi < z.low:
+                    continue
+                if (cand.direction == "LONG" and price < z.low) or \
+                        (cand.direction == "SHORT" and price > z.high):
+                    continue
+                seen = self.__dict__.setdefault("_touch_shadow_logged", set())
+                key = (cand.symbol, cand.direction, cand.trigger_bar_ts, z.low, z.high)
+                if key in seen:
+                    continue
+                if len(seen) > 512:
+                    seen.clear()
+                seen.add(key)
+                entry = min(max(price, z.low), z.high)
+                log.info(f"[touch shadow] {cand.symbol} {cand.direction} would-enter "
+                         f"entry={entry:.8g} price={price:.8g} wick=[{lo:.8g}-{hi:.8g}] "
+                         f"zone=[{z.low:.8g}-{z.high:.8g}] state={cand.state} "
+                         f"trigger_bar_ts={cand.trigger_bar_ts} bars_waited={cand.bars_waited} "
+                         f"bar_open_ts={int(bar_open_ts)}")
+                logged += 1
+        return logged
 
     def _v2_entry_active(self, symbol: str) -> bool:
         """True when the v2 (OB/BB pullback) entry path OWNS this symbol.

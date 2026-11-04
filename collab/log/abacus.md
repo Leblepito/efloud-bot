@@ -22,3 +22,39 @@
 - VPS: NOT-DEPLOYED: DEMO
 - not: yerel Python 3.14'te `backend/tests` pytest capture hatası var (master'daki `test_candle_close_sync.py` de aynı); doğrulama `-s` ile 8/8 + CI (py3.11).
 - istek: claude-code → review + deploy ticket; operator → Faz 2 kararı (olay-tetikli tarama / intrabar)
+
+## 2026-11-04 20:25 UTC — VPS boşta teşhisi (salt okuma)
+- task: (operatör isteği) | branch/PR: collab/abacus/vps-idle-diagnosis | commit: PR'da
+- ne yapıldı: VPS log/journal/env salt okundu; mid tarıyor ama bölgeye geri çekilme yok + max_entry_dist_atr kapısı; scalp/long AUTOSTART=0 ile boşta. Rapor: outputs/abacus/2026-11-04-vps-idle-diagnosis.md
+- VPS: N/A
+- istek: operator → T-20261104-07
+## 2026-11-04 18:51 UTC — Telegram rulebook (full export)
+- task: T-20261104-01 | branch/PR: collab/abacus/T-20261104-01-telegram-rulebook (#272) | commit: 47b5a59
+- ne yapıldı: 892 mesaj özel laptop store'unda tarandı; yıllık tema frekansları, örnek ID'ler, LuxAlgo öncelikli motor eşlemesi ve test edilebilir hipotezler raporlandı. Ham metin/görsel repo'ya alınmadı.
+- VPS: N/A
+- not: Zamanlayıcı aracı bu ortamda yok; döngü manuel tetiklemeli. Sayılar mesaj-başı anahtar sözcük eşleşmesidir, kazanma oranı/performans iddiası değildir.
+- istek: claude-code — review/CI.
+
+## 2026-11-04 18:53 UTC — Git ve MCP erişim doğrulaması
+- task: T-20261104-01 | branch/PR: collab/abacus/T-20261104-01-telegram-rulebook (#272) | commit: 151e16b
+- ne yapıldı: Laptop'tan fetch/push ve `gh` ile PR oluşturma; browser MCP ile public GitHub PR'ını okuma doğrulandı. MODELS.md'de Abacus satırı düzeltildi.
+- VPS: N/A
+- not: GitHub/TradingView MCP ve bu oturumdan TradingView Desktop erişimi yok/doğrulanmadı; GitHub `gh` erişimi ayrı MCP değil.
+- istek: claude-code — MODELS.md farkını da incele; bu protokol dosyası nedeniyle merge operatöre ait.
+## 2026-11-05 — T-20261104-12 #280 CHANGES uygulandı (shadow-only)
+- task: T-20261104-12 | branch/PR: collab/abacus/T-20261104-12-ws-touch-entry (#280) | commit: PR'da
+- ne yapıldı: claude-code CHANGES: `touch_entry` live dalı + lease/emir kodu çıkarıldı (yalnız off|shadow, emir yok); event_scan 2 sn tamponu korundu, event uykudan sonra temizleniyor; shadow satırına trigger_bar_ts/bars_waited eklendi. master (#283) merge edildi. Config değişmedi.
+- VPS: NOT-DEPLOYED: DEMO
+- not: `live` ancak NET-cost eşiği (n>=30, IS+OOS NET>0, bazdan iyi) + emirleri ana döngüye kuyruklayan ayrı PR ile.
+- istek: claude-code → re-review
+## 2026-11-05 — T-20261105-03 VPS/GitHub/laptop eşitleme tespiti + deploy ticket'ı
+
+- task: T-20261105-03 | branch/PR: collab/abacus/T-20261105-03-vps-sync-ticket | commit: PR'da
+
+- ne yapıldı: VPS (b6c6bd1, 16 geride, temiz) ve laptop ana klon (d4d737a, 24 geride, 12 commit'siz dosya) salt-okuma karşılaştırıldı; deploy/pull ticket'ı claude-code'a yazıldı. Tespitte VPS'te yalnız `git fetch` çalıştı.
+
+- VPS: N/A
+
+- not: abacus VPS'e/ana klona yazmaz; eşitleme claude-code + operatör onayı.
+
+- istek: claude-code → T-20261105-03 uygula

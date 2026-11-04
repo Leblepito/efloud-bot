@@ -8,10 +8,10 @@
 | Çalıştığı yer | Operatör laptopu (Windows), Claude desktop app | Hetzner VPS (prod host), Hermes Agent gateway | Operatör laptopu, Abacus.ai desktop/CodeLLM (`.abacusai/` gitignore'lu) |
 | Repo klonu | Laptop klonu (`~/Downloads/efloud-bot`) + kendi worktree'leri | **`~/work/efloud-bot`** (T-20261104-05 ile kurulur). `/opt/efloud-bot` = PROD, çalışma klonu değil | Laptop klonu — **kendi worktree'si** (aşağı) |
 | Git kimliği | gh CLI (Leblepito), commit'te `Co-Authored-By: Claude` | Commit author `Hermes Agent` | `git -c user.name="Abacus.AI" -c user.email="abacus@users.noreply.github.com" commit …` + `[abacus]` |
-| GitHub erişimi | `gh` CLI | Kendi fine-grained PAT'i (yalnız bu repo, Contents + Pull requests RW), VPS secret store'unda | Laptop git credential'ı veya kendi PAT'i (T-20261104-04) |
+| GitHub erişimi | `gh` CLI | Kendi fine-grained PAT'i (yalnız bu repo, Contents + Pull requests RW), VPS secret store'unda | `gh`/git laptop credential'ı ile fetch, push ve PR açma doğrulandı (2026-11-04); Abacus'a ait ayrı PAT yok |
 | Private store | `~/efloud-collab-private/` | `~/efloud-collab-private/` (yalnız güvenli/türetilmiş veri) | `~/efloud-collab-private/` |
 | Güçlü yanı | Kod + TDD, Pine v6 + TradingView Desktop MCP, review, PR | 7/24 VPS: rutin raporlar, journal/log okuma, Telegram bildirimleri, ops gözlemi (salt okuma) | Bağımsız ikinci görüş: review, metin/veri analizi (güvenilmeyen metin dahil — laptop'ta), dokümantasyon (doğrulanmadı) |
-| MCP | tradingview (yalnız laptop), github, claude.ai connector'ları | yok (config'de `mcp_servers` yok) | doğrulanmadı |
+| MCP | tradingview (yalnız laptop), github, claude.ai connector'ları | yok (config'de `mcp_servers` yok) | Browser MCP mevcut; public GitHub PR sayfası okundu (2026-11-04). GitHub/TradingView MCP bağlantısı bu oturumda yok; Desktop TradingView erişimi doğrulanmadı |
 | Desk rolü (varsayılan) | Lead + pine-engineer + strategist + **execution-ops** (ticket ile, `live_write_gate` backstop'u) | trade-reviewer + research-analyst (yalnız iç veri: journal, log, motor çıktısı) | ikinci reviewer (risk-manager / code review) + analist |
 
 ## Herkes için YASAK

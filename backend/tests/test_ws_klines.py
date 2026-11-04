@@ -107,3 +107,61 @@ def test_ws_disabled_by_default():
     r.universe = SimpleNamespace(resolve=lambda: ["BTC/USDT"])
     r._ws_start()
     assert r.ws_stream is None
+
+
+# ── T-20261104-12: Faz 2 (event_scan + touch_entry) ──────────────────────
+
+def test_latest_bar_returns_forming_bar():
+    s = KlineStream(["BTC/USDT"], ["15m"])
+    assert s.latest_bar("BTC/USDT", "15m") is None
+    s.handle_message(_msg(h=106, l=98, c=101, x=False), recv_ms=7)
+    b = s.latest_bar("BTC/USDT", "15m")
+    assert (b["h"], b["l"], b["c"], b["x"], b["recv_ms"]) == (106.0, 98.0, 101.0, False, 7)
+
+
+def test_touch_scan_forwards_fresh_bars_only():
+    import time as _t
+    s = KlineStream(["BTC/USDT", "ETH/USDT"], ["15m"])
+    now = int(_t.time() * 1000)
+    s.handle_message(_msg(h=106, l=98, c=101), recv_ms=now)
+    s.handle_message(_msg(sym="ETHUSDT"), recv_ms=now - 60_000)
+    calls = []
+    orch = SimpleNamespace(
+        touch_watch_symbols=lambda: ["BTC/USDT", "ETH/USDT", "SOL/USDT"],
+        on_intrabar_touch=lambda sym, **kw: calls.append((sym, kw)) or 1,
+    )
+    r = _runner(s)
+    r.orch = orch
+    assert r._touch_scan("15m", 5000) == 1
+    assert [c[0] for c in calls] == ["BTC/USDT"]
+    kw = calls[0][1]
+    assert (kw["price"], kw["bar_high"], kw["bar_low"], kw["bar_open_ts"]) == (101.0, 106.0, 98.0, T0)
+
+
+def test_ws_close_wakes_loop_after_settle_and_clears_event_late():
+    import asyncio
+    import time as _t
+
+    async def go():
+        r = _runner(None)
+        r.cfg = {"timeframes": {"entry": "15m"}}
+        r._ws_loop = asyncio.get_running_loop()
+        r._ws_wake = asyncio.Event()
+        r._ws_on_close("BTC/USDT", "4h", {}, 0)
+        assert await r._sleep_or_ws_close(0.05) is False
+        r._ws_on_close("BTC/USDT", "15m", {}, 0)
+        await asyncio.sleep(0.05)
+        t0 = _t.monotonic()
+        woke = await r._sleep_or_ws_close(5.0)
+        return woke, _t.monotonic() - t0, r._ws_wake.is_set()
+
+    woke, dt, still_set = asyncio.run(go())
+    assert woke is True and dt >= 1.9      # REST'in kapanan mumu servis etmesi için bekler
+    assert still_set is False
+
+
+def test_sleep_without_event_scan_is_plain_sleep():
+    import asyncio
+    r = _runner(None)
+    r._ws_wake = None
+    assert asyncio.run(r._sleep_or_ws_close(0.01)) is False

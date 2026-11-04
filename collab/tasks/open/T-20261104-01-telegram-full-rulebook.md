@@ -3,8 +3,8 @@ id: T-20261104-01
 title: Telegram export'unun TAMAMINI (892 mesaj) analiz et → kanıtlı kural kataloğu
 from: claude-code
 to: any
-status: open
-claimed_by: null
+status: in-review
+claimed_by: abacus
 reviewer: claude-code
 created: 2026-11-04
 touches_live: false
@@ -27,9 +27,9 @@ prod host'ta işlenmez (`collab/README.md` §0.4). Hermes bu task'ın çıktıs�
   LuxAlgo modunda devre dışı — yalnız karşılaştırma için.
 
 ## Beklenen çıktı
-- [ ] `collab/outputs/<model>/telegram-rulebook-2023-2025.md`: her kural için `kural | kaç mesajda | yıl dağılımı | örnek id'ler | motorda karşılığı (dosya:satır veya YOK)`. Alıntı yok/≤15 kelime; kendi cümlelerin.
-- [ ] Hipotez listesi: motorda OLMAYAN veya FARKLI olan kurallar (ör. H-TG1: LuxAlgo setup + engulfing vs + mLTF BOS/CHoCH teyidi). Her biri "test edilebilir mi, hangi araçla" (signal ledger, `scripts/desk/plan_replay.py`, `scripts/desk/agent_verdict_edge.py` — backtest modülü 2026-10-31'de kaldırıldı).
-- [ ] `collab/log/<model>.md` girişi (`- VPS: N/A`).
+- [x] `collab/outputs/<model>/telegram-rulebook-2023-2025.md`: her kural için `kural | kaç mesajda | yıl dağılımı | örnek id'ler | motorda karşılığı (dosya:satır veya YOK)`. Alıntı yok/≤15 kelime; kendi cümlelerin.
+- [x] Hipotez listesi: motorda OLMAYAN veya FARKLI olan kurallar. Her biri test edilebilirlik ve uygun araçla birlikte yazıldı.
+- [x] `collab/log/<model>.md` girişi (`- VPS: N/A`).
 
 ## Kısıtlar
 - Ham mesaj metni / `*.jsonl` repo'ya girmez (repo PUBLIC).
@@ -39,5 +39,7 @@ prod host'ta işlenmez (`collab/README.md` §0.4). Hermes bu task'ın çıktıs�
 
 ## Log
 - 2026-11-04 claude-code: task açıldı; export laptop private store'unda.
+- 2026-11-04 abacus: 892 kayıt yerelde sayıldı; yıl dağılımı, kural terimi frekansları, örnek ID'ler, LuxAlgo öncelikli motor eşlemesi ve test edilebilir hipotezler `outputs/abacus/telegram-rulebook-2023-2025.md` dosyasına eklendi. Ham veri/metin PR'a alınmadı. Takip task'ı açılmadı: görseller mevcut değil; semantik doğrulama için görsel anotasyonu veya ileriye dönük ledger alanı gerekiyor, bunlar operatör/sonraki çalışma girdisi.
+- 2026-11-04 abacus: Git fetch/push/PR ve browser MCP public read doğrulandı; `collab/MODELS.md` Abacus GitHub/MCP hücreleri PR #272'de güncellendi. GitHub/TradingView MCP ve TradingView Desktop erişimi bu oturumda mevcut değil.
 
 ## Review

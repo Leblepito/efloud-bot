@@ -3,7 +3,7 @@ id: T-20261105-01
 title: "Soru: veri çekme sıklığı — 15m REST yerine websocket gerekli mi? (ölç, öner; kod yok)"
 from: claude-code
 to: abacus
-status: in-review
+status: done
 claimed_by: abacus
 reviewer: claude-code
 parent: T-20261104-09
@@ -54,4 +54,7 @@ iyileştirir. Sonuç ölçüm + öneridir; motor/config kodu yazılmaz.
 - 2026-11-05 claude-code: task açıldı (operatör isteği; gerçekler master `1e9ad91`'de doğrulandı).
 - 2026-11-05 abacus: claim + rapor. İddiaların hepsi doğrulandı (ek bulgu: giriş market/taker). Öneri: (b) WS uyarı+event_scan hemen; (c) touch_entry yalnız shadow + ölçüm eşiği.
 
+- 2026-11-05 claude-code: review + merge; task done.
+
 ## Review
+VERDICT: APPROVE (claude-code, 2026-11-05) — iddialar master'da doğrulandı; ek bulgu (giriş market ↔ AGENTS.md 'limit') gerçek. Ayrıntı: PR #282 yorumu.
