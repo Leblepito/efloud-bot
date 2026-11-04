@@ -96,10 +96,12 @@ def test_mtf_only_mode_skips_tradingagents(tmp_path):
     assert docs[0]["tradingagents"] is None and docs[0]["status"] == "ok"
 
 
-def test_default_models_are_deepseek_flash_quick_pro_deep():
+def test_default_models_are_deepseek_flash_quick_pro_deep(monkeypatch):
     """Operator decision 2026-11-03: the research cycle runs on OpenRouter —
     deepseek flash for the quick tier, deepseek pro where conflicts are resolved.
     No Anthropic key exists on the VPS, so a claude-* default would 401."""
+    for var in ("TRADINGAGENTS_LLM_PROVIDER", "TRADINGAGENTS_QUICK_THINK_LLM", "TRADINGAGENTS_DEEP_THINK_LLM"):
+        monkeypatch.delenv(var, raising=False)
     a = rc.parse_args([])
     assert a.provider == "openrouter"
     assert a.quick_model == "deepseek/deepseek-v4.1-flash"
@@ -114,3 +116,22 @@ def test_luxalgo_is_loaded_without_importing_the_engine_package():
                          check=False, timeout=60)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == "False"
+
+
+def test_model_tiers_and_token_cap_come_from_env_when_set(monkeypatch):
+    """.env.research is how the VPS picks models (e.g. a free OpenRouter model) without
+    a code change; the cycle must honour the same TRADINGAGENTS_* vars as the brief."""
+    monkeypatch.setenv("TRADINGAGENTS_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("TRADINGAGENTS_QUICK_THINK_LLM", "vendor/free-model:free")
+    monkeypatch.setenv("TRADINGAGENTS_DEEP_THINK_LLM", "vendor/free-model:free")
+    monkeypatch.setenv("TRADINGAGENTS_MAX_TOKENS", "6000")
+    a = rc.parse_args([])
+    assert a.quick_model == a.deep_model == "vendor/free-model:free"
+    assert a.max_tokens == 6000
+
+
+def test_default_token_cap_avoids_model_max_reservation(monkeypatch):
+    """Without a cap TradingAgents asked OpenRouter for the model maximum (131072
+    tokens) and the key's credit could not cover the reservation (HTTP 402)."""
+    monkeypatch.delenv("TRADINGAGENTS_MAX_TOKENS", raising=False)
+    assert rc.parse_args([]).max_tokens == 8192

@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -156,9 +157,13 @@ def parse_args(argv=None):
     ap.add_argument("--config", default=str(ROOT / "configs" / "config.phase2_1k.yaml"),
                     help="live config; its smc_v2.luxalgo block sets the structure parameters")
     ap.add_argument("--out", default="desk/briefs")
-    ap.add_argument("--provider", default="openrouter")
-    ap.add_argument("--quick-model", default="deepseek/deepseek-v4.1-flash")
-    ap.add_argument("--deep-model", default="deepseek/deepseek-v4-pro")
+    # Same TRADINGAGENTS_* env vars as tradingagents_brief.py, so .env.research can pick
+    # the models (e.g. a free OpenRouter model) without a code change.
+    ap.add_argument("--provider", default=os.getenv("TRADINGAGENTS_LLM_PROVIDER", "openrouter"))
+    ap.add_argument("--quick-model", default=os.getenv("TRADINGAGENTS_QUICK_THINK_LLM", "deepseek/deepseek-v4.1-flash"))
+    ap.add_argument("--deep-model", default=os.getenv("TRADINGAGENTS_DEEP_THINK_LLM", "deepseek/deepseek-v4-pro"))
+    ap.add_argument("--max-tokens", type=int, default=int(os.getenv("TRADINGAGENTS_MAX_TOKENS", "8192")),
+                    help="cap per completion (avoids model-max credit reservation / HTTP 402)")
     ap.add_argument("--no-tradingagents", action="store_true", help="MTF structure only, no LLM calls")
     return ap.parse_args(argv)
 
@@ -176,7 +181,8 @@ def main(argv=None) -> int:
         except (tb.BriefError, ImportError) as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return 2
-        ta_config = tb.build_config(DEFAULT_CONFIG, a.provider, a.deep_model, a.quick_model, Path(a.out).parent)
+        ta_config = tb.build_config(DEFAULT_CONFIG, a.provider, a.deep_model, a.quick_model, Path(a.out).parent,
+                                    max_tokens=a.max_tokens)
     docs = run_cycle([s.strip() for s in a.symbols.split(",") if s.strip()], a.out, lux_cfg, ta_config=ta_config)
     for d in docs:
         if d["status"] != "ok":

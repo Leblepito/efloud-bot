@@ -73,6 +73,27 @@ Start with BTC and ETH (the default); add symbols only after checking the bill.
 A symbol whose data or LLM call fails is reported as **unavailable** and the cycle
 continues.
 
+### Free-model mode (operator decision 2026-11-04)
+
+The research cycle may run on a free OpenRouter model (Nemotron 3 Ultra) to keep cost
+near zero. Models are chosen in `.env.research`, not in code:
+`TRADINGAGENTS_QUICK_THINK_LLM` / `TRADINGAGENTS_DEEP_THINK_LLM` (both
+`research_cycle.py` and `tradingagents_brief.py` read them). Before setting them:
+
+- Verify the exact free id from `https://openrouter.ai/api/v1/models` (price 0) and that
+  its `supported_parameters` include `tools` — TradingAgents' analysts use tool calling.
+- Free models have tight request quotas (per minute and per day). One run makes dozens
+  of calls; BTC+ETH every 5 h can exceed a small daily quota. Expect HTTP 429 and
+  `unavailable` symbols if the quota is hit.
+- Free endpoints may log or train on prompts. Acceptable here (public market data and
+  our structure summary), not for the live advisory layer, which stays on the paid
+  backend in `configs/*.yaml`.
+
+`--max-tokens` / `TRADINGAGENTS_MAX_TOKENS` (default 8192) caps every completion.
+Without it TradingAgents requests the model maximum (131072 tokens) and OpenRouter
+reserves credit for it — HTTP 402 on a low-credit key (observed 2026-11-04). Reasoning
+models spend thinking tokens inside this cap; raise it if answers come back truncated.
+
 ## Interpreting
 
 - Get the engine's HTF bias first (`market-analyst` brief) and pass it as
