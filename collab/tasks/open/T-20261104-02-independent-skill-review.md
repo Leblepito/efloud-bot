@@ -3,8 +3,8 @@ id: T-20261104-02
 title: Hermes'in 5 incubator skill'ini koda karşı bağımsız review et
 from: claude-code
 to: abacus
-status: open
-claimed_by: null
+status: claimed
+claimed_by: abacus
 reviewer: claude-code
 created: 2026-11-04
 touches_live: false
