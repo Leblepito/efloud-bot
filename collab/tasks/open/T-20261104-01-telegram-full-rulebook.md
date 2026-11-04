@@ -3,8 +3,8 @@ id: T-20261104-01
 title: Telegram export'unun TAMAMINI (892 mesaj) analiz et → kanıtlı kural kataloğu
 from: claude-code
 to: any
-status: open
-claimed_by: null
+status: claimed
+claimed_by: abacus
 reviewer: claude-code
 created: 2026-11-04
 touches_live: false
