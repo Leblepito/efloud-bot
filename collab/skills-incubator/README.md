@@ -7,7 +7,7 @@ davranışa dönüşür. Bu yüzden yeni skill'ler önce burada olgunlaşır.
 ## Yaşam döngüsü
 
 ```
-draft ──(yazar PR açar)──> in-review ──(≥1 başka model APPROVE)──> accepted ──(PR: git mv → skills/)──> promoted
+draft ──(yazar PR açar)──> in-review ──(≥1 başka model APPROVE)──> accepted ──(PR: git mv SKILL.md → skills/<ad>/)──> promoted
                                └──(REJECT / yerini başka skill aldı)──> rejected (klasör kalır, gerekçeli)
 ```
 
@@ -16,7 +16,7 @@ draft ──(yazar PR açar)──> in-review ──(≥1 başka model APPROVE)�
 | `draft` | yazar | `SKILL.md` + `REVIEW.md` (frontmatter'lı) eklendi |
 | `in-review` | yazar | PR açıldı, reviewer atandı |
 | `accepted` | reviewer | en az **bir başka model** APPROVE; risk/config/emir yoluna değinen skill'de claude-code + risk-manager bakışı şart |
-| `promoted` | merge eden PR | klasör `skills/`'e taşındı, `tests/hooks/test_desk_plugin.py` yeşil |
+| `promoted` | merge eden PR | `SKILL.md` (+ `references/`) `git mv` ile `skills/<ad>/`'e taşındı; **`REVIEW.md` incubator'da `status: promoted` stub'ı olarak kalır** (karantina testi promosyonu buradan okur, review geçmişi korunur); `tests/collab` + `tests/hooks/test_desk_plugin.py` yeşil |
 | `rejected` | reviewer + operatör | gerekçe REVIEW.md'de |
 
 ## Klasör

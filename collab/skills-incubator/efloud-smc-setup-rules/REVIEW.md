@@ -23,8 +23,9 @@ kanalda en sık tekrar eden kural (129/892 mesaj).
 2. R:R tablosu (A+ 1:2, A 1:1.5, range 1:1) kanaldan değil, varsayım. Canlı motor:
    `smc_tp_targeting: true`, `min_rr_tp1: 0.5`, `blended_rr_target: 1.5` (`configs/config.phase2_1k.yaml:256-258`).
    → "hipotez" başlığına taşı.
-3. TP planı (TP1 %50-75 / TP2 %25 / TP3 kalan) motorla farklı: motor TP1/TP2 50/50
-   (`exchange/__init__.py:1065`, `open_position`). TP1 sonrası SL→entry motorda **zaten var** (`_move_sl_to_breakeven`, `exchange/__init__.py:1642`).
+3. TP planı (TP1 %50-75 / TP2 %25 / TP3 kalan) motorla farklı: motor **iki hedefli**
+   pozisyonda TP1/TP2 50/50 (`exchange/__init__.py:1065`, `open_position`); **tek hedefli** setup'ta
+   (`tp2=None`, v2 yolu `engine/safe_orchestrator.py:2807-2811`) TP1 tam boyut alır, bölünme yok. TP1 sonrası SL→entry motorda **zaten var** (`_move_sl_to_breakeven`, `exchange/__init__.py:1642`).
 4. "Volume OK / sığ market" kuralının ölçülebilir tanımı yok — rejim dedektörü (`safety.adx_*`,
    `volatile_atr_mult`) ile eşle ya da açık soru bırak.
 
