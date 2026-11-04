@@ -132,6 +132,9 @@ class BotRunner:
         self.runtime_state = RuntimeState(state_dir=state_dir)
         self.last_scan_candle_ts = 0  # Track last scanned candle timestamp
         self.ws_stream = None  # T-20261104-11: opsiyonel kline WS (yalnız gölge/parite)
+        self.touch_task = None  # T-20261104-12: intrabar fitil/temas döngüsü
+        self._ws_wake = None
+        self._ws_loop = None
 
     # ─────────────────────────────────────────────────────────────
     # Lifecycle
@@ -376,6 +379,10 @@ class BotRunner:
         self.audit_engine = AuditEngine(pool=db.pool)
 
         self._ws_start()
+        if self.ws_stream is not None and self.orch is not None \
+                and self.orch.touch_entry_mode() != "off":
+            self.touch_task = asyncio.create_task(self._touch_loop(), name="ws_touch_entry")
+            log.info(f"👆 WS touch-entry loop started (mode={self.orch.touch_entry_mode()})")
 
         # Spawn the worker task
         self.task = asyncio.create_task(self._run_loop(), name="bot_runner")
@@ -436,6 +443,13 @@ class BotRunner:
             except Exception:
                 pass
             self._kronos_executor = None
+        if self.touch_task and not self.touch_task.done():
+            self.touch_task.cancel()
+            try:
+                await self.touch_task
+            except asyncio.CancelledError:
+                pass
+        self.touch_task = None
         if self.ws_stream is not None:
             try:
                 self.ws_stream.stop()
@@ -461,6 +475,7 @@ class BotRunner:
         log.info(f"Loop interval: {interval}s")
 
         loop = asyncio.get_running_loop()
+        ws_woke = False
 
         while not self.stopped:
             t0 = loop.time()
@@ -505,7 +520,8 @@ class BotRunner:
                     log.info(f"Reaped {reaped} dead instances")
 
                 # Run scan cycle
-                await loop.run_in_executor(None, self._scan_universe)
+                await loop.run_in_executor(None, self._scan_universe, ws_woke)
+                ws_woke = False
 
                 duration_ms = int((loop.time() - t0) * 1000)
                 self.last_cycle_duration_ms = duration_ms
@@ -529,9 +545,64 @@ class BotRunner:
             elapsed = loop.time() - t0
             sleep_for = max(0.0, interval - elapsed)
             try:
-                await asyncio.sleep(sleep_for)
+                ws_woke = await self._sleep_or_ws_close(sleep_for)
             except asyncio.CancelledError:
                 raise
+
+    async def _sleep_or_ws_close(self, timeout: float) -> bool:
+        """Döngü uykusu; event_scan açıkken entry mumu WS'te kapanınca erken uyanır."""
+        wake = self._ws_wake
+        if wake is None:
+            await asyncio.sleep(timeout)
+            return False
+        try:
+            await asyncio.wait_for(wake.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            return False
+        wake.clear()
+        await asyncio.sleep(0.5)  # aynı kapanışın diğer sembol mesajları gelsin
+        return True
+
+    def _ws_on_close(self, sym: str, tf: str, bar: dict, recv_ms: int) -> None:
+        """WS thread'inden: entry mumu kapandı → ana döngüyü uyandır."""
+        if tf != self.cfg["timeframes"]["entry"] or self._ws_wake is None or self._ws_loop is None:
+            return
+        try:
+            self._ws_loop.call_soon_threadsafe(self._ws_wake.set)
+        except RuntimeError:
+            pass
+
+    async def _touch_loop(self) -> None:
+        """Intrabar fitil/temas girişi: WS oluşan bar high/low → orchestrator."""
+        ws_cfg = ((self.cfg or {}).get("data_feed") or {}).get("ws") or {}
+        interval = max(0.2, float(ws_cfg.get("touch_interval_sec", 1.0)))
+        max_age_ms = int(ws_cfg.get("touch_max_age_ms", 5000))
+        tf_entry = self.cfg["timeframes"]["entry"]
+        loop = asyncio.get_running_loop()
+        while not self.stopped:
+            try:
+                await loop.run_in_executor(None, self._touch_scan, tf_entry, max_age_ms)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning(f"[touch] loop error: {e}")
+            await asyncio.sleep(interval)
+
+    def _touch_scan(self, tf_entry: str, max_age_ms: int) -> int:
+        """Sync — executor thread. Bekleyen adayı olan sembollerde dokunuş kontrolü."""
+        ws, orch = self.ws_stream, self.orch
+        if ws is None or orch is None:
+            return 0
+        fired = 0
+        now_ms = int(time.time() * 1000)
+        for sym in orch.touch_watch_symbols():
+            bar = ws.latest_bar(sym, tf_entry)
+            if bar is None or now_ms - bar["recv_ms"] > max_age_ms:
+                continue
+            fired += orch.on_intrabar_touch(sym, price=bar["c"], bar_high=bar["h"],
+                                            bar_low=bar["l"], bar_open_ts=bar["t"],
+                                            now_ms=now_ms)
+        return fired
 
     def _ws_start(self) -> None:
         """Opsiyonel kline WS (T-20261104-11, Faz 1: yalnız GÖLGE).
@@ -546,9 +617,14 @@ class BotRunner:
             from exchange.ws_klines import KlineStream
             tf = self.cfg["timeframes"]
             tfs = [tf["entry"], tf["mtf"], tf["htf"]]
+            event_scan = bool(ws_cfg.get("event_scan", False))
+            if event_scan:
+                self._ws_loop = asyncio.get_running_loop()
+                self._ws_wake = asyncio.Event()
             self.ws_stream = KlineStream(
                 self.universe.resolve(), tfs,
                 testnet=bool(self.cfg["exchange"].get("testnet", False)),
+                on_close=self._ws_on_close if event_scan else None,
             )
             self._ws_counts = {"ok": 0, "mismatch": 0, "missing": 0}
             self.ws_stream.start()
@@ -582,8 +658,12 @@ class BotRunner:
         except Exception as e:
             log.debug(f"ws shadow check skipped: {e}")
 
-    def _scan_universe(self) -> None:
-        """Sync part — runs in executor thread."""
+    def _scan_universe(self, ws_woke: bool = False) -> None:
+        """Sync part — runs in executor thread.
+
+        ws_woke=True: WS entry mumunun kapanışını bildirdi (event_scan) → 2 sn
+        tampon gerekmez; kapanış anında taranır.
+        """
         if not self.universe or not self.orch or not self.order_mgr or not self.client:
             return
 
@@ -604,7 +684,8 @@ class BotRunner:
             entry_tf_ms = 900_000
 
         now_ms = int(time.time() * 1000)
-        current_candle_ts = ((now_ms - 2000) // entry_tf_ms) * entry_tf_ms
+        buffer_ms = 0 if ws_woke else 2000
+        current_candle_ts = ((now_ms - buffer_ms) // entry_tf_ms) * entry_tf_ms
 
         if self.last_scan_candle_ts != 0 and current_candle_ts <= self.last_scan_candle_ts:
             # Still in the same candle. Skip OHLCV fetching and SMC scan to save API weight and eliminate delay.

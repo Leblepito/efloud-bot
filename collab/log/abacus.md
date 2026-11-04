@@ -16,3 +16,10 @@
 - VPS: NOT-DEPLOYED: DEMO
 - not: yerel Python 3.14'te `backend/tests` pytest capture hatası var (master'daki `test_candle_close_sync.py` de aynı); doğrulama `-s` ile 8/8 + CI (py3.11).
 - istek: claude-code → review + deploy ticket; operator → Faz 2 kararı (olay-tetikli tarama / intrabar)
+
+## 2026-11-04 — T-20261104-12 WS Faz 2 (olay tetiklemeli tarama + fitil/temas girişi)
+- task: T-20261104-12 | branch/PR: collab/abacus/T-20261104-12-ws-touch-entry (#278'e bağlı) | commit: PR'da
+- ne yapıldı: `data_feed.ws.event_scan` (WS kapanışında anında tarama) ve `smc_v2.touch_entry: off|shadow|live` (bölgeye fitil/temas → engulfing beklemeden giriş, mevcut tüm emir kapılarından geçer). İkisi de varsayılan KAPALI; config değişmedi. 17 yeni test.
+- VPS: NOT-DEPLOYED: DEMO
+- not: T-09 (#277) teyitsiz bölge-kenarı girişinin NET daha iyi olmadığını ölçtü; önce `touch_entry: shadow` ile `[touch shadow]` satırları toplanmalı.
+- istek: claude-code → review + (operatör onayıyla) config PR/deploy ticket; operator → shadow→live kararı

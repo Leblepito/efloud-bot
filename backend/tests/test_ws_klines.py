@@ -107,3 +107,72 @@ def test_ws_disabled_by_default():
     r.universe = SimpleNamespace(resolve=lambda: ["BTC/USDT"])
     r._ws_start()
     assert r.ws_stream is None
+
+
+# ── T-20261104-12: Faz 2 (event_scan + touch_entry) ──────────────────────
+
+def test_latest_bar_returns_forming_bar():
+    s = KlineStream(["BTC/USDT"], ["15m"])
+    assert s.latest_bar("BTC/USDT", "15m") is None
+    s.handle_message(_msg(h=106, l=98, c=101, x=False), recv_ms=7)
+    b = s.latest_bar("BTC/USDT", "15m")
+    assert (b["h"], b["l"], b["c"], b["x"], b["recv_ms"]) == (106.0, 98.0, 101.0, False, 7)
+
+
+def test_touch_scan_forwards_fresh_bars_only():
+    import time as _t
+    s = KlineStream(["BTC/USDT", "ETH/USDT"], ["15m"])
+    now = int(_t.time() * 1000)
+    s.handle_message(_msg(h=106, l=98, c=101), recv_ms=now)
+    s.handle_message(_msg(sym="ETHUSDT"), recv_ms=now - 60_000)
+    calls = []
+    orch = SimpleNamespace(
+        touch_watch_symbols=lambda: ["BTC/USDT", "ETH/USDT", "SOL/USDT"],
+        on_intrabar_touch=lambda sym, **kw: calls.append((sym, kw)) or 1,
+    )
+    r = _runner(s)
+    r.orch = orch
+    assert r._touch_scan("15m", 5000) == 1
+    assert [c[0] for c in calls] == ["BTC/USDT"]
+    kw = calls[0][1]
+    assert (kw["price"], kw["bar_high"], kw["bar_low"], kw["bar_open_ts"]) == (101.0, 106.0, 98.0, T0)
+
+
+def test_ws_close_wakes_loop_and_skips_buffer():
+    import asyncio
+
+    async def go():
+        r = _runner(None)
+        r.cfg = {"timeframes": {"entry": "15m"}}
+        r._ws_loop = asyncio.get_running_loop()
+        r._ws_wake = asyncio.Event()
+        r._ws_on_close("BTC/USDT", "4h", {}, 0)
+        assert await r._sleep_or_ws_close(0.05) is False
+        r._ws_on_close("BTC/USDT", "15m", {}, 0)
+        return await r._sleep_or_ws_close(5.0)
+
+    assert asyncio.run(go()) is True
+
+
+def test_sleep_without_event_scan_is_plain_sleep():
+    import asyncio
+    r = _runner(None)
+    r._ws_wake = None
+    assert asyncio.run(r._sleep_or_ws_close(0.01)) is False
+
+
+def test_scan_universe_ws_woke_uses_no_buffer(monkeypatch):
+    from unittest.mock import MagicMock
+    from backend.bot_runner import BotRunner
+    r = BotRunner.__new__(BotRunner)
+    r.universe = SimpleNamespace(resolve=lambda: ["BTC/USDT"])
+    r.orch, r.order_mgr, r.client = MagicMock(), MagicMock(), MagicMock()
+    r.ws_stream = None
+    r.cfg = {"timeframes": {"entry": "15m", "htf": "4h", "mtf": "1h"}, "operation": {"dry_run": True}}
+    boundary = T0 + TF_MS
+    monkeypatch.setattr("time.time", lambda: (boundary + 500) / 1000.0)
+    r.last_scan_candle_ts = T0
+    r._scan_universe()
+    assert r.orch.run_cycle.call_count == 0
+    r._scan_universe(ws_woke=True)
+    assert r.orch.run_cycle.call_count == 1 and r.last_scan_candle_ts == boundary

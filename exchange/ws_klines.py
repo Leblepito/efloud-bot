@@ -129,6 +129,12 @@ class KlineStream:
             return None
         return max(ts, key=lambda b: b["recv_ms"])["c"]
 
+    def latest_bar(self, symbol: str, timeframe: str) -> Optional[dict]:
+        """Son alınan bar (oluşan ya da kapanmış) — intrabar fitil/temas için."""
+        with self._lock:
+            b = self._latest.get((symbol, timeframe))
+            return dict(b) if b else None
+
     def last_closed(self, symbol: str, timeframe: str) -> Optional[dict]:
         with self._lock:
             q = self._closed.get((symbol, timeframe))
