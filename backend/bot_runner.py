@@ -131,6 +131,7 @@ class BotRunner:
         ) or os.environ.get("EFLOUD_STATE_DIR", "./state")
         self.runtime_state = RuntimeState(state_dir=state_dir)
         self.last_scan_candle_ts = 0  # Track last scanned candle timestamp
+        self.ws_stream = None  # T-20261104-11: opsiyonel kline WS (yalnız gölge/parite)
 
     # ─────────────────────────────────────────────────────────────
     # Lifecycle
@@ -374,6 +375,8 @@ class BotRunner:
         # Pool may still be None in degraded mode (no DATABASE_URL); engine no-ops.
         self.audit_engine = AuditEngine(pool=db.pool)
 
+        self._ws_start()
+
         # Spawn the worker task
         self.task = asyncio.create_task(self._run_loop(), name="bot_runner")
         self.sentiment_task = asyncio.create_task(self._run_sentiment_loop(), name="sentiment_worker")
@@ -433,6 +436,12 @@ class BotRunner:
             except Exception:
                 pass
             self._kronos_executor = None
+        if self.ws_stream is not None:
+            try:
+                self.ws_stream.stop()
+            except Exception as e:
+                log.warning(f"ws kline stop error: {e}")
+            self.ws_stream = None
         self.running = False
         log.info("🛑 Bot runner stopped")
         bus.publish("bot_stopped")
@@ -524,6 +533,55 @@ class BotRunner:
             except asyncio.CancelledError:
                 raise
 
+    def _ws_start(self) -> None:
+        """Opsiyonel kline WS (T-20261104-11, Faz 1: yalnız GÖLGE).
+
+        `data_feed.ws.enabled` (varsayılan false). Karar/emir yolu REST'te kalır;
+        akış yalnız REST'e karşı parite + gecikme ölçümü için çalışır.
+        """
+        try:
+            ws_cfg = ((self.cfg or {}).get("data_feed") or {}).get("ws") or {}
+            if not ws_cfg.get("enabled", False) or not self.universe:
+                return
+            from exchange.ws_klines import KlineStream
+            tf = self.cfg["timeframes"]
+            tfs = [tf["entry"], tf["mtf"], tf["htf"]]
+            self.ws_stream = KlineStream(
+                self.universe.resolve(), tfs,
+                testnet=bool(self.cfg["exchange"].get("testnet", False)),
+            )
+            self._ws_counts = {"ok": 0, "mismatch": 0, "missing": 0}
+            self.ws_stream.start()
+            log.info(f"📡 WS kline shadow feed started ({len(tfs)} TF, shadow-only)")
+        except Exception as e:
+            self.ws_stream = None
+            log.warning(f"WS kline feed failed to start (non-critical): {e}")
+
+    def _ws_shadow_check(self, sym: str, tf_entry: str, df_entry) -> None:
+        """REST son kapanmış barı ile WS kapanış barını karşılaştır (yalnız log)."""
+        ws = self.ws_stream
+        if ws is None or df_entry is None or len(df_entry) == 0:
+            return
+        try:
+            open_ms = int(df_entry.index[-1].value // 1_000_000)
+            wb = ws.closed_bar(sym, tf_entry, open_ms)
+            if wb is None:
+                self._ws_counts["missing"] += 1
+                log.info(f"[ws shadow] {sym} {tf_entry} bar {open_ms}: WS'te yok (age_ms={ws.age_ms()})")
+                return
+            last = df_entry.iloc[-1]
+            same = all(
+                abs(float(last[c]) - wb[k]) <= 1e-9 * max(1.0, abs(wb[k]))
+                for c, k in (("open", "o"), ("high", "h"), ("low", "l"), ("close", "c"))
+            )
+            lag_ms = int(time.time() * 1000) - wb["recv_ms"]
+            self._ws_counts["ok" if same else "mismatch"] += 1
+            level = log.info if same else log.warning
+            level(f"[ws shadow] {sym} {tf_entry} parity={'OK' if same else 'MISMATCH'} "
+                  f"ws_seen_before_rest_ms={lag_ms} counts={self._ws_counts}")
+        except Exception as e:
+            log.debug(f"ws shadow check skipped: {e}")
+
     def _scan_universe(self) -> None:
         """Sync part — runs in executor thread."""
         if not self.universe or not self.orch or not self.order_mgr or not self.client:
@@ -561,6 +619,7 @@ class BotRunner:
                 df_htf = self.client.fetch_ohlcv(sym, tf["htf"], limit)
                 df_mtf = self.client.fetch_ohlcv(sym, tf["mtf"], limit)
                 df_entry = self.client.fetch_ohlcv(sym, tf["entry"], limit)
+                self._ws_shadow_check(sym, tf["entry"], df_entry)
                 df_daily = None
                 try:
                     df_daily = self.client.fetch_ohlcv(sym, "1d", 100)
