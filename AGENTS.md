@@ -37,7 +37,7 @@ Python (CCXT, FastAPI) + TradingView Pine Script v6.
 
 Üç model (claude-code, hermes, abacus) eşzamanlı çalışır. Giriş: `collab/README.md`
 (protokol: görevler `collab/tasks/`, model başına append-only log `collab/log/<model>.md`
-+ `VPS: DEPLOYED|NOT-DEPLOYED: DEMO|N/A` notu, çıktılar `collab/outputs/<model>/`, skill
+ve `VPS: DEPLOYED|NOT-DEPLOYED: DEMO|N/A` notu, çıktılar `collab/outputs/<model>/`, skill
 taslakları `collab/skills-incubator/` → review → `skills/`). Modeller: `collab/MODELS.md`,
 pano: `collab/STATUS.md`, MCP kaydı: `collab/mcp/README.md`. Ham veri git dışında
 (`~/efloud-collab-private/`, VPS `/root/efloud-collab-private/`) — repo PUBLIC.

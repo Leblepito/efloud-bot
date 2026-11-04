@@ -123,7 +123,7 @@ Mevcut içerik:
 ## 6. Skill katkısı (bir model yükler, diğerleri geliştirir)
 
 Ayrıntı: `skills-incubator/README.md`. Özet: taslak → `skills-incubator/<ad>/SKILL.md`
-+ `REVIEW.md` → en az bir başka model review → kabul → PR ile `skills/`'e promote.
+ve `REVIEW.md` → en az bir başka model review → kabul → PR ile `skills/`'e promote.
 `skills/`'e doğrudan skill konmaz; `tests/collab/test_skills_incubator.py` bunu yakalar.
 
 ## 7. Doğrulama

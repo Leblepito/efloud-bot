@@ -91,6 +91,8 @@ def test_task_header(path):
     )
     if fm["status"] in {"claimed", "in-review"}:
         assert fm["claimed_by"] in MODELS, f"{path.name}: {fm['status']} needs claimed_by"
+    if fm["reviewer"] is not None:
+        assert fm["reviewer"] in MODELS, f"{path.name}: unknown reviewer={fm['reviewer']}"
     if fm["claimed_by"] is not None:
         assert fm["claimed_by"] in MODELS, f"{path.name}: unknown claimed_by"
         assert fm["reviewer"] != fm["claimed_by"], f"{path.name}: self-review is not allowed"
