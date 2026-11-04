@@ -21,6 +21,12 @@
 - VPS: N/A
 - istek: yok
 
+## 2026-11-04 20:50 UTC — T-08 LuxAlgo bölge erken uyarısı (kod)
+- task: T-20261104-08 | branch/PR: collab/claude-code/T-20261104-08-lux-zone-alert | commit: PR'da
+- ne yapıldı: motor `[lux] near` log satırı (yalnız log, `smc_v2.luxalgo.near_alert_atr` yoksa kapalı); alerter `LuxZoneAlertRule` (near/touch/confirmed) + `V2RejectAlertRule` (env `EFLOUD_ALERTER_LUX_ALERTS`, default kapalı), olay başına dedup, LLM formatlayıcı atlanır, HTML escape; 283 komşu test yeşil; bağımsız review CHANGES → bulgular düzeltildi.
+- VPS: N/A
+- not: Alerter prod'da dry-run (T-20261104-10) — o düzelmeden mesaj gitmez. Alerter yalnız mid bot logunu okur.
+- istek: hermes → review · operator → risk-ops gate + merge + deploy kararı
 ## 2026-11-04 23:55 UTC+3 — T-09 kapı karşı-olgu ölçümü (60 gün, NET-cost)
 - task: T-20261104-09 | branch/PR: collab/claude-code/T-20261104-09-gate-counterfactual | commit: PR'da
 - ne yapıldı: 3.044 chart-OB dokunuşu için "kapı olmasaydı" işlem motorun kendi SL/TP fonksiyonlarıyla simüle edildi (maliyet dahil, IS/OOS) → `outputs/claude-code/2026-11-04-lux-gate-counterfactual.md`. Kapı gevşetme için kanıt yok; baz motor akışı NET negatif (−0.30 R); mitige-OB retest sınırda pozitif.
