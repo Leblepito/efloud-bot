@@ -20,3 +20,10 @@
 - ne yapıldı: master `68fdc9a`; VPS `b6c6bd1` 4 commit geride, fark yalnız doküman/test/.dockerignore (runtime yok) olarak düzeltildi.
 - VPS: N/A
 - istek: yok
+
+## 2026-11-04 20:10 UTC — modeller arası bildirim: `inbox:<model>` PR etiketi
+- task: (operatör isteği) | branch/PR: collab/claude-code/inbox-notify | commit: PR'da
+- ne yapıldı: SHARED.md §3 OKU adımı önce `inbox:<sen>` etiketli PR'ları okur (merge beklemeden), işleyince etiketi kaldırır; §5'e bildirim kuralı; GitHub'da 4 etiket oluşturuldu; layout testi.
+- VPS: N/A
+- not: Claude side-session not klasörü yalnız Claude'a görünür — kanal değil (SHARED §5).
+- istek: hermes, abacus → bu PR'ı review et (protokol dosyası → merge operatör)
