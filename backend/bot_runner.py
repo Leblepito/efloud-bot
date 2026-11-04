@@ -475,7 +475,6 @@ class BotRunner:
         log.info(f"Loop interval: {interval}s")
 
         loop = asyncio.get_running_loop()
-        ws_woke = False
 
         while not self.stopped:
             t0 = loop.time()
@@ -520,8 +519,7 @@ class BotRunner:
                     log.info(f"Reaped {reaped} dead instances")
 
                 # Run scan cycle
-                await loop.run_in_executor(None, self._scan_universe, ws_woke)
-                ws_woke = False
+                await loop.run_in_executor(None, self._scan_universe)
 
                 duration_ms = int((loop.time() - t0) * 1000)
                 self.last_cycle_duration_ms = duration_ms
@@ -545,7 +543,7 @@ class BotRunner:
             elapsed = loop.time() - t0
             sleep_for = max(0.0, interval - elapsed)
             try:
-                ws_woke = await self._sleep_or_ws_close(sleep_for)
+                await self._sleep_or_ws_close(sleep_for)
             except asyncio.CancelledError:
                 raise
 
@@ -559,8 +557,10 @@ class BotRunner:
             await asyncio.wait_for(wake.wait(), timeout=timeout)
         except asyncio.TimeoutError:
             return False
+        # Binance kapanan mumu REST'ten servis edene kadar (eski 2 sn tamponla aynı) +
+        # aynı kapanışın diğer sembol mesajları gelsin; event ANCAK SONRA temizlenir.
+        await asyncio.sleep(2.0)
         wake.clear()
-        await asyncio.sleep(0.5)  # aynı kapanışın diğer sembol mesajları gelsin
         return True
 
     def _ws_on_close(self, sym: str, tf: str, bar: dict, recv_ms: int) -> None:
@@ -658,12 +658,8 @@ class BotRunner:
         except Exception as e:
             log.debug(f"ws shadow check skipped: {e}")
 
-    def _scan_universe(self, ws_woke: bool = False) -> None:
-        """Sync part — runs in executor thread.
-
-        ws_woke=True: WS entry mumunun kapanışını bildirdi (event_scan) → 2 sn
-        tampon gerekmez; kapanış anında taranır.
-        """
+    def _scan_universe(self) -> None:
+        """Sync part — runs in executor thread."""
         if not self.universe or not self.orch or not self.order_mgr or not self.client:
             return
 
@@ -684,8 +680,7 @@ class BotRunner:
             entry_tf_ms = 900_000
 
         now_ms = int(time.time() * 1000)
-        buffer_ms = 0 if ws_woke else 2000
-        current_candle_ts = ((now_ms - buffer_ms) // entry_tf_ms) * entry_tf_ms
+        current_candle_ts = ((now_ms - 2000) // entry_tf_ms) * entry_tf_ms
 
         if self.last_scan_candle_ts != 0 and current_candle_ts <= self.last_scan_candle_ts:
             # Still in the same candle. Skip OHLCV fetching and SMC scan to save API weight and eliminate delay.

@@ -2284,10 +2284,14 @@ class SafeOrchestrator:
         return lock
 
     def touch_entry_mode(self) -> str:
-        """smc_v2.touch_entry: off (varsayılan) | shadow (yalnız log) | live."""
+        """smc_v2.touch_entry: off (varsayılan) | shadow (yalnız log).
+
+        `live` bilinçli olarak YOK: NET-cost kapısı (n>=30, IS+OOS NET>0, bazdan iyi)
+        geçilmeden ve emir yolu eşzamanlılık çözümü olmadan (emirler ana döngüye
+        kuyruklanmadan) intrabar emir açılmaz. Bilinmeyen değer = off.
+        """
         raw = (self.config.get("smc_v2") or {}).get("touch_entry", "off")
-        mode = str(raw or "off").strip().lower()
-        return mode if mode in ("shadow", "live") else "off"
+        return "shadow" if str(raw or "off").strip().lower() == "shadow" else "off"
 
     def touch_watch_symbols(self) -> list:
         """Dokunuş beklenen (bekleyen v2 adayı olan) semboller."""
@@ -2307,19 +2311,15 @@ class SafeOrchestrator:
         bar_open_ts: int,
         now_ms: Optional[int] = None,
     ) -> int:
-        """Fitil/temas girişi (T-20261104-12): mum kapanışı ve engulfing beklemeden.
+        """Fitil/temas GÖLGE gözlemi (T-20261104-12). YALNIZ LOG — emir yok, durum değişmez.
 
         Oluşan entry barının fitili (WS high/low) ya da anlık fiyat bekleyen bir
-        adayın hedef bölgesine değdiği an aday CONFIRMED olur ve giriş, fiyatın
-        bölgeye clamp'lenmiş hâliyle `_place_v2_entry_order`'a gider; whitelist,
-        breaker, SL/TP, pos_guard, smc_v2_shadow ve OrderManager drift kapıları
-        aynen çalışır. Fiyat bölgeyi ters yönde delip geçmişse (LONG: < low,
-        SHORT: > high) giriş yapılmaz. shadow modunda yalnız `[touch shadow]`
-        satırı basılır, durum değişmez. Son kapanış taraması bayatsa
-        (> 2 entry barı) hiçbir şey yapılmaz. Dönüş: emre gönderilen aday sayısı.
+        adayın hedef bölgesine değerse aday başına bir kez `[touch shadow] would-enter`
+        satırı basılır. Fiyat bölgeyi ters yönde delip geçmişse (LONG: < low,
+        SHORT: > high) ya da son kapanış taraması bayatsa (> 2 entry barı) basılmaz.
+        Dönüş: basılan satır sayısı.
         """
-        mode = self.touch_entry_mode()
-        if mode == "off" or self.setup_state_store is None:
+        if self.touch_entry_mode() != "shadow" or self.setup_state_store is None:
             return 0
         df = self.__dict__.get("_v2_last_df", {}).get(symbol)
         if df is None or len(df) == 0:
@@ -2328,12 +2328,11 @@ class SafeOrchestrator:
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000) if now_ms is None else int(now_ms)
         last_open = int(df.index[-1].timestamp() * 1000)
         if now_ms - (last_open + tf_ms) > 2 * tf_ms:
-            log.debug(f"[touch] {symbol}: last closed-bar scan is stale, skipped")
             return 0
         lo, hi = min(bar_low, price), max(bar_high, price)
 
         from engine.smc_v2.setup_state import PERSISTED_STATES
-        fired = 0
+        logged = 0
         with self._v2_state_lock():
             for cand in list(self.setup_state_store.candidates):
                 if cand.symbol != symbol or cand.state not in PERSISTED_STATES:
@@ -2346,47 +2345,21 @@ class SafeOrchestrator:
                 if (cand.direction == "LONG" and price < z.low) or \
                         (cand.direction == "SHORT" and price > z.high):
                     continue
+                seen = self.__dict__.setdefault("_touch_shadow_logged", set())
+                key = (cand.symbol, cand.direction, cand.trigger_bar_ts, z.low, z.high)
+                if key in seen:
+                    continue
+                if len(seen) > 512:
+                    seen.clear()
+                seen.add(key)
                 entry = min(max(price, z.low), z.high)
-                if mode == "shadow":
-                    seen = self.__dict__.setdefault("_touch_shadow_logged", set())
-                    key = (cand.symbol, cand.direction, cand.trigger_bar_ts, z.low, z.high)
-                    if key not in seen:
-                        if len(seen) > 512:
-                            seen.clear()
-                        seen.add(key)
-                        log.info(f"[touch shadow] {cand.symbol} {cand.direction} would-enter "
-                                 f"entry={entry:.8g} price={price:.8g} wick=[{lo:.8g}-{hi:.8g}] "
-                                 f"zone=[{z.low:.8g}-{z.high:.8g}] state={cand.state}")
-                    continue
-                if self._v2_po3_blocked(df):
-                    self._lux_trace_po3(cand, price, int(bar_open_ts))
-                    continue
-                lease = False
-                if self.instance_mgr:
-                    lease = self.instance_mgr.sync_acquire_symbol(symbol)
-                    if not lease:
-                        log.warning(f"[touch] {symbol}: lease contended, entry skipped")
-                        continue
-                try:
-                    cand.state = "CONFIRMED"
-                    self._lux_trace(cand, "confirmed", price, f"touch entry={entry:.8g}")
-                    log.info(f"[touch] {cand.symbol} {cand.direction} wick/touch entry={entry:.8g} "
-                             f"price={price:.8g} zone=[{z.low:.8g}-{z.high:.8g}]")
-                    self._place_v2_entry_order(cand, current_price=price,
-                                               entry_price=entry, df_entry=df)
-                    fired += 1
-                finally:
-                    if lease:
-                        try:
-                            self.instance_mgr.sync_release_symbol(symbol)
-                        except Exception as e:
-                            log.warning(f"[touch] {symbol}: lease release failed: {e}")
-            if fired and self.persist:
-                try:
-                    self.setup_state_store.save()
-                except Exception as e:
-                    log.error(f"setup_state save failed after touch entry: {e}")
-        return fired
+                log.info(f"[touch shadow] {cand.symbol} {cand.direction} would-enter "
+                         f"entry={entry:.8g} price={price:.8g} wick=[{lo:.8g}-{hi:.8g}] "
+                         f"zone=[{z.low:.8g}-{z.high:.8g}] state={cand.state} "
+                         f"trigger_bar_ts={cand.trigger_bar_ts} bars_waited={cand.bars_waited} "
+                         f"bar_open_ts={int(bar_open_ts)}")
+                logged += 1
+        return logged
 
     def _v2_entry_active(self, symbol: str) -> bool:
         """True when the v2 (OB/BB pullback) entry path OWNS this symbol.

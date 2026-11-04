@@ -138,8 +138,9 @@ def test_touch_scan_forwards_fresh_bars_only():
     assert (kw["price"], kw["bar_high"], kw["bar_low"], kw["bar_open_ts"]) == (101.0, 106.0, 98.0, T0)
 
 
-def test_ws_close_wakes_loop_and_skips_buffer():
+def test_ws_close_wakes_loop_after_settle_and_clears_event_late():
     import asyncio
+    import time as _t
 
     async def go():
         r = _runner(None)
@@ -149,9 +150,14 @@ def test_ws_close_wakes_loop_and_skips_buffer():
         r._ws_on_close("BTC/USDT", "4h", {}, 0)
         assert await r._sleep_or_ws_close(0.05) is False
         r._ws_on_close("BTC/USDT", "15m", {}, 0)
-        return await r._sleep_or_ws_close(5.0)
+        await asyncio.sleep(0.05)
+        t0 = _t.monotonic()
+        woke = await r._sleep_or_ws_close(5.0)
+        return woke, _t.monotonic() - t0, r._ws_wake.is_set()
 
-    assert asyncio.run(go()) is True
+    woke, dt, still_set = asyncio.run(go())
+    assert woke is True and dt >= 1.9      # REST'in kapanan mumu servis etmesi için bekler
+    assert still_set is False
 
 
 def test_sleep_without_event_scan_is_plain_sleep():
@@ -159,20 +165,3 @@ def test_sleep_without_event_scan_is_plain_sleep():
     r = _runner(None)
     r._ws_wake = None
     assert asyncio.run(r._sleep_or_ws_close(0.01)) is False
-
-
-def test_scan_universe_ws_woke_uses_no_buffer(monkeypatch):
-    from unittest.mock import MagicMock
-    from backend.bot_runner import BotRunner
-    r = BotRunner.__new__(BotRunner)
-    r.universe = SimpleNamespace(resolve=lambda: ["BTC/USDT"])
-    r.orch, r.order_mgr, r.client = MagicMock(), MagicMock(), MagicMock()
-    r.ws_stream = None
-    r.cfg = {"timeframes": {"entry": "15m", "htf": "4h", "mtf": "1h"}, "operation": {"dry_run": True}}
-    boundary = T0 + TF_MS
-    monkeypatch.setattr("time.time", lambda: (boundary + 500) / 1000.0)
-    r.last_scan_candle_ts = T0
-    r._scan_universe()
-    assert r.orch.run_cycle.call_count == 0
-    r._scan_universe(ws_woke=True)
-    assert r.orch.run_cycle.call_count == 1 and r.last_scan_candle_ts == boundary

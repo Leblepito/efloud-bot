@@ -1,4 +1,4 @@
-"""T-20261104-12: fitil/temas girişi (smc_v2.touch_entry, varsayılan off)."""
+"""T-20261104-12: fitil/temas GÖLGE gözlemi (smc_v2.touch_entry: off|shadow; emir yok)."""
 import threading
 from types import SimpleNamespace
 
@@ -27,7 +27,7 @@ def _cand(direction="LONG", state="AWAITING_PULLBACK", low=100.0, high=102.0):
     )
 
 
-def _orch(mode="live", cands=None):
+def _orch(mode="shadow", cands=None):
     orch = SafeOrchestrator.__new__(SafeOrchestrator)
     orch.config = {"smc_v2": {"touch_entry": mode}, "timeframes": {"entry": "15m"}}
     orch.setup_state_store = SimpleNamespace(candidates=list(cands or []), save=lambda: None)
@@ -45,97 +45,79 @@ NOW = T0 + TF + 60_000
 BAR = T0 + TF
 
 
-def test_off_by_default_does_nothing():
+def _shadow_lines(caplog):
+    return [r.message for r in caplog.records if "[touch shadow]" in r.message]
+
+
+def _run(orch, caplog, *a, **k):
+    with caplog.at_level("INFO", logger="efloud.safe_orch"):
+        return orch.on_intrabar_touch(*a, **k)
+
+
+def test_off_by_default_does_nothing(caplog):
     c = _cand()
-    orch = _orch(mode=None, cands=[c])
+    orch = _orch(cands=[c])
     orch.config["smc_v2"].pop("touch_entry")
     assert orch.touch_entry_mode() == "off"
     assert orch.touch_watch_symbols() == []
-    assert orch.on_intrabar_touch("BTC/USDT", 101.5, 103.0, 101.5, BAR, now_ms=NOW) == 0
-    assert c.state == "AWAITING_PULLBACK" and orch.placed == []
+    assert _run(orch, caplog, "BTC/USDT", 101.5, 103.0, 101.5, BAR, now_ms=NOW) == 0
+    assert _shadow_lines(caplog) == [] and orch.placed == []
 
 
-def test_wick_touch_long_enters_at_zone_edge():
+def test_live_value_is_not_supported_and_means_off(caplog):
+    orch = _orch(mode="live", cands=[_cand()])
+    assert orch.touch_entry_mode() == "off"
+    assert _run(orch, caplog, "BTC/USDT", 101.5, 103.0, 101.5, BAR, now_ms=NOW) == 0
+    assert orch.placed == []
+
+
+def test_wick_touch_logs_once_never_orders(caplog):
     c = _cand()
     orch = _orch(cands=[c])
     assert orch.touch_watch_symbols() == ["BTC/USDT"]
-    n = orch.on_intrabar_touch("BTC/USDT", price=102.4, bar_high=104.0, bar_low=101.8,
-                               bar_open_ts=BAR, now_ms=NOW)
-    assert n == 1 and c.state == "CONFIRMED"
-    assert orch.placed == [("BTC/USDT", "LONG", 102.0)]
-
-
-def test_price_inside_zone_short_enters_at_price():
-    c = _cand(direction="SHORT", state="AWAITING_REENTRY")
-    orch = _orch(cands=[c])
-    assert orch.on_intrabar_touch("BTC/USDT", 100.5, 100.6, 99.0, BAR, now_ms=NOW) == 1
-    assert orch.placed == [("BTC/USDT", "SHORT", 100.5)]
-
-
-def test_no_touch_no_entry():
-    c = _cand()
-    orch = _orch(cands=[c])
-    assert orch.on_intrabar_touch("BTC/USDT", 103.0, 104.0, 102.5, BAR, now_ms=NOW) == 0
-    assert c.state == "AWAITING_PULLBACK"
-
-
-def test_blown_through_zone_no_entry():
-    c = _cand()
-    orch = _orch(cands=[c])
-    assert orch.on_intrabar_touch("BTC/USDT", 99.0, 101.0, 98.5, BAR, now_ms=NOW) == 0
-    assert c.state == "AWAITING_PULLBACK"
-
-
-def test_no_double_fire():
-    c = _cand()
-    orch = _orch(cands=[c])
-    assert orch.on_intrabar_touch("BTC/USDT", 101.0, 103.0, 100.8, BAR, now_ms=NOW) == 1
-    assert orch.on_intrabar_touch("BTC/USDT", 101.0, 103.0, 100.8, BAR, now_ms=NOW + 1000) == 0
-    assert len(orch.placed) == 1
-
-
-def test_shadow_logs_only(caplog):
-    c = _cand()
-    orch = _orch(mode="shadow", cands=[c])
-    with caplog.at_level("INFO", logger="efloud.safe_orch"):
-        assert orch.on_intrabar_touch("BTC/USDT", 101.0, 103.0, 100.8, BAR, now_ms=NOW) == 0
-        orch.on_intrabar_touch("BTC/USDT", 101.0, 103.0, 100.8, BAR, now_ms=NOW + 1000)
+    assert _run(orch, caplog, "BTC/USDT", price=102.4, bar_high=104.0, bar_low=101.8,
+                bar_open_ts=BAR, now_ms=NOW) == 1
+    assert _run(orch, caplog, "BTC/USDT", 102.4, 104.0, 101.8, BAR, now_ms=NOW + 1000) == 0
+    lines = _shadow_lines(caplog)
+    assert len(lines) == 1 and "entry=102 " in lines[0]
+    assert f"trigger_bar_ts={T0}" in lines[0] and "bars_waited=1" in lines[0]
     assert c.state == "AWAITING_PULLBACK" and orch.placed == []
-    assert sum("[touch shadow]" in r.message for r in caplog.records) == 1
 
 
-def test_stale_scan_blocks():
-    c = _cand()
-    orch = _orch(cands=[c])
-    assert orch.on_intrabar_touch("BTC/USDT", 101.0, 103.0, 100.8, BAR,
-                                  now_ms=T0 + TF + 3 * TF) == 0
-    assert c.state == "AWAITING_PULLBACK"
+def test_short_inside_zone_logs_price(caplog):
+    orch = _orch(cands=[_cand(direction="SHORT", state="AWAITING_REENTRY")])
+    assert _run(orch, caplog, "BTC/USDT", 100.5, 100.6, 99.0, BAR, now_ms=NOW) == 1
+    assert "entry=100.5 " in _shadow_lines(caplog)[0]
 
 
-def test_trigger_bar_itself_ignored():
-    c = _cand()
-    orch = _orch(cands=[c])
-    assert orch.on_intrabar_touch("BTC/USDT", 101.0, 103.0, 100.8, T0, now_ms=NOW) == 0
+def test_no_touch_no_log(caplog):
+    orch = _orch(cands=[_cand()])
+    assert _run(orch, caplog, "BTC/USDT", 103.0, 104.0, 102.5, BAR, now_ms=NOW) == 0
 
 
-def test_po3_block_keeps_candidate():
-    c = _cand()
-    orch = _orch(cands=[c])
-    orch._v2_po3_blocked = lambda df: True
-    orch._lux_trace_po3 = lambda *a, **k: None
-    assert orch.on_intrabar_touch("BTC/USDT", 101.0, 103.0, 100.8, BAR, now_ms=NOW) == 0
-    assert c.state == "AWAITING_PULLBACK"
+def test_blown_through_zone_no_log(caplog):
+    orch = _orch(cands=[_cand()])
+    assert _run(orch, caplog, "BTC/USDT", 99.0, 101.0, 98.5, BAR, now_ms=NOW) == 0
 
 
-def test_expired_and_confirmed_skipped():
+def test_stale_scan_blocks(caplog):
+    orch = _orch(cands=[_cand()])
+    assert _run(orch, caplog, "BTC/USDT", 101.0, 103.0, 100.8, BAR, now_ms=T0 + 4 * TF) == 0
+
+
+def test_trigger_bar_itself_ignored(caplog):
+    orch = _orch(cands=[_cand()])
+    assert _run(orch, caplog, "BTC/USDT", 101.0, 103.0, 100.8, T0, now_ms=NOW) == 0
+
+
+def test_expired_and_confirmed_skipped(caplog):
     orch = _orch(cands=[_cand(state="EXPIRED"), _cand(state="CONFIRMED")])
     assert orch.touch_watch_symbols() == []
-    assert orch.on_intrabar_touch("BTC/USDT", 101.0, 103.0, 100.8, BAR, now_ms=NOW) == 0
+    assert _run(orch, caplog, "BTC/USDT", 101.0, 103.0, 100.8, BAR, now_ms=NOW) == 0
 
 
-def test_concurrent_touches_place_once():
-    c = _cand()
-    orch = _orch(cands=[c])
+def test_concurrent_touches_log_once():
+    orch = _orch(cands=[_cand()])
     results = []
     ts = [threading.Thread(target=lambda: results.append(
         orch.on_intrabar_touch("BTC/USDT", 101.0, 103.0, 100.8, BAR, now_ms=NOW)))
@@ -144,4 +126,4 @@ def test_concurrent_touches_place_once():
         t.start()
     for t in ts:
         t.join()
-    assert sum(results) == 1 and len(orch.placed) == 1
+    assert sum(results) == 1 and orch.placed == []

@@ -22,3 +22,10 @@
 - VPS: NOT-DEPLOYED: DEMO
 - not: yerel Python 3.14'te `backend/tests` pytest capture hatası var (master'daki `test_candle_close_sync.py` de aynı); doğrulama `-s` ile 8/8 + CI (py3.11).
 - istek: claude-code → review + deploy ticket; operator → Faz 2 kararı (olay-tetikli tarama / intrabar)
+
+## 2026-11-05 — T-20261104-12 #280 CHANGES uygulandı (shadow-only)
+- task: T-20261104-12 | branch/PR: collab/abacus/T-20261104-12-ws-touch-entry (#280) | commit: PR'da
+- ne yapıldı: claude-code CHANGES: `touch_entry` live dalı + lease/emir kodu çıkarıldı (yalnız off|shadow, emir yok); event_scan 2 sn tamponu korundu, event uykudan sonra temizleniyor; shadow satırına trigger_bar_ts/bars_waited eklendi. master (#283) merge edildi. Config değişmedi.
+- VPS: NOT-DEPLOYED: DEMO
+- not: `live` ancak NET-cost eşiği (n>=30, IS+OOS NET>0, bazdan iyi) + emirleri ana döngüye kuyruklayan ayrı PR ile.
+- istek: claude-code → re-review

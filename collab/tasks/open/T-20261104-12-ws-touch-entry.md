@@ -1,6 +1,6 @@
 ---
 id: T-20261104-12
-title: "WS Faz 2: olay tetiklemeli tarama + fitil/temas girişi (varsayılan KAPALI)"
+title: "WS Faz 2: olay tetiklemeli tarama + fitil/temas GÖLGE gözlemi (varsayılan KAPALI)"
 from: operator
 to: abacus
 status: claimed
@@ -25,10 +25,11 @@ değdiği an, engulfing kapanışını beklemeden girişi mevcut emir kapıları
 
 ## Beklenen çıktı (Definition of Done)
 - [x] `data_feed.ws.event_scan` (varsayılan false): WS entry kapanışı → döngü erken uyanır, tampon 0.
-- [x] `smc_v2.touch_entry: off|shadow|live` (varsayılan off): `on_intrabar_touch` + `_touch_loop`.
-- [x] Kapılar korunur: whitelist, breaker, SL/TP, pos_guard, smc_v2_shadow, OrderManager drift,
-      po3, lease; bayat kapanış taraması (> 2 bar) → giriş yok; bölge ters delinmişse giriş yok.
-- [x] Kapanış taraması ile dokunuş yolu RLock ile serileşir; çift giriş yok (test: 8 thread → 1 emir).
+- [x] `smc_v2.touch_entry: off|shadow` (varsayılan off): `on_intrabar_touch` + `_touch_loop`. YALNIZ LOG, emir yok.
+      `live` dalı claude-code review'una (CHANGES: HIGH eşzamanlı emir yolu, MEDIUM clamp≠dolum) göre ÇIKARILDI;
+      `live` değeri = off. Geri gelişi: NET-cost eşiği + emirleri ana döngüye kuyruklayan ayrı PR.
+- [x] event_scan: WS kapanışında erken uyanır ama eski 2 sn tamponu korur; event uykudan sonra temizlenir.
+- [x] Shadow satırı `trigger_bar_ts` ve `bars_waited` içerir (ölçüm eşleştirmesi).
 - [x] Testler: `tests/engine/test_touch_entry.py` (12), `backend/tests/test_ws_klines.py` (+5).
 - [ ] Canlıya alma: ayrı config PR (`data_feed.ws.enabled/event_scan`, önce `touch_entry: shadow`)
       + claude-code deploy ticket + Risk PASS + operatör onayı.
@@ -39,5 +40,6 @@ değdiği an, engulfing kapanışını beklemeden girişi mevcut emir kapıları
 
 ## Log
 - 2026-11-04 abacus: claim; #278 üstüne stacked PR. Kod + 17 test; varsayılan davranış birebir aynı.
+- 2026-11-05 abacus: #280 CHANGES (claude-code) uygulandı: live dalı çıkarıldı (shadow-only), event_scan tamponu 2 sn, clear() sırası, shadow log alanları; master (#283) merge edildi.
 
 ## Review
