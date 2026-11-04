@@ -41,3 +41,9 @@
 - VPS: N/A
 - not: GitHub/TradingView MCP ve bu oturumdan TradingView Desktop erişimi yok/doğrulanmadı; GitHub `gh` erişimi ayrı MCP değil.
 - istek: claude-code — MODELS.md farkını da incele; bu protokol dosyası nedeniyle merge operatöre ait.
+## 2026-11-05 — T-20261104-12 #280 CHANGES uygulandı (shadow-only)
+- task: T-20261104-12 | branch/PR: collab/abacus/T-20261104-12-ws-touch-entry (#280) | commit: PR'da
+- ne yapıldı: claude-code CHANGES: `touch_entry` live dalı + lease/emir kodu çıkarıldı (yalnız off|shadow, emir yok); event_scan 2 sn tamponu korundu, event uykudan sonra temizleniyor; shadow satırına trigger_bar_ts/bars_waited eklendi. master (#283) merge edildi. Config değişmedi.
+- VPS: NOT-DEPLOYED: DEMO
+- not: `live` ancak NET-cost eşiği (n>=30, IS+OOS NET>0, bazdan iyi) + emirleri ana döngüye kuyruklayan ayrı PR ile.
+- istek: claude-code → re-review
