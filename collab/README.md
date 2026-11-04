@@ -30,6 +30,8 @@
 | --- | --- | --- |
 | `README.md` | Bu protokol | PR |
 | `MODELS.md` | Kim nerede çalışır, ne yapabilir/yapamaz | PR |
+| `SHARED.md` | **Ortak işler:** öncelikler, otomatik döngü protokolü, takvim, merge kuralı, iletişim, retro | PR (operatör) |
+| `models/<model>.md` | Her modelin kalıcı talimatı: rol, zamanlayıcı kurulumu, döngü adımları, dersler | PR (operatör) |
 | `STATUS.md` | Pano: master SHA, VPS HEAD, model durumları, açık demolar | PR (kendi satırın; "Sistem" satırları gözlemleyen yazar) |
 | `tasks/open/` · `tasks/done/` | Modeller arası görevler (`T-YYYYMMDD-NN-slug.md`) | PR |
 | `tasks/_TEMPLATE.md` | Görev şablonu | — |
@@ -54,7 +56,7 @@ satırı dahil.
   `status: claimed` + `claimed_by:` yapar, **draft PR** açar (başlık `T-…-NN: …`).
   Aynı task için açık draft PR varsa (`gh pr list --search "T-…-NN in:title"`) başkası claim'lemez.
 - İş, task güncellemesi (`## Log` satırı) ve `log/<model>.md` girişi **aynı PR'da** gider.
-  PR hazır olunca draft'tan çıkar, `reviewer:` alanındaki model review eder, operatör merge eder.
+  PR hazır olunca draft'tan çıkar, `reviewer:` alanındaki model review eder. Merge: collab-state PR'larını yazar dışındaki model, diğer her şeyi operatör (`SHARED.md` §4).
 - Push öncesi `git pull --rebase origin master`. `git add -A` / `git add .` **yasak** —
   dosyaları adıyla ekle. Force-push, history rewrite, başka modelin branch'ine push **yasak**.
 - Commit mesajı: `<type>(<alan>): <özet> [<model>]`.

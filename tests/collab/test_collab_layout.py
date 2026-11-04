@@ -38,6 +38,8 @@ REQUIRED = [
     "README.md",
     "MODELS.md",
     "STATUS.md",
+    "SHARED.md",
+    *[f"models/{m}.md" for m in sorted(MODELS)],
     "tasks/_TEMPLATE.md",
     "mcp/README.md",
     "prompts/hermes-onboarding.md",
@@ -91,6 +93,9 @@ def test_task_header(path):
     )
     if fm["status"] in {"claimed", "in-review"}:
         assert fm["claimed_by"] in MODELS, f"{path.name}: {fm['status']} needs claimed_by"
+    if fm.get("parent") is not None:
+        assert TASK_ID_RE.match(str(fm["parent"])), f"{path.name}: bad parent {fm['parent']!r}"
+        assert fm["parent"] != fm["id"], f"{path.name}: task cannot be its own parent"
     if fm["reviewer"] is not None:
         assert fm["reviewer"] in MODELS, f"{path.name}: unknown reviewer={fm['reviewer']}"
     if fm["claimed_by"] is not None:
