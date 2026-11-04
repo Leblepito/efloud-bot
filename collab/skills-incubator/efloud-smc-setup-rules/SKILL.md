@@ -11,6 +11,8 @@ metadata:
     related_skills: [efloud-smc-concepts, efloud-risk-management]
 ---
 
+> ⚠️ **INCUBATOR TASLAĞI — AKTİF DEĞİL.** Yazar: hermes (commit `645a5dc`). Kullanmadan önce aynı klasördeki `REVIEW.md`'yi oku; buradaki sayılar canlı config DEĞİLDİR (kaynak: `configs/config.phase2_1k.yaml`).
+
 # Efloud SMC Setup Rules
 
 ## When to Use

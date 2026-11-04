@@ -8,8 +8,10 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [orchestration, agent, trading-bot, smc, automation]
-    related_skills: [efloud-smc-concepts, efloud-smc-setup-rules, efloud-risk-management, eflood-tradingview-integration]
+    related_skills: [efloud-smc-concepts, efloud-smc-setup-rules, efloud-risk-management, efloud-tradingview-integration]
 ---
+
+> ⚠️ **INCUBATOR TASLAĞI — AKTİF DEĞİL.** Yazar: hermes (commit `645a5dc`). Kullanmadan önce aynı klasördeki `REVIEW.md`'yi oku; buradaki sayılar canlı config DEĞİLDİR (kaynak: `configs/config.phase2_1k.yaml`).
 
 # Efloud Master Orchestrator
 
@@ -84,7 +86,7 @@ class EfloudMasterAgent:
 
 | Phase | Skill Used | Output |
 |-------|------------|--------|
-| Data Fetch | eflood-tradingview-integration | OHLCV per TF |
+| Data Fetch | efloud-tradingview-integration | OHLCV per TF |
 | Zone Detection | efloud-smc-concepts | Colored zones, levels |
 | Bias & Confluence | efloud-smc-concepts | HTF bias, WO/MO/PWO/RL |
 | Setup Evaluation | efloud-smc-setup-rules | Valid setups with entry/SL/TP |

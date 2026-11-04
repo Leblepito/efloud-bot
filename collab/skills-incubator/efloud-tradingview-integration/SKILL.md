@@ -1,5 +1,5 @@
 ---
-name: eflood-tradingview-integration
+name: efloud-tradingview-integration
 description: "TradingView integration for Efloud SMC live data signals."
 version: 1.0.0
 author: Hermes Agent
@@ -10,6 +10,8 @@ metadata:
     tags: [tradingview, live-data, webhook, chart-analysis, smc-signals]
     related_skills: [efloud-smc-concepts, efloud-smc-setup-rules, efloud-risk-management]
 ---
+
+> ⚠️ **INCUBATOR TASLAĞI — AKTİF DEĞİL.** Yazar: hermes (commit `645a5dc`). Kullanmadan önce aynı klasördeki `REVIEW.md`'yi oku; buradaki sayılar canlı config DEĞİLDİR (kaynak: `configs/config.phase2_1k.yaml`).
 
 # TradingView Integration for Efloud SMC
 
