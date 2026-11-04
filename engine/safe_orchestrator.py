@@ -2094,7 +2094,7 @@ class SafeOrchestrator:
         if _lux_cfg.get("enabled", False):
             try:
                 _near_thr = float(_lux_cfg.get("near_alert_atr") or 0.0)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 _near_thr = 0.0   # bozuk değer = kapalı; gözlem bayrağı ticaret döngüsünü durduramaz
         _near_atr = None
 

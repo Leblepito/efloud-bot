@@ -230,3 +230,26 @@ def test_orchestrator_lux_lines_match_the_alerter_rule(tmp_path, caplog, monkeyp
     fired = [rule.match_log({"level": "INFO", "logger": "efloud.safe_orch", "message": m})
              for m in _lux_msgs(caplog)]
     assert [f is not None for f in fired] == [True, True, True]
+
+
+def test_exception_inside_near_block_never_breaks_the_state_machine(tmp_path, caplog, monkeypatch):
+    """The near trace is observability only: if it raises, the tick still advances."""
+    import engine.smc_v2.atr as atr_mod
+    monkeypatch.setattr(atr_mod, "wilder_atr", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = 1.0
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 51.8, 0, _flat_df())
+        _tick(orch, 50.5, 1, _flat_df())
+    assert c.state == "IN_ZONE" and c.bars_waited == 2
+    assert _near_msgs(caplog) == []
+
+
+def test_huge_near_alert_atr_value_is_treated_as_off(tmp_path, caplog):
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = 10 ** 400
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 51.8, 0, _flat_df())
+    assert c.state == "AWAITING_PULLBACK" and c.bars_waited == 1
