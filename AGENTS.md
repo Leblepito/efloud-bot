@@ -33,6 +33,15 @@ Python (CCXT, FastAPI) + TradingView Pine Script v6.
 | `engine/smc_v2/triggers.py` | v2 trigger (CHoCH+BOS → SetupCandidate) |
 | `engine/safe_orchestrator.py` | Ana orchestrator (v1 susturma + v2 entry) |
 
+## Ortak çalışma — `collab/` (YENİ 2026-11-04)
+
+Üç model (claude-code, hermes, abacus) eşzamanlı çalışır. Giriş: `collab/README.md`
+(protokol: görevler `collab/tasks/`, model başına append-only log `collab/log/<model>.md`
++ `VPS: DEPLOYED|NOT-DEPLOYED: DEMO|N/A` notu, çıktılar `collab/outputs/<model>/`, skill
+taslakları `collab/skills-incubator/` → review → `skills/`). Modeller: `collab/MODELS.md`,
+pano: `collab/STATUS.md`, MCP kaydı: `collab/mcp/README.md`. Ham veri git dışında
+(`~/efloud-collab-private/`, VPS `/root/efloud-collab-private/`) — repo PUBLIC.
+
 ## Desk Plugin — çok-ajanlı masa (YENİ 2026-11-03)
 
 Repo kökü bir Claude Code plugin'idir (`efloud-desk`, `.claude-plugin/`): roller
