@@ -118,3 +118,13 @@ def test_no_large_or_raw_data_files_in_collab():
         and (p.stat().st_size > MAX_FILE_BYTES or p.suffix.lower() in RAW_DATA_SUFFIXES)
     ]
     assert not offenders, f"raw/large data belongs in the private store, not the public repo: {offenders}"
+
+
+def test_shared_defines_inbox_label_for_every_model_and_operator():
+    """Cross-model notification = `inbox:<model>` PR label read first in the loop
+    (unmerged PR content is otherwise invisible to models reading master)."""
+    text = (COLLAB / "SHARED.md").read_text(encoding="utf-8")
+    for who in sorted(MODELS) + ["operator"]:
+        assert f"inbox:{who}" in text, f"SHARED.md must name the inbox:{who} label"
+    assert "gh pr list --label inbox:<sen>" in text, "loop step OKU must read the inbox first"
+    assert "--remove-label inbox:<sen>" in text, "receiver must ack by removing its label"

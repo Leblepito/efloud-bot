@@ -17,8 +17,10 @@ Overseer-watchdog (added Task E):
 """
 from __future__ import annotations
 
+import html
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,10 +40,19 @@ class Rule:
     alert_key: str = ""
     severity: str = "WARNING"  # "WARNING" or "CRITICAL"
     dedup_window_sec: int = 30 * 60
+    # False → text is sent verbatim (no LLM rewrite). For alerts whose numbers
+    # must not be altered and that must never read like a trade call.
+    ai_format: bool = True
 
     def match_log(self, rec: dict) -> Optional[str]:
         """Given a parsed JSON log line dict, return formatted alert text or None."""
         return None
+
+    def dedup_key(self, rec: dict) -> str:
+        """Dedup key for a matched log record. Default: one key per rule.
+        Rules that fire for many independent events (per symbol / zone)
+        override this so one event cannot silence another."""
+        return self.alert_key
 
     def match_health(self, payload: dict, history: dict) -> Optional[str]:
         """Given a /healthz response dict and alerter's mutable history dict,
@@ -287,6 +298,97 @@ class TradeClosedRule(Rule):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# LuxAlgo zone early warning (T-20261104-08) — read-only, default OFF
+# ─────────────────────────────────────────────────────────────────────
+
+LUX_ALERTS_ENV = "EFLOUD_ALERTER_LUX_ALERTS"
+_LUX_NOTE = "ℹ️ Bilgi amaçlı — işlem sinyali değil; emri yalnız motor verir."
+# safe_orchestrator._lux_trace format: "[lux] <event> <SYM> <DIR> bars=N price=P zone=[lo-hi] | extra"
+_RE_LUX = re.compile(
+    r"^\[lux\] (?P<event>near|touch|confirmed) (?P<sym>\S+) (?P<dir>LONG|SHORT) "
+    r"bars=(?P<bars>\d+) price=(?P<price>\S+) zone=\[(?P<zone>[^\]]+)\](?: \| (?P<extra>.*))?$")
+# safe_orchestrator._place_v2_entry_order: "[v2 reject] <SYM>: <reason> (...)"
+_RE_REJECT = re.compile(r"^\[v2 reject\] (?P<sym>\S+): (?P<reason>[a-z_0-9]+)(?P<rest>.*)$")
+_LUX_TITLES = {
+    "near": "👀 <b>Bölgeye yaklaşıyor</b>",
+    "touch": "📍 <b>Fiyat bölgede — bot teyit mumu bekliyor</b>",
+    "confirmed": "✅ <b>Bölgede teyit geldi — emir kontrollerine gidiyor</b>",
+}
+
+
+def _lux_alerts_on() -> bool:
+    return os.environ.get(LUX_ALERTS_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _safe_orch_msg(rec: dict, levels=("INFO",)) -> Optional[str]:
+    if rec.get("logger") != "efloud.safe_orch" or rec.get("level") not in levels:
+        return None
+    return rec.get("message", "")
+
+
+def _esc(x) -> str:
+    """Telegram parse_mode=HTML: raw '<' / '&' in log text makes the API refuse the message."""
+    return html.escape(str(x or ""), quote=False)
+
+
+@dataclass
+class LuxZoneAlertRule(Rule):
+    """`[lux] near|touch|confirmed` → operator message.
+
+    left/reentry are skipped on purpose: price oscillating at a zone edge
+    flips them every 30 s tick. One message per (event, symbol, direction,
+    zone) per window.
+    """
+    alert_key: str = "lux.zone"
+    severity: str = "INFO"
+    dedup_window_sec: int = 6 * 60 * 60
+    ai_format: bool = False
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if not _lux_alerts_on():
+            return None
+        m = _RE_LUX.match(_safe_orch_msg(rec) or "")
+        if not m:
+            return None
+        extra = f" · {_esc(m['extra'])}" if m["extra"] else ""
+        return (f"{_LUX_TITLES[m['event']]}\n"
+                f"{_esc(m['sym'])} {m['dir']} · bölge [{_esc(m['zone'])}] · fiyat {_esc(m['price'])}{extra}\n"
+                f"{_LUX_NOTE}")
+
+    def dedup_key(self, rec: dict) -> str:
+        m = _RE_LUX.match(rec.get("message", ""))
+        if not m:
+            return self.alert_key
+        return f"{self.alert_key}.{m['event']}.{m['sym']}.{m['dir']}.{m['zone']}"
+
+
+@dataclass
+class V2RejectAlertRule(Rule):
+    """`[v2 reject] SYM: reason` → operator sees which rule blocked the entry."""
+    alert_key: str = "lux.reject"
+    severity: str = "INFO"
+    dedup_window_sec: int = 60 * 60
+    ai_format: bool = False
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if not _lux_alerts_on():
+            return None
+        # WARNING dahil: sizing / breaker / pos_guard kontrol HATALARI bu seviyede loglanır.
+        m = _RE_REJECT.match(_safe_orch_msg(rec, levels=("INFO", "WARNING")) or "")
+        if not m:
+            return None
+        return (f"⛔ <b>Bot girişi reddetti</b>\n"
+                f"{_esc(m['sym'])} · kural: {_esc(m['reason'])}{_esc(m['rest'])}\n"
+                f"{_LUX_NOTE}")
+
+    def dedup_key(self, rec: dict) -> str:
+        m = _RE_REJECT.match(rec.get("message", ""))
+        if not m:
+            return self.alert_key
+        return f"{self.alert_key}.{m['sym']}.{m['reason']}"
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Overseer watchdog (file-mtime driven)
 # ─────────────────────────────────────────────────────────────────────
 
@@ -387,4 +489,6 @@ RULES: list[Rule] = [
     TP1HitRule(),
     TradeClosedRule(),
     OverseerHeartbeatStaleRule(),
+    LuxZoneAlertRule(),
+    V2RejectAlertRule(),
 ]

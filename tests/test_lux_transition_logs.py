@@ -127,3 +127,129 @@ def test_report_has_a_funnel_from_setup_to_entry():
     assert "HUNİ" in txt
     assert "touch 1" in txt and "confirmed 1" in txt and "red 1" in txt
     assert lm.classify(lines[1].split(" | ")[3]) == "trace"
+
+
+# ── T-20261104-08: "[lux] near" early-warning line (log only, default OFF) ──
+
+def _flat_df(n=20, mid=52.0):
+    """Every bar has range 1.0 and no gaps → Wilder ATR(14) == 1.0."""
+    idx = pd.date_range("2026-11-04", periods=n, freq="15min", tz="UTC")
+    return pd.DataFrame({"open": [mid] * n, "high": [mid + 0.5] * n,
+                         "low": [mid - 0.5] * n, "close": [mid] * n}, index=idx)
+
+
+def _near_msgs(caplog):
+    return [m for m in _lux_msgs(caplog) if m.startswith("[lux] near ")]
+
+
+def test_near_line_is_off_by_default(tmp_path, caplog):
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 51.8, 0, _flat_df())
+    assert _near_msgs(caplog) == []
+    assert c.state == "AWAITING_PULLBACK"
+
+
+def test_near_line_logged_once_within_threshold_and_states_unchanged(tmp_path, caplog):
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = 1.0
+    df = _flat_df()
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 53.0, 0, df)        # 2.0 ATR above zone high -> silent
+        _tick(orch, 51.8, 1, df)        # 0.8 ATR -> near
+        _tick(orch, 51.6, 2, df)        # still near -> not repeated
+        _tick(orch, 50.5, 3, df)        # inside zone -> touch (unchanged path)
+    near = _near_msgs(caplog)
+    assert len(near) == 1
+    assert "X LONG" in near[0] and "zone=[50-51]" in near[0] and "dist=0.80 ATR" in near[0]
+    assert c.state == "IN_ZONE" and orch.placed == []
+    events = [lm.RE_TRACE.search(m)["event"] for m in _lux_msgs(caplog) if lm.RE_TRACE.search(m)]
+    assert events == ["touch"]
+
+
+def test_near_line_short_measures_distance_below_zone_low(tmp_path, caplog):
+    c = SetupCandidate("X", "SHORT", 0, 40.0, "BEAR", ZoneSpec(53.0, 54.0, "OB"),
+                       54.5, 0, "AWAITING_PULLBACK", 0, ["LUX internal CHoCH BEAR aligned with HTF BEAR"])
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = 1.0
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 52.5, 0, _flat_df())   # 0.5 ATR below zone low
+    near = _near_msgs(caplog)
+    assert len(near) == 1 and "dist=0.50 ATR" in near[0]
+
+
+def test_near_line_skipped_without_atr(tmp_path, caplog):
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = 1.0
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 51.8, 0, _df(engulf=False))   # 3 bars -> ATR not computable
+    assert _near_msgs(caplog) == []
+
+
+def test_bad_near_alert_atr_value_never_breaks_the_state_machine(tmp_path, caplog):
+    """A config typo in a log-only knob must not abort the trading tick."""
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = "1.0x"
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 51.8, 0, _flat_df())
+        _tick(orch, 50.5, 1, _flat_df())
+    assert c.state == "IN_ZONE" and c.bars_waited == 2
+    assert _near_msgs(caplog) == []
+
+
+def test_near_line_not_logged_right_after_leaving_the_zone(tmp_path, caplog):
+    """AWAITING_REENTRY is next to the edge it just left — 'approaching' would mislead."""
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = 1.0
+    df = _flat_df()
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 50.5, 0, df)    # touch
+        _tick(orch, 51.5, 1, df)    # left, 0.5 ATR above zone
+        _tick(orch, 51.5, 2, df)    # still outside, waiting for re-entry
+    assert c.state == "AWAITING_REENTRY"
+    assert _near_msgs(caplog) == []
+
+
+def test_orchestrator_lux_lines_match_the_alerter_rule(tmp_path, caplog, monkeypatch):
+    """Contract: the exact lines the engine writes are the lines the alerter parses."""
+    from ops.alerter.rules import LuxZoneAlertRule
+    monkeypatch.setenv("EFLOUD_ALERTER_LUX_ALERTS", "1")
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = 1.0
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 51.8, 0, _flat_df())            # near
+        _tick(orch, 50.5, 1, _df(engulf=True))      # touch
+        _tick(orch, 50.95, 1, _df(engulf=True))     # confirmed
+    rule = LuxZoneAlertRule()
+    fired = [rule.match_log({"level": "INFO", "logger": "efloud.safe_orch", "message": m})
+             for m in _lux_msgs(caplog)]
+    assert [f is not None for f in fired] == [True, True, True]
+
+
+def test_exception_inside_near_block_never_breaks_the_state_machine(tmp_path, caplog, monkeypatch):
+    """The near trace is observability only: if it raises, the tick still advances."""
+    import engine.smc_v2.atr as atr_mod
+    monkeypatch.setattr(atr_mod, "wilder_atr", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = 1.0
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 51.8, 0, _flat_df())
+        _tick(orch, 50.5, 1, _flat_df())
+    assert c.state == "IN_ZONE" and c.bars_waited == 2
+    assert _near_msgs(caplog) == []
+
+
+def test_huge_near_alert_atr_value_is_treated_as_off(tmp_path, caplog):
+    c = _cand()
+    orch = _orch(tmp_path, [c])
+    orch.config["smc_v2"]["luxalgo"]["near_alert_atr"] = 10 ** 400
+    with caplog.at_level(logging.INFO, logger="efloud.safe_orch"):
+        _tick(orch, 51.8, 0, _flat_df())
+    assert c.state == "AWAITING_PULLBACK" and c.bars_waited == 1
