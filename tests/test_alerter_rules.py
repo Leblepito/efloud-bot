@@ -192,6 +192,9 @@ def test_rules_list_contains_in_scope_rules():
         "trade.tp1",
         "trade.closed",
         "overseer.heartbeat_stale",
+        # T-20261104-08: LuxAlgo zone early warning (default OFF via env).
+        "lux.zone",
+        "lux.reject",
     }
     assert set(keys) == expected, f"got {set(keys)}"
 

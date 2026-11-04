@@ -20,6 +20,7 @@ import urllib.error
 import urllib.request
 from collections import deque
 from pathlib import Path
+from typing import Optional
 
 from ops.alerter.dedup import Dedup
 from ops.alerter.rules import RULES, Rule
@@ -129,7 +130,7 @@ class Alerter:
         for rule in RULES:
             text = rule.match_log(rec)
             if text:
-                self._maybe_fire(rule, text)
+                self._maybe_fire(rule, text, key=rule.dedup_key(rec))
 
     def _poll_healthz(self) -> None:
         try:
@@ -149,12 +150,13 @@ class Alerter:
             if text:
                 self._maybe_fire(rule, text)
 
-    def _maybe_fire(self, rule: Rule, text: str) -> None:
+    def _maybe_fire(self, rule: Rule, text: str, key: Optional[str] = None) -> None:
         # R-6 fix (2026-07-17): dedup kaydı teslimat BAŞARILI olunca düşülür.
         # Önceki sıra (should_fire önce), rate-limit düşüşünde veya Telegram
         # hata/timeout'unda alert'i pencere boyunca (BreakerDailyRule: 24h!)
         # kalıcı yutuyordu — bir sonraki değerlendirme turu yeniden dener.
-        if not self.dedup.would_fire(rule.alert_key, rule.dedup_window_sec):
+        key = key or rule.alert_key
+        if not self.dedup.would_fire(key, rule.dedup_window_sec):
             self.stat_alerts_deduped += 1
             return
         # Rate limit: drop if 50 already sent in last 60s
@@ -168,13 +170,14 @@ class Alerter:
             )
             return
         # AI-based structured formatting wrapper (with zero-friction fallback)
-        formatted_text = format_alert_with_ai(text, rule.severity, rule.alert_key)
+        formatted_text = (format_alert_with_ai(text, rule.severity, rule.alert_key)
+                          if rule.ai_format else text)
         ok = send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, formatted_text)
         if ok:
-            self.dedup.mark_fired(rule.alert_key)
+            self.dedup.mark_fired(key)
             self.send_timestamps.append(now)
             self.stat_alerts_fired += 1
-            log.info(f"alert fired: {rule.alert_key}")
+            log.info(f"alert fired: {key}")
 
     def _write_heartbeat(self) -> None:
         try:

@@ -2087,6 +2087,17 @@ class SafeOrchestrator:
         # smc_v2.po3_gate: false (default) → inert; UNDEFINED bloklamaz.
         po3_blocked = self._v2_po3_blocked(df_15m)
 
+        # T-20261104-08: "[lux] near" erken uyarı satırı — YALNIZ LOG (kapı/durum
+        # değişmez). luxalgo.near_alert_atr yoksa/0 ise kapalı; ATR bu tick'te
+        # en çok bir kez, yalnız ihtiyaç olunca hesaplanır.
+        _near_thr = 0.0
+        if _lux_cfg.get("enabled", False):
+            try:
+                _near_thr = float(_lux_cfg.get("near_alert_atr") or 0.0)
+            except (TypeError, ValueError):
+                _near_thr = 0.0   # bozuk değer = kapalı; gözlem bayrağı ticaret döngüsünü durduramaz
+        _near_atr = None
+
         # Local import to avoid module-level circular dependency on smc_v2
         from engine.smc_v2.zones import is_price_in_zone
         from engine.smc_v2.setup_state import PERSISTED_STATES
@@ -2131,6 +2142,15 @@ class SafeOrchestrator:
                 continue
 
             price_in_zone = is_price_in_zone(current_price, cand.target_zone)
+            # AWAITING_REENTRY hariç: fiyat az önce çıktığı kenarın dibinde, "yaklaşıyor" yanıltır.
+            if _near_thr > 0.0 and not price_in_zone and cand.state == "AWAITING_PULLBACK":
+                try:
+                    if _near_atr is None:
+                        from engine.smc_v2.atr import wilder_atr
+                        _near_atr = wilder_atr(df_15m, period=14) or 0.0
+                    self._lux_trace_near(cand, current_price, _near_atr, _near_thr)
+                except Exception as e:  # yalnız log — durum ilerlemesini asla kesmez
+                    log.debug(f"[lux] near trace skipped for {cand.symbol}: {e!r}")
 
             # === AWAITING_PULLBACK state ===
             if cand.state == "AWAITING_PULLBACK":
@@ -2352,6 +2372,28 @@ class SafeOrchestrator:
         log.info(f"[lux] {event} {cand.symbol} {cand.direction} bars={cand.bars_waited} "
                  f"price={price:.8g} zone=[{z.low:.8g}-{z.high:.8g}]"
                  + (f" | {extra}" if extra else ""))
+
+    def _lux_trace_near(self, cand, price: float, atr: float, threshold_atr: float) -> None:
+        """[lux] near — fiyat bölgenin yakın kenarına threshold_atr×ATR'den yakın.
+
+        Yalnız gözlem (alerter erken uyarısı, T-20261104-08). Aday başına bir kez
+        basılır; ATR yoksa ya da fiyat bölgeyi geçmişse sessiz kalır.
+        """
+        if not _is_lux_cand(cand) or not atr or atr <= 0.0:
+            return
+        z = cand.target_zone
+        lo, hi = min(z.low, z.high), max(z.low, z.high)
+        dist = (price - hi) if cand.direction == "LONG" else (lo - price)
+        if dist <= 0.0 or dist / atr > threshold_atr:
+            return
+        seen = self.__dict__.setdefault("_lux_near_logged", set())
+        key = (cand.symbol, cand.direction, cand.trigger_bar_ts, z.low, z.high)
+        if key in seen:
+            return
+        if len(seen) > 512:   # yalnız log tekilleştirme belleği; sınırsız büyümesin
+            seen.clear()
+        seen.add(key)
+        self._lux_trace(cand, "near", price, f"dist={dist / atr:.2f} ATR")
 
     def _lux_trace_po3(self, cand, price: float, bar_ts: int) -> None:
         """Po3 bloğu her 30 sn'lik tick'te tekrar eder; aday başına bar başına bir satır."""

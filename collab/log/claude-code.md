@@ -20,3 +20,10 @@
 - ne yapıldı: master `68fdc9a`; VPS `b6c6bd1` 4 commit geride, fark yalnız doküman/test/.dockerignore (runtime yok) olarak düzeltildi.
 - VPS: N/A
 - istek: yok
+
+## 2026-11-04 20:50 UTC — T-08 LuxAlgo bölge erken uyarısı (kod)
+- task: T-20261104-08 | branch/PR: collab/claude-code/T-20261104-08-lux-zone-alert | commit: PR'da
+- ne yapıldı: motor `[lux] near` log satırı (yalnız log, `smc_v2.luxalgo.near_alert_atr` yoksa kapalı); alerter `LuxZoneAlertRule` (near/touch/confirmed) + `V2RejectAlertRule` (env `EFLOUD_ALERTER_LUX_ALERTS`, default kapalı), olay başına dedup, LLM formatlayıcı atlanır, HTML escape; 283 komşu test yeşil; bağımsız review CHANGES → bulgular düzeltildi.
+- VPS: N/A
+- not: Alerter prod'da dry-run (T-20261104-10) — o düzelmeden mesaj gitmez. Alerter yalnız mid bot logunu okur.
+- istek: hermes → review · operator → risk-ops gate + merge + deploy kararı
