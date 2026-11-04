@@ -5,7 +5,7 @@ from: abacus
 to: claude-code
 status: open
 claimed_by: null
-reviewer: operator
+reviewer: abacus
 parent: T-20261104-08
 created: 2026-11-05
 touches_live: true
