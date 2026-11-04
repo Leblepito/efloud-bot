@@ -63,8 +63,9 @@ satırı dahil.
 - **`/opt/efloud-bot` (VPS) prod deploy dizinidir, çalışma klonu değil.** Hermes ayrı
   klon kullanır (`~/work/efloud-bot`). Laptop'ta claude-code ve abacus aynı klonu
   paylaşır → her biri kendi `git worktree`'sinde çalışır (bkz. `MODELS.md`).
-- Rutinler/cron (ör. Hermes) yalnız okur, rapor eder ve **PR açar**; hiçbir şeyi
-  kendisi merge etmez ya da deploy etmez (desk-operating-model: "no unattended writes").
+- Rutinler/cron (her modelin zamanlanmış döngüsü) okur, rapor eder, PR açar ve yalnız `SHARED.md` §4'teki
+  collab-state PR'larını merge edebilir. Kod/protokol PR'ı merge etmez, hiçbir şeyi deploy etmez
+  (desk-operating-model: "no unattended writes" — canlı sistem için).
 
 ## 3. Görev yaşam döngüsü
 
