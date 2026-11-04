@@ -2139,15 +2139,19 @@ class SafeOrchestrator:
                     if not cand.has_left_zone:
                         # First entry into zone — move to IN_ZONE to wait for leave
                         cand.state = "IN_ZONE"
+                        self._lux_trace(cand, "touch", current_price)
                         continue
                     else:
                         # Already left zone before, this is a re-entry (pullback)
                         # Proceed with confirmation logic
                         if not require_confirmation:
                             if po3_blocked:
+                                self._lux_trace_po3(cand, current_price, current_bar_ts)
                                 continue
                             cand.state = "CONFIRMED"
                             clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
+                            self._lux_trace(cand, "confirmed", current_price,
+                                            f"entry={clamped_entry_price:.8g}")
                             self._place_v2_entry_order(
                                 cand,
                                 current_price=current_price,
@@ -2157,6 +2161,7 @@ class SafeOrchestrator:
                             continue
                         else:
                             cand.state = "IN_ZONE"
+                            self._lux_trace(cand, "reentry", current_price)
 
             # === IN_ZONE state ===
             if cand.state == "IN_ZONE":
@@ -2164,6 +2169,7 @@ class SafeOrchestrator:
                     # Price left the zone — this is what we want for pullback detection
                     cand.has_left_zone = True
                     cand.state = "AWAITING_REENTRY"
+                    self._lux_trace(cand, "left", current_price)
                     continue
 
                 # Price still in zone — check for confirmation
@@ -2172,9 +2178,12 @@ class SafeOrchestrator:
                     if cand.has_left_zone:
                         # This is a re-entry (pullback) — confirm entry
                         if po3_blocked:
+                            self._lux_trace_po3(cand, current_price, current_bar_ts)
                             continue
                         cand.state = "CONFIRMED"
                         clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
+                        self._lux_trace(cand, "confirmed", current_price,
+                                        f"entry={clamped_entry_price:.8g}")
                         self._place_v2_entry_order(
                             cand,
                             current_price=current_price,
@@ -2196,8 +2205,10 @@ class SafeOrchestrator:
                 )
                 if confirmed:
                     if po3_blocked:
+                        self._lux_trace_po3(cand, current_price, current_bar_ts)
                         continue
                     cand.state = "CONFIRMED"
+                    self._lux_trace(cand, "confirmed", current_price, f"entry={entry_px:.8g}")
                     self._place_v2_entry_order(
                         cand,
                         current_price=current_price,
@@ -2211,9 +2222,12 @@ class SafeOrchestrator:
                     # Price re-entered the zone (pullback complete)
                     if not require_confirmation:
                         if po3_blocked:
+                            self._lux_trace_po3(cand, current_price, current_bar_ts)
                             continue
                         cand.state = "CONFIRMED"
                         clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
+                        self._lux_trace(cand, "confirmed", current_price,
+                                        f"entry={clamped_entry_price:.8g}")
                         self._place_v2_entry_order(
                             cand,
                             current_price=current_price,
@@ -2224,6 +2238,7 @@ class SafeOrchestrator:
                     else:
                         # Wait for engulfing confirmation inside zone
                         cand.state = "IN_ZONE"
+                        self._lux_trace(cand, "reentry", current_price)
                         # Note: has_left_zone is already True, so next IN_ZONE cycle
                         # will allow entry on confirmation without requiring another leave
                 # Price still outside zone — keep waiting
@@ -2322,6 +2337,35 @@ class SafeOrchestrator:
         except Exception as e:
             log.warning(f"signal_ledger record skipped (best-effort): {e!r}")
             return None
+
+    def _lux_trace(self, cand, event: str, price: float, extra: str = "") -> None:
+        """[lux] durum geçişi satırı (touch / left / reentry / po3-block / confirmed).
+
+        Yalnız gözlem: hiçbir durumu, kapıyı ya da emri değiştirmez. Yalnız
+        LuxAlgo adayları için basılır ([lux] expired ile aynı kapsam), böylece
+        `lux_monitor report` setup+ → giriş hunisinin hangi adımda kırıldığını
+        gösterebilir (2026-11-04: mid bot 132 cycle girişsiz, kör noktaydı).
+        """
+        if not _is_lux_cand(cand):
+            return
+        z = cand.target_zone
+        log.info(f"[lux] {event} {cand.symbol} {cand.direction} bars={cand.bars_waited} "
+                 f"price={price:.8g} zone=[{z.low:.8g}-{z.high:.8g}]"
+                 + (f" | {extra}" if extra else ""))
+
+    def _lux_trace_po3(self, cand, price: float, bar_ts: int) -> None:
+        """Po3 bloğu her 30 sn'lik tick'te tekrar eder; aday başına bar başına bir satır."""
+        if not _is_lux_cand(cand):
+            return
+        seen = self.__dict__.setdefault("_lux_po3_logged", {})
+        key = (cand.symbol, cand.direction, cand.trigger_bar_ts,
+               cand.target_zone.low, cand.target_zone.high)
+        if seen.get(key) == bar_ts:
+            return
+        if len(seen) > 512:   # yalnız log tekilleştirme belleği; sınırsız büyümesin
+            seen.clear()
+        seen[key] = bar_ts
+        self._lux_trace(cand, "po3-block", price, "Po3 MANIPULATION fazı — setup bekliyor")
 
     def _lux_log_scan(self, symbol, htf_bias, lux, cands) -> None:
         """[lux] scan satırı — yalnız özet DEĞİŞTİĞİNDE basılır (30 sn'lik

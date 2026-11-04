@@ -104,6 +104,12 @@ def test_service_runs_the_wrapper_as_a_oneshot():
     assert "Type=oneshot" in text
     assert "ExecStart=/opt/efloud-bot/deploy/research-cycle.sh" in text
     assert "TimeoutStartSec=" in text, "LLM koşusu için üst sınır şart"
+    # Measured 2026-11-04 on the VPS: one full BTC run on the free Nemotron model took
+    # 13 min 14 s; the default is BTC+ETH (~27 min). 1800 s left almost no margin and a
+    # slow second symbol would be killed mid-run. Require >= 2x a single run + margin.
+    timeout = int(next(ln.split("=", 1)[1] for ln in text.splitlines()
+                       if ln.strip().startswith("TimeoutStartSec=")))
+    assert timeout >= 3600, f"TimeoutStartSec={timeout} too tight for 2 symbols x ~13 min"
 
 
 def test_service_removes_the_container_when_it_stops_or_times_out():

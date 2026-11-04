@@ -24,8 +24,9 @@ Requires=docker.service
 Type=oneshot
 WorkingDirectory=/opt/efloud-bot
 ExecStart=/opt/efloud-bot/deploy/research-cycle.sh
-# TradingAgents bir koşuda çok sayıda LLM çağrısı yapar; 30 dk tavan.
-TimeoutStartSec=1800
+# TradingAgents bir koşuda çok sayıda LLM çağrısı yapar. Ölçüm 2026-11-04: ücretsiz
+# Nemotron ile BTC tek sembol 13 dk 14 sn; varsayılan BTC+ETH ~27 dk -> 60 dk tavan.
+TimeoutStartSec=3600
 # systemd zaman aşımında/stop'ta yalnız `docker run` istemcisini öldürür; konteyner
 # yaşamaya (ve LLM kredisi harcamaya) devam edebilir, sonraki koşu --name çakışmasına
 # düşer. Servis her durduğunda konteyneri kaldır ("-" = konteyner yoksa hata sayma).
