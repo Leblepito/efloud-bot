@@ -12,7 +12,7 @@
 
 
 ## 2026-11-04 18:53 UTC — Git ve MCP erişim doğrulaması
-- task: T-20261104-01 | branch/PR: collab/abacus/T-20261104-01-telegram-rulebook (#272) | commit: pending
+- task: T-20261104-01 | branch/PR: collab/abacus/T-20261104-01-telegram-rulebook (#272) | commit: 151e16b
 - ne yapıldı: Laptop'tan fetch/push ve `gh` ile PR oluşturma; browser MCP ile public GitHub PR'ını okuma doğrulandı. MODELS.md'de Abacus satırı düzeltildi.
 - VPS: N/A
 - not: GitHub/TradingView MCP ve bu oturumdan TradingView Desktop erişimi yok/doğrulanmadı; GitHub `gh` erişimi ayrı MCP değil.
