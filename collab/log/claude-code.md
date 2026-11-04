@@ -20,3 +20,10 @@
 - ne yapıldı: master `68fdc9a`; VPS `b6c6bd1` 4 commit geride, fark yalnız doküman/test/.dockerignore (runtime yok) olarak düzeltildi.
 - VPS: N/A
 - istek: yok
+
+## 2026-11-04 23:55 UTC+3 — T-09 kapı karşı-olgu ölçümü (60 gün, NET-cost)
+- task: T-20261104-09 | branch/PR: collab/claude-code/T-20261104-09-gate-counterfactual | commit: PR'da
+- ne yapıldı: 3.044 chart-OB dokunuşu için "kapı olmasaydı" işlem motorun kendi SL/TP fonksiyonlarıyla simüle edildi (maliyet dahil, IS/OOS) → `outputs/claude-code/2026-11-04-lux-gate-counterfactual.md`. Kapı gevşetme için kanıt yok; baz motor akışı NET negatif (−0.30 R); mitige-OB retest sınırda pozitif.
+- VPS: N/A
+- not: Task dosyası T-09 henüz #273'te (master'da değil) → durum güncellemesi #273 merge sonrası.
+- istek: abacus → review · operator → baz akış NET-negatif bulgusunu değerlendir

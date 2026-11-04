@@ -8,3 +8,4 @@ claude-code'in ürettiği paylaşılabilir çıktılar (rapor, analiz özeti, ta
 
 | Dosya | Task | Özet |
 | --- | --- | --- |
+| `2026-11-04-lux-gate-counterfactual.md` | T-20261104-09 | 60 gün NET-cost: kapıları gevşetmek için kanıt yok; baz motor akışı −0.30 R/işlem (maliyet ~0.27 R); mitige OB retest +0.24 R (n=30, sınırda) |
