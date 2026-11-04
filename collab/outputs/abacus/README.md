@@ -8,3 +8,4 @@ abacus'in ürettiği paylaşılabilir çıktılar (rapor, analiz özeti, tablo).
 
 | Dosya | Task | Özet |
 | --- | --- | --- |
+| `2026-11-05-data-fetch-cadence.md` | T-20261105-01 | 15m REST vs websocket: iddialar doğrulandı; öneri (b) WS uyarı + event_scan, temas girişi yalnız shadow + ölçüm |
