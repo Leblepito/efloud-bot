@@ -38,6 +38,16 @@ def test_runner_files_exist():
         assert p.exists(), f"eksik: {p.relative_to(ROOT)}"
 
 
+@pytest.mark.skipif(shutil.which("git") is None, reason="git yok")
+def test_wrapper_is_tracked_as_executable():
+    """systemd runs ExecStart=/opt/efloud-bot/deploy/research-cycle.sh directly, so the
+    file must be executable after every checkout/pull (mode 100755 in git). A 644 file
+    fails with 203/EXEC; on the VPS it was fixed by a local chmod (drift)."""
+    out = subprocess.run(["git", "ls-files", "-s", "deploy/research-cycle.sh"], cwd=ROOT,
+                         capture_output=True, text=True, check=False)
+    assert out.stdout.split()[0] == "100755", out.stdout
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash yok (Windows test makinesi)")
 def test_wrapper_is_valid_posix_shell():
     out = subprocess.run(["bash", "-n", str(WRAPPER)], capture_output=True, text=True, check=False)
