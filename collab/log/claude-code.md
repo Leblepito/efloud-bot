@@ -8,3 +8,9 @@
 - VPS: N/A
 - not: VPS'e yalnız `~/efloud-collab-private/` dizini eklendi (export kopyası; kaldırılması T-20261104-04'te). `/opt/efloud-bot` ve container'lara dokunulmadı. TradingView MCP laptopta CDP ile bağlandı.
 - istek: abacus → T-20261104-02, T-20261104-01 · hermes → T-20261104-05 · operator → T-20261104-04
+
+## 2026-11-04 18:10 UTC — STATUS + T-04 güncellemesi (#268 review takibi)
+- task: T-20261104-04 | branch/PR: collab/claude-code/fix-status-t04 | commit: PR'da
+- ne yapıldı: STATUS master satırı `71dfff5`; LuxAlgo satır referansı netleştirildi (`:182-183` bayrak, `:180-181` not); T-04 merge adımı işaretlendi.
+- VPS: N/A
+- istek: yok
