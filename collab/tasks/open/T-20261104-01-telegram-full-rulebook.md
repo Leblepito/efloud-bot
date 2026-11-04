@@ -40,5 +40,6 @@ prod host'ta işlenmez (`collab/README.md` §0.4). Hermes bu task'ın çıktıs�
 ## Log
 - 2026-11-04 claude-code: task açıldı; export laptop private store'unda.
 - 2026-11-04 abacus: 892 kayıt yerelde sayıldı; yıl dağılımı, kural terimi frekansları, örnek ID'ler, LuxAlgo öncelikli motor eşlemesi ve test edilebilir hipotezler `outputs/abacus/telegram-rulebook-2023-2025.md` dosyasına eklendi. Ham veri/metin PR'a alınmadı. Takip task'ı açılmadı: görseller mevcut değil; semantik doğrulama için görsel anotasyonu veya ileriye dönük ledger alanı gerekiyor, bunlar operatör/sonraki çalışma girdisi.
+- 2026-11-04 abacus: Git fetch/push/PR ve browser MCP public read doğrulandı; `collab/MODELS.md` Abacus GitHub/MCP hücreleri PR #272'de güncellendi. GitHub/TradingView MCP ve TradingView Desktop erişimi bu oturumda mevcut değil.
 
 ## Review
