@@ -138,6 +138,12 @@ edge'e mal olduğu gösterilirse: default-OFF config bayrağı + TDD + risk-ops 
 
 ## 7. Sınırlar
 
+- **Düzeltme (2026-11-05):** Motor 30 sn'de bir değil, **yalnız her 15m mum kapanışında** tarar
+  (`backend/bot_runner.py:540-553`) ve oluşan mumu atar; bölge teması kapanış fiyatıyla ölçülür. Replay
+  bar içi fiyat yolu varsaydığı için motorun dokunuş görmesini biraz iyimser saydı. 60 günlük veride fitil
+  dokunuşlarının %85'inde 48 mum içinde bölge içi kapanış geliyor; sebep dağılımı değişmez. Websocket
+  sorusu → T-20261105-01.
+
 - Replay canlı 30 sn'lik fiyat örneklemesini bar içi O→L→H→C (ya da O→H→L→C) yolu ile yaklaşıklar.
 - "Emir adayı" = SL/TP kapılarını geçti; pos_guard, max_open, breaker, sizing ve borsa tarafı simüle edilmedi.
 - Chart görünürlüğü motorun 2100 barlık analiziyle yaklaşıklandı; TradingView'in "son 5 OB" gösterim sınırı uygulanmadı.

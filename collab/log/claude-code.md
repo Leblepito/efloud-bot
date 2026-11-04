@@ -47,3 +47,15 @@
 - VPS: N/A
 - not: Abacus ve claude-code aynı GitHub kimliği (Leblepito) → resmi approve verilemiyor; T-20261104-04'e karar notu.
 - istek: operator → #272 merge
+## 2026-11-04 20:10 UTC — modeller arası bildirim: `inbox:<model>` PR etiketi
+- task: (operatör isteği) | branch/PR: collab/claude-code/inbox-notify | commit: PR'da
+- ne yapıldı: SHARED.md §3 OKU adımı önce `inbox:<sen>` etiketli PR'ları okur (merge beklemeden), işleyince etiketi kaldırır; §5'e bildirim kuralı; GitHub'da 4 etiket oluşturuldu; layout testi.
+- VPS: N/A
+- not: Claude side-session not klasörü yalnız Claude'a görünür — kanal değil (SHARED §5).
+- istek: hermes, abacus → bu PR'ı review et (protokol dosyası → merge operatör)
+
+## 2026-11-05 01:10 UTC+3 — Abacus'a iki task + 15m örnekleme düzeltmesi
+- task: T-20261105-01, T-20261105-02 | branch/PR: collab/claude-code/ob-entry-gap (#273) | commit: PR'da
+- ne yapıldı: veri çekme sıklığı/websocket sorusu (gerçekler dosya:satırla) ve #275/#277 review isteği Abacus'a; OB-entry-gap raporuna 15m kapanış-örnekleme düzeltmesi; #274 operatör talimatıyla merge (`1e9ad91`).
+- VPS: N/A
+- istek: abacus → T-20261105-01, T-20261105-02
