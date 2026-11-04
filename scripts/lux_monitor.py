@@ -46,6 +46,10 @@ RE_ENTRY = re.compile(
     r"tp1=(?P<s1>[^,]+), tp2=(?P<s2>[^)]+)\)")
 RE_REJECT = re.compile(r"\[v2 reject\] (?P<sym>\S+): (?P<reason>[a-z_0-9]+)")
 RE_GATE = re.compile(r"\[v2 gate\] (?P<sym>\S+) (?P<dir>LONG|SHORT) setup dropped")
+# Durum geçişleri (safe_orchestrator._lux_trace): setup+ ile giriş arasındaki huni.
+TRACE_EVENTS = ("touch", "left", "reentry", "po3-block", "confirmed")
+RE_TRACE = re.compile(r"\[lux\] (?P<event>touch|left|reentry|po3-block|confirmed) "
+                      r"(?P<sym>\S+) (?P<dir>LONG|SHORT)")
 
 
 def parse_line(raw: str) -> Optional[Tuple[str, str]]:
@@ -71,7 +75,7 @@ def parse_line(raw: str) -> Optional[Tuple[str, str]]:
 
 # ── follow ─────────────────────────────────────────────────────────────────
 
-_COLORS = {"setup+": "\033[32m", "expired": "\033[90m", "scan": "\033[36m",
+_COLORS = {"setup+": "\033[32m", "expired": "\033[90m", "scan": "\033[36m", "trace": "\033[34m",
            "entry": "\033[1;33m", "reject": "\033[31m", "gate": "\033[35m"}
 _RESET = "\033[0m"
 
@@ -83,6 +87,8 @@ def classify(msg: str) -> str:
         return "expired"
     if "[lux] scan" in msg:
         return "scan"
+    if RE_TRACE.search(msg):
+        return "trace"
     if "[v2] " in msg:
         return "entry"
     if "[v2 reject]" in msg:
@@ -120,6 +126,7 @@ def build_report(lines: Iterable[str]) -> dict:
     reject_reasons = Counter()
     entries = []
     tp_sources = Counter()
+    trace = Counter()
     for raw in lines:
         p = parse_line(raw)
         if p is None:
@@ -131,6 +138,8 @@ def build_report(lines: Iterable[str]) -> dict:
             setups[(m["sym"], m["dir"])] += 1
         elif m := RE_EXPIRED.search(msg):
             expired[(m["sym"], m["dir"])] += 1
+        elif m := RE_TRACE.search(msg):
+            trace[m["event"]] += 1
         elif m := RE_ENTRY.search(msg):
             entries.append({"ts": ts, **m.groupdict()})
             tp_sources[m["s1"]] += 1
@@ -141,7 +150,7 @@ def build_report(lines: Iterable[str]) -> dict:
             reject_reasons[m["reason"]] += 1
     return {"scans": scans, "setups": setups, "expired": expired, "gates": gates,
             "rejects": rejects, "reject_reasons": reject_reasons,
-            "entries": entries, "tp_sources": tp_sources}
+            "entries": entries, "tp_sources": tp_sources, "trace": trace}
 
 
 def _table(rows, headers) -> str:
@@ -190,6 +199,14 @@ def render_report(r: dict) -> str:
     if r["reject_reasons"]:
         out.append(f"\nRED NEDENLERİ: {dict(r['reject_reasons'].most_common())}")
     tot_setup = sum(r["setups"].values())
+    tr = r.get("trace") or Counter()
+    out.append("\nHUNİ (setup+ → giriş): "
+               f"setup+ {tot_setup} → kapı_drop {sum(r['gates'].values())} → "
+               + " → ".join(f"{e} {tr[e]}" for e in TRACE_EVENTS)
+               + f" → red {sum(r['rejects'].values())} → giriş {len(r['entries'])}")
+    if not sum(tr.values()):
+        out.append("  (touch/left/... satırı yok: bu commit'ten eski bir imaj ya da "
+                   "hiçbir setup bölgesine henüz ulaşmadı)")
     out.append(f"\nTOPLAM: setup+ {tot_setup} | expired {sum(r['expired'].values())} | "
                f"kapı_drop {sum(r['gates'].values())} | red {sum(r['rejects'].values())} | "
                f"giriş {len(r['entries'])}")
