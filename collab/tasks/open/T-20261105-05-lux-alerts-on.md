@@ -20,7 +20,7 @@ Operatör (2026-11-05): "Yeni özellikleri açmak: Telegram bölge uyarıları (
 - [x] `docker-compose.prod.yml` → yalnız `alerter` servisine `EFLOUD_ALERTER_LUX_ALERTS=1` (git'te görünür, git'le geri alınır;
       VPS `.env.production` elle değişmez).
 - [x] Test: `tests/config/test_live_lux_alert_flags.py` (bayraklar + bayrak trading servislerinde yok).
-- [ ] Merge + deploy ticket + Risk PASS + operatör onayı (claude-code uygular).
+- [x] Merge + deploy ticket + Risk PASS + operatör onayı (claude-code uygular). → EF-20261105-02, `042c3a3`, 2026-11-05 15:48 UTC.
 - [ ] Deploy sonrası 24 saat: Telegram mesaj sayısı ve içerik operatörce kontrol; spam ise `near_alert_atr` küçült / kapat.
 
 ## Hacim tahmini
@@ -33,5 +33,6 @@ dokunma 6 sa, red 1 sa). `near` buna eklenir (dokunuş öncesi en fazla aday ba�
 
 ## Log
 - 2026-11-05 claude-code: config + compose + test; `tests/config tests/test_alerter_lux_rules.py tests/test_lux_transition_logs.py tests/collab` 139 passed.
+- 2026-11-05 claude-code: deploy edildi (`042c3a3`); 16:00 UTC ilk `[lux] near`/`touch` satırları. 24 sa hacim kontrolü açık.
 
 ## Review
