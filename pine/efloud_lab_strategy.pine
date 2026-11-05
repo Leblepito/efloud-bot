@@ -749,11 +749,13 @@ if barstate.isconfirmed
     // partial TP1 fill: position shrank but did not close
     if strategy.position_size != 0 and strategy.position_size[1] != 0 and not tp1Hit and math.abs(strategy.position_size) < math.abs(strategy.position_size[1])
         tp1Hit := true
-    if strategy.position_size == 0 and strategy.position_size[1] != 0
+    if strategy.position_size == 0
         tp1Hit := false
-        posDir := 0
+        posDir := 0                         // flat (closed, or an entry that never filled) → ready for the next setup
+    else
+        posDir := strategy.position_size > 0 ? 1 : -1
     // flat → open: first fired candidate (one open position per symbol, as the live position guard)
-    if strategy.position_size == 0 and posDir == 0 and array.size(fired) > 0
+    if strategy.position_size == 0 and array.size(fired) > 0
         Cand c = array.get(fired, 0)
         float qty = marginUsd * leverage / c.entry
         posEntry := c.entry
