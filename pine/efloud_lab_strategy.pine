@@ -484,7 +484,238 @@ f_emit() =>
                 continue
             array.push(cands, Cand.new(dir = dir, trigIdx = b.idx, trigTime = b.t, trigPrice = b.level, ob = ob, zLow = zl, zHigh = zh, tags = tags, nTags = n, src = b.breaker ? "BREAKER" : "OB"))
             b.emitted := true
-// ==== [SECTION: STATE MACHINE + SL/TP] ==== (Task 4)
+// ==== [SECTION: STATE MACHINE + SL/TP] ====
+// Po3 (engine/smc_v2/po3.py): UTC-day accumulation box; sweep after the box with no displacement yet = MANIPULATION
+utcHour  = hour(time, "UTC")
+dayKey   = math.floor(time / 86400000.0)
+bodyRef  = ta.sma(high - low, 20)
+var int   po3Day     = -1
+var float accHi      = na
+var float accLo      = na
+var int   accN       = 0
+var int   sweepSide  = 0
+var bool  dispAfter  = false
+if barstate.isconfirmed
+    if dayKey != po3Day
+        po3Day    := dayKey
+        accHi     := na
+        accLo     := na
+        accN      := 0
+        sweepSide := 0
+        dispAfter := false
+    if utcHour >= po3AccStart and utcHour < po3AccEnd
+        accHi := na(accHi) ? high : math.max(accHi, high)
+        accLo := na(accLo) ? low  : math.min(accLo, low)
+        accN  += 1
+    else if utcHour >= po3AccEnd and accN >= 2
+        if sweepSide == 0
+            if high > accHi
+                sweepSide := 1
+            else if low < accLo
+                sweepSide := -1
+        else if not dispAfter and math.abs(close - open) >= po3DispMult * bodyRef
+            dispAfter := true
+po3Blocked = po3Gate and accN >= 2 and sweepSide != 0 and not dispAfter
+
+f_inZone(float px, Cand c) =>
+    c.zLow <= px and px <= c.zHigh
+
+// confirmation.confirm_entry: engulfing whose close sits in the zone, bars with time > sinceTime, OLDEST first
+f_confirm(int dir, float zl, float zh, int sinceTime, bool lastOnly) =>
+    bool  ok = false
+    float px = na
+    int maxOff   = math.min(bar_index - 1, recencyBars + timeoutBars + 2)
+    int startOff = lastOnly ? 0 : maxOff
+    if maxOff >= 0
+        for off = startOff to 0
+            if ok
+                break
+            if time[off] <= sinceTime
+                continue
+            float pO = open[off + 1]
+            float pC = close[off + 1]
+            float cO = open[off]
+            float cC = close[off]
+            if dir == -1
+                if pC > pO and cC < cO and cO >= pC and cC <= pO and zl <= cC and cC <= zh
+                    ok := true
+                    px := cC
+            else
+                if pC < pO and cC > cO and cO <= pC and cC >= pO and zl <= cC and cC <= zh
+                    ok := true
+                    px := cC
+    [ok, px]
+
+// sl_calc.calc_sl: structural = anchor ∓ buffer; widen to minSlAtr; reject above maxSlAtr; reject on bad ATR
+f_calcSl(int dir, float entry, float zl, float zh, float anchor) =>
+    bool  ok = not na(atr14) and atr14 > 0
+    float sl = na
+    if ok
+        float buffer     = slBuffer * atr14
+        float structural = dir == 1 ? math.min(zl, anchor) - buffer : math.max(zh, anchor) + buffer
+        float dist = math.abs(entry - structural)
+        float minD = minSlAtr * atr14
+        float maxD = maxSlAtr * atr14
+        if dist > maxD
+            ok := false
+        else
+            sl := dist < minD ? (dir == 1 ? entry - minD : entry + minD) : structural
+    [sl, ok]
+
+f_pushTp(array<float> px, array<string> src, float p, string s) =>
+    array.push(px, p)
+    array.push(src, s)
+
+f_tpPool(array<float> px, array<string> src, array<OB> pool, int dir, float entry) =>
+    for o in pool
+        if o.mitigatedIdx < 0 and o.bias == -dir and (dir == 1 ? o.bot() > entry : o.top() < entry)
+            f_pushTp(px, src, dir == 1 ? o.bot() : o.top(), "LUX_OB")
+
+// luxalgo.tp_targets — nearest candidate ≥ minRr×risk; TP2 next beyond, else fib extension of the trailing range
+f_tpTargets(int dir, float entry, float sl) =>
+    float risk    = math.abs(entry - sl)
+    float minDist = minRr * risk
+    float buf     = math.max(0.0, tpWickBufferR) * risk
+    array<float>  px  = array.new<float>()
+    array<string> src = array.new<string>()
+    f_tpPool(px, src, swingObs, dir, entry)
+    f_tpPool(px, src, intObs, dir, entry)
+    for f in fvgs
+        if f.mitigatedIdx < 0 and f.bias == -dir and (dir == 1 ? f.bot > entry : f.top < entry)
+            f_pushTp(px, src, dir == 1 ? f.bot : f.top, "LUX_FVG")
+    for e in equals
+        if e.isHigh == (dir == 1) and not (tpSweptFilter and e.swept)
+            float lvl = dir == 1 ? e.priceB - buf : e.priceB + buf
+            if dir == 1 ? lvl > entry : lvl < entry
+                f_pushTp(px, src, lvl, dir == 1 ? "LUX_EQH" : "LUX_EQL")
+    array<Piv> pivs = dir == 1 ? shPiv : slPiv
+    for p in pivs
+        if not (tpSweptFilter and p.swept)
+            float lvl = dir == 1 ? p.price - buf : p.price + buf
+            if dir == 1 ? lvl > entry : lvl < entry
+                f_pushTp(px, src, lvl, dir == 1 ? "LUX_LIQ_HIGH" : "LUX_LIQ_LOW")
+    if zoneOk
+        if dir == 1 ? zEq > entry : zEq < entry
+            f_pushTp(px, src, zEq, "LUX_EQUILIBRIUM")
+        float trailLvl = dir == 1 ? trailTop - buf : trailBot + buf
+        if dir == 1 ? trailLvl > entry : trailLvl < entry
+            f_pushTp(px, src, trailLvl, dir == 1 ? "LUX_TRAIL_TOP" : "LUX_TRAIL_BOTTOM")
+    int n = array.size(px)
+    if n > 1
+        for i = 0 to n - 2
+            int m = i
+            for j = i + 1 to n - 1
+                float a = array.get(px, j)
+                float b = array.get(px, m)
+                if dir == 1 ? a < b : a > b
+                    m := j
+            if m != i
+                float tp = array.get(px, i)
+                array.set(px, i, array.get(px, m))
+                array.set(px, m, tp)
+                string ts = array.get(src, i)
+                array.set(src, i, array.get(src, m))
+                array.set(src, m, ts)
+    float  tp1 = na
+    float  tp2 = na
+    string s1  = "NONE"
+    string s2  = "NONE"
+    bool   ok  = true
+    if n == 0
+        tp1 := dir == 1 ? entry + minDist : entry - minDist
+        s1  := "RR_PROJECTION"
+    else
+        int k1 = -1
+        for i = 0 to n - 1
+            float p = array.get(px, i)
+            if k1 < 0 and (dir == 1 ? p - entry : entry - p) >= minDist
+                k1 := i
+        if k1 < 0
+            ok := false
+        else
+            tp1 := array.get(px, k1)
+            s1  := array.get(src, k1)
+            if k1 + 1 <= n - 1
+                for i = k1 + 1 to n - 1
+                    float p = array.get(px, i)
+                    if na(tp2) and (dir == 1 ? p > tp1 : p < tp1)
+                        tp2 := p
+                        s2  := array.get(src, i)
+            if na(tp2) and zoneOk
+                float rng  = trailTop - trailBot
+                float best = na
+                for r in array.from(1.272, 1.618, 2.618)
+                    float e = dir == 1 ? trailBot + rng * r : trailTop - rng * r
+                    if (dir == 1 ? e > tp1 : e < tp1) and (na(best) or (dir == 1 ? e < best : e > best))
+                        best := e
+                if not na(best)
+                    tp2 := best
+                    s2  := "FIB_EXT"
+    [tp1, tp2, s1, s2, ok]
+
+// _place_v2_entry_order (SL/TP part): rejected setups are consumed (CONFIRMED, no trade) — same as live
+f_onConfirmed(Cand c, float px) =>
+    float anchor = c.dir == 1 ? c.ob.bot() : c.ob.top()
+    [sl, okSl] = f_calcSl(c.dir, px, c.zLow, c.zHigh, anchor)
+    if not okSl
+        f_drop(na(atr14) or atr14 <= 0 ? "ATR_NA" : "SL_TOO_FAR")
+    else
+        [tp1, tp2, s1, s2, okTp] = f_tpTargets(c.dir, px, sl)
+        if not okTp
+            f_drop("TP_INSUFFICIENT")
+        else
+            c.entry  := px
+            c.sl     := sl
+            c.tp1    := tp1
+            c.tp2    := tp2
+            c.tp1Src := s1
+            c.tp2Src := s2
+            array.push(fired, c)
+
+f_pruneTerminal() =>
+    if array.size(cands) > 0
+        for i = array.size(cands) - 1 to 0
+            if not f_isActive(array.get(cands, i))
+                array.remove(cands, i)
+
+// Per closed bar: 3 passes of (advance → prune → emit). The live orchestrator ticks several
+// times per closed bar on identical data; pass 0 is the "new bar" tick (bars_waited += 1).
+if barstate.isconfirmed
+    array.clear(fired)
+    for pass = 0 to 2
+        bool isNewBar = pass == 0
+        for c in cands
+            if not f_isActive(c)
+                continue
+            if isNewBar
+                c.barsWaited += 1
+            if c.barsWaited > timeoutBars
+                c.state := "EXPIRED"
+                f_drop("EXPIRED")
+                continue
+            bool inZ = f_inZone(close, c)
+            if c.state == "AWAITING_PULLBACK"
+                if inZ
+                    if not c.hasLeft
+                        c.state := "IN_ZONE"
+                        continue
+                    else
+                        c.state := "IN_ZONE"
+            if c.state == "IN_ZONE"
+                if not inZ
+                    c.hasLeft := true
+                    c.state   := "AWAITING_REENTRY"
+                    continue
+                [ok, px] = f_confirm(c.dir, c.zLow, c.zHigh, c.trigTime, freshConfirm)
+                if ok and not po3Blocked
+                    c.state := "CONFIRMED"
+                    f_onConfirmed(c, px)
+                continue
+            if c.state == "AWAITING_REENTRY"
+                if inZ
+                    c.state := "IN_ZONE"
+        f_pruneTerminal()
+        f_emit()
 
 // ─── STRATEGY TAIL (skeleton — Task 5 replaces) ───────────────────────────────
 grpStr = "Strategy (canlı sizing)"
