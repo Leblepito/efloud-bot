@@ -41,9 +41,10 @@ TF_MS = {"4h": 14_400_000, "12h": 43_200_000, "1d": 86_400_000}
 HTF_RULE = {"4h": "4h", "12h": "12h", "1d": "1D"}
 ROW_FIELDS = ["symbol", "direction", "trigger_bar_ts", "trigger_price", "scope", "kind", "zone_low", "zone_high",
               "tags", "confluence_score", "confirmed_ts", "entry", "sl", "tp1", "tp2", "tp1_source", "tp2_source",
-              "atr_source", "drop_reason", "python_guard_rejected"]
+              "atr_source", "drop_reason", "python_guard_rejected", "fill"]
 NUMERIC = {"trigger_bar_ts": int, "confirmed_ts": int, "confluence_score": int, "trigger_price": float,
-           "zone_low": float, "zone_high": float, "entry": float, "sl": float, "tp1": float, "tp2": float}
+           "zone_low": float, "zone_high": float, "entry": float, "sl": float, "tp1": float, "tp2": float,
+           "fill": float}
 
 
 # ───────────────────────────── data ─────────────────────────────
@@ -111,7 +112,8 @@ class LabOrchestrator(SafeOrchestrator):
                    trigger_price=float(cand.trigger_price), scope=m.group(1) if m else "", kind=m.group(2) if m else "",
                    zone_low=float(cand.target_zone.low), zone_high=float(cand.target_zone.high),
                    tags=reasons[2].replace("confluence=", ""), confluence_score=int(cand.confluence_score),
-                   confirmed_ts=int(self.current_bar_ts), entry=float(entry_price), python_guard_rejected=False)
+                   confirmed_ts=int(self.current_bar_ts), entry=float(entry_price), python_guard_rejected=False,
+                   fill=float(current_price))   # live market order fills at the current close, not the engulfing close
         atr_15m = None
         if bool(engine_cfg.get("v2_use_real_atr", False)) and df_entry is not None:
             atr_15m = wilder_atr(df_entry, period=14)
@@ -284,8 +286,41 @@ def tv_entries(trades: pd.DataFrame) -> list[dict]:
         trig = _num(sig.get("trig"))
         out.append({"direction": "LONG" if "long" in r["type"].lower() else "SHORT",
                     "trig": int(trig) if trig is not None else None, "entry": float(r["price"]),
+                    "entry_ref": _num(sig.get("entry")),
                     "sl": _num(sig.get("sl")), "tp1": _num(sig.get("tp1")), "tp2": _num(sig.get("tp2")),
                     "time": r["time"], "variant": sig["variant"]})
+    return out
+
+
+def _ms(ts) -> int:
+    return int(pd.Timestamp(ts).value // 1_000_000)
+
+
+def _trade_groups(trades: pd.DataFrame) -> list[tuple[pd.Series, float, pd.DataFrame]]:
+    """One group per position: Trade # rows sharing (entry time, entry signal) are merged (TradingView may list a
+    partial TP1 as a separate Trade #). Returns (first entry row, summed entry qty, exit rows by time)."""
+    groups: dict = {}
+    for _trade_id, grp in trades.groupby("trade", sort=True):
+        ent = grp[grp["type"].str.startswith("Entry")]
+        if ent.empty:
+            continue
+        e = ent.iloc[0]
+        key = (e["time"], e["signal"])
+        g = groups.setdefault(key, {"entry": e, "qty": 0.0, "exits": []})
+        g["qty"] += float(e["qty"])
+        g["exits"].append(grp[grp["type"].str.startswith("Exit")])
+    out = []
+    for g in sorted(groups.values(), key=lambda g: g["entry"]["time"]):
+        ex = pd.concat(g["exits"]).sort_values("time", kind="stable")
+        out.append((g["entry"], g["qty"], ex))
+    return out
+
+
+def tv_intervals(trades: pd.DataFrame) -> list[tuple[int, int]]:
+    """(entry_ms, last_exit_ms) per position (UTC ms). A position still open at the export end extends to +inf."""
+    out = []
+    for e, _qty, ex in _trade_groups(trades):
+        out.append((_ms(e["time"]), _ms(ex["time"].max()) if not ex.empty else sys.maxsize))
     return out
 
 
@@ -301,14 +336,26 @@ def _key(direction, trig) -> tuple:
     return (direction, None if trig is None else int(trig))
 
 
-def compare(py_rows: list[dict], entries: list[dict], *, entry_tol: float = 0.0005, level_tol: float = 0.001,
-            gate: float = 0.95) -> dict:
+def compare(py_rows: list[dict], entries: list[dict], *, intervals: Optional[list] = None, entry_tol: float = 0.0005,
+            level_tol: float = 0.001, gate: float = 0.95) -> dict:
     """Pair intended Python entries (drop_reason == '') with TradingView entries on (direction, trig).
 
+    Python rows confirmed while a TV position was open (entry_ms < confirmed_ts <= exit_ms) are set aside as
+    `blocked_by_position`: the strategy holds one position per symbol and ignores fired candidates meanwhile.
     Duplicate keys (the engine re-emits a break after its candidate expired; the strategy can reopen on the
     same trig) pair in time order: i-th Python row (by confirmed_ts) with i-th TV entry (by time).
+    The entry tolerance compares the TV fill price with the Python fill (`fill`, current close; fallback
+    `entry`); the engulfing `entry` is compared with the TV comment's `entry=` as a level (`entry_ref`).
     """
-    py_entries = [r for r in py_rows if r.get("drop_reason", "") == ""]
+    py_entries, blocked = [], []
+    for r in py_rows:
+        if r.get("drop_reason", "") != "":
+            continue
+        cts = r.get("confirmed_ts", "")
+        if intervals and cts != "" and any(a < int(cts) <= b for a, b in intervals):
+            blocked.append(r)
+        else:
+            py_entries.append(r)
     py_groups: dict = {}
     for r in py_entries:
         py_groups.setdefault(_key(r["direction"], r["trigger_bar_ts"]), []).append(r)
@@ -321,15 +368,21 @@ def compare(py_rows: list[dict], entries: list[dict], *, entry_tol: float = 0.00
         tes = sorted(tv_groups.get(key, []), key=lambda e: e["time"])
         for r, e in zip(prs, tes):
             matched += 1
-            bad = [] if _close(r["entry"], e["entry"], entry_tol) else ["entry"]
-            bad += [lvl for lvl in ("sl", "tp1", "tp2") if not _close(r.get(lvl, ""), e.get(lvl), level_tol)]
+            fill = r.get("fill", "")
+            pyv = {"entry": r["entry"] if fill in (None, "") else fill, "entry_ref": r["entry"]}
+            tvv = {"entry": e["entry"], "entry_ref": e.get("entry_ref")}
+            for lvl in ("sl", "tp1", "tp2"):
+                pyv[lvl], tvv[lvl] = r.get(lvl, ""), e.get(lvl)
+            bad = [] if _close(pyv["entry"], tvv["entry"], entry_tol) else ["entry"]
+            bad += [lvl for lvl in ("sl", "tp1", "tp2", "entry_ref") if not _close(pyv[lvl], tvv[lvl], level_tol)]
             if bad:
                 mismatches.append({"trig": key[1], "direction": key[0], "levels": bad,
-                                   "python": {k: r.get(k) for k in bad}, "pine": {k: e.get(k) for k in bad}})
+                                   "python": {k: pyv[k] for k in bad}, "pine": {k: tvv[k] for k in bad}})
         python_only.extend(prs[len(tes):])
         pine_only.extend(tes[len(prs):])
     rate = matched / len(py_entries) if py_entries else 0.0
     return {"python_entries": len(py_entries), "matched": matched, "python_only": python_only, "pine_only": pine_only,
+            "blocked_by_position": blocked,
             "level_mismatch": mismatches, "guard_rejected": sum(1 for r in py_entries if r.get("python_guard_rejected")),
             "match_rate": rate, "passed": bool(py_entries) and rate >= gate and not mismatches
             and len(pine_only) <= (1.0 - gate) * max(1, len(entries))}
@@ -340,8 +393,9 @@ def format_compare(res: dict) -> str:
              f"matched        : {res['matched']}  (match rate {res['match_rate']:.1%})",
              f"python-only    : {len(res['python_only'])}",
              f"pine-only      : {len(res['pine_only'])}",
+             f"blocked by pos : {len(res.get('blocked_by_position', []))}  (confirmed while a TV position was open)",
              f"level mismatch : {len(res['level_mismatch'])}",
-             f"guard-rejected : {res['guard_rejected']}  (B2 float flag — live would have dropped these)",
+             f"guard-rejected : {res['guard_rejected']}  (B2 float flag -- live would have dropped these)",
              f"GATE           : {'PASS' if res['passed'] else 'FAIL'}"]
     for r in res["python_only"][:20]:
         lines.append(f"  py-only  {r['direction']} trig={r['trigger_bar_ts']} entry={r['entry']}")
@@ -355,7 +409,9 @@ def format_compare(res: dict) -> str:
 def _cmd_compare(a) -> int:
     try:
         py = read_rows(a.python)
-        entries = tv_entries(load_tv_trades(a.tv))
+        trades = load_tv_trades(a.tv)
+        entries = tv_entries(trades)
+        intervals = tv_intervals(trades)
     except ValueError as exc:
         print(f"compare: {exc}", file=sys.stderr)
         return 2
@@ -363,29 +419,27 @@ def _cmd_compare(a) -> int:
     if stamps:
         first = pd.Timestamp(min(stamps), unit="ms")
         entries = [e for e in entries if e["time"] >= first]
-    res = compare(py, entries, entry_tol=a.entry_tol, level_tol=a.level_tol, gate=a.gate)
+    res = compare(py, entries, intervals=intervals, entry_tol=a.entry_tol, level_tol=a.level_tol, gate=a.gate)
     print(format_compare(res))
     return 0 if res["passed"] else 1
 
 
 # ───────────────────────────── score ─────────────────────────────
 def score_trades(trades: pd.DataFrame) -> dict:
-    """NET R per trade from the TradingView list: R = Σ exit P&L / (|entry − initial SL| × qty at entry).
+    """NET R per position from the TradingView list: R = sum(exit P&L) / (|entry - initial SL| x sum(entry qty)).
+    Trade # rows sharing (entry time, entry signal) are one position (a partial TP1 may be listed separately).
     The initial SL comes from the entry signal (`sl=`), or from the first exit signal when the entry
-    was a limit order placed before the SL was known (T3: exit comment `TP1/SL|sl=…`)."""
+    was a limit order placed before the SL was known (T3: exit comments `TP1|sl=`, `SL|sl=`, `TP2|sl=`, `BE|sl=`)."""
     rs, variants = [], {}
-    for _trade_id, grp in trades.groupby("trade", sort=True):
-        ent = grp[grp["type"].str.startswith("Entry")]
-        ex = grp[grp["type"].str.startswith("Exit")]
-        if ent.empty or ex.empty:
+    for e, qty, ex in _trade_groups(trades):
+        if ex.empty:
             continue
-        e = ent.iloc[0]
         sig = parse_signal(e["signal"])
         sl = _num(sig.get("sl"))
         if sl is None:
             sl = _num(parse_signal(ex.iloc[0]["signal"]).get("sl"))
-        risk = abs(float(e["price"]) - sl) * float(e["qty"]) if sl is not None else 0.0
-        if risk <= 0:
+        risk = abs(float(e["price"]) - sl) * qty if sl is not None else 0.0
+        if not (risk > 0):
             continue
         r = float(ex["pnl"].fillna(0.0).sum()) / risk
         rs.append(r)
@@ -406,16 +460,16 @@ def score_trades(trades: pd.DataFrame) -> dict:
 
 
 def decide(baseline: dict, variant: dict) -> tuple[bool, list[str]]:
-    """Spec §6.3: n ≥ 50, total NET R > baseline, avg NET R > baseline, max DD(R) ≤ 1.2 × baseline."""
+    """Spec §6.3: n >= 50, total NET R > baseline, avg NET R > baseline, max DD(R) <= 1.2 x baseline."""
     why = []
     if variant["n"] < 50:
         why.append(f"n={variant['n']} < 50")
     if not variant["total_r"] > baseline["total_r"]:
-        why.append(f"total R {variant['total_r']:.2f} ≤ baseline {baseline['total_r']:.2f}")
+        why.append(f"total R {variant['total_r']:.2f} <= baseline {baseline['total_r']:.2f}")
     if not variant["avg_r"] > baseline["avg_r"]:
-        why.append(f"avg R {variant['avg_r']:.3f} ≤ baseline {baseline['avg_r']:.3f}")
+        why.append(f"avg R {variant['avg_r']:.3f} <= baseline {baseline['avg_r']:.3f}")
     if variant["max_dd_r"] > 1.2 * baseline["max_dd_r"]:
-        why.append(f"max drawdown {variant['max_dd_r']:.2f}R > 1.2 × baseline {baseline['max_dd_r']:.2f}R")
+        why.append(f"max drawdown {variant['max_dd_r']:.2f}R > 1.2 x baseline {baseline['max_dd_r']:.2f}R")
     return (not why), why
 
 
@@ -442,7 +496,7 @@ def _cmd_replay(a) -> int:
     df = load_ohlcv_csv(a.ohlcv)
     rows, stats = replay(df, cfg, htf_tf=a.htf, window=a.window, ticks_per_bar=a.ticks, symbol=a.symbol)
     write_rows(rows, a.out)
-    print(f"replay: {stats} → {a.out}")
+    print(f"replay: {stats} -> {a.out}")
     return 0
 
 

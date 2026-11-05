@@ -89,6 +89,7 @@ def test_replay_emits_and_confirms_on_trending_zigzag():
         assert r["atr_source"] == "WILDER14"
         assert r["tp1_source"] != ""
         assert r["confirmed_ts"] >= r["trigger_bar_ts"]
+        assert isinstance(r["fill"], float)
 
 
 def test_replay_reads_recency_from_risk_block_like_live_orchestrator():
@@ -148,20 +149,22 @@ def test_load_tv_trades_and_parse_signal(tmp_path):
     t = plp.load_tv_trades(p)
     assert list(t.columns) == ["trade", "type", "time", "signal", "price", "qty", "pnl"]
     e = plp.tv_entries(t)
-    assert e == [{"direction": "LONG", "trig": 1772359200000, "entry": 100.0, "sl": 99.0, "tp1": 103.0,
-                  "tp2": None, "time": pd.Timestamp("2026-03-01 10:00"), "variant": "B"}]
+    assert e == [{"direction": "LONG", "trig": 1772359200000, "entry": 100.0, "entry_ref": None, "sl": 99.0,
+                  "tp1": 103.0, "tp2": None, "time": pd.Timestamp("2026-03-01 10:00"), "variant": "B"}]
+    p2 = _tv_csv(tmp_path, ["1,Entry long,2026-03-01 10:00,B|trig=1|entry=99.5|sl=99|tp1=103|tp2=na,100,5,\n"])
+    assert plp.tv_entries(plp.load_tv_trades(p2))[0]["entry_ref"] == 99.5
 
 
 def test_compare_matches_python_only_pine_only_and_tolerances():
     py = [
-        {"direction": "LONG", "trigger_bar_ts": 1, "entry": 100.0, "sl": 98.0, "tp1": 104.0, "tp2": "", "drop_reason": "", "python_guard_rejected": False, "confirmed_ts": 1},
-        {"direction": "LONG", "trigger_bar_ts": 2, "entry": 100.0, "sl": 98.0, "tp1": 104.0, "tp2": "", "drop_reason": "", "python_guard_rejected": True, "confirmed_ts": 2},
-        {"direction": "SHORT", "trigger_bar_ts": 3, "entry": 100.0, "sl": 102.0, "tp1": 96.0, "tp2": "", "drop_reason": "SL_TOO_FAR", "python_guard_rejected": False, "confirmed_ts": 3},
+        {"direction": "LONG", "trigger_bar_ts": 1, "entry": 100.0, "fill": 100.0, "sl": 98.0, "tp1": 104.0, "tp2": "", "drop_reason": "", "python_guard_rejected": False, "confirmed_ts": 1},
+        {"direction": "LONG", "trigger_bar_ts": 2, "entry": 100.0, "fill": 100.0, "sl": 98.0, "tp1": 104.0, "tp2": "", "drop_reason": "", "python_guard_rejected": True, "confirmed_ts": 2},
+        {"direction": "SHORT", "trigger_bar_ts": 3, "entry": 100.0, "fill": 100.0, "sl": 102.0, "tp1": 96.0, "tp2": "", "drop_reason": "SL_TOO_FAR", "python_guard_rejected": False, "confirmed_ts": 3},
     ]
     entries = [
-        {"direction": "LONG", "trig": 1, "entry": 100.04, "sl": 98.0, "tp1": 104.0, "tp2": None, "time": pd.Timestamp("2026-01-01")},
-        {"direction": "LONG", "trig": 2, "entry": 100.0, "sl": 98.5, "tp1": 104.0, "tp2": None, "time": pd.Timestamp("2026-01-01")},
-        {"direction": "SHORT", "trig": 9, "entry": 50.0, "sl": 51.0, "tp1": 48.0, "tp2": None, "time": pd.Timestamp("2026-01-01")},
+        {"direction": "LONG", "trig": 1, "entry": 100.04, "entry_ref": 100.0, "sl": 98.0, "tp1": 104.0, "tp2": None, "time": pd.Timestamp("2026-01-01")},
+        {"direction": "LONG", "trig": 2, "entry": 100.0, "entry_ref": 100.0, "sl": 98.5, "tp1": 104.0, "tp2": None, "time": pd.Timestamp("2026-01-01")},
+        {"direction": "SHORT", "trig": 9, "entry": 50.0, "entry_ref": 50.0, "sl": 51.0, "tp1": 48.0, "tp2": None, "time": pd.Timestamp("2026-01-01")},
     ]
     res = plp.compare(py, entries)
     assert res["python_entries"] == 2 and res["matched"] == 2
@@ -177,13 +180,13 @@ def test_compare_matches_python_only_pine_only_and_tolerances():
     assert "match" in plp.format_compare(res2)
 
 
-def _py_row(trig, entry=100.0, confirmed=None, drop=""):
-    return {"direction": "LONG", "trigger_bar_ts": trig, "entry": entry, "sl": 98.0, "tp1": 104.0, "tp2": "",
+def _py_row(trig, entry=100.0, confirmed=None, drop="", fill=None):
+    return {"direction": "LONG", "trigger_bar_ts": trig, "entry": entry, "fill": entry if fill is None else fill, "sl": 98.0, "tp1": 104.0, "tp2": "",
             "drop_reason": drop, "python_guard_rejected": False, "confirmed_ts": trig if confirmed is None else confirmed}
 
 
-def _tv_entry(trig, entry=100.0, time="2026-01-01"):
-    return {"direction": "LONG", "trig": trig, "entry": entry, "sl": 98.0, "tp1": 104.0, "tp2": None,
+def _tv_entry(trig, entry=100.0, time="2026-01-01", entry_ref=None):
+    return {"direction": "LONG", "trig": trig, "entry": entry, "entry_ref": entry if entry_ref is None else entry_ref, "sl": 98.0, "tp1": 104.0, "tp2": None,
             "time": pd.Timestamp(time)}
 
 
@@ -210,6 +213,25 @@ def test_compare_duplicate_keys_pair_in_time_order():
     assert res["matched"] == 2 and [e["entry"] for e in res["pine_only"]] == [120.0]
 
 
+def test_compare_excludes_python_rows_inside_an_open_tv_trade():
+    py = [_py_row(10), _py_row(20), _py_row(30)]
+    res = plp.compare(py, [_tv_entry(10)], intervals=[(10, 25)])
+    assert [r["confirmed_ts"] for r in res["blocked_by_position"]] == [20]
+    assert [r["confirmed_ts"] for r in res["python_only"]] == [30]
+    assert res["python_entries"] == 2 and res["matched"] == 1
+    assert "blocked" in plp.format_compare(res)
+
+
+def test_compare_uses_fill_price_not_engulfing_close():
+    py = [_py_row(1, entry=100.0, fill=101.0)]
+    res = plp.compare(py, [_tv_entry(1, entry=101.0, entry_ref=100.0)])
+    assert res["matched"] == 1 and res["level_mismatch"] == []
+    res = plp.compare(py, [_tv_entry(1, entry=100.0, entry_ref=100.0)])
+    assert res["matched"] == 1 and "entry" in res["level_mismatch"][0]["levels"]
+    res = plp.compare(py, [_tv_entry(1, entry=101.0, entry_ref=101.0)])
+    assert res["level_mismatch"][0]["levels"] == ["entry_ref"]
+
+
 def test_compare_without_python_entries_fails_gate():
     py = [_py_row(1, drop="SL_TOO_FAR"), _py_row(2, drop="RR")]
     tv = [_tv_entry(1), _tv_entry(2)]
@@ -233,14 +255,14 @@ def test_cli_compare_reports_missing_signal_column(tmp_path, capsys):
 def test_score_trades_r_math_with_partial_tp1(tmp_path):
     p = _tv_csv(tmp_path, [
         "1,Entry long,2026-03-01 10:00,B|trig=1|sl=98|tp1=104|tp2=108,100,10,\n",
-        "1,Exit long,2026-03-01 12:00,TP1/SL,104,5,20\n",
-        "1,Exit long,2026-03-01 14:00,TP2/BE,108,5,40\n",      # +60 on risk 2×10=20 → +3.0 R
+        "1,Exit long,2026-03-01 12:00,TP1|sl=98,104,5,20\n",
+        "1,Exit long,2026-03-01 14:00,TP2|sl=98,108,5,40\n",      # +60 on risk 2×10=20 → +3.0 R
         "2,Entry short,2026-03-02 10:00,B|trig=2|sl=102|tp1=96|tp2=na,100,10,\n",
-        "2,Exit short,2026-03-02 12:00,TP1/SL,102,10,-20\n",   # −1.0 R
+        "2,Exit short,2026-03-02 12:00,SL|sl=102,102,10,-20\n",   # −1.0 R
         "3,Entry long,2026-03-03 10:00,B|trig=3|sl=99|tp1=103|tp2=na,100,10,\n",
         "3,Exit long,2026-03-03 12:00,MAX_HOLD,99.5,10,-5\n",  # −0.5 R
         "4,Entry long,2026-03-04 10:00,B|T3|trig=4|ote=1,100,10,\n",
-        "4,Exit long,2026-03-04 12:00,TP1/SL|sl=98,104,10,40\n",   # +2.0 R, SL recovered from the exit comment
+        "4,Exit long,2026-03-04 12:00,TP1|sl=98,104,10,40\n",   # +2.0 R, SL recovered from the exit comment
     ])
     s = plp.score_trades(plp.load_tv_trades(p))
     assert s["n"] == 4
@@ -249,6 +271,20 @@ def test_score_trades_r_math_with_partial_tp1(tmp_path):
     assert s["pf"] == pytest.approx(5.0 / 1.5)
     assert s["max_dd_r"] == pytest.approx(1.5)                 # peak +3.0 → trough +1.5
     assert s["win_rate"] == pytest.approx(0.5)
+
+
+def test_score_merges_split_partial_trades(tmp_path):
+    p = _tv_csv(tmp_path, [
+        "1,Entry long,2026-03-01 10:00,B|trig=5|sl=98|tp1=104|tp2=108,100,5,\n",
+        "1,Exit long,2026-03-01 12:00,TP1|sl=98,104,5,20\n",
+        "2,Entry long,2026-03-01 10:00,B|trig=5|sl=98|tp1=104|tp2=108,100,5,\n",
+        "2,Exit long,2026-03-01 14:00,TP2|sl=98,108,5,40\n",
+    ])
+    t = plp.load_tv_trades(p)
+    s = plp.score_trades(t)
+    assert s["n"] == 1 and s["total_r"] == pytest.approx(3.0)        # 60 / (2 x 10)
+    ms = lambda x: int(pd.Timestamp(x).value // 1_000_000)
+    assert plp.tv_intervals(t) == [(ms("2026-03-01 10:00"), ms("2026-03-01 14:00"))]
 
 
 def test_decide_applies_all_four_criteria():
@@ -261,3 +297,5 @@ def test_decide_applies_all_four_criteria():
     assert ok is False and any("drawdown" in w for w in why)
     ok, why = plp.decide(base, {**win, "total_r": 10.0})
     assert ok is False
+    ok, why = plp.decide(base, {"n": 1, "total_r": 0.0, "avg_r": 0.0, "pf": 0.0, "max_dd_r": 99.0})
+    assert len(why) == 4 and all(w.isascii() for w in why)

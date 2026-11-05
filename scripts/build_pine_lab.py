@@ -40,7 +40,7 @@ def main(argv=None) -> int:
             if not path.exists() or path.read_text(encoding="utf-8") != content:
                 stale.append(path)
         else:
-            path.write_text(content, encoding="utf-8")
+            path.write_text(content, encoding="utf-8", newline="\n")
             print(f"wrote {path.relative_to(ROOT)} ({len(content.splitlines())} lines)")
     for p in stale:
         print(f"STALE: {p.relative_to(ROOT)} — run: python scripts/build_pine_lab.py", file=sys.stderr)

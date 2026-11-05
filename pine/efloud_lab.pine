@@ -134,6 +134,7 @@ hiMit   = obMitHighLow ? high : close
 loMit   = obMitHighLow ? low  : close
 
 // Pine leg(size): bar[t-size] above highest(size) → bearish leg (0); below lowest(size) → bullish leg (1)
+// var state advances on every bar by design (TradingView rolls back the realtime bar): repaint-safe outside barstate.isconfirmed
 f_leg(int size) =>
     var int leg = 0
     hh = ta.highest(high, size)
@@ -327,6 +328,7 @@ if barstate.isconfirmed
 // ==== [SECTION: BIAS + CANDIDATES] ====
 // HTF swing trend — the same leg/pivot/crossover rules as the chart-TF swing scope.
 // Non-repaint: returns bias[1] and is requested with lookahead_on (PINE_SPEC §15 recipe).
+// var state advances on every bar by design (TradingView rolls back the realtime bar): repaint-safe outside barstate.isconfirmed
 f_swingTrend(int size) =>
     var int   leg       = 0
     var float shLvl     = na
@@ -386,6 +388,8 @@ type Cand
     int    limitBar = -1
     bool   limitOk  = false      // SL/TP valid at limitPx (strategy places the order only when true)
     float  limitTp1 = na         // TP1 estimated at limitPx (OTE_MISSED check)
+    float  limitSl  = na         // SL estimated at limitPx (exits armed on the pending limit entry)
+    float  limitTp2 = na         // TP2 estimated at limitPx
     // filled on CONFIRMED
     float  entry = na
     float  sl    = na
@@ -486,6 +490,10 @@ f_emit() =>
             if na(ob) or ob.mitigatedIdx >= 0
                 continue
             int dir = b.dir
+            if f_isDup(dir, b.t)                                          // dedup + cap first: same outcome, skips f_tags' FVG loop
+                continue
+            if f_activeCount() >= maxPending
+                continue
             if obDisplacement and not b.breaker and not f_hasDisplacement(ob, b.idx, dir)
                 continue
             if requirePD and zoneOk
@@ -507,10 +515,6 @@ f_emit() =>
                 float far = dir == 1 ? close - zl : zh - close
                 if -(far / atr14) > maxOvershootAtr
                     continue
-            if f_isDup(dir, b.t)
-                continue
-            if f_activeCount() >= maxPending
-                continue
             array.push(cands, Cand.new(dir = dir, trigIdx = b.idx, trigTime = b.t, trigPrice = b.level, ob = ob, zLow = zl, zHigh = zh, tags = tags, nTags = n, src = b.breaker ? "BREAKER" : "OB"))
             b.emitted := true
 // ==== [SECTION: STATE MACHINE + SL/TP] ====
@@ -553,7 +557,7 @@ f_inZone(float px, Cand c) =>
 f_confirm(int dir, float zl, float zh, int sinceTime, bool lastOnly) =>
     bool  ok = false
     float px = na
-    int maxOff   = math.min(bar_index - 1, recencyBars + timeoutBars + 2)
+    int maxOff   = math.min(bar_index - 1, math.min(recencyBars + timeoutBars + 2, 990))   // max_bars_back = 1000
     int startOff = lastOnly ? 0 : maxOff
     if maxOff >= 0
         for off = startOff to 0
@@ -741,12 +745,16 @@ f_oteUpdate(Cand c) =>
             // pre-validate SL/TP at the limit so a resting order can never fill into a setup the lab would reject
             c.limitOk  := false
             c.limitTp1 := na
+            c.limitSl  := na
+            c.limitTp2 := na
             [slEst, okSl] = f_calcSl(c.dir, c.limitPx, c.zLow, c.zHigh, c.legLow)
             if okSl
                 [tp1Est, tp2Est, s1Est, s2Est, okTp] = f_tpTargets(c.dir, c.limitPx, slEst)
                 if okTp
                     c.limitOk  := true
                     c.limitTp1 := tp1Est
+                    c.limitSl  := slEst
+                    c.limitTp2 := tp2Est
     ok
 
 f_pruneTerminal() =>

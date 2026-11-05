@@ -134,6 +134,7 @@ hiMit   = obMitHighLow ? high : close
 loMit   = obMitHighLow ? low  : close
 
 // Pine leg(size): bar[t-size] above highest(size) → bearish leg (0); below lowest(size) → bullish leg (1)
+// var state advances on every bar by design (TradingView rolls back the realtime bar): repaint-safe outside barstate.isconfirmed
 f_leg(int size) =>
     var int leg = 0
     hh = ta.highest(high, size)
@@ -327,6 +328,7 @@ if barstate.isconfirmed
 // ==== [SECTION: BIAS + CANDIDATES] ====
 // HTF swing trend — the same leg/pivot/crossover rules as the chart-TF swing scope.
 // Non-repaint: returns bias[1] and is requested with lookahead_on (PINE_SPEC §15 recipe).
+// var state advances on every bar by design (TradingView rolls back the realtime bar): repaint-safe outside barstate.isconfirmed
 f_swingTrend(int size) =>
     var int   leg       = 0
     var float shLvl     = na
@@ -386,6 +388,8 @@ type Cand
     int    limitBar = -1
     bool   limitOk  = false      // SL/TP valid at limitPx (strategy places the order only when true)
     float  limitTp1 = na         // TP1 estimated at limitPx (OTE_MISSED check)
+    float  limitSl  = na         // SL estimated at limitPx (exits armed on the pending limit entry)
+    float  limitTp2 = na         // TP2 estimated at limitPx
     // filled on CONFIRMED
     float  entry = na
     float  sl    = na
@@ -486,6 +490,10 @@ f_emit() =>
             if na(ob) or ob.mitigatedIdx >= 0
                 continue
             int dir = b.dir
+            if f_isDup(dir, b.t)                                          // dedup + cap first: same outcome, skips f_tags' FVG loop
+                continue
+            if f_activeCount() >= maxPending
+                continue
             if obDisplacement and not b.breaker and not f_hasDisplacement(ob, b.idx, dir)
                 continue
             if requirePD and zoneOk
@@ -507,10 +515,6 @@ f_emit() =>
                 float far = dir == 1 ? close - zl : zh - close
                 if -(far / atr14) > maxOvershootAtr
                     continue
-            if f_isDup(dir, b.t)
-                continue
-            if f_activeCount() >= maxPending
-                continue
             array.push(cands, Cand.new(dir = dir, trigIdx = b.idx, trigTime = b.t, trigPrice = b.level, ob = ob, zLow = zl, zHigh = zh, tags = tags, nTags = n, src = b.breaker ? "BREAKER" : "OB"))
             b.emitted := true
 // ==== [SECTION: STATE MACHINE + SL/TP] ====
@@ -553,7 +557,7 @@ f_inZone(float px, Cand c) =>
 f_confirm(int dir, float zl, float zh, int sinceTime, bool lastOnly) =>
     bool  ok = false
     float px = na
-    int maxOff   = math.min(bar_index - 1, recencyBars + timeoutBars + 2)
+    int maxOff   = math.min(bar_index - 1, math.min(recencyBars + timeoutBars + 2, 990))   // max_bars_back = 1000
     int startOff = lastOnly ? 0 : maxOff
     if maxOff >= 0
         for off = startOff to 0
@@ -741,12 +745,16 @@ f_oteUpdate(Cand c) =>
             // pre-validate SL/TP at the limit so a resting order can never fill into a setup the lab would reject
             c.limitOk  := false
             c.limitTp1 := na
+            c.limitSl  := na
+            c.limitTp2 := na
             [slEst, okSl] = f_calcSl(c.dir, c.limitPx, c.zLow, c.zHigh, c.legLow)
             if okSl
                 [tp1Est, tp2Est, s1Est, s2Est, okTp] = f_tpTargets(c.dir, c.limitPx, slEst)
                 if okTp
                     c.limitOk  := true
                     c.limitTp1 := tp1Est
+                    c.limitSl  := slEst
+                    c.limitTp2 := tp2Est
     ok
 
 f_pruneTerminal() =>
@@ -837,24 +845,40 @@ var float  posTp1   = na
 var float  posTp2   = na
 var int    posDir   = 0
 var bool   tp1Hit   = false
+var int    closedSeen = 0
 
 f_sfmt(float x) =>
     na(x) ? "na" : str.tostring(x, "#.########")
 
 f_cmt(Cand c) =>
-    variantLabel + "|trig=" + str.tostring(c.trigTime) + "|sl=" + f_sfmt(c.sl) + "|tp1=" + f_sfmt(c.tp1) + "|tp2=" + f_sfmt(c.tp2)
+    variantLabel + "|trig=" + str.tostring(c.trigTime) + "|entry=" + f_sfmt(c.entry) + "|sl=" + f_sfmt(c.sl) + "|tp1=" + f_sfmt(c.tp1) + "|tp2=" + f_sfmt(c.tp2)
 
+// Both legs armed from the entry bar (live bot: full-size STOP_MARKET). An SL hit closes X1 (its share) and
+// X2 (the remainder) at the same stop; after TP1 the X2 stop moves to BE.
 f_exits() =>
     string id = posDir == 1 ? "L" : "S"
-    if not tp1Hit
-        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = na(posTp2) ? 100 : tp1ClosePct, comment = "TP1/SL|sl=" + f_sfmt(posSl))
-    else if not na(posTp2)
-        strategy.exit("X2", id, stop = moveSlToBe ? posEntry : posSl, limit = posTp2, comment = "TP2/BE")
+    string slTag = "|sl=" + f_sfmt(posSl)
+    if na(posTp2)
+        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = 100, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+    else
+        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = tp1ClosePct, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+        strategy.exit("X2", id, stop = tp1Hit and moveSlToBe ? posEntry : posSl, limit = posTp2, qty_percent = 100, comment_profit = "TP2" + slTag, comment_loss = (tp1Hit and moveSlToBe ? "BE" : "SL") + slTag)
+
+// T3: exits attached to the pending limit entry activate on its fill (intrabar), so the fill bar is protected
+f_armPending(string id, int dir, Cand c) =>
+    string slTag = "|sl=" + f_sfmt(c.limitSl)
+    if na(c.limitTp2)
+        strategy.exit("X1", id, stop = c.limitSl, limit = c.limitTp1, qty_percent = 100, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+    else
+        strategy.exit("X1", id, stop = c.limitSl, limit = c.limitTp1, qty_percent = tp1ClosePct, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+        strategy.exit("X2", id, stop = c.limitSl, limit = c.limitTp2, qty_percent = 100, comment_profit = "TP2" + slTag, comment_loss = "SL" + slTag)
 
 if barstate.isconfirmed
-    // partial TP1 fill: position shrank but did not close
-    if strategy.position_size != 0 and strategy.position_size[1] != 0 and not tp1Hit and math.abs(strategy.position_size) < math.abs(strategy.position_size[1])
+    // TP1 partial: a trade closed while the position is still open can only be the X1 take-profit leg
+    // (an SL/BE stop closes both legs and leaves the position flat)
+    if strategy.closedtrades > closedSeen and strategy.position_size != 0 and not tp1Hit
         tp1Hit := true
+    closedSeen := strategy.closedtrades
     if strategy.position_size == 0
         tp1Hit := false
         posDir := 0                         // flat (closed, or an entry that never filled) → ready for the next setup
@@ -872,10 +896,12 @@ if barstate.isconfirmed
                     bestS := c
         if not na(bestL)
             strategy.entry("L", strategy.long, qty = marginUsd * leverage / bestL.limitPx, limit = bestL.limitPx, comment = variantLabel + "|trig=" + str.tostring(bestL.trigTime) + "|ote=1")
+            f_armPending("L", 1, bestL)
         else
             strategy.cancel("L")
         if not na(bestS)
             strategy.entry("S", strategy.short, qty = marginUsd * leverage / bestS.limitPx, limit = bestS.limitPx, comment = variantLabel + "|trig=" + str.tostring(bestS.trigTime) + "|ote=1")
+            f_armPending("S", -1, bestS)
         else
             strategy.cancel("S")
     else if oteEntry

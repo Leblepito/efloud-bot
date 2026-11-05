@@ -12,24 +12,40 @@ var float  posTp1   = na
 var float  posTp2   = na
 var int    posDir   = 0
 var bool   tp1Hit   = false
+var int    closedSeen = 0
 
 f_sfmt(float x) =>
     na(x) ? "na" : str.tostring(x, "#.########")
 
 f_cmt(Cand c) =>
-    variantLabel + "|trig=" + str.tostring(c.trigTime) + "|sl=" + f_sfmt(c.sl) + "|tp1=" + f_sfmt(c.tp1) + "|tp2=" + f_sfmt(c.tp2)
+    variantLabel + "|trig=" + str.tostring(c.trigTime) + "|entry=" + f_sfmt(c.entry) + "|sl=" + f_sfmt(c.sl) + "|tp1=" + f_sfmt(c.tp1) + "|tp2=" + f_sfmt(c.tp2)
 
+// Both legs armed from the entry bar (live bot: full-size STOP_MARKET). An SL hit closes X1 (its share) and
+// X2 (the remainder) at the same stop; after TP1 the X2 stop moves to BE.
 f_exits() =>
     string id = posDir == 1 ? "L" : "S"
-    if not tp1Hit
-        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = na(posTp2) ? 100 : tp1ClosePct, comment = "TP1/SL|sl=" + f_sfmt(posSl))
-    else if not na(posTp2)
-        strategy.exit("X2", id, stop = moveSlToBe ? posEntry : posSl, limit = posTp2, comment = "TP2/BE")
+    string slTag = "|sl=" + f_sfmt(posSl)
+    if na(posTp2)
+        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = 100, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+    else
+        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = tp1ClosePct, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+        strategy.exit("X2", id, stop = tp1Hit and moveSlToBe ? posEntry : posSl, limit = posTp2, qty_percent = 100, comment_profit = "TP2" + slTag, comment_loss = (tp1Hit and moveSlToBe ? "BE" : "SL") + slTag)
+
+// T3: exits attached to the pending limit entry activate on its fill (intrabar), so the fill bar is protected
+f_armPending(string id, int dir, Cand c) =>
+    string slTag = "|sl=" + f_sfmt(c.limitSl)
+    if na(c.limitTp2)
+        strategy.exit("X1", id, stop = c.limitSl, limit = c.limitTp1, qty_percent = 100, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+    else
+        strategy.exit("X1", id, stop = c.limitSl, limit = c.limitTp1, qty_percent = tp1ClosePct, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+        strategy.exit("X2", id, stop = c.limitSl, limit = c.limitTp2, qty_percent = 100, comment_profit = "TP2" + slTag, comment_loss = "SL" + slTag)
 
 if barstate.isconfirmed
-    // partial TP1 fill: position shrank but did not close
-    if strategy.position_size != 0 and strategy.position_size[1] != 0 and not tp1Hit and math.abs(strategy.position_size) < math.abs(strategy.position_size[1])
+    // TP1 partial: a trade closed while the position is still open can only be the X1 take-profit leg
+    // (an SL/BE stop closes both legs and leaves the position flat)
+    if strategy.closedtrades > closedSeen and strategy.position_size != 0 and not tp1Hit
         tp1Hit := true
+    closedSeen := strategy.closedtrades
     if strategy.position_size == 0
         tp1Hit := false
         posDir := 0                         // flat (closed, or an entry that never filled) → ready for the next setup
@@ -47,10 +63,12 @@ if barstate.isconfirmed
                     bestS := c
         if not na(bestL)
             strategy.entry("L", strategy.long, qty = marginUsd * leverage / bestL.limitPx, limit = bestL.limitPx, comment = variantLabel + "|trig=" + str.tostring(bestL.trigTime) + "|ote=1")
+            f_armPending("L", 1, bestL)
         else
             strategy.cancel("L")
         if not na(bestS)
             strategy.entry("S", strategy.short, qty = marginUsd * leverage / bestS.limitPx, limit = bestS.limitPx, comment = variantLabel + "|trig=" + str.tostring(bestS.trigTime) + "|ote=1")
+            f_armPending("S", -1, bestS)
         else
             strategy.cancel("S")
     else if oteEntry
