@@ -198,6 +198,16 @@ smc_v2:
     tp_wick_buffer_r: 0.15       # likidite/wick TP hedefi wick uc degil, 0.15R iceride
     pullback_timeout_bars: 48     # entry-TF bar (scalp 4s / mid 12s / long 2g)
     htf: {}
+  # T-20261105-04: fitil/temas GÖLGE gözlemi — yalnız `[touch shadow] would-enter` log satırı,
+  # emir YOK (live modu kodda yok). Kapatmak için satırı sil ya da off yap.
+  touch_entry: shadow
+
+# T-20261105-04: Binance kline WS (#283/#280). enabled → gölge parite sayaçları + (touch_entry
+# shadow için) intrabar fiyat; event_scan kapalı: tarama davranışı değişmez. Emir yolu yok.
+data_feed:
+  ws:
+    enabled: true
+    event_scan: false
 
 # ── 10 majör sembol (yüksek likidite, düşük min order) ──
 symbols:

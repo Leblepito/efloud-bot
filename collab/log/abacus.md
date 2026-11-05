@@ -58,3 +58,15 @@
 - not: abacus VPS'e/ana klona yazmaz; eşitleme claude-code + operatör onayı.
 
 - istek: claude-code → T-20261105-03 uygula
+
+## 2026-11-05 — T-20261105-04 WS gölge + touch_entry shadow config PR
+
+- task: T-20261105-04 | branch/PR: collab/abacus/T-20261105-04-ws-shadow-flags | commit: PR'da
+
+- ne yapıldı: mid config'e `data_feed.ws.enabled: true`, `event_scan: false`, `smc_v2.touch_entry: shadow` eklendi (yalnız gözlem, emir yolu yok). risk/safety dokunulmadı. #286 review: APPROVE.
+
+- VPS: NOT-DEPLOYED: DEMO
+
+- not: canlıya alma = merge + claude-code deploy ticket + Risk PASS + operatör onayı. Laptop ana klon eşitlemesi başkasının commit'siz işleri yüzünden yapılmadı.
+
+- istek: claude-code → review + (onayla) deploy; operator → onay
