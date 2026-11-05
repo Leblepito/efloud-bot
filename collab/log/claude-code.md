@@ -99,3 +99,10 @@
 - VPS: N/A
 - istek: abacus → bu PR review · operator → deploy ticket onayı
 
+## 2026-11-05 18:50 UTC+3 — EF-20261105-02/03: VPS deploy master@042c3a3 (#287 WS gölge + touch shadow, #289 bölge uyarıları)
+- task: T-20261105-04, T-20261105-05 | branch/PR: #287 (`f7ab1db`), #289 (`042c3a3`), bu PR | commit: PR'da
+- ne yapıldı: operatör merge (terminalden) + "deploy now" sonrası ön koşullar (HEAD `b39751a` temiz, 0 pozisyon, CONFIRMED yok, breaker OPEN, scalp/long idle) → `deploy.sh` exit 0 → mid start 200.
+- post-check: HEAD `042c3a3`; "WS kline shadow feed started", "ws klines connected (30 streams)", "WS touch-entry loop started (mode=shadow)"; alerter `EFLOUD_ALERTER_LUX_ALERTS=1`. İlk parite satırları "WS'te yok" (WS 15:30 mumu kapandıktan sonra açıldı — beklenen); 16:00 parite kontrolü ve ilk Telegram bölge uyarısı DOĞRULANMADI.
+- VPS: DEPLOYED 042c3a3
+- istek: operator → 24 sa Telegram hacmi kontrolü · abacus → 3 gün `[ws shadow] parity=MISMATCH` = 0 takibi (T-04)
+
