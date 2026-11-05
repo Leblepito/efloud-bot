@@ -315,14 +315,176 @@ if barstate.isconfirmed
             array.push(fvgs, FVG.new(top = low[2], bot = high, idx = bar_index - 1, bias = -1))
     f_prunePools()
 
-// ==== [SECTION: BIAS + CANDIDATES] ==== (Task 3)
-// ==== [SECTION: STATE MACHINE + SL/TP] ==== (Task 4)
+// ==== [SECTION: BIAS + CANDIDATES] ====
+// HTF swing trend — the same leg/pivot/crossover rules as the chart-TF swing scope.
+// Non-repaint: returns bias[1] and is requested with lookahead_on (PINE_SPEC §15 recipe).
+f_swingTrend(int size) =>
+    var int   leg       = 0
+    var float shLvl     = na
+    var bool  shCrossed = false
+    var float slLvl     = na
+    var bool  slCrossed = false
+    var int   bias      = 0
+    hh = ta.highest(high, size)
+    ll = ta.lowest(low, size)
+    if bar_index >= size
+        if high[size] > hh
+            leg := 0
+        else if low[size] < ll
+            leg := 1
+    ch = ta.change(leg)
+    if ch == 1
+        slLvl     := low[size]
+        slCrossed := false
+    else if ch == -1
+        shLvl     := high[size]
+        shCrossed := false
+    if not na(shLvl) and close > shLvl and not (close[1] > shLvl) and not shCrossed
+        shCrossed := true
+        bias      := 1
+    if not na(slLvl) and close < slLvl and not (close[1] < slLvl) and not slCrossed
+        slCrossed := true
+        bias      := -1
+    bias[1]
 
-// Temporary HTF stub so the non-repaint lint has a request.security call to check; Task 3 replaces it
-f_stub() =>
-    close[1]
-stubHtf = request.security(syminfo.tickerid, f_tf(biasTf), f_stub(), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)
-plot(stubHtf, "lab-stub", display = display.none)
+htfBias      = request.security(syminfo.tickerid, f_tf(biasTf), f_swingTrend(htfSwingLen), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)
+macroBiasRaw = request.security(syminfo.tickerid, f_tf(macroTf == "none" ? "12h" : macroTf), f_swingTrend(htfSwingLen), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)
+macroBias    = macroTf == "none" ? 0 : macroBiasRaw
+
+zoneOk  = not na(trailTop) and not na(trailBot) and trailTop > trailBot
+zEq     = (trailTop + trailBot) / 2.0
+zEqLow  = 0.525 * trailBot + 0.475 * trailTop
+zEqHigh = 0.525 * trailTop + 0.475 * trailBot
+
+type Cand
+    int    dir
+    int    trigIdx
+    int    trigTime
+    float  trigPrice
+    OB     ob
+    float  zLow
+    float  zHigh
+    string tags
+    int    nTags
+    int    barsWaited = 0
+    string state = "AWAITING_PULLBACK"
+    bool   hasLeft = false
+    string src = "OB"
+    // T3 (OTE limit)
+    float  legLow  = na
+    float  legHigh = na
+    float  limitPx = na
+    int    limitBar = -1
+    // filled on CONFIRMED
+    float  entry = na
+    float  sl    = na
+    float  tp1   = na
+    float  tp2   = na
+    string tp1Src = ""
+    string tp2Src = ""
+
+var array<Cand>   cands   = array.new<Cand>()
+var array<Cand>   fired   = array.new<Cand>()     // CONFIRMED on this bar with SL/TP computed (tails consume)
+var array<string> dropLog = array.new<string>()   // last 20 drop reasons (dashboard)
+
+f_drop(string why) =>
+    array.push(dropLog, why)
+    if array.size(dropLog) > 20
+        array.shift(dropLog)
+
+// Python zone_confluence: SWING_OB / OTE / EQ / FVG / SWEEP (+ BREAKER for T2)
+f_tags(int dir, Brk b, OB ob) =>
+    string tags = ""
+    int    n    = 0
+    if b.breaker
+        tags := "BREAKER"
+        n += 1
+    if not b.internal
+        tags := tags == "" ? "SWING_OB" : tags + "+SWING_OB"
+        n += 1
+    if zoneOk
+        float rng = trailTop - trailBot
+        float bLo = dir == 1 ? trailTop - rng * 0.786 : trailBot + rng * 0.618
+        float bHi = dir == 1 ? trailTop - rng * 0.618 : trailBot + rng * 0.786
+        if f_overlaps(ob.bot(), ob.top(), bLo, bHi)
+            tags := tags == "" ? "OTE" : tags + "+OTE"
+            n += 1
+        if f_overlaps(ob.bot(), ob.top(), zEqLow, zEqHigh)
+            tags := tags == "" ? "EQ" : tags + "+EQ"
+            n += 1
+    bool fvgHit = false
+    for f in fvgs
+        if not fvgHit and f.mitigatedIdx < 0 and f.bias == dir and f.idx >= ob.idx and f_overlaps(ob.bot(), ob.top(), f.bot, f.top)
+            fvgHit := true
+    if fvgHit
+        tags := tags == "" ? "FVG" : tags + "+FVG"
+        n += 1
+    float priorPx = na
+    array<Piv> piv = dir == 1 ? slPiv : shPiv
+    for p in piv
+        if p.bar < ob.idx
+            priorPx := p.price
+    if not na(priorPx) and ((dir == 1 and ob.bot() < priorPx) or (dir == -1 and ob.top() > priorPx))
+        tags := tags == "" ? "SWEEP" : tags + "+SWEEP"
+        n += 1
+    [tags, n]
+
+f_isActive(Cand c) =>
+    c.state == "AWAITING_PULLBACK" or c.state == "IN_ZONE" or c.state == "AWAITING_REENTRY"
+
+f_activeCount() =>
+    int n = 0
+    for c in cands
+        if f_isActive(c)
+            n += 1
+    n
+
+f_isDup(int dir, int trigTime) =>
+    bool d = false
+    for c in cands
+        if not d and c.dir == dir and c.trigTime == trigTime and f_isActive(c)
+            d := true
+    d
+
+// Python: generate_candidates → _emit_setup_candidates gates → store.add (dedup, cap)
+f_emit() =>
+    if htfBias != 0
+        int trigMin = bar_index - recencyBars
+        for b in breaks
+            if b.idx < trigMin or b.dir != htfBias
+                continue
+            if (b.isChoch and not kindChoch) or (not b.isChoch and not kindBos)
+                continue
+            if (b.internal and not useInternal) or (not b.internal and not useSwing)
+                continue
+            OB ob = b.ob
+            if na(ob) or ob.mitigatedIdx >= 0
+                continue
+            int dir = b.dir
+            if requirePD and zoneOk
+                if dir == 1 and ob.top() > zEq
+                    continue
+                if dir == -1 and ob.bot() < zEq
+                    continue
+            [tags, n] = f_tags(dir, b, ob)
+            if n < minConfluence
+                continue
+            float zl = ob.bot()
+            float zh = ob.top()
+            if not na(atr14) and atr14 > 0
+                float near = dir == 1 ? close - zh : zl - close
+                if maxZoneDistAtr > 0 and near / atr14 > maxZoneDistAtr
+                    continue
+                float far = dir == 1 ? close - zl : zh - close
+                if -(far / atr14) > maxOvershootAtr
+                    continue
+            if f_isDup(dir, b.t)
+                continue
+            if f_activeCount() >= maxPending
+                continue
+            array.push(cands, Cand.new(dir = dir, trigIdx = b.idx, trigTime = b.t, trigPrice = b.level, ob = ob, zLow = zl, zHigh = zh, tags = tags, nTags = n, src = b.breaker ? "BREAKER" : "OB"))
+            b.emitted := true
+// ==== [SECTION: STATE MACHINE + SL/TP] ==== (Task 4)
 
 // ─── STRATEGY TAIL (skeleton — Task 5 replaces) ───────────────────────────────
 grpStr = "Strategy (canlı sizing)"
