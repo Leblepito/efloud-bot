@@ -228,3 +228,34 @@ def test_cli_compare_reports_missing_signal_column(tmp_path, capsys):
                   "1,Entry long,2026-03-01 10:00,100,5,\n")
     assert plp.main(["compare", "--python", str(p), "--tv", str(tv)]) == 2
     assert "Signal" in capsys.readouterr().err
+
+
+def test_score_trades_r_math_with_partial_tp1(tmp_path):
+    p = _tv_csv(tmp_path, [
+        "1,Entry long,2026-03-01 10:00,B|trig=1|sl=98|tp1=104|tp2=108,100,10,\n",
+        "1,Exit long,2026-03-01 12:00,TP1/SL,104,5,20\n",
+        "1,Exit long,2026-03-01 14:00,TP2/BE,108,5,40\n",      # +60 on risk 2×10=20 → +3.0 R
+        "2,Entry short,2026-03-02 10:00,B|trig=2|sl=102|tp1=96|tp2=na,100,10,\n",
+        "2,Exit short,2026-03-02 12:00,TP1/SL,102,10,-20\n",   # −1.0 R
+        "3,Entry long,2026-03-03 10:00,B|trig=3|sl=99|tp1=103|tp2=na,100,10,\n",
+        "3,Exit long,2026-03-03 12:00,MAX_HOLD,99.5,10,-5\n",  # −0.5 R
+    ])
+    s = plp.score_trades(plp.load_tv_trades(p))
+    assert s["n"] == 3
+    assert s["total_r"] == pytest.approx(1.5)
+    assert s["avg_r"] == pytest.approx(0.5)
+    assert s["pf"] == pytest.approx(3.0 / 1.5)
+    assert s["max_dd_r"] == pytest.approx(1.5)                 # peak +3.0 → trough +1.5
+    assert s["win_rate"] == pytest.approx(1 / 3)
+
+
+def test_decide_applies_all_four_criteria():
+    base = {"n": 60, "total_r": 10.0, "avg_r": 0.17, "pf": 1.3, "max_dd_r": 5.0}
+    win = {"n": 55, "total_r": 14.0, "avg_r": 0.25, "pf": 1.5, "max_dd_r": 5.5}
+    assert plp.decide(base, win) == (True, [])
+    ok, why = plp.decide(base, {**win, "n": 49})
+    assert ok is False and any("n=" in w for w in why)
+    ok, why = plp.decide(base, {**win, "max_dd_r": 6.1})
+    assert ok is False and any("drawdown" in w for w in why)
+    ok, why = plp.decide(base, {**win, "total_r": 10.0})
+    assert ok is False

@@ -368,6 +368,74 @@ def _cmd_compare(a) -> int:
     return 0 if res["passed"] else 1
 
 
+# ───────────────────────────── score ─────────────────────────────
+def score_trades(trades: pd.DataFrame) -> dict:
+    """NET R per trade from the TradingView list: R = Σ exit P&L / (|entry − initial SL| × qty at entry).
+    The initial SL comes from the entry signal (`sl=`), or from the first exit signal when the entry
+    was a limit order placed before the SL was known (T3: exit comment `TP1/SL|sl=…`)."""
+    rs, variants = [], {}
+    for _trade_id, grp in trades.groupby("trade", sort=True):
+        ent = grp[grp["type"].str.startswith("Entry")]
+        ex = grp[grp["type"].str.startswith("Exit")]
+        if ent.empty or ex.empty:
+            continue
+        e = ent.iloc[0]
+        sig = parse_signal(e["signal"])
+        sl = _num(sig.get("sl"))
+        if sl is None:
+            sl = _num(parse_signal(ex.iloc[0]["signal"]).get("sl"))
+        risk = abs(float(e["price"]) - sl) * float(e["qty"]) if sl is not None else 0.0
+        if risk <= 0:
+            continue
+        r = float(ex["pnl"].fillna(0.0).sum()) / risk
+        rs.append(r)
+        variants.setdefault(sig.get("variant", ""), []).append(r)
+    if not rs:
+        return {"n": 0, "total_r": 0.0, "avg_r": 0.0, "pf": 0.0, "max_dd_r": 0.0, "win_rate": 0.0, "by_variant": {}}
+    gains = sum(r for r in rs if r > 0)
+    losses = -sum(r for r in rs if r < 0)
+    peak, dd, cum = 0.0, 0.0, 0.0
+    for r in rs:
+        cum += r
+        peak = max(peak, cum)
+        dd = max(dd, peak - cum)
+    return {"n": len(rs), "total_r": sum(rs), "avg_r": sum(rs) / len(rs),
+            "pf": (gains / losses) if losses > 0 else float("inf"), "max_dd_r": dd,
+            "win_rate": sum(1 for r in rs if r > 0) / len(rs),
+            "by_variant": {k: {"n": len(v), "total_r": sum(v)} for k, v in variants.items()}}
+
+
+def decide(baseline: dict, variant: dict) -> tuple[bool, list[str]]:
+    """Spec §6.3: n ≥ 50, total NET R > baseline, avg NET R > baseline, max DD(R) ≤ 1.2 × baseline."""
+    why = []
+    if variant["n"] < 50:
+        why.append(f"n={variant['n']} < 50")
+    if not variant["total_r"] > baseline["total_r"]:
+        why.append(f"total R {variant['total_r']:.2f} ≤ baseline {baseline['total_r']:.2f}")
+    if not variant["avg_r"] > baseline["avg_r"]:
+        why.append(f"avg R {variant['avg_r']:.3f} ≤ baseline {baseline['avg_r']:.3f}")
+    if variant["max_dd_r"] > 1.2 * baseline["max_dd_r"]:
+        why.append(f"max drawdown {variant['max_dd_r']:.2f}R > 1.2 × baseline {baseline['max_dd_r']:.2f}R")
+    return (not why), why
+
+
+def format_score(name: str, s: dict) -> str:
+    return (f"{name:<28} n={s['n']:<4} totalR={s['total_r']:+8.2f} avgR={s['avg_r']:+.3f} "
+            f"PF={s['pf']:.2f} maxDD={s['max_dd_r']:.2f}R win={s['win_rate']:.0%}")
+
+
+def _cmd_score(a) -> int:
+    base = score_trades(load_tv_trades(a.baseline))
+    print(format_score("baseline", base))
+    rc = 0
+    for v in a.variant:
+        s = score_trades(load_tv_trades(v))
+        ok, why = decide(base, s)
+        print(format_score(Path(v).stem, s) + ("  WIN" if ok else "  NO: " + "; ".join(why)))
+        rc = rc or (0 if ok else 2)
+    return rc
+
+
 # ───────────────────────────── cli ─────────────────────────────
 def _cmd_replay(a) -> int:
     cfg = load_config(a.config)
@@ -397,6 +465,10 @@ def main(argv=None) -> int:
     c.add_argument("--level-tol", type=float, default=0.001)
     c.add_argument("--gate", type=float, default=0.95)
     c.set_defaults(fn=_cmd_compare)
+    s = sub.add_parser("score", help="NET R metrics + WIN/NO vs baseline (spec §6.3)")
+    s.add_argument("--baseline", required=True)
+    s.add_argument("--variant", action="append", default=[])
+    s.set_defaults(fn=_cmd_score)
     a = ap.parse_args(argv)
     return a.fn(a)
 
