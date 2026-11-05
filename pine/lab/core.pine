@@ -59,7 +59,257 @@ f_tf(string s) =>
 
 variantLabel = "B" + ((biasTf != "12h" or biasMode != "hard" or macroTf != "none") ? "|T1=" + biasTf + "/" + biasMode + (macroTf != "none" ? "+" + macroTf : "") : "") + (obInvalidate ? "|T2" : "") + (oteEntry ? "|T3" : "") + (sweepSl ? "|T4" : "") + (freshConfirm ? "|T5" : "") + (obDisplacement ? "|T6" : "") + (tpSweptFilter ? "|T7" : "") + (emitOnce ? "|T8" : "")
 
-// ==== [SECTION: STRUCTURE ENGINE] ==== (Task 2)
+// ==== [SECTION: STRUCTURE ENGINE] ==== LuxAlgo port — same per-bar order as luxalgo.analyze()
+type Pivot
+    float level   = na
+    int   bar     = -1
+    bool  crossed = false
+
+type OB
+    float barHigh                 // Python LuxOrderBlock.bar_high (parsedHigh; on a high-vol candle this is the LOW)
+    float barLow                  // parsedLow
+    int   idx                     // OB candle bar_index
+    int   createdIdx              // break bar
+    int   bias                    // 1 BULL / -1 BEAR
+    bool  internal
+    int   mitigatedIdx = -1
+    int   pivotBar = -1           // broken pivot bar (T4/T6)
+    float rawLow  = na            // raw lowest low over [pivotBar, createdIdx) (T4)
+    float rawHigh = na            // raw highest high over the same span (T4)
+
+type Brk
+    bool  isChoch
+    int   dir                     // 1 BULL / -1 BEAR
+    float level
+    int   pivotBar
+    int   idx                     // break bar_index
+    int   t                       // break bar open time (ms) == Python SetupCandidate.trigger_bar_ts
+    bool  internal
+    OB    ob = na
+    bool  emitted = false         // T8
+    bool  breaker = false         // T2
+
+type FVG
+    float top
+    float bot
+    int   idx                     // middle candle
+    int   bias
+    int   mitigatedIdx = -1
+
+type Equal
+    bool  isHigh                  // EQH (true) / EQL (false)
+    float priceA
+    float priceB
+    int   idxA
+    int   idxB
+    bool  swept = false           // T7
+
+type Piv
+    int   bar
+    float price
+    bool  swept = false           // T7
+
+method top(OB this) =>
+    math.max(this.barHigh, this.barLow)
+
+method bot(OB this) =>
+    math.min(this.barHigh, this.barLow)
+
+f_overlaps(float lo1, float hi1, float lo2, float hi2) =>
+    lo1 <= hi2 and lo2 <= hi1
+
+atr200  = ta.atr(200)
+atr14   = ta.atr(14)
+cumTr   = ta.cum(ta.tr)
+volRef  = obFilterAtr ? atr200 : (bar_index > 0 ? cumTr / bar_index : na)
+highVol = not na(volRef) and (high - low) >= 2.0 * volRef
+pHi     = highVol ? low : high
+pLo     = highVol ? high : low
+hiMit   = obMitHighLow ? high : close
+loMit   = obMitHighLow ? low  : close
+
+// Pine leg(size): bar[t-size] above highest(size) → bearish leg (0); below lowest(size) → bullish leg (1)
+f_leg(int size) =>
+    var int leg = 0
+    hh = ta.highest(high, size)
+    ll = ta.lowest(low, size)
+    if bar_index >= size
+        if high[size] > hh
+            leg := 0
+        else if low[size] < ll
+            leg := 1
+    leg
+
+legSwing = f_leg(swingLen)
+legInt   = f_leg(internalLen)
+legEq    = f_leg(eqLen)
+chSwing  = ta.change(legSwing)     // +1 → pivot LOW at bar-size, -1 → pivot HIGH
+chInt    = ta.change(legInt)
+chEq     = ta.change(legEq)
+
+var Pivot swingHigh = Pivot.new()
+var Pivot swingLow  = Pivot.new()
+var Pivot intHigh   = Pivot.new()
+var Pivot intLow    = Pivot.new()
+var Pivot eqHigh    = Pivot.new()
+var Pivot eqLow     = Pivot.new()
+var int   swingBias = 0
+var int   intBias   = 0
+var float trailTop  = na
+var float trailBot  = na
+var array<OB>    swingObs = array.new<OB>()
+var array<OB>    intObs   = array.new<OB>()
+var array<Brk>   breaks   = array.new<Brk>()
+var array<FVG>   fvgs     = array.new<FVG>()
+var array<Equal> equals   = array.new<Equal>()
+var array<Piv>   shPiv    = array.new<Piv>()
+var array<Piv>   slPiv    = array.new<Piv>()
+
+f_mitigate(array<OB> pool) =>
+    for o in pool
+        if o.mitigatedIdx < 0
+            if o.bias == -1 and hiMit > o.barHigh
+                o.mitigatedIdx := bar_index
+            else if o.bias == 1 and loMit < o.barLow
+                o.mitigatedIdx := bar_index
+
+// Python _pivot_update: returns [isNew, isLow, newLevel, prevLevel, prevBar]
+f_pivotUpdate(Pivot pHigh, Pivot pLow, int ch, int size) =>
+    bool  isNew   = ch != 0
+    bool  isLow   = ch == 1
+    float lvl     = na
+    float prev    = na
+    int   prevBar = -1
+    if isNew
+        Pivot p = isLow ? pLow : pHigh
+        prev    := p.level
+        prevBar := p.bar
+        lvl     := isLow ? low[size] : high[size]
+        p.level   := lvl
+        p.bar     := bar_index - size
+        p.crossed := false
+    [isNew, isLow, lvl, prev, prevBar]
+
+f_equalCheck(bool isLow, float prevLvl, float lvl, int prevBar) =>
+    if not na(prevLvl) and not na(atr200) and math.abs(prevLvl - lvl) < eqThr * atr200
+        array.push(equals, Equal.new(isHigh = not isLow, priceA = prevLvl, priceB = lvl, idxA = prevBar, idxB = bar_index - eqLen))
+
+// Python _store_ob: argmin parsedLow (BULL) / argmax parsedHigh (BEAR) over [pivot.bar, break) — first hit wins
+f_storeOb(Pivot p, bool internal, int bias) =>
+    OB ob = na
+    int a = p.bar
+    int b = bar_index
+    if a >= 0 and b > a
+        int   span = math.min(b - a, liveWindowBars)      // live engine sees at most liveWindowBars bars
+        int   k    = -1
+        float best = na
+        float rLo  = na
+        float rHi  = na
+        for i = b - span to b - 1
+            int off = b - i
+            float v = bias == -1 ? pHi[off] : pLo[off]
+            rLo := na(rLo) ? low[off]  : math.min(rLo, low[off])
+            rHi := na(rHi) ? high[off] : math.max(rHi, high[off])
+            if na(best) or (bias == -1 ? v > best : v < best)
+                best := v
+                k    := i
+        if k >= 0
+            int offK = b - k
+            ob := OB.new(barHigh = pHi[offK], barLow = pLo[offK], idx = k, createdIdx = b, bias = bias, internal = internal, pivotBar = a, rawLow = rLo, rawHigh = rHi)
+            array.push(internal ? intObs : swingObs, ob)
+    ob
+
+// Python _structure(internal, t): bull check then bear check; bias re-read between them
+f_structure(bool internal, int biasIn) =>
+    int   biasOut = biasIn
+    Pivot ph = internal ? intHigh : swingHigh
+    Pivot pl = internal ? intLow  : swingLow
+    bool  extraH = internal ? (na(swingHigh.level) or intHigh.level != swingHigh.level) : true
+    bool  extraL = internal ? (na(swingLow.level)  or intLow.level  != swingLow.level)  : true
+    float lvlH = ph.level
+    if not na(lvlH) and close > lvlH and not (close[1] > lvlH) and not ph.crossed and extraH
+        bool isChoch = biasOut == -1
+        ph.crossed := true
+        OB ob = f_storeOb(ph, internal, 1)
+        array.push(breaks, Brk.new(isChoch = isChoch, dir = 1, level = lvlH, pivotBar = ph.bar, idx = bar_index, t = time, internal = internal, ob = ob))
+        biasOut := 1
+    float lvlL = pl.level
+    if not na(lvlL) and close < lvlL and not (close[1] < lvlL) and not pl.crossed and extraL
+        bool isChoch = biasOut == 1
+        pl.crossed := true
+        OB ob = f_storeOb(pl, internal, -1)
+        array.push(breaks, Brk.new(isChoch = isChoch, dir = -1, level = lvlL, pivotBar = pl.bar, idx = bar_index, t = time, internal = internal, ob = ob))
+        biasOut := -1
+    biasOut
+
+f_pruneObs(array<OB> pool) =>
+    if array.size(pool) > 0
+        for i = array.size(pool) - 1 to 0
+            if array.get(pool, i).createdIdx < bar_index - liveWindowBars
+                array.remove(pool, i)
+
+f_prunePools() =>
+    f_pruneObs(swingObs)
+    f_pruneObs(intObs)
+    if array.size(breaks) > 0
+        for i = array.size(breaks) - 1 to 0
+            if array.get(breaks, i).idx < bar_index - recencyBars - 1
+                array.remove(breaks, i)
+    if array.size(fvgs) > 0
+        for i = array.size(fvgs) - 1 to 0
+            if array.get(fvgs, i).idx < bar_index - liveWindowBars
+                array.remove(fvgs, i)
+    if array.size(equals) > 0
+        for i = array.size(equals) - 1 to 0
+            if array.get(equals, i).idxB < bar_index - liveWindowBars
+                array.remove(equals, i)
+    if array.size(shPiv) > 0
+        for i = array.size(shPiv) - 1 to 0
+            if array.get(shPiv, i).bar < bar_index - liveWindowBars
+                array.remove(shPiv, i)
+    if array.size(slPiv) > 0
+        for i = array.size(slPiv) - 1 to 0
+            if array.get(slPiv, i).bar < bar_index - liveWindowBars
+                array.remove(slPiv, i)
+
+// FVG auto threshold — Python: fvg_cum / t * 2 over the live window
+fvgDelta    = bar_index >= 2 and open[1] != 0 ? (close[1] - open[1]) / (open[1] * 100.0) : 0.0
+fvgAbsSum   = math.sum(math.abs(fvgDelta), liveWindowBars)
+fvgT        = math.max(1, math.min(bar_index, liveWindowBars))
+fvgThr      = fvgAuto ? fvgAbsSum / fvgT * 2.0 : 0.0
+
+if barstate.isconfirmed
+    f_mitigate(intObs)
+    f_mitigate(swingObs)
+    [nS, lowS, lvlS, prevS, pbS] = f_pivotUpdate(swingHigh, swingLow, chSwing, swingLen)
+    if nS
+        if lowS
+            trailBot := lvlS
+            array.push(slPiv, Piv.new(bar = bar_index - swingLen, price = lvlS))
+        else
+            trailTop := lvlS
+            array.push(shPiv, Piv.new(bar = bar_index - swingLen, price = lvlS))
+    [nI, lowI, lvlI, prevI, pbI] = f_pivotUpdate(intHigh, intLow, chInt, internalLen)
+    [nE, lowE, lvlE, prevE, pbE] = f_pivotUpdate(eqHigh, eqLow, chEq, eqLen)
+    if nE
+        f_equalCheck(lowE, prevE, lvlE, pbE)
+    intBias   := f_structure(true, intBias)
+    swingBias := f_structure(false, swingBias)
+    trailTop := na(trailTop) ? high : math.max(high, trailTop)
+    trailBot := na(trailBot) ? low  : math.min(low,  trailBot)
+    for f in fvgs
+        if f.mitigatedIdx < 0
+            if f.bias == 1 and low < f.bot
+                f.mitigatedIdx := bar_index
+            else if f.bias == -1 and high > f.top
+                f.mitigatedIdx := bar_index
+    if bar_index >= 2
+        if low > high[2] and close[1] > high[2] and fvgDelta > fvgThr
+            array.push(fvgs, FVG.new(top = low, bot = high[2], idx = bar_index - 1, bias = 1))
+        if high < low[2] and close[1] < low[2] and -fvgDelta > fvgThr
+            array.push(fvgs, FVG.new(top = low[2], bot = high, idx = bar_index - 1, bias = -1))
+    f_prunePools()
+
 // ==== [SECTION: BIAS + CANDIDATES] ==== (Task 3)
 // ==== [SECTION: STATE MACHINE + SL/TP] ==== (Task 4)
 
