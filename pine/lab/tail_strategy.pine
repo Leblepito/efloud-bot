@@ -40,7 +40,7 @@ if barstate.isconfirmed
         Cand bestL = na
         Cand bestS = na
         for c in cands
-            if c.state == "AWAITING_PULLBACK" and not na(c.limitPx) and not po3Blocked
+            if c.state == "AWAITING_PULLBACK" and c.limitOk and not na(c.limitPx) and not po3Blocked
                 if c.dir == 1 and (na(bestL) or c.limitPx > bestL.limitPx)
                     bestL := c
                 if c.dir == -1 and (na(bestS) or c.limitPx < bestS.limitPx)
@@ -60,13 +60,18 @@ if barstate.isconfirmed
     // take the fired candidate that matches the direction we are in, arm exits now
     bool justFilledOte = oteEntry and strategy.position_size != 0 and strategy.position_size[1] == 0
     if array.size(fired) > 0 and (strategy.position_size == 0 or justFilledOte)
-        int wantDir = strategy.position_size > 0 ? 1 : strategy.position_size < 0 ? -1 : 0
+        int   wantDir = strategy.position_size > 0 ? 1 : strategy.position_size < 0 ? -1 : 0
+        float fillPx  = strategy.opentrades > 0 ? strategy.opentrades.entry_price(strategy.opentrades - 1) : na
         Cand c = array.get(fired, 0)
+        bool  matched = wantDir == 0
         if wantDir != 0
             for f in fired
-                if f.dir == wantDir
+                if f.dir == wantDir and (not matched or (not na(fillPx) and math.abs(f.entry - fillPx) <= 2 * syminfo.mintick))
                     c := f
-        if wantDir == 0 or c.dir == wantDir
+                    matched := true
+        if not matched
+            strategy.close_all(comment = "OTE_NAKED")        // filled order has no fired candidate (should not happen after pre-validation) — never sit unprotected
+        if matched
             posEntry := c.entry
             posSl    := c.sl
             posTp1   := c.tp1

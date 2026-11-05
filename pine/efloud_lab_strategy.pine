@@ -375,6 +375,8 @@ type Cand
     float  legHigh = na
     float  limitPx = na
     int    limitBar = -1
+    bool   limitOk  = false      // SL/TP valid at limitPx (strategy places the order only when true)
+    float  limitTp1 = na         // TP1 estimated at limitPx (OTE_MISSED check)
     // filled on CONFIRMED
     float  entry = na
     float  sl    = na
@@ -708,6 +710,15 @@ f_oteUpdate(Cand c) =>
             c.limitPx := math.min(math.max(px, lo), hi)
             if c.limitBar < 0
                 c.limitBar := bar_index
+            // pre-validate SL/TP at the limit so a resting order can never fill into a setup the lab would reject
+            c.limitOk  := false
+            c.limitTp1 := na
+            [slEst, okSl] = f_calcSl(c.dir, c.limitPx, c.zLow, c.zHigh, c.legLow)
+            if okSl
+                [tp1Est, tp2Est, s1Est, s2Est, okTp] = f_tpTargets(c.dir, c.limitPx, slEst)
+                if okTp
+                    c.limitOk  := true
+                    c.limitTp1 := tp1Est
     ok
 
 f_pruneTerminal() =>
@@ -734,7 +745,9 @@ if barstate.isconfirmed
             if oteEntry and c.state == "AWAITING_PULLBACK"
                 if not isNewBar
                     continue                                   // the limit is evaluated once per bar (pass 0); later passes only re-emit
-                float restingPx = c.limitPx                    // the order that was actually live during this bar (placed at the prior close)
+                float restingPx  = c.limitPx                    // the order that was actually live during this bar (placed at the prior close)
+                bool  restingOk  = c.limitOk
+                float restingTp1 = c.limitTp1
                 if not f_oteUpdate(c)
                     c.state := "INVALIDATED"
                     f_drop("NO_OTE_OVERLAP")
@@ -743,19 +756,15 @@ if barstate.isconfirmed
                     c.state := "INVALIDATED"
                     f_drop("OTE_LEG_BROKEN")
                     continue
-                if po3Blocked or na(restingPx) or c.limitBar >= bar_index
-                    continue                                   // no live order this bar: first bar, or pulled during manipulation
+                if po3Blocked or na(restingPx) or not restingOk or c.limitBar >= bar_index
+                    continue                                   // no live order this bar: first bar, invalid SL/TP at the limit, or pulled during manipulation
                 bool filled = c.dir == 1 ? low <= restingPx : high >= restingPx
                 if filled
                     c.state := "CONFIRMED"
                     f_onConfirmed(c, restingPx)
-                else
-                    [slEst, okEst] = f_calcSl(c.dir, restingPx, c.zLow, c.zHigh, c.legLow)
-                    if okEst
-                        [tp1Est, tp2Est, s1Est, s2Est, okTpEst] = f_tpTargets(c.dir, restingPx, slEst)
-                        if okTpEst and (c.dir == 1 ? high >= tp1Est : low <= tp1Est)
-                            c.state := "INVALIDATED"
-                            f_drop("OTE_MISSED")
+                else if c.dir == 1 ? high >= restingTp1 : low <= restingTp1
+                    c.state := "INVALIDATED"
+                    f_drop("OTE_MISSED")
                 continue
             bool inZ = f_inZone(close, c)
             if obInvalidate and (c.dir == 1 ? close < c.ob.bot() : close > c.ob.top())
@@ -828,7 +837,7 @@ if barstate.isconfirmed
         Cand bestL = na
         Cand bestS = na
         for c in cands
-            if c.state == "AWAITING_PULLBACK" and not na(c.limitPx) and not po3Blocked
+            if c.state == "AWAITING_PULLBACK" and c.limitOk and not na(c.limitPx) and not po3Blocked
                 if c.dir == 1 and (na(bestL) or c.limitPx > bestL.limitPx)
                     bestL := c
                 if c.dir == -1 and (na(bestS) or c.limitPx < bestS.limitPx)
@@ -848,13 +857,18 @@ if barstate.isconfirmed
     // take the fired candidate that matches the direction we are in, arm exits now
     bool justFilledOte = oteEntry and strategy.position_size != 0 and strategy.position_size[1] == 0
     if array.size(fired) > 0 and (strategy.position_size == 0 or justFilledOte)
-        int wantDir = strategy.position_size > 0 ? 1 : strategy.position_size < 0 ? -1 : 0
+        int   wantDir = strategy.position_size > 0 ? 1 : strategy.position_size < 0 ? -1 : 0
+        float fillPx  = strategy.opentrades > 0 ? strategy.opentrades.entry_price(strategy.opentrades - 1) : na
         Cand c = array.get(fired, 0)
+        bool  matched = wantDir == 0
         if wantDir != 0
             for f in fired
-                if f.dir == wantDir
+                if f.dir == wantDir and (not matched or (not na(fillPx) and math.abs(f.entry - fillPx) <= 2 * syminfo.mintick))
                     c := f
-        if wantDir == 0 or c.dir == wantDir
+                    matched := true
+        if not matched
+            strategy.close_all(comment = "OTE_NAKED")        // filled order has no fired candidate (should not happen after pre-validation) — never sit unprotected
+        if matched
             posEntry := c.entry
             posSl    := c.sl
             posTp1   := c.tp1
