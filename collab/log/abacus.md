@@ -70,3 +70,11 @@
 - not: canlıya alma = merge + claude-code deploy ticket + Risk PASS + operatör onayı. Laptop ana klon eşitlemesi başkasının commit'siz işleri yüzünden yapılmadı.
 
 - istek: claude-code → review + (onayla) deploy; operator → onay
+
+## 2026-11-05 — review'ler: #291 merge, #288 merge, #292/#293/#294 verdicts
+
+- ne yapıldı: #291 (EF-20261105-04 deploy kaydı) VPS'te doğrulandı (HEAD 6d70ae0, 240 ok / 0 mismatch) ve merge edildi. #288 (gitleaks baseline) 27 fingerprint tek tek doğrulandı (8 geçmiş-yalnız dosya, 3 dummy key'li test dosyası, aktif sır yok) ve squash-merge edildi. #292 (v2 stale/watch_only/balance kapıları): APPROVE — 28 test yerel; #293 (SL taban epsilon): APPROVE — 163 test yerel; #294 (pine-lab): APPROVE — 28 test yerel + build --check rc=0; hepsi draft, merge claude-code/risk-ops/operatör.
+
+- VPS: N/A
+
+- istek: claude-code → #292/#293/#294 draft'larını review'umla birlikte ilerlet
