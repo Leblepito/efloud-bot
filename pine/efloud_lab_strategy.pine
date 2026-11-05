@@ -661,6 +661,7 @@ f_tpTargets(int dir, float entry, float sl) =>
 
 // _place_v2_entry_order (SL/TP part): rejected setups are consumed (CONFIRMED, no trade) — same as live
 f_onConfirmed(Cand c, float px) =>
+    // For BREAKER candidates c.ob is the flipped box, so this anchor already yields the breaker's far edge.
     float anchor = c.dir == 1 ? c.ob.bot() : c.ob.top()
     [sl, okSl] = f_calcSl(c.dir, px, c.zLow, c.zHigh, anchor)
     if not okSl
@@ -677,6 +678,13 @@ f_onConfirmed(Cand c, float px) =>
             c.tp1Src := s1
             c.tp2Src := s2
             array.push(fired, c)
+
+// T2: a closed-through OB becomes an opposite-direction Breaker zone (same box) with its own break record
+f_flipBreaker(Cand c) =>
+    OB src = c.ob
+    OB bb = OB.new(barHigh = src.barHigh, barLow = src.barLow, idx = src.idx, createdIdx = bar_index, bias = -src.bias, internal = src.internal, pivotBar = src.pivotBar, rawLow = src.rawLow, rawHigh = src.rawHigh)
+    array.push(src.internal ? intObs : swingObs, bb)
+    array.push(breaks, Brk.new(isChoch = true, dir = -c.dir, level = close, pivotBar = src.pivotBar, idx = bar_index, t = time, internal = src.internal, ob = bb, breaker = true))
 
 f_pruneTerminal() =>
     if array.size(cands) > 0
@@ -700,6 +708,11 @@ if barstate.isconfirmed
                 f_drop("EXPIRED")
                 continue
             bool inZ = f_inZone(close, c)
+            if obInvalidate and (c.dir == 1 ? close < c.ob.bot() : close > c.ob.top())
+                c.state := "INVALIDATED"
+                f_drop("OB_INVALIDATED")
+                f_flipBreaker(c)
+                continue
             if c.state == "AWAITING_PULLBACK"
                 if inZ
                     if not c.hasLeft
