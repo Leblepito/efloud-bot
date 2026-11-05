@@ -1152,6 +1152,16 @@ class SafeOrchestrator:
             if stale:
                 log.warning("📛 Stale/invalid data detected — analysis only, NO TRADING")
             
+            # C4: a failed balance fetch on a LIVE cycle must NOT fabricate a $10k
+            # balance and size new entries against it (see actual_balance fallback
+            # below). Treat unavailable balance like stale data → existing positions
+            # are still managed in STEP 5, but open NO new entries this cycle.
+            # Dry-run/backtest pass an explicit balance, so None there is exempt.
+            # Computed here (not at STEP 6) so the v2 advance tick below sees it.
+            balance_unavailable = (
+                balance is None and not self.config["operation"].get("dry_run", False)
+            )
+
             current_price = float(df_entry["close"].iloc[-1])
             bar_high = float(df_entry["high"].iloc[-1])
             bar_low = float(df_entry["low"].iloc[-1])
@@ -1161,12 +1171,22 @@ class SafeOrchestrator:
             # even on no-trade ticks (operator observability).
             if self.setup_state_store is not None:
                 current_bar_ts = int(df_entry.index[-1].timestamp() * 1000)
+                # Fail-closed: the tick places live v2 orders, so it must honour
+                # the same no-new-entry gates as v1's can_trade (STEP 6). The
+                # state machine still advances; only order placement is held.
+                # Regime gate deliberately NOT applied here (operator decision).
+                v2_entry_block = tuple(reason for reason, blocked in (
+                    ("stale_data", stale),
+                    ("watch_only", self.config["operation"].get("watch_only", False)),
+                    ("balance_unavailable", balance_unavailable),
+                ) if blocked)
                 with self._v2_state_lock():
                     self._advance_setup_state_tick(
                         symbol=symbol,
                         current_price=current_price,
                         current_bar_ts=current_bar_ts,
                         df_15m=df_entry,
+                        entry_block_reasons=v2_entry_block,
                     )
             
                 # SMC v2 trigger phase: detect new CHoCH → emit SetupCandidates.
@@ -1436,14 +1456,7 @@ class SafeOrchestrator:
                 warnings.extend(hold_check.warnings)
             
             # ═══ STEP 6: Yeni Trade Decision ═══
-            # C4: a failed balance fetch on a LIVE cycle must NOT fabricate a $10k
-            # balance and size new entries against it (see actual_balance fallback
-            # below). Treat unavailable balance like stale data → existing positions
-            # were already managed in STEP 5, but open NO new entries this cycle.
-            # Dry-run/backtest pass an explicit balance, so None there is exempt.
-            balance_unavailable = (
-                balance is None and not self.config["operation"].get("dry_run", False)
-            )
+            # C4: balance_unavailable is computed after STEP 0 (see there).
             if balance_unavailable:
                 warnings.append(
                     "Balance unavailable (fetch failed) — skipping new entries this cycle"
@@ -2048,6 +2061,7 @@ class SafeOrchestrator:
         current_bar_ts: int,
         pullback_timeout_bars: int = 8,
         df_15m=None,
+        entry_block_reasons: tuple = (),
     ) -> None:
         """Advance pending SMC v2 setup candidates for `symbol` by one tick.
 
@@ -2074,6 +2088,13 @@ class SafeOrchestrator:
                 run_cycle always passes df_entry; test paths exercising
                 the IN_ZONE → CONFIRMED transition. Only direct unit tests
                 may omit it.
+            entry_block_reasons: run_cycle's no-new-entry gates that are
+                closed this tick (stale_data / watch_only /
+                balance_unavailable). Non-empty → a candidate that would
+                CONFIRM is HELD in its current state instead (like the Po3
+                gate) and NO order is placed; all other transitions still
+                run. run_cycle always passes it; the empty default exists
+                only for direct unit tests of the state machine.
 
         Other-symbol candidates are untouched (operation is scoped to `symbol`).
         Terminal states (CONFIRMED, EXPIRED) are skipped — they wait for the
@@ -2180,6 +2201,9 @@ class SafeOrchestrator:
                             if po3_blocked:
                                 self._lux_trace_po3(cand, current_price, current_bar_ts)
                                 continue
+                            if entry_block_reasons:
+                                self._v2_log_entry_hold(cand, entry_block_reasons)
+                                continue
                             cand.state = "CONFIRMED"
                             clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
                             self._lux_trace(cand, "confirmed", current_price,
@@ -2212,6 +2236,9 @@ class SafeOrchestrator:
                         if po3_blocked:
                             self._lux_trace_po3(cand, current_price, current_bar_ts)
                             continue
+                        if entry_block_reasons:
+                            self._v2_log_entry_hold(cand, entry_block_reasons)
+                            continue
                         cand.state = "CONFIRMED"
                         clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
                         self._lux_trace(cand, "confirmed", current_price,
@@ -2239,6 +2266,9 @@ class SafeOrchestrator:
                     if po3_blocked:
                         self._lux_trace_po3(cand, current_price, current_bar_ts)
                         continue
+                    if entry_block_reasons:
+                        self._v2_log_entry_hold(cand, entry_block_reasons)
+                        continue
                     cand.state = "CONFIRMED"
                     self._lux_trace(cand, "confirmed", current_price, f"entry={entry_px:.8g}")
                     self._place_v2_entry_order(
@@ -2255,6 +2285,9 @@ class SafeOrchestrator:
                     if not require_confirmation:
                         if po3_blocked:
                             self._lux_trace_po3(cand, current_price, current_bar_ts)
+                            continue
+                        if entry_block_reasons:
+                            self._v2_log_entry_hold(cand, entry_block_reasons)
                             continue
                         cand.state = "CONFIRMED"
                         clamped_entry_price = min(max(current_price, cand.target_zone.low), cand.target_zone.high)
@@ -2507,6 +2540,12 @@ class SafeOrchestrator:
         seen[key] = bar_ts
         self._lux_trace(cand, "po3-block", price, "Po3 MANIPULATION fazı — setup bekliyor")
 
+    @staticmethod
+    def _v2_log_entry_hold(cand, reasons: tuple) -> None:
+        """v2 entry held by a run_cycle no-new-entry gate (stale/watch_only/balance)."""
+        log.info(f"[v2 hold] {cand.symbol} {cand.direction}: entry held "
+                 f"({', '.join(reasons)}) — no order, setup kept in {cand.state}")
+
     def _lux_log_scan(self, symbol, htf_bias, lux, cands) -> None:
         """[lux] scan satırı — yalnız özet DEĞİŞTİĞİNDE basılır (30 sn'lik
         tick'lerde log seli olmasın). Deploy sonrası her sembol için ilk taramada
@@ -2713,6 +2752,10 @@ class SafeOrchestrator:
 
         Safety gates (full parity with v1 signals.py path):
         - order_manager is None → skip (test/paper mode)
+        - stale_data / watch_only / balance_unavailable → enforced UPSTREAM:
+          run_cycle passes them as entry_block_reasons and
+          _advance_setup_state_tick never calls this method while any is set.
+          (v1's regime gate is NOT applied to v2 — pending operator decision.)
         - breaker.check.can_trade is False → skip (HALTED/TRIPPED)
         - pos_guard.can_open_position is False → skip (notional / exposure /
           holding-hours / pyramid / SL ATR distance / max-open / opposite-direction)
