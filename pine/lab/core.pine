@@ -657,7 +657,7 @@ f_tpTargets(int dir, float entry, float sl) =>
 // _place_v2_entry_order (SL/TP part): rejected setups are consumed (CONFIRMED, no trade) — same as live
 f_onConfirmed(Cand c, float px) =>
     // For BREAKER candidates c.ob is the flipped box, so this anchor already yields the breaker's far edge.
-    float anchor = c.dir == 1 ? c.ob.bot() : c.ob.top()
+    float anchor = oteEntry and not na(c.legLow) ? c.legLow : (c.dir == 1 ? c.ob.bot() : c.ob.top())
     [sl, okSl] = f_calcSl(c.dir, px, c.zLow, c.zHigh, anchor)
     if not okSl
         f_drop(na(atr14) or atr14 <= 0 ? "ATR_NA" : "SL_TOO_FAR")
@@ -681,6 +681,30 @@ f_flipBreaker(Cand c) =>
     array.push(src.internal ? intObs : swingObs, bb)
     array.push(breaks, Brk.new(isChoch = true, dir = -c.dir, level = close, pivotBar = src.pivotBar, idx = bar_index, t = time, internal = src.internal, ob = bb, breaker = true))
 
+// T3: impulse leg = OB origin → running extreme since the break; OTE band [0.618, 0.786]; limit at 0.705, clamped into band ∩ OB
+f_oteUpdate(Cand c) =>
+    bool ok = true
+    if na(c.legLow)
+        c.legLow  := c.dir == 1 ? c.ob.bot() : c.ob.top()
+        c.legHigh := c.dir == 1 ? high : low
+    c.legHigh := c.dir == 1 ? math.max(c.legHigh, high) : math.min(c.legHigh, low)
+    float r = math.abs(c.legHigh - c.legLow)
+    if r <= 0
+        ok := false
+    else
+        float bLo = c.dir == 1 ? c.legHigh - 0.786 * r : c.legHigh + 0.618 * r
+        float bHi = c.dir == 1 ? c.legHigh - 0.618 * r : c.legHigh + 0.786 * r
+        float lo  = math.max(math.min(bLo, bHi), c.zLow)
+        float hi  = math.min(math.max(bLo, bHi), c.zHigh)
+        if lo > hi
+            ok := false
+        else
+            float px = c.dir == 1 ? c.legHigh - 0.705 * r : c.legHigh + 0.705 * r
+            c.limitPx := math.min(math.max(px, lo), hi)
+            if c.limitBar < 0
+                c.limitBar := bar_index
+    ok
+
 f_pruneTerminal() =>
     if array.size(cands) > 0
         for i = array.size(cands) - 1 to 0
@@ -701,6 +725,29 @@ if barstate.isconfirmed
             if c.barsWaited > timeoutBars
                 c.state := "EXPIRED"
                 f_drop("EXPIRED")
+                continue
+            if oteEntry and c.state == "AWAITING_PULLBACK"
+                if not f_oteUpdate(c)
+                    c.state := "INVALIDATED"
+                    f_drop("NO_OTE_OVERLAP")
+                    continue
+                if c.dir == 1 ? close < c.legLow : close > c.legLow
+                    c.state := "INVALIDATED"
+                    f_drop("OTE_LEG_BROKEN")
+                    continue
+                if po3Blocked or c.limitBar >= bar_index
+                    continue                                   // limit not live yet (placed at bar close) or pulled during manipulation
+                bool filled = c.dir == 1 ? low <= c.limitPx : high >= c.limitPx
+                if filled
+                    c.state := "CONFIRMED"
+                    f_onConfirmed(c, c.limitPx)
+                else
+                    [slEst, okEst] = f_calcSl(c.dir, c.limitPx, c.zLow, c.zHigh, c.legLow)
+                    if okEst
+                        [tp1Est, tp2Est, s1Est, s2Est, okTpEst] = f_tpTargets(c.dir, c.limitPx, slEst)
+                        if okTpEst and (c.dir == 1 ? high >= tp1Est : low <= tp1Est)
+                            c.state := "INVALIDATED"
+                            f_drop("OTE_MISSED")
                 continue
             bool inZ = f_inZone(close, c)
             if obInvalidate and (c.dir == 1 ? close < c.ob.bot() : close > c.ob.top())

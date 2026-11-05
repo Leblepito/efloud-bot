@@ -22,7 +22,7 @@ f_cmt(Cand c) =>
 f_exits() =>
     string id = posDir == 1 ? "L" : "S"
     if not tp1Hit
-        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = na(posTp2) ? 100 : tp1ClosePct, comment = "TP1/SL")
+        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = na(posTp2) ? 100 : tp1ClosePct, comment = "TP1/SL|sl=" + f_sfmt(posSl))
     else if not na(posTp2)
         strategy.exit("X2", id, stop = moveSlToBe ? posEntry : posSl, limit = posTp2, comment = "TP2/BE")
 
@@ -35,21 +35,40 @@ if barstate.isconfirmed
         posDir := 0                         // flat (closed, or an entry that never filled) → ready for the next setup
     else
         posDir := strategy.position_size > 0 ? 1 : -1
+    // T3: keep one limit order per direction at the nearest pending OTE candidate; cancel when none
+    if oteEntry and strategy.position_size == 0
+        Cand bestL = na
+        Cand bestS = na
+        for c in cands
+            if c.state == "AWAITING_PULLBACK" and not na(c.limitPx) and not po3Blocked
+                if c.dir == 1 and (na(bestL) or c.limitPx > bestL.limitPx)
+                    bestL := c
+                if c.dir == -1 and (na(bestS) or c.limitPx < bestS.limitPx)
+                    bestS := c
+        if not na(bestL)
+            strategy.entry("L", strategy.long, qty = marginUsd * leverage / bestL.limitPx, limit = bestL.limitPx, comment = variantLabel + "|trig=" + str.tostring(bestL.trigTime) + "|ote=1")
+        else
+            strategy.cancel("L")
+        if not na(bestS)
+            strategy.entry("S", strategy.short, qty = marginUsd * leverage / bestS.limitPx, limit = bestS.limitPx, comment = variantLabel + "|trig=" + str.tostring(bestS.trigTime) + "|ote=1")
+        else
+            strategy.cancel("S")
     // flat → open: first fired candidate (one open position per symbol, as the live position guard)
     if strategy.position_size == 0 and array.size(fired) > 0
         Cand c = array.get(fired, 0)
-        float qty = marginUsd * leverage / c.entry
         posEntry := c.entry
         posSl    := c.sl
         posTp1   := c.tp1
         posTp2   := c.tp2
         posDir   := c.dir
         tp1Hit   := false
-        if c.dir == 1
-            strategy.entry("L", strategy.long, qty = qty, comment = f_cmt(c))
-        else
-            strategy.entry("S", strategy.short, qty = qty, comment = f_cmt(c))
-        f_exits()                       // armed now so the fill is protected from its first bar
+        if not oteEntry
+            float qty = marginUsd * leverage / c.entry
+            if c.dir == 1
+                strategy.entry("L", strategy.long, qty = qty, comment = f_cmt(c))
+            else
+                strategy.entry("S", strategy.short, qty = qty, comment = f_cmt(c))
+        f_exits()                      // armed now so the fill is protected from its first bar
     else if strategy.position_size != 0
         f_exits()
         if strategy.opentrades > 0 and time - strategy.opentrades.entry_time(strategy.opentrades - 1) >= maxHoldHours * 3600000

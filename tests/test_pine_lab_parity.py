@@ -239,14 +239,16 @@ def test_score_trades_r_math_with_partial_tp1(tmp_path):
         "2,Exit short,2026-03-02 12:00,TP1/SL,102,10,-20\n",   # −1.0 R
         "3,Entry long,2026-03-03 10:00,B|trig=3|sl=99|tp1=103|tp2=na,100,10,\n",
         "3,Exit long,2026-03-03 12:00,MAX_HOLD,99.5,10,-5\n",  # −0.5 R
+        "4,Entry long,2026-03-04 10:00,B|T3|trig=4|ote=1,100,10,\n",
+        "4,Exit long,2026-03-04 12:00,TP1/SL|sl=98,104,10,40\n",   # +2.0 R, SL recovered from the exit comment
     ])
     s = plp.score_trades(plp.load_tv_trades(p))
-    assert s["n"] == 3
-    assert s["total_r"] == pytest.approx(1.5)
-    assert s["avg_r"] == pytest.approx(0.5)
-    assert s["pf"] == pytest.approx(3.0 / 1.5)
+    assert s["n"] == 4
+    assert s["total_r"] == pytest.approx(3.5)
+    assert s["avg_r"] == pytest.approx(0.875)
+    assert s["pf"] == pytest.approx(5.0 / 1.5)
     assert s["max_dd_r"] == pytest.approx(1.5)                 # peak +3.0 → trough +1.5
-    assert s["win_rate"] == pytest.approx(1 / 3)
+    assert s["win_rate"] == pytest.approx(0.5)
 
 
 def test_decide_applies_all_four_criteria():
