@@ -131,3 +131,45 @@ def test_write_rows_roundtrip(tmp_path):
     plp.write_rows(rows, out)
     back = plp.read_rows(out)
     assert back[0]["trigger_bar_ts"] == 5 and back[0]["entry"] == 1.0 and back[0]["drop_reason"] == ""
+
+
+def _tv_csv(tmp_path, rows):
+    p = tmp_path / "trades.csv"
+    hdr = "Trade #,Type,Date and time,Signal,Price USDT,Position size (qty),Net P&L USDT\n"
+    p.write_text(hdr + "".join(rows))
+    return p
+
+
+def test_load_tv_trades_and_parse_signal(tmp_path):
+    p = _tv_csv(tmp_path, [
+        "1,Entry long,2026-03-01 10:00,B|trig=1772359200000|sl=99|tp1=103|tp2=na,100,5,\n",
+        "1,Exit long,2026-03-01 12:00,TP1/SL,103,5,15\n",
+    ])
+    t = plp.load_tv_trades(p)
+    assert list(t.columns) == ["trade", "type", "time", "signal", "price", "qty", "pnl"]
+    e = plp.tv_entries(t)
+    assert e == [{"direction": "LONG", "trig": 1772359200000, "entry": 100.0, "sl": 99.0, "tp1": 103.0,
+                  "tp2": None, "time": pd.Timestamp("2026-03-01 10:00"), "variant": "B"}]
+
+
+def test_compare_matches_python_only_pine_only_and_tolerances():
+    py = [
+        {"direction": "LONG", "trigger_bar_ts": 1, "entry": 100.0, "sl": 98.0, "tp1": 104.0, "tp2": "", "drop_reason": "", "python_guard_rejected": False, "confirmed_ts": 1},
+        {"direction": "LONG", "trigger_bar_ts": 2, "entry": 100.0, "sl": 98.0, "tp1": 104.0, "tp2": "", "drop_reason": "", "python_guard_rejected": True, "confirmed_ts": 2},
+        {"direction": "SHORT", "trigger_bar_ts": 3, "entry": 100.0, "sl": 102.0, "tp1": 96.0, "tp2": "", "drop_reason": "SL_TOO_FAR", "python_guard_rejected": False, "confirmed_ts": 3},
+    ]
+    entries = [
+        {"direction": "LONG", "trig": 1, "entry": 100.04, "sl": 98.0, "tp1": 104.0, "tp2": None, "time": pd.Timestamp("2026-01-01")},
+        {"direction": "LONG", "trig": 2, "entry": 100.0, "sl": 98.5, "tp1": 104.0, "tp2": None, "time": pd.Timestamp("2026-01-01")},
+        {"direction": "SHORT", "trig": 9, "entry": 50.0, "sl": 51.0, "tp1": 48.0, "tp2": None, "time": pd.Timestamp("2026-01-01")},
+    ]
+    res = plp.compare(py, entries)
+    assert res["python_entries"] == 2 and res["matched"] == 2
+    assert res["python_only"] == [] and [e["trig"] for e in res["pine_only"]] == [9]
+    assert [m["trig"] for m in res["level_mismatch"]] == [2]           # sl 98.5 vs 98.0 > 0.1 %
+    assert res["guard_rejected"] == 1
+    assert res["match_rate"] == 1.0 and res["passed"] is False         # level mismatch fails the gate
+    entries[0]["entry"] = 100.2                                       # > 0.05 % → unmatched
+    res2 = plp.compare(py, entries)
+    assert res2["matched"] == 1 and [r["trigger_bar_ts"] for r in res2["python_only"]] == [1]
+    assert "match" in plp.format_compare(res2)

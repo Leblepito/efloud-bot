@@ -237,6 +237,121 @@ def read_rows(path) -> list[dict]:
     return out
 
 
+# ───────────────────────────── compare ─────────────────────────────
+def _col(df: pd.DataFrame, *prefixes: str, exclude_pct: bool = False) -> str:
+    for p in prefixes:
+        for c in df.columns:
+            if c.strip().lower().startswith(p.lower()) and not (exclude_pct and c.strip().endswith("%")):
+                return c
+    raise ValueError(f"column starting with one of {prefixes} not found in {list(df.columns)}")
+
+
+def load_tv_trades(path) -> pd.DataFrame:
+    """TradingView Strategy Tester 'List of trades' export → trade, type, time, signal, price, qty, pnl."""
+    raw = pd.read_csv(path)
+    return pd.DataFrame({
+        "trade": pd.to_numeric(raw[_col(raw, "Trade #", "Trade")], errors="coerce").astype(int),
+        "type": raw[_col(raw, "Type")].astype(str).str.strip(),
+        "time": pd.to_datetime(raw[_col(raw, "Date")]),
+        "signal": raw[_col(raw, "Signal")].astype(str).str.strip(),
+        "price": pd.to_numeric(raw[_col(raw, "Price")], errors="coerce").astype(float),
+        "qty": pd.to_numeric(raw[_col(raw, "Position size (qty)", "Contracts", "Quantity")], errors="coerce").astype(float),
+        "pnl": pd.to_numeric(raw[_col(raw, "Net P&L", "Profit", exclude_pct=True)], errors="coerce"),
+    })
+
+
+def parse_signal(s: str) -> dict:
+    parts = str(s).split("|")
+    d = {"variant": parts[0] if parts else ""}
+    for kv in parts[1:]:
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            d[k.strip()] = v.strip()
+    return d
+
+
+def _num(v) -> Optional[float]:
+    try:
+        return None if v in (None, "", "na") else float(v)
+    except ValueError:
+        return None
+
+
+def tv_entries(trades: pd.DataFrame) -> list[dict]:
+    out = []
+    for _, r in trades[trades["type"].str.startswith("Entry")].iterrows():
+        sig = parse_signal(r["signal"])
+        trig = _num(sig.get("trig"))
+        out.append({"direction": "LONG" if "long" in r["type"].lower() else "SHORT",
+                    "trig": int(trig) if trig is not None else None, "entry": float(r["price"]),
+                    "sl": _num(sig.get("sl")), "tp1": _num(sig.get("tp1")), "tp2": _num(sig.get("tp2")),
+                    "time": r["time"], "variant": sig["variant"]})
+    return out
+
+
+def _close(a, b, tol: float) -> bool:
+    if a in (None, "") and b in (None, ""):
+        return True
+    if a in (None, "") or b in (None, ""):
+        return False
+    return abs(float(a) - float(b)) <= tol * max(abs(float(a)), 1e-12)
+
+
+def compare(py_rows: list[dict], entries: list[dict], *, entry_tol: float = 0.0005, level_tol: float = 0.001,
+            gate: float = 0.95) -> dict:
+    """Match intended Python entries (drop_reason == '') to TradingView entries on (direction, trig)."""
+    py_entries = [r for r in py_rows if r.get("drop_reason", "") == ""]
+    by_key = {(e["direction"], e["trig"]): e for e in entries}
+    matched, python_only, mismatches = 0, [], []
+    used = set()
+    for r in py_entries:
+        key = (r["direction"], int(r["trigger_bar_ts"]))
+        e = by_key.get(key)
+        if e is None or not _close(r["entry"], e["entry"], entry_tol):
+            python_only.append(r)
+            continue
+        used.add(key)
+        matched += 1
+        bad = [lvl for lvl in ("sl", "tp1", "tp2") if not _close(r.get(lvl, ""), e.get(lvl), level_tol)]
+        if bad:
+            mismatches.append({"trig": key[1], "direction": key[0], "levels": bad, "python": {k: r.get(k) for k in bad},
+                               "pine": {k: e.get(k) for k in bad}})
+    pine_only = [e for e in entries if (e["direction"], e["trig"]) not in used]
+    rate = matched / len(py_entries) if py_entries else 0.0
+    return {"python_entries": len(py_entries), "matched": matched, "python_only": python_only, "pine_only": pine_only,
+            "level_mismatch": mismatches, "guard_rejected": sum(1 for r in py_entries if r.get("python_guard_rejected")),
+            "match_rate": rate, "passed": bool(py_entries) and rate >= gate and not mismatches
+            and len(pine_only) <= (1.0 - gate) * max(1, len(entries))}
+
+
+def format_compare(res: dict) -> str:
+    lines = [f"python entries : {res['python_entries']}",
+             f"matched        : {res['matched']}  (match rate {res['match_rate']:.1%})",
+             f"python-only    : {len(res['python_only'])}",
+             f"pine-only      : {len(res['pine_only'])}",
+             f"level mismatch : {len(res['level_mismatch'])}",
+             f"guard-rejected : {res['guard_rejected']}  (B2 float flag — live would have dropped these)",
+             f"GATE           : {'PASS' if res['passed'] else 'FAIL'}"]
+    for r in res["python_only"][:20]:
+        lines.append(f"  py-only  {r['direction']} trig={r['trigger_bar_ts']} entry={r['entry']}")
+    for e in res["pine_only"][:20]:
+        lines.append(f"  pine-only {e['direction']} trig={e['trig']} entry={e['entry']} at {e['time']}")
+    for m in res["level_mismatch"][:20]:
+        lines.append(f"  levels   {m['direction']} trig={m['trig']} {m['levels']} py={m['python']} pine={m['pine']}")
+    return "\n".join(lines)
+
+
+def _cmd_compare(a) -> int:
+    py = read_rows(a.python)
+    entries = tv_entries(load_tv_trades(a.tv))
+    if py:
+        first = pd.Timestamp(min(r["confirmed_ts"] for r in py if r["confirmed_ts"] != ""), unit="ms")
+        entries = [e for e in entries if e["time"] >= first]
+    res = compare(py, entries, entry_tol=a.entry_tol, level_tol=a.level_tol, gate=a.gate)
+    print(format_compare(res))
+    return 0 if res["passed"] else 1
+
+
 # ───────────────────────────── cli ─────────────────────────────
 def _cmd_replay(a) -> int:
     cfg = load_config(a.config)
@@ -259,6 +374,13 @@ def main(argv=None) -> int:
     r.add_argument("--symbol", default="LAB/USDT")
     r.add_argument("--out", default="python_setups.csv")
     r.set_defaults(fn=_cmd_replay)
+    c = sub.add_parser("compare", help="python_setups.csv vs TradingView trade list")
+    c.add_argument("--python", required=True)
+    c.add_argument("--tv", required=True)
+    c.add_argument("--entry-tol", type=float, default=0.0005)
+    c.add_argument("--level-tol", type=float, default=0.001)
+    c.add_argument("--gate", type=float, default=0.95)
+    c.set_defaults(fn=_cmd_compare)
     a = ap.parse_args(argv)
     return a.fn(a)
 
