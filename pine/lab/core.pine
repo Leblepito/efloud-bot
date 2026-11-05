@@ -308,6 +308,15 @@ if barstate.isconfirmed
             array.push(fvgs, FVG.new(top = low, bot = high[2], idx = bar_index - 1, bias = 1))
         if high < low[2] and close[1] < low[2] and -fvgDelta > fvgThr
             array.push(fvgs, FVG.new(top = low[2], bot = high, idx = bar_index - 1, bias = -1))
+    for p in shPiv
+        if not p.swept and bar_index > p.bar + swingLen and high > p.price
+            p.swept := true
+    for p in slPiv
+        if not p.swept and bar_index > p.bar + swingLen and low < p.price
+            p.swept := true
+    for e in equals
+        if not e.swept and bar_index > e.idxB + eqLen and (e.isHigh ? high > e.priceB : low < e.priceB)
+            e.swept := true
     f_prunePools()
 
 // ==== [SECTION: BIAS + CANDIDATES] ====
@@ -443,6 +452,14 @@ f_isDup(int dir, int trigTime) =>
             d := true
     d
 
+// T6: the leg after the OB must have left a same-direction FVG (mitigated or not) before the break
+f_hasDisplacement(OB ob, int breakIdx, int dir) =>
+    bool hit = false
+    for f in fvgs
+        if not hit and f.bias == dir and f.idx > ob.idx and f.idx <= breakIdx
+            hit := true
+    hit
+
 // Python: generate_candidates → _emit_setup_candidates gates → store.add (dedup, cap)
 f_emit() =>
     if htfBias != 0
@@ -464,6 +481,8 @@ f_emit() =>
             if na(ob) or ob.mitigatedIdx >= 0
                 continue
             int dir = b.dir
+            if obDisplacement and not b.breaker and not f_hasDisplacement(ob, b.idx, dir)
+                continue
             if requirePD and zoneOk
                 if dir == 1 and ob.top() > zEq
                     continue
