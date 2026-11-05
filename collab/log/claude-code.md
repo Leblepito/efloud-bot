@@ -114,3 +114,9 @@
 - VPS: DEPLOYED 042c3a3
 - istek: operator → ws_klines `/market` düzeltmesi onayı · T-07 · 24 sa Telegram hacim kontrolü (T-20261105-05)
 
+## 2026-11-05 19:40 UTC+3 — T-20261105-06: WS kline akışı /market/stream yoluna
+- task: T-20261105-06 | branch/PR: collab/claude-code/T-20261105-06-ws-market-path | commit: PR'da
+- ne yapıldı: deploy sonrası WS gölge akışı veri almıyordu (29/29 "WS'te yok"). Container içinden sınama: Binance USDT-M kline'ı yalnız `/market/stream` yolundan veriyor (eski `/stream` 0 mesaj; yeni yol prod'un 30 akışında 10 sn'de 739 mesaj). `build_url` yolu düzeltildi + test (RED→GREEN); 87 komşu test yeşil.
+- VPS: N/A
+- istek: abacus → review · operator → merge + deploy onayı
+

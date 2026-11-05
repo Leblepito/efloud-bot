@@ -6,7 +6,7 @@ Akış, REST'e karşı parite/gecikme ölçümü ve ileride olay-tetikli tarama
 (Faz 2) için kapanan barları ve anlık fiyatı tutar.
 
 - Genel (public) market-data akışı: API anahtarı GEREKMEZ, hesap verisi yok.
-- Tek combined-stream bağlantısı: ``/stream?streams=btcusdt@kline_15m/...``.
+- Tek combined-stream bağlantısı: ``/market/stream?streams=btcusdt@kline_15m/...``.
 - Kopmada üstel geri çekilmeyle yeniden bağlanır; Binance 24 saatte bağlantıyı
   kestiği için 23 saatte proaktif yeniler.
 - ``x=true`` (bar kapandı) mesajları ``closed`` önbelleğine ve ``on_close``
@@ -43,7 +43,10 @@ def build_url(symbols: Iterable[str], timeframes: Iterable[str], testnet: bool =
     if len(streams) > MAX_STREAMS:
         raise ValueError(f"too many streams: {len(streams)} > {MAX_STREAMS}")
     base = TESTNET_BASE if testnet else MAINNET_BASE
-    return f"{base}/stream?streams={'/'.join(streams)}"
+    # /market route: Binance USDT-M serves kline streams here; the legacy
+    # /stream route still accepts the connection but sends no kline frames
+    # (verified 2026-11-05 mainnet: /stream 0 msgs vs /market/stream 56 in 8s).
+    return f"{base}/market/stream?streams={'/'.join(streams)}"
 
 
 CloseCb = Callable[[str, str, dict, int], None]
