@@ -8,9 +8,9 @@
 
 | Alan | Değer | Kaynak / zaman (UTC) | Gözlemleyen |
 | --- | --- | --- | --- |
-| GitHub master | `68fdc9a` (#266 karantina, #268 collab protokolü, #269 STATUS takibi merge edildi) | `git fetch` 2026-11-04 18:37 | claude-code |
-| VPS `/opt/efloud-bot` HEAD | `b6c6bd1` (master'ın 4 commit gerisi; fark: `skills/` → `collab/` taşıma, `collab/**`, `tests/collab/**`, `.dockerignore`, `AGENTS.md`, `HERMES.md` — engine/exchange/config/runtime kodu yok → deploy gerekmiyor) | `ssh efloud-bot git rev-parse` 2026-11-04 18:37 | claude-code |
-| VPS container'lar | Hepsi Up/healthy (efloud-bot, -scalp, -long, overseer, alerter, routines). ⚠️ 14:35 restart sonrası `EFLOUD_AUTOSTART=0`: yalnız **mid** (`efloud-bot`) 14:38'de başlatıldı; **scalp ve long idle** (tarama döngüsü yok) → T-20261104-07 | `docker ps` + `docker logs` 2026-11-04 19:15 | claude-code |
+| GitHub master | `b39751a` (#285 entegrasyon: #272/#276/#279/#280/#284; öncesinde #283 WS Faz 1, #275 uyarılar) | `git fetch` 2026-11-05 06:05 | claude-code |
+| VPS `/opt/efloud-bot` HEAD | `b39751a` = master, çalışma ağacı temiz — **DEPLOYED** (EF-20261105-01, `deploy/deploy.sh`). Yeni özelliklerin hepsi default OFF (config'te anahtar yok) | `ssh efloud-bot git rev-parse` 2026-11-05 06:06 | claude-code |
+| VPS container'lar | Hepsi yeniden oluşturuldu + Up (efloud-bot, -scalp, -long, overseer, alerter, routines). `EFLOUD_AUTOSTART=0`: yalnız **mid** 06:06 UTC'de API ile başlatıldı (healthz ok, breaker OPEN, 0 pozisyon); **scalp/long idle** (T-20261104-07; Binance key'leri mainnet'te geçersiz `-2008`) | `docker ps` + `/api/status` + `/healthz` 2026-11-05 06:07 | claude-code |
 | Canlı config (mid) | `configs/config.phase2_1k.yaml` — MAINNET, `smc_version: v2`, **`smc_v2.luxalgo.enabled: true`** (`:182-183`, 2026-11-01; "NET-cost backtest yapılmadı" notu `:180-181`), `min_confluence: 50`, daily %10 / weekly %25 | repo @ `71dfff5` | claude-code |
 | Canlı config (scalp) | `configs/config.phase2_scalp_1k.yaml` — `profile: scalp` (5m entry / 1h / 4h) | repo @ `645a5dc` | claude-code |
 | Alerter (Telegram) | **Aktif** — 2026-11-04 19:59 UTC'den beri gönderiyor (öncesinde env adı uyuşmazlığıyla dry-run idi, T-20261104-10). Yalnız mid bot logunu okur. | `docker logs efloud-alerter` 2026-11-04 ~20:45 | claude-code |

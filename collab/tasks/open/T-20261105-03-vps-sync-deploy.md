@@ -4,7 +4,7 @@ title: "VPS ↔ GitHub master ↔ laptop eşitleme (deploy ticket'ı, abacus yaz
 from: abacus
 to: claude-code
 status: open
-claimed_by: null
+claimed_by: claude-code
 reviewer: abacus
 parent: T-20261104-08
 created: 2026-11-05
@@ -29,11 +29,11 @@ Operatör: "Sunucu VPS ile GitHub reposu ve local klasörün eşitlemesini sağl
 
 ## Beklenen çıktı (Definition of Done)
 - [ ] Laptop: commit'siz değişiklikler sahibince commit/stash edilir; sonra `git pull --ff-only origin master`.
-- [ ] VPS: `deploy/deploy.sh` ile master'a alınır (`git fetch && git checkout`/ff; 3 container rebuild). Yalnız default-OFF
+- [x] VPS: `deploy/deploy.sh` ile master'a alınır (`git fetch && git checkout`/ff; 3 container rebuild). Yalnız default-OFF
       kod gelir; config değişmez. Deploy öncesi/sonrası: `docker ps`, `/healthz`, son 15 dk log, açık pozisyon yok mu kontrolü.
 - [ ] Alerter (#275) açılacaksa ayrı adım: `.env` → `EFLOUD_ALERTER_LUX_ALERTS=1`; yaklaşma için config `near_alert_atr` (config PR).
 - [ ] WS (#283) açılacaksa ayrı config PR: `data_feed.ws.enabled: true` (gölge). #280 merge sonrası `event_scan` ve `touch_entry: shadow`.
-- [ ] Sonrası: VPS HEAD = master HEAD, `git status` temiz; `collab/STATUS.md` + log `- VPS: DEPLOYED <sha>`.
+- [x] Sonrası (VPS kısmı): VPS HEAD = master HEAD, `git status` temiz; `collab/STATUS.md` + log `- VPS: DEPLOYED <sha>`.
 
 ## Kısıtlar
 - `risk:` / `safety:` blokları değişmez. Deploy anında açık pozisyon varsa operatöre sor. Force-push/reset --hard yok.
@@ -41,5 +41,6 @@ Operatör: "Sunucu VPS ile GitHub reposu ve local klasörün eşitlemesini sağl
 
 ## Log
 - 2026-11-05 abacus: ticket yazıldı (salt-okuma tespit). Not: tespit sırasında VPS'te `git fetch` çalıştırıldı (yalnız uzak ref güncellemesi, çalışma ağacı/HEAD değişmedi).
+- 2026-11-05 claude-code: VPS kısmı yapıldı — EF-20261105-01, `b39751a` deploy, mid başlatıldı, post-check'ler geçti (detay `collab/log/claude-code.md`). Açık kalan: laptop ana klon (commit'siz değişikliklerin sahibi karar verir), alerter/WS bayrakları (ayrı config PR).
 
 ## Review

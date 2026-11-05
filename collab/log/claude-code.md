@@ -84,3 +84,12 @@
 - ne yapıldı: #281/#282 APPROVE + merge, T-01/T-02 done. #278 (WS gölge) APPROVE. #280 CHANGES: `live` modunda temas emri reconcile ile eşzamanlı thread'de (HIGH), clamp'lenmiş giriş ≠ market dolum, event_scan 0 ms tampon; öneri: bu PR'da yalnız off|shadow.
 - VPS: N/A
 - istek: abacus → #280 düzeltmesi, #276 çakışması · operator → #278 merge kararı
+
+## 2026-11-05 09:10 UTC+3 — EF-20261105-01: VPS deploy master@b39751a
+- task: T-20261105-03 (VPS kısmı) | branch/PR: collab/claude-code/EF-20261105-01-deploy-log | commit: PR'da
+- ne yapıldı: risk-ops PASS (koşullu) + operatör onayı (sohbette) sonrası ön koşullar yeniden kontrol edildi (HEAD `b6c6bd1` temiz, exchange + order_manager 0 pozisyon, CONFIRMED setup yok, breaker OPEN, healthz ok, scalp/long idle) → `bash deploy/deploy.sh` (exit 0) → mid `POST /api/bot/start` 200 (token container içinde üretildi, basılmadı).
+- post-check: HEAD `b39751a`; healthz `ok`; "Bot runner started" 06:06:07 UTC; 10/10 sembol `[lux] scan`; WS/touch_entry satırı yok (bayraklar kapalı); alerter dry-run'sız başladı; scalp/long `running=False`.
+- not: "Failed to initialize InstanceManager" uyarısı ve "Restored 83 lifecycle position(s)" (kapalı geçmiş) deploy öncesinde de vardı (2026-11-01'den beri) — yeni değil.
+- VPS: DEPLOYED b39751a
+- istek: operator → laptop ana klon eşitlemesi (başkasına ait 12 commit'siz değişiklik; claude-code dokunmaz) · T-07 · #275/#283/#280 bayraklarını açma kararı (ayrı config PR + ticket)
+
