@@ -62,10 +62,11 @@ def load_ohlcv_csv(path) -> pd.DataFrame:
     t = pd.to_numeric(raw[tcol], errors="coerce")
     unit = "ms" if t.dropna().abs().max() > 1e12 else "s"
     idx = pd.to_datetime(t, unit=unit)
-    out = pd.DataFrame({k: pd.to_numeric(raw[cols[k]], errors="coerce").astype(float)
-                        for k in ("open", "high", "low", "close")}, index=idx)
+    # .to_numpy(): RangeIndex Series passed with index=idx would be realigned to the DatetimeIndex → all NaN
+    out = pd.DataFrame({k: pd.to_numeric(raw[cols[k]], errors="coerce").astype(float).to_numpy()
+                        for k in ("open", "high", "low", "close")}, index=pd.DatetimeIndex(idx))
     vcol = cols.get("volume")
-    out["volume"] = pd.to_numeric(raw[vcol], errors="coerce").astype(float) if vcol else 0.0
+    out["volume"] = pd.to_numeric(raw[vcol], errors="coerce").astype(float).to_numpy() if vcol else 0.0
     out.index.name = "timestamp"
     return out.sort_index()
 

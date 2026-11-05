@@ -58,9 +58,12 @@ def test_load_ohlcv_csv_tradingview_and_binance_layouts(tmp_path):
     df = plp.load_ohlcv_csv(tv)
     assert list(df.columns) == ["open", "high", "low", "close", "volume"]
     assert df.index.tz is None and df.index[0] == pd.Timestamp("2023-11-14 22:13:20")
+    assert df.iloc[0].tolist() == [1.0, 2.0, 0.5, 1.5, 10.0]          # values survive the DatetimeIndex (no NaN realign)
+    assert not df.isna().any().any()
     bn = tmp_path / "bn.csv"
     bn.write_text("timestamp,open,high,low,close,volume\n1700000000000,1,2,0.5,1.5,10\n")
     assert plp.load_ohlcv_csv(bn).index[0] == df.index[0]
+    assert plp.load_ohlcv_csv(bn).iloc[0].tolist() == [1.0, 2.0, 0.5, 1.5, 10.0]
 
 
 def test_resample_htf_drops_incomplete_last_bin_and_checks_alignment():
