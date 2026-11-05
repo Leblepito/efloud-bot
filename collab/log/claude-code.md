@@ -120,3 +120,10 @@
 - VPS: N/A
 - istek: abacus → review · operator → merge + deploy onayı
 
+## 2026-11-05 20:05 UTC+3 — EF-20261105-04: deploy master@6d70ae0 (WS /market/stream düzeltmesi)
+- task: T-20261105-06 | branch/PR: #290 (operatör merge, `6d70ae0`), bu kayıt collab/claude-code/EF-20261105-04-deploy-log | commit: PR'da
+- ne yapıldı: ön koşullar (VPS HEAD `042c3a3` temiz, exchange + order_manager 0 pozisyon, CONFIRMED setup yok, breaker OPEN, healthz ok, scalp/long idle) → 16:45 taraması bittikten sonra `bash deploy/deploy.sh` (exit 0) → mid `POST /api/bot/start` 200 (16:47 UTC). Laptop ana klon `6d70ae0`'ya ileri sarıldı.
+- post-check: `ws klines connected (30 streams)`; ilk taramada `age_ms` 31–76 ms (önce `None`). 17:00 UTC kapanış: **10/10 `parity=OK`, 0 MISMATCH** (10 "WS'te yok" = WS açılmadan kapanan 16:30 mumu, beklenen); WS kapanan mumu REST taramasından ~26–28 sn önce görüyor. healthz 200, `Traceback`/`Cycle error` 0. `[touch shadow]` satırı henüz yok (bölge dokunuşu olmadı).
+- VPS: DEPLOYED 6d70ae0
+- istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
+

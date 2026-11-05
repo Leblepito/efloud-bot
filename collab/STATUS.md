@@ -8,9 +8,9 @@
 
 | Alan | Değer | Kaynak / zaman (UTC) | Gözlemleyen |
 | --- | --- | --- | --- |
-| GitHub master | `042c3a3` (#287 WS gölge + touch shadow, #289 Telegram bölge uyarıları; öncesi #285 entegrasyon) | `git fetch` 2026-11-05 16:20 | claude-code |
-| VPS `/opt/efloud-bot` HEAD | `042c3a3` = master = laptop ana klon, çalışma ağaçları temiz — **DEPLOYED** (EF-20261105-02/03, `deploy/deploy.sh`) | `ssh efloud-bot git rev-parse` + laptop `git rev-parse` 2026-11-05 16:20 | claude-code |
-| VPS container'lar | Hepsi yeniden oluşturuldu + Up. `EFLOUD_AUTOSTART=0`: yalnız **mid** 15:48 UTC'de API ile başlatıldı (healthz 200, breaker OPEN, 0 pozisyon); **scalp/long idle** (T-20261104-07; Binance key'leri mainnet'te geçersiz `-2008`) | `/api/status` + `/healthz` 2026-11-05 16:15 | claude-code |
+| GitHub master | `6d70ae0` (#290 WS `/market/stream` düzeltmesi; öncesi #286 deploy kaydı, #287/#289 bayraklar) | `git fetch` 2026-11-05 17:05 | claude-code |
+| VPS `/opt/efloud-bot` HEAD | `6d70ae0` = master = laptop ana klon, çalışma ağaçları temiz — **DEPLOYED** (EF-20261105-04, `deploy/deploy.sh`) | `ssh efloud-bot git rev-parse` + laptop `git rev-parse` 2026-11-05 17:05 | claude-code |
+| VPS container'lar | Hepsi yeniden oluşturuldu + Up. `EFLOUD_AUTOSTART=0`: yalnız **mid** 16:47 UTC'de API ile başlatıldı (healthz 200, breaker OPEN, 0 pozisyon). WS gölge akışı veri alıyor: 17:00 UTC 10/10 `parity=OK`, 0 MISMATCH. **scalp/long idle** (T-20261104-07; Binance key'leri mainnet'te geçersiz `-2008`) | `docker logs efloud-bot` + `/healthz` 2026-11-05 17:01 | claude-code |
 | Canlı config (mid) | `configs/config.phase2_1k.yaml` — MAINNET, `smc_version: v2`, **`smc_v2.luxalgo.enabled: true`** (`:182-183`, 2026-11-01; "NET-cost backtest yapılmadı" notu `:180-181`), `min_confluence: 50`, daily %10 / weekly %25 | repo @ `71dfff5` | claude-code |
 | Canlı config (scalp) | `configs/config.phase2_scalp_1k.yaml` — `profile: scalp` (5m entry / 1h / 4h) | repo @ `645a5dc` | claude-code |
 | Alerter (Telegram) | **Aktif** + LuxAlgo bölge uyarıları **açık** (`EFLOUD_ALERTER_LUX_ALERTS=1`, `near_alert_atr: 1.0`; ilk `[lux] near`/`touch` satırları 16:00 UTC). Yalnız mid bot logunu okur. | `docker exec efloud-alerter printenv` + `docker logs efloud-bot` 2026-11-05 16:15 | claude-code |
