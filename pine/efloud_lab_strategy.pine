@@ -665,6 +665,13 @@ f_tpTargets(int dir, float entry, float sl) =>
 f_onConfirmed(Cand c, float px) =>
     // For BREAKER candidates c.ob is the flipped box, so this anchor already yields the breaker's far edge.
     float anchor = oteEntry and not na(c.legLow) ? c.legLow : (c.dir == 1 ? c.ob.bot() : c.ob.top())
+    if sweepSl and not na(atr14)
+        anchor := c.dir == 1 ? math.min(anchor, c.ob.rawLow) : math.max(anchor, c.ob.rawHigh)   // raw extreme incl. the high-vol sweep candle
+        for e in equals
+            if c.dir == 1 and not e.isHigh and e.priceB < c.zLow and e.priceB >= c.zLow - atr14
+                anchor := math.min(anchor, e.priceB)
+            if c.dir == -1 and e.isHigh and e.priceB > c.zHigh and e.priceB <= c.zHigh + atr14
+                anchor := math.max(anchor, e.priceB)
     [sl, okSl] = f_calcSl(c.dir, px, c.zLow, c.zHigh, anchor)
     if not okSl
         f_drop(na(atr14) or atr14 <= 0 ? "ATR_NA" : "SL_TOO_FAR")
