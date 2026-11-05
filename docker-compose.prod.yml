@@ -152,6 +152,9 @@ services:
       - EFLOUD_HEALTHZ_URL=http://efloud-bot:8080/healthz
       - EFLOUD_ALERTER_DEDUP_DB=/app/state/alerter_dedup.sqlite
       - EFLOUD_ALERTER_HEARTBEAT_FILE=/app/state/alerter_heartbeat.json
+      # T-20261105-05 (#275): LuxAlgo bölge uyarıları (near/touch/confirmed + v2 reject) → Telegram.
+      # Yalnız bildirim; emir yolu yok. Kapatmak: satırı sil → `docker compose up -d alerter`.
+      - EFLOUD_ALERTER_LUX_ALERTS=1
     volumes:
       - efloud_logs:/app/logs:ro      # read-only — alerter only tails
       - efloud_state:/app/state       # read-write — dedup + heartbeat live here
