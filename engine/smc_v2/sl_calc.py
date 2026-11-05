@@ -66,6 +66,13 @@ def calc_sl(
     if stop_dist > max_dist:
         raise SLTooFarError(stop_dist=stop_dist, max_dist=max_dist)
     if stop_dist < min_dist:
-        # Widen to ATR floor — same direction as structural
-        return (entry_price - min_dist) if direction == "LONG" else (entry_price + min_dist)
+        # Widen to ATR floor — same direction as structural.
+        # Nudge a hair PAST the floor: PositionGuard recomputes
+        # abs(entry - sl) / atr and strictly rejects "< min_sl_atr"; landing
+        # exactly on the floor round-trips to 1.9999999999 for ~half of all
+        # price/ATR magnitudes (2026-11-05 sim: 49.4% false "SL too tight").
+        # 1e-9 relative dwarfs that float error (~1e-13 at ATR=0.1% of price)
+        # and is sub-tick in price terms. The guard stays strict and untouched.
+        widened = min_dist * (1.0 + 1e-9)
+        return (entry_price - widened) if direction == "LONG" else (entry_price + widened)
     return structural_sl
