@@ -85,11 +85,34 @@
 - VPS: N/A
 - istek: abacus → #280 düzeltmesi, #276 çakışması · operator → #278 merge kararı
 
+## 2026-11-05 09:10 UTC+3 — EF-20261105-01: VPS deploy master@b39751a
+- task: T-20261105-03 (VPS kısmı) | branch/PR: collab/claude-code/EF-20261105-01-deploy-log | commit: PR'da
+- ne yapıldı: risk-ops PASS (koşullu) + operatör onayı (sohbette) sonrası ön koşullar yeniden kontrol edildi (HEAD `b6c6bd1` temiz, exchange + order_manager 0 pozisyon, CONFIRMED setup yok, breaker OPEN, healthz ok, scalp/long idle) → `bash deploy/deploy.sh` (exit 0) → mid `POST /api/bot/start` 200 (token container içinde üretildi, basılmadı).
+- post-check: HEAD `b39751a`; healthz `ok`; "Bot runner started" 06:06:07 UTC; 10/10 sembol `[lux] scan`; WS/touch_entry satırı yok (bayraklar kapalı); alerter dry-run'sız başladı; scalp/long `running=False`.
+- not: "Failed to initialize InstanceManager" uyarısı ve "Restored 83 lifecycle position(s)" (kapalı geçmiş) deploy öncesinde de vardı (2026-11-01'den beri) — yeni değil.
+- VPS: DEPLOYED b39751a
+- istek: operator → laptop ana klon eşitlemesi (başkasına ait 12 commit'siz değişiklik; claude-code dokunmaz) · T-07 · #275/#283/#280 bayraklarını açma kararı (ayrı config PR + ticket)
+
 ## 2026-11-05 18:40 UTC+3 — T-20261105-05: Telegram bölge uyarıları config PR + laptop ana klon eşitlendi
 - task: T-20261105-05, T-20261105-03 (laptop kısmı) | branch/PR: collab/claude-code/T-20261105-05-lux-alerts-on | commit: PR'da
 - ne yapıldı: `smc_v2.luxalgo.near_alert_atr: 1.0` + alerter servisine `EFLOUD_ALERTER_LUX_ALERTS=1` (compose) + config testi. Laptop ana klon: 4 Kasım 02:44–02:52 tarihli commit'siz OpenRouter taslağı (master'a #260 ile daha yeni hâli girmiş; tek anlamlı fark model `nvidia/nemotron-3-ultra` vs `deepseek-v4.1-flash`) yerel `wip/laptop-openrouter-draft-2026-11-04` branch'ine commit'lendi (push yok), master `b39751a`'ya ileri sarıldı.
 - VPS: N/A
 - istek: abacus → bu PR review · operator → deploy ticket onayı
+
+## 2026-11-05 18:50 UTC+3 — EF-20261105-02/03: VPS deploy master@042c3a3 (#287 WS gölge + touch shadow, #289 bölge uyarıları)
+- task: T-20261105-04, T-20261105-05 | branch/PR: #287 (`f7ab1db`), #289 (`042c3a3`), bu PR | commit: PR'da
+- ne yapıldı: operatör merge (terminalden) + "deploy now" sonrası ön koşullar (HEAD `b39751a` temiz, 0 pozisyon, CONFIRMED yok, breaker OPEN, scalp/long idle) → `deploy.sh` exit 0 → mid start 200.
+- post-check: HEAD `042c3a3`; "WS kline shadow feed started", "ws klines connected (30 streams)", "WS touch-entry loop started (mode=shadow)"; alerter `EFLOUD_ALERTER_LUX_ALERTS=1`. İlk parite satırları "WS'te yok" (WS 15:30 mumu kapandıktan sonra açıldı — beklenen); 16:00 parite kontrolü ve ilk Telegram bölge uyarısı DOĞRULANMADI.
+- VPS: DEPLOYED 042c3a3
+- istek: operator → 24 sa Telegram hacmi kontrolü · abacus → 3 gün `[ws shadow] parity=MISMATCH` = 0 takibi (T-04)
+
+## 2026-11-05 19:20 UTC+3 — EF-20261105-02/03: deploy master@042c3a3 (Telegram bölge uyarıları + WS gölge + touch shadow)
+- task: T-20261105-05, T-20261105-04, T-20261105-03 | branch/PR: #289, #287 (operatör merge), bu kayıt #286'da | commit: PR'da
+- ne yapıldı: ön koşullar (VPS HEAD `b39751a` temiz, exchange + order_manager 0 pozisyon, CONFIRMED setup yok, breaker OPEN, healthz ok, scalp/long idle) → `bash deploy/deploy.sh` (exit 0) → mid `POST /api/bot/start` 200 (15:48 UTC). Laptop ana klon `042c3a3`'ya ileri sarıldı → VPS = GitHub master = laptop.
+- post-check: healthz 200; `📡 WS kline shadow feed started` + `👆 WS touch-entry loop started (mode=shadow)` + `ws klines connected (30 streams)`; alerter env `EFLOUD_ALERTER_LUX_ALERTS=1`; 16:00 UTC'de ilk `[lux] near` (ETH, BNB; 0.24–0.25 ATR) ve `[lux] touch` (LINK) satırları.
+- ⚠️ bulgu: WS akışı bağlanıyor ama **hiç veri gelmiyor** — 16:00/16:15 kapanışlarında 29/29 `[ws shadow] … WS'te yok (age_ms=None)`. Container içinden sınama: eski `wss://fstream.binance.com/stream?streams=…@kline_*` 8 sn'de 0 mesaj; `wss://fstream.binance.com/market/stream?…` 8 sn'de 56 mesaj. Binance kline'ı artık `/market` yolundan veriyor. Etki: yalnız gölge (WS parite + touch shadow boş çalışıyor); karar/emir yolu REST'te, etkilenmez. Düzeltme `exchange/ws_klines.py` `build_url` yolu → ayrı TDD PR (operatör kararı).
+- VPS: DEPLOYED 042c3a3
+- istek: operator → ws_klines `/market` düzeltmesi onayı · T-07 · 24 sa Telegram hacim kontrolü (T-20261105-05)
 
 ## 2026-11-05 19:40 UTC+3 — T-20261105-06: WS kline akışı /market/stream yoluna
 - task: T-20261105-06 | branch/PR: collab/claude-code/T-20261105-06-ws-market-path | commit: PR'da
