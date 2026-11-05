@@ -1,0 +1,11 @@
+// ─── INDICATOR TAIL (skeleton — Task 4 replaces) ──────────────────────────────
+grpVis = "Görsel"
+showObs     = input.bool(true, "Active OB boxes", group = grpVis)
+showZones   = input.bool(true, "Pending candidate zones", group = grpVis)
+showLevels  = input.bool(true, "Entry/SL/TP lines", group = grpVis)
+showDash    = input.bool(true, "Dashboard", group = grpVis)
+maxDrawings = input.int(60, "Kept signal drawings", minval = 4, maxval = 150, group = grpVis)
+var table dash = table.new(position.top_right, 2, 2, border_width = 1)
+if barstate.islast and showDash
+    table.cell(dash, 0, 0, "Variant", text_color = color.gray, text_size = size.small)
+    table.cell(dash, 1, 0, variantLabel, text_color = color.white, text_size = size.small)

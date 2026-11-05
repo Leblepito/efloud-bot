@@ -1,0 +1,7 @@
+// ─── STRATEGY TAIL (skeleton — Task 5 replaces) ───────────────────────────────
+grpStr = "Strategy (canlı sizing)"
+marginUsd    = input.float(50.0, "Margin per trade (USD)", minval = 1, group = grpStr)
+leverage     = input.int(10, "Leverage", minval = 1, maxval = 125, group = grpStr)
+maxHoldHours = input.int(36, "Max hold (hours)", minval = 1, group = grpStr)
+tp1ClosePct  = input.float(50.0, "TP1 close %", minval = 1, maxval = 100, group = grpStr)
+moveSlToBe   = input.bool(true, "Move SL to BE after TP1", group = grpStr)
