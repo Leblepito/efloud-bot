@@ -455,6 +455,8 @@ f_emit() =>
         for b in breaks
             if b.idx < trigMin
                 continue
+            if emitOnce and b.emitted
+                continue
             bool counterBias = b.dir != htfBias
             if counterBias and (biasMode == "hard" or not b.isChoch)      // soft: only CHoCH may run against the HTF
                 continue
