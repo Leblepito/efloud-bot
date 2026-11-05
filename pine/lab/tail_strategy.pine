@@ -1,7 +1,54 @@
-// ─── STRATEGY TAIL (skeleton — Task 5 replaces) ───────────────────────────────
+// ─── STRATEGY TAIL: live order lifecycle model (spec §6.1) ───────────────────
 grpStr = "Strategy (canlı sizing)"
 marginUsd    = input.float(50.0, "Margin per trade (USD)", minval = 1, group = grpStr)
 leverage     = input.int(10, "Leverage", minval = 1, maxval = 125, group = grpStr)
 maxHoldHours = input.int(36, "Max hold (hours)", minval = 1, group = grpStr)
 tp1ClosePct  = input.float(50.0, "TP1 close %", minval = 1, maxval = 100, group = grpStr)
 moveSlToBe   = input.bool(true, "Move SL to BE after TP1", group = grpStr)
+
+var float  posEntry = na
+var float  posSl    = na
+var float  posTp1   = na
+var float  posTp2   = na
+var int    posDir   = 0
+var bool   tp1Hit   = false
+
+f_sfmt(float x) =>
+    na(x) ? "na" : str.tostring(x, "#.########")
+
+f_cmt(Cand c) =>
+    variantLabel + "|trig=" + str.tostring(c.trigTime) + "|sl=" + f_sfmt(c.sl) + "|tp1=" + f_sfmt(c.tp1) + "|tp2=" + f_sfmt(c.tp2)
+
+f_exits() =>
+    string id = posDir == 1 ? "L" : "S"
+    if not tp1Hit
+        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = na(posTp2) ? 100 : tp1ClosePct, comment = "TP1/SL")
+    else if not na(posTp2)
+        strategy.exit("X2", id, stop = moveSlToBe ? posEntry : posSl, limit = posTp2, comment = "TP2/BE")
+
+if barstate.isconfirmed
+    // partial TP1 fill: position shrank but did not close
+    if strategy.position_size != 0 and strategy.position_size[1] != 0 and not tp1Hit and math.abs(strategy.position_size) < math.abs(strategy.position_size[1])
+        tp1Hit := true
+    if strategy.position_size == 0 and strategy.position_size[1] != 0
+        tp1Hit := false
+        posDir := 0
+    // flat → open: first fired candidate (one open position per symbol, as the live position guard)
+    if strategy.position_size == 0 and posDir == 0 and array.size(fired) > 0
+        Cand c = array.get(fired, 0)
+        float qty = marginUsd * leverage / c.entry
+        posEntry := c.entry
+        posSl    := c.sl
+        posTp1   := c.tp1
+        posTp2   := c.tp2
+        posDir   := c.dir
+        tp1Hit   := false
+        if c.dir == 1
+            strategy.entry("L", strategy.long, qty = qty, comment = f_cmt(c))
+        else
+            strategy.entry("S", strategy.short, qty = qty, comment = f_cmt(c))
+        f_exits()                       // armed now so the fill is protected from its first bar
+    else if strategy.position_size != 0
+        f_exits()
+        if strategy.opentrades > 0 and time - strategy.opentrades.entry_time(strategy.opentrades - 1) >= maxHoldHours * 3600000
+            strategy.close(posDir == 1 ? "L" : "S", comment = "MAX_HOLD")
