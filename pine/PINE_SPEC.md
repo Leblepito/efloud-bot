@@ -619,3 +619,26 @@ Referans: `engine/smc_v2/sl_calc.py`, `engine/safe_orchestrator.py:1900-1903/196
    fill script SONRASI) → exit bloğu hiç kurulmuyordu. Reset artık yalnız
    open→flat geçişinde (`position_size[1] != 0`). Eski backtest sonuçları
    (bu fix öncesi) GEÇERSİZDİR — exit'siz koşuyorlardı.
+
+---
+
+## §20 — 2026-11 Pine Lab (baseline parity + geliştirme toggle'ları)
+
+Tasarım: `docs/superpowers/specs/2026-11-05-pine-lab-design.md`. Plan: `docs/superpowers/plans/2026-11-05-pine-lab.md`.
+
+- Dosyalar: `pine/lab/{head_indicator,head_strategy,core,tail_indicator,tail_strategy}.pine` tek kaynak; `scripts/build_pine_lab.py` → `pine/efloud_lab.pine` + `pine/efloud_lab_strategy.pine` (üretilen, elle düzenlenmez; `--check` CI kapısı `tests/test_pine_lab_build.py`).
+- Baseline = canlı v2 LuxAlgo modu (`configs/config.phase2_1k.yaml`): tüm toggle'lar kapalıyken üretilen setup'lar `scripts/pine_lab_parity.py replay/compare` ile Python'la karşılaştırılır; kapı ≥ %95 eşleşme, SL/TP ≤ %0.1.
+- Bilinçli sapmalar: (1) Pine bar kapanışında 3 geçiş koşar (orchestrator'ın bar içi çoklu tick'i); (2) `liveWindowBars=750` havuzları ve FVG eşiğini canlı pencereye kırpar, pivotlar tam geçmişten gelir; (3) canlı B1 (kapı atlaması) ve B2 (float red, harness `python_guard_rejected` sütunu) kopyalanmaz; (4) breaker'lar, entry drift, funding, çoklu sembol margin modellenmez.
+- Toggle'lar (default KAPALI): T1 `biasTf/biasMode/macroTf`, T2 `obInvalidate`, T3 `oteEntry` (0.705 limit; Python'da limit yolu yok, parity dışı), T4 `sweepSl`, T5 `freshConfirm`, T6 `obDisplacement`, T7 `tpSweptFilter`, T8 `emitOnce`. Kazanma kriteri spec §6.3; sonuçlar `docs/pine-lab/`.
+- Lisans: core LuxAlgo SMC (CnB3fSph) mantığını taşır — CC BY-NC-SA 4.0; script private/invite-only.
+
+**Review notları (2026-11-05 uygulama turu)**
+
+- `internal_confluence_filter` kasıtlı olarak port edilmedi: canlı config `false`, `LuxConfig` default `False` → baseline etkilenmez.
+- Orchestrator `recency_bars`'ı `risk.recency_bars` (168) altından okur; harness `recency_bars(config)` aynı kaynağı kullanır.
+- Pine OTE (T3): dolum, önceki kapanışta konan "resting" limit fiyatına göre değerlendirilir (bar içi look-ahead yok); limit yalnız SL/TP'si `limitPx`'te geçerli adaylar için konur (`limitOk`); dolan limitin eşleşen adayı yoksa strategy `close_all("OTE_NAKED")` ile düzleşir (fee/slippage gerçekleşir).
+- T2×T3 etkileşimi: OTE adayında `OTE_LEG_BROKEN` (`close < legLow`) T2 breaker flip'inden önce çalışır → T3 açıkken bekleyen OTE adayları breaker üretmez (isteğe bağlı: `OTE_LEG_BROKEN` dalına `if obInvalidate: f_flipBreaker(c)`).
+- T3 `legHigh` adayın ilk işlendiği barın high'ıyla başlar (kırılım barı değil); Po3 bloğu core'da N+1 kapanışında, strategy'de N kapanışında değerlendirilir (sınırlarda küçük fark).
+- T6 (`obDisplacement`) FVG havuzu `liveWindowBars` ile budandığı için eski leg'ler displacement'sız görünebilir.
+- `fired` içinde aynı barda birden fazla aday olabilir; strategy yalnız ilkini (OTE'de yön/fiyat eşleşenini) açar; indicator `alert()` çağrıları `freq_once_per_bar_close` ile birleşebilir.
+- Pine derleme kapısı (TV MCP) bu tur için operatörde bekliyor; derleme düzeltmeleri `fix(pine-lab): compile fixes from TradingView gate` commit'iyle gelir.
