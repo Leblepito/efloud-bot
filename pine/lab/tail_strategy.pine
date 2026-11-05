@@ -59,19 +59,22 @@ if barstate.isconfirmed
     // flat → open (market mode), or the bar an OTE limit filled (position already open at this close):
     // take the fired candidate that matches the direction we are in, arm exits now
     bool justFilledOte = oteEntry and strategy.position_size != 0 and strategy.position_size[1] == 0
-    if array.size(fired) > 0 and (strategy.position_size == 0 or justFilledOte)
+    if justFilledOte or (strategy.position_size == 0 and array.size(fired) > 0)
         int   wantDir = strategy.position_size > 0 ? 1 : strategy.position_size < 0 ? -1 : 0
         float fillPx  = strategy.opentrades > 0 ? strategy.opentrades.entry_price(strategy.opentrades - 1) : na
-        Cand c = array.get(fired, 0)
-        bool  matched = wantDir == 0
-        if wantDir != 0
-            for f in fired
-                if f.dir == wantDir and (not matched or (not na(fillPx) and math.abs(f.entry - fillPx) <= 2 * syminfo.mintick))
-                    c := f
+        Cand  c       = na
+        bool  matched = false
+        for f in fired
+            if wantDir == 0
+                if na(c)
+                    c       := f
                     matched := true
+            else if f.dir == wantDir and (not matched or (not na(fillPx) and math.abs(f.entry - fillPx) <= 2 * syminfo.mintick))
+                c       := f                                 // prefer the fired candidate whose entry equals the fill price
+                matched := true
         if not matched
-            strategy.close_all(comment = "OTE_NAKED")        // filled order has no fired candidate (should not happen after pre-validation) — never sit unprotected
-        if matched
+            strategy.close_all(comment = "OTE_NAKED")        // a filled order with no fired candidate is never left unprotected
+        else
             posEntry := c.entry
             posSl    := c.sl
             posTp1   := c.tp1
