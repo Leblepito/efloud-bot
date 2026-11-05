@@ -215,7 +215,7 @@ def test_compare_duplicate_keys_pair_in_time_order():
 
 def test_compare_excludes_python_rows_inside_an_open_tv_trade():
     py = [_py_row(10), _py_row(20), _py_row(30)]
-    res = plp.compare(py, [_tv_entry(10)], intervals=[(10, 25)])
+    res = plp.compare(py, [_tv_entry(10)], intervals=[(10, 25, False)])
     assert [r["confirmed_ts"] for r in res["blocked_by_position"]] == [20]
     assert [r["confirmed_ts"] for r in res["python_only"]] == [30]
     assert res["python_entries"] == 2 and res["matched"] == 1
@@ -284,7 +284,30 @@ def test_score_merges_split_partial_trades(tmp_path):
     s = plp.score_trades(t)
     assert s["n"] == 1 and s["total_r"] == pytest.approx(3.0)        # 60 / (2 x 10)
     ms = lambda x: int(pd.Timestamp(x).value // 1_000_000)
-    assert plp.tv_intervals(t) == [(ms("2026-03-01 10:00"), ms("2026-03-01 14:00"))]
+    assert plp.tv_intervals(t) == [(ms("2026-03-01 10:00"), ms("2026-03-01 14:00"), False)]
+
+
+def test_blocked_by_position_boundaries(tmp_path):
+    ms = lambda x: int(pd.Timestamp(x).value // 1_000_000)
+    e, x = ms("2026-03-01 10:00"), ms("2026-03-01 14:00")
+    sl = plp.tv_intervals(plp.load_tv_trades(_tv_csv(tmp_path, [
+        "1,Entry long,2026-03-01 10:00,B|trig=1|sl=98|tp1=104|tp2=na,100,10,\n",
+        "1,Exit long,2026-03-01 14:00,SL|sl=98,98,10,-20\n"])))
+    assert sl == [(e, x, False)]
+    mh = plp.tv_intervals(plp.load_tv_trades(_tv_csv(tmp_path, [
+        "1,Entry long,2026-03-01 10:00,B|trig=1|sl=98|tp1=104|tp2=na,100,10,\n",
+        "1,Exit long,2026-03-01 14:00,MAX_HOLD,99,10,-10\n"])))
+    assert mh == [(e, x, True)]
+
+    def blocked(iv, cts):
+        res = plp.compare([_py_row(cts, confirmed=cts)], [], intervals=iv)
+        return len(res["blocked_by_position"]) == 1
+
+    mid = (e + x) // 2
+    assert not blocked(sl, e) and not blocked(mh, e)     # entry bound is exclusive
+    assert not blocked(sl, x)                            # SL exit fills intrabar: next entry possible
+    assert blocked(mh, x)                                # MAX_HOLD closes at the close: still held
+    assert blocked(sl, mid) and blocked(mh, mid)
 
 
 def test_decide_applies_all_four_criteria():

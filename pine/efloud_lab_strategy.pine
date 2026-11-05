@@ -861,7 +861,8 @@ f_exits() =>
     if na(posTp2)
         strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = 100, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
     else
-        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = tp1ClosePct, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+        if not tp1Hit
+            strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = tp1ClosePct, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
         strategy.exit("X2", id, stop = tp1Hit and moveSlToBe ? posEntry : posSl, limit = posTp2, qty_percent = 100, comment_profit = "TP2" + slTag, comment_loss = (tp1Hit and moveSlToBe ? "BE" : "SL") + slTag)
 
 // T3: exits attached to the pending limit entry activate on its fill (intrabar), so the fill bar is protected

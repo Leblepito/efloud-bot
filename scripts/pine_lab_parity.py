@@ -316,11 +316,17 @@ def _trade_groups(trades: pd.DataFrame) -> list[tuple[pd.Series, float, pd.DataF
     return out
 
 
-def tv_intervals(trades: pd.DataFrame) -> list[tuple[int, int]]:
-    """(entry_ms, last_exit_ms) per position (UTC ms). A position still open at the export end extends to +inf."""
+def tv_intervals(trades: pd.DataFrame) -> list[tuple[int, int, bool]]:
+    """(entry_ms, last_exit_ms, inclusive) per position (UTC ms). A position still open at the export end extends
+    to +inf. SL/TP exits fill intrabar (the strategy is flat at that bar's close), so the upper bound is exclusive;
+    close-time exits (MAX_HOLD / OTE_NAKED) keep the position through the close, so the bound is inclusive."""
     out = []
     for e, _qty, ex in _trade_groups(trades):
-        out.append((_ms(e["time"]), _ms(ex["time"].max()) if not ex.empty else sys.maxsize))
+        if ex.empty:
+            out.append((_ms(e["time"]), sys.maxsize, True))
+            continue
+        last = parse_signal(ex.iloc[-1]["signal"])["variant"]
+        out.append((_ms(e["time"]), _ms(ex["time"].max()), last.startswith(("MAX_HOLD", "OTE_NAKED"))))
     return out
 
 
@@ -340,7 +346,8 @@ def compare(py_rows: list[dict], entries: list[dict], *, intervals: Optional[lis
             level_tol: float = 0.001, gate: float = 0.95) -> dict:
     """Pair intended Python entries (drop_reason == '') with TradingView entries on (direction, trig).
 
-    Python rows confirmed while a TV position was open (entry_ms < confirmed_ts <= exit_ms) are set aside as
+    Python rows confirmed while a TV position was open (entry_ms < confirmed_ts < exit_ms; <= for MAX_HOLD /
+    OTE_NAKED close-time exits, see `tv_intervals`) are set aside as
     `blocked_by_position`: the strategy holds one position per symbol and ignores fired candidates meanwhile.
     Duplicate keys (the engine re-emits a break after its candidate expired; the strategy can reopen on the
     same trig) pair in time order: i-th Python row (by confirmed_ts) with i-th TV entry (by time).
@@ -352,7 +359,7 @@ def compare(py_rows: list[dict], entries: list[dict], *, intervals: Optional[lis
         if r.get("drop_reason", "") != "":
             continue
         cts = r.get("confirmed_ts", "")
-        if intervals and cts != "" and any(a < int(cts) <= b for a, b in intervals):
+        if intervals and cts != "" and any(a < int(cts) and (int(cts) <= b if incl else int(cts) < b) for a, b, incl in intervals):
             blocked.append(r)
         else:
             py_entries.append(r)
