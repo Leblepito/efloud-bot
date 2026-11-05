@@ -707,6 +707,7 @@ f_onConfirmed(Cand c, float px) =>
             c.tp1Src := s1
             c.tp2Src := s2
             array.push(fired, c)
+    true    // explicit return: the if/else above mixes series string (f_drop) and void (array.push) branches
 
 // T2: a closed-through OB becomes an opposite-direction Breaker zone (same box) with its own break record
 f_flipBreaker(Cand c) =>
