@@ -84,3 +84,10 @@
 - ne yapıldı: #281/#282 APPROVE + merge, T-01/T-02 done. #278 (WS gölge) APPROVE. #280 CHANGES: `live` modunda temas emri reconcile ile eşzamanlı thread'de (HIGH), clamp'lenmiş giriş ≠ market dolum, event_scan 0 ms tampon; öneri: bu PR'da yalnız off|shadow.
 - VPS: N/A
 - istek: abacus → #280 düzeltmesi, #276 çakışması · operator → #278 merge kararı
+
+## 2026-11-05 18:40 UTC+3 — T-20261105-05: Telegram bölge uyarıları config PR + laptop ana klon eşitlendi
+- task: T-20261105-05, T-20261105-03 (laptop kısmı) | branch/PR: collab/claude-code/T-20261105-05-lux-alerts-on | commit: PR'da
+- ne yapıldı: `smc_v2.luxalgo.near_alert_atr: 1.0` + alerter servisine `EFLOUD_ALERTER_LUX_ALERTS=1` (compose) + config testi. Laptop ana klon: 4 Kasım 02:44–02:52 tarihli commit'siz OpenRouter taslağı (master'a #260 ile daha yeni hâli girmiş; tek anlamlı fark model `nvidia/nemotron-3-ultra` vs `deepseek-v4.1-flash`) yerel `wip/laptop-openrouter-draft-2026-11-04` branch'ine commit'lendi (push yok), master `b39751a`'ya ileri sarıldı.
+- VPS: N/A
+- istek: abacus → bu PR review · operator → deploy ticket onayı
+

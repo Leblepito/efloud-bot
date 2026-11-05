@@ -193,6 +193,9 @@ smc_v2:
     use_swing: true
     require_premium_discount: true
     kinds: [CHoCH, BOS]
+    # T-20261105-05 (#275): fiyat bekleyen bölgeye <= 1.0 ATR yaklaşınca yalnız `[lux] near` log
+    # satırı → alerter Telegram'a "bölgeye yaklaşıyor" yazar. Emir yolu yok. Kapatmak: satırı sil / 0.
+    near_alert_atr: 1.0
     tp_mode: luxalgo
     min_confluence: 1           # OB + >=1 ek konsept (SWING_OB/OTE/EQ/FVG/SWEEP) — Efloud notlari
     tp_wick_buffer_r: 0.15       # likidite/wick TP hedefi wick uc degil, 0.15R iceride
