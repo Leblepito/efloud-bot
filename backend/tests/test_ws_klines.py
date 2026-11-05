@@ -24,9 +24,12 @@ def test_symbol_and_url():
     assert to_stream_symbol("BTC/USDT") == "btcusdt"
     assert to_stream_symbol("BTC/USDT:USDT") == "btcusdt"
     url = build_url(["BTC/USDT", "ETH/USDT"], ["15m", "4h"])
-    assert url.startswith("wss://fstream.binance.com/stream?streams=")
+    # Binance USDT-M serves kline streams on the /market route; the legacy
+    # /stream route accepts the connection but sends nothing (seen 2026-11-05).
+    assert url.startswith("wss://fstream.binance.com/market/stream?streams=")
     assert url.count("@kline_") == 4 and "ethusdt@kline_4h" in url
-    assert build_url(["BTC/USDT"], ["15m"], testnet=True).startswith("wss://stream.binancefuture.com")
+    assert build_url(["BTC/USDT"], ["15m"], testnet=True).startswith(
+        "wss://stream.binancefuture.com/market/stream?streams=")
     with pytest.raises(ValueError):
         build_url([], ["15m"])
 
