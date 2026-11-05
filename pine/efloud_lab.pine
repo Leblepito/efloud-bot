@@ -732,6 +732,9 @@ if barstate.isconfirmed
                 f_drop("EXPIRED")
                 continue
             if oteEntry and c.state == "AWAITING_PULLBACK"
+                if not isNewBar
+                    continue                                   // the limit is evaluated once per bar (pass 0); later passes only re-emit
+                float restingPx = c.limitPx                    // the order that was actually live during this bar (placed at the prior close)
                 if not f_oteUpdate(c)
                     c.state := "INVALIDATED"
                     f_drop("NO_OTE_OVERLAP")
@@ -740,16 +743,16 @@ if barstate.isconfirmed
                     c.state := "INVALIDATED"
                     f_drop("OTE_LEG_BROKEN")
                     continue
-                if po3Blocked or c.limitBar >= bar_index
-                    continue                                   // limit not live yet (placed at bar close) or pulled during manipulation
-                bool filled = c.dir == 1 ? low <= c.limitPx : high >= c.limitPx
+                if po3Blocked or na(restingPx) or c.limitBar >= bar_index
+                    continue                                   // no live order this bar: first bar, or pulled during manipulation
+                bool filled = c.dir == 1 ? low <= restingPx : high >= restingPx
                 if filled
                     c.state := "CONFIRMED"
-                    f_onConfirmed(c, c.limitPx)
+                    f_onConfirmed(c, restingPx)
                 else
-                    [slEst, okEst] = f_calcSl(c.dir, c.limitPx, c.zLow, c.zHigh, c.legLow)
+                    [slEst, okEst] = f_calcSl(c.dir, restingPx, c.zLow, c.zHigh, c.legLow)
                     if okEst
-                        [tp1Est, tp2Est, s1Est, s2Est, okTpEst] = f_tpTargets(c.dir, c.limitPx, slEst)
+                        [tp1Est, tp2Est, s1Est, s2Est, okTpEst] = f_tpTargets(c.dir, restingPx, slEst)
                         if okTpEst and (c.dir == 1 ? high >= tp1Est : low <= tp1Est)
                             c.state := "INVALIDATED"
                             f_drop("OTE_MISSED")

@@ -732,6 +732,9 @@ if barstate.isconfirmed
                 f_drop("EXPIRED")
                 continue
             if oteEntry and c.state == "AWAITING_PULLBACK"
+                if not isNewBar
+                    continue                                   // the limit is evaluated once per bar (pass 0); later passes only re-emit
+                float restingPx = c.limitPx                    // the order that was actually live during this bar (placed at the prior close)
                 if not f_oteUpdate(c)
                     c.state := "INVALIDATED"
                     f_drop("NO_OTE_OVERLAP")
@@ -740,16 +743,16 @@ if barstate.isconfirmed
                     c.state := "INVALIDATED"
                     f_drop("OTE_LEG_BROKEN")
                     continue
-                if po3Blocked or c.limitBar >= bar_index
-                    continue                                   // limit not live yet (placed at bar close) or pulled during manipulation
-                bool filled = c.dir == 1 ? low <= c.limitPx : high >= c.limitPx
+                if po3Blocked or na(restingPx) or c.limitBar >= bar_index
+                    continue                                   // no live order this bar: first bar, or pulled during manipulation
+                bool filled = c.dir == 1 ? low <= restingPx : high >= restingPx
                 if filled
                     c.state := "CONFIRMED"
-                    f_onConfirmed(c, c.limitPx)
+                    f_onConfirmed(c, restingPx)
                 else
-                    [slEst, okEst] = f_calcSl(c.dir, c.limitPx, c.zLow, c.zHigh, c.legLow)
+                    [slEst, okEst] = f_calcSl(c.dir, restingPx, c.zLow, c.zHigh, c.legLow)
                     if okEst
-                        [tp1Est, tp2Est, s1Est, s2Est, okTpEst] = f_tpTargets(c.dir, c.limitPx, slEst)
+                        [tp1Est, tp2Est, s1Est, s2Est, okTpEst] = f_tpTargets(c.dir, restingPx, slEst)
                         if okTpEst and (c.dir == 1 ? high >= tp1Est : low <= tp1Est)
                             c.state := "INVALIDATED"
                             f_drop("OTE_MISSED")
@@ -838,22 +841,33 @@ if barstate.isconfirmed
             strategy.entry("S", strategy.short, qty = marginUsd * leverage / bestS.limitPx, limit = bestS.limitPx, comment = variantLabel + "|trig=" + str.tostring(bestS.trigTime) + "|ote=1")
         else
             strategy.cancel("S")
-    // flat → open: first fired candidate (one open position per symbol, as the live position guard)
-    if strategy.position_size == 0 and array.size(fired) > 0
+    else if oteEntry
+        strategy.cancel("L")                 // in a position: no resting entry on either side (pyramiding = 1, no reversals)
+        strategy.cancel("S")
+    // flat → open (market mode), or the bar an OTE limit filled (position already open at this close):
+    // take the fired candidate that matches the direction we are in, arm exits now
+    bool justFilledOte = oteEntry and strategy.position_size != 0 and strategy.position_size[1] == 0
+    if array.size(fired) > 0 and (strategy.position_size == 0 or justFilledOte)
+        int wantDir = strategy.position_size > 0 ? 1 : strategy.position_size < 0 ? -1 : 0
         Cand c = array.get(fired, 0)
-        posEntry := c.entry
-        posSl    := c.sl
-        posTp1   := c.tp1
-        posTp2   := c.tp2
-        posDir   := c.dir
-        tp1Hit   := false
-        if not oteEntry
-            float qty = marginUsd * leverage / c.entry
-            if c.dir == 1
-                strategy.entry("L", strategy.long, qty = qty, comment = f_cmt(c))
-            else
-                strategy.entry("S", strategy.short, qty = qty, comment = f_cmt(c))
-        f_exits()                      // armed now so the fill is protected from its first bar
+        if wantDir != 0
+            for f in fired
+                if f.dir == wantDir
+                    c := f
+        if wantDir == 0 or c.dir == wantDir
+            posEntry := c.entry
+            posSl    := c.sl
+            posTp1   := c.tp1
+            posTp2   := c.tp2
+            posDir   := c.dir
+            tp1Hit   := false
+            if not oteEntry
+                float qty = marginUsd * leverage / c.entry
+                if c.dir == 1
+                    strategy.entry("L", strategy.long, qty = qty, comment = f_cmt(c))
+                else
+                    strategy.entry("S", strategy.short, qty = qty, comment = f_cmt(c))
+            f_exits()                       // armed now so the fill is protected from its first bar
     else if strategy.position_size != 0
         f_exits()
         if strategy.opentrades > 0 and time - strategy.opentrades.entry_time(strategy.opentrades - 1) >= maxHoldHours * 3600000
