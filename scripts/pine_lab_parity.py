@@ -153,6 +153,11 @@ def _snapshot(store: SetupStateStore) -> dict:
     return {(c.direction, c.trigger_bar_ts): c.state for c in store.candidates}
 
 
+def recency_bars(config: dict) -> int:
+    """Same source as the live orchestrator (safe_orchestrator.py: config["risk"]["recency_bars"], default 40)."""
+    return int(config.get("risk", {}).get("recency_bars", 40))
+
+
 def replay(df15: pd.DataFrame, config: dict, *, htf_tf: str = "12h", window: int = 750, ticks_per_bar: int = 3,
            symbol: str = "LAB/USDT", htf_bias_override: Optional[str] = None) -> tuple[list[dict], dict]:
     """Walk closed 15m bars exactly as the live orchestrator sees them (rolling `window` bars, HTF closed bars only)."""
@@ -160,7 +165,7 @@ def replay(df15: pd.DataFrame, config: dict, *, htf_tf: str = "12h", window: int
     lux_cfg = smc.get("luxalgo", {}) or {}
     cfg_ltf = lx.LuxConfig.from_dict(lux_cfg)
     cfg_htf = lx.LuxConfig.from_dict({**lux_cfg, **(lux_cfg.get("htf") or {})})
-    recency = int(smc.get("recency_bars", 40))
+    recency = recency_bars(config)
     htf = resample_htf(df15, htf_tf) if htf_bias_override is None else None
     htf_end = None if htf is None else htf.index + pd.Timedelta(milliseconds=TF_MS[htf_tf])
     stats = {"bars": 0, "emitted": 0, "confirmed": 0, "expired": 0}

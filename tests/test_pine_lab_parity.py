@@ -44,7 +44,7 @@ def _lab_config():
     lux = cfg["smc_v2"]["luxalgo"]
     lux.update({"swing_length": 4, "internal_length": 2, "eq_length": 2, "atr_length": 10,
                 "require_premium_discount": False, "min_confluence": 0, "pullback_timeout_bars": 60})
-    cfg["smc_v2"]["recency_bars"] = 120
+    cfg["risk"]["recency_bars"] = 120
     cfg["smc_v2"]["po3_gate"] = False
     cfg["smc_v2"]["max_entry_dist_atr"] = 0.0
     cfg["smc_v2"]["max_zone_overshoot_atr"] = 999.0
@@ -81,11 +81,21 @@ def test_replay_emits_and_confirms_on_trending_zigzag():
     assert stats["bars"] == len(df) - 199
     assert stats["emitted"] >= 1
     assert all(r["direction"] == "LONG" for r in rows)
-    assert all(set(plp.ROW_FIELDS) >= set(r) for r in rows)
+    assert all(set(r) == set(plp.ROW_FIELDS) for r in rows)
     confirmed = [r for r in rows if r["drop_reason"] == ""]
     assert confirmed, "expected at least one confirmed setup with SL/TP"
     for r in confirmed:
         assert r["sl"] < r["entry"] < r["tp1"]
+        assert r["atr_source"] == "WILDER14"
+        assert r["tp1_source"] != ""
+        assert r["confirmed_ts"] >= r["trigger_bar_ts"]
+
+
+def test_replay_reads_recency_from_risk_block_like_live_orchestrator():
+    cfg = plp.load_config(ROOT / "configs" / "config.phase2_1k.yaml")
+    assert cfg["risk"]["recency_bars"] == 168 and "recency_bars" not in cfg.get("smc_v2", {})
+    assert plp.recency_bars(cfg) == 168
+    assert plp.recency_bars({"smc_v2": {"recency_bars": 99}}) == 40
 
 
 def test_guard_rejected_flag_marks_floor_widened_stops(tmp_path):
@@ -107,7 +117,10 @@ def test_guard_rejected_flag_marks_floor_widened_stops(tmp_path):
                               state="CONFIRMED", confluence_score=1,
                               reasons=["LUX swing BOS BULL", "", "confluence=SWING_OB"])
         orch._place_v2_entry_order(cand, current_price=entry, entry_price=entry, df_entry=d)
-        flags.add(orch.records[-1]["python_guard_rejected"])
+        rec = orch.records[-1]
+        if rec["drop_reason"] == "":
+            assert rec["atr_source"] == "WILDER14"
+            flags.add(rec["python_guard_rejected"])
     assert flags == {True, False}, "the B2 float flag must fire for some floor-widened stops and not others"
 
 
