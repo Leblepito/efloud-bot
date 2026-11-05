@@ -106,3 +106,11 @@
 - VPS: DEPLOYED 042c3a3
 - istek: operator → 24 sa Telegram hacmi kontrolü · abacus → 3 gün `[ws shadow] parity=MISMATCH` = 0 takibi (T-04)
 
+## 2026-11-05 19:20 UTC+3 — EF-20261105-02/03: deploy master@042c3a3 (Telegram bölge uyarıları + WS gölge + touch shadow)
+- task: T-20261105-05, T-20261105-04, T-20261105-03 | branch/PR: #289, #287 (operatör merge), bu kayıt #286'da | commit: PR'da
+- ne yapıldı: ön koşullar (VPS HEAD `b39751a` temiz, exchange + order_manager 0 pozisyon, CONFIRMED setup yok, breaker OPEN, healthz ok, scalp/long idle) → `bash deploy/deploy.sh` (exit 0) → mid `POST /api/bot/start` 200 (15:48 UTC). Laptop ana klon `042c3a3`'ya ileri sarıldı → VPS = GitHub master = laptop.
+- post-check: healthz 200; `📡 WS kline shadow feed started` + `👆 WS touch-entry loop started (mode=shadow)` + `ws klines connected (30 streams)`; alerter env `EFLOUD_ALERTER_LUX_ALERTS=1`; 16:00 UTC'de ilk `[lux] near` (ETH, BNB; 0.24–0.25 ATR) ve `[lux] touch` (LINK) satırları.
+- ⚠️ bulgu: WS akışı bağlanıyor ama **hiç veri gelmiyor** — 16:00/16:15 kapanışlarında 29/29 `[ws shadow] … WS'te yok (age_ms=None)`. Container içinden sınama: eski `wss://fstream.binance.com/stream?streams=…@kline_*` 8 sn'de 0 mesaj; `wss://fstream.binance.com/market/stream?…` 8 sn'de 56 mesaj. Binance kline'ı artık `/market` yolundan veriyor. Etki: yalnız gölge (WS parite + touch shadow boş çalışıyor); karar/emir yolu REST'te, etkilenmez. Düzeltme `exchange/ws_klines.py` `build_url` yolu → ayrı TDD PR (operatör kararı).
+- VPS: DEPLOYED 042c3a3
+- istek: operator → ws_klines `/market` düzeltmesi onayı · T-07 · 24 sa Telegram hacim kontrolü (T-20261105-05)
+
