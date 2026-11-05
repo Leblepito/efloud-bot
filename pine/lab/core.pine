@@ -446,8 +446,12 @@ f_emit() =>
     if htfBias != 0
         int trigMin = bar_index - recencyBars
         for b in breaks
-            if b.idx < trigMin or b.dir != htfBias
+            if b.idx < trigMin
                 continue
+            bool counterBias = b.dir != htfBias
+            if counterBias and (biasMode == "hard" or not b.isChoch)      // soft: only CHoCH may run against the HTF
+                continue
+            int needTags = minConfluence + (counterBias ? 1 : 0) + (macroBias != 0 and b.dir != macroBias ? 1 : 0)
             if (b.isChoch and not kindChoch) or (not b.isChoch and not kindBos)
                 continue
             if (b.internal and not useInternal) or (not b.internal and not useSwing)
@@ -462,7 +466,9 @@ f_emit() =>
                 if dir == -1 and ob.bot() < zEq
                     continue
             [tags, n] = f_tags(dir, b, ob)
-            if n < minConfluence
+            if n < needTags
+                if n >= minConfluence
+                    f_drop("BIAS_SOFT_TAGS")
                 continue
             float zl = ob.bot()
             float zh = ob.top()
