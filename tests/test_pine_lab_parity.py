@@ -171,5 +171,60 @@ def test_compare_matches_python_only_pine_only_and_tolerances():
     assert res["match_rate"] == 1.0 and res["passed"] is False         # level mismatch fails the gate
     entries[0]["entry"] = 100.2                                       # > 0.05 % → unmatched
     res2 = plp.compare(py, entries)
-    assert res2["matched"] == 1 and [r["trigger_bar_ts"] for r in res2["python_only"]] == [1]
+    assert res2["matched"] == 2 and res2["python_only"] == []
+    assert [m["trig"] for m in res2["level_mismatch"]] == [1, 2]
+    assert "entry" in res2["level_mismatch"][0]["levels"]
     assert "match" in plp.format_compare(res2)
+
+
+def _py_row(trig, entry=100.0, confirmed=None, drop=""):
+    return {"direction": "LONG", "trigger_bar_ts": trig, "entry": entry, "sl": 98.0, "tp1": 104.0, "tp2": "",
+            "drop_reason": drop, "python_guard_rejected": False, "confirmed_ts": trig if confirmed is None else confirmed}
+
+
+def _tv_entry(trig, entry=100.0, time="2026-01-01"):
+    return {"direction": "LONG", "trig": trig, "entry": entry, "sl": 98.0, "tp1": 104.0, "tp2": None,
+            "time": pd.Timestamp(time)}
+
+
+def test_compare_pass_path_and_gate_boundary():
+    py = [_py_row(i) for i in range(1, 21)]
+    tv = [_tv_entry(i) for i in range(1, 21)]
+    res = plp.compare(py, tv)
+    assert res["passed"] is True and res["match_rate"] == 1.0
+    res = plp.compare(py, tv[:19])
+    assert res["match_rate"] == 0.95 and res["passed"] is True
+    assert plp.compare(py, tv[:18])["passed"] is False
+    assert plp.compare(py, tv[:19], gate=0.96)["passed"] is False
+
+
+def test_compare_duplicate_keys_pair_in_time_order():
+    py = [_py_row(7, 100.0, confirmed=10), _py_row(7, 110.0, confirmed=20)]
+    t1, t2, t3 = "2026-01-01 00:00", "2026-01-01 01:00", "2026-01-01 02:00"
+    tv = [_tv_entry(7, 110.0, t2), _tv_entry(7, 100.0, t1)]
+    res = plp.compare(py, tv)
+    assert res["matched"] == 2 and res["level_mismatch"] == []
+    res = plp.compare(py, [_tv_entry(7, 100.0, t1)])
+    assert res["matched"] == 1 and [r["confirmed_ts"] for r in res["python_only"]] == [20]
+    res = plp.compare(py, tv + [_tv_entry(7, 120.0, t3)])
+    assert res["matched"] == 2 and [e["entry"] for e in res["pine_only"]] == [120.0]
+
+
+def test_compare_without_python_entries_fails_gate():
+    py = [_py_row(1, drop="SL_TOO_FAR"), _py_row(2, drop="RR")]
+    tv = [_tv_entry(1), _tv_entry(2)]
+    res = plp.compare(py, tv)
+    assert res["python_entries"] == 0 and res["match_rate"] == 0.0 and res["passed"] is False
+    assert res["pine_only"] == tv
+
+
+def test_cli_compare_reports_missing_signal_column(tmp_path, capsys):
+    p = tmp_path / "py.csv"
+    row = {k: "" for k in plp.ROW_FIELDS}
+    row.update(symbol="LAB/USDT", direction="LONG", trigger_bar_ts=5, entry=1.0, sl=0.9, tp1=1.2, confirmed_ts=5)
+    plp.write_rows([row], p)
+    tv = tmp_path / "trades.csv"
+    tv.write_text("Trade #,Type,Date and time,Price USDT,Position size (qty),Net P&L USDT\n"
+                  "1,Entry long,2026-03-01 10:00,100,5,\n")
+    assert plp.main(["compare", "--python", str(p), "--tv", str(tv)]) == 2
+    assert "Signal" in capsys.readouterr().err

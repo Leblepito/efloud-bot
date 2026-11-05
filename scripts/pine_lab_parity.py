@@ -297,26 +297,37 @@ def _close(a, b, tol: float) -> bool:
     return abs(float(a) - float(b)) <= tol * max(abs(float(a)), 1e-12)
 
 
+def _key(direction, trig) -> tuple:
+    return (direction, None if trig is None else int(trig))
+
+
 def compare(py_rows: list[dict], entries: list[dict], *, entry_tol: float = 0.0005, level_tol: float = 0.001,
             gate: float = 0.95) -> dict:
-    """Match intended Python entries (drop_reason == '') to TradingView entries on (direction, trig)."""
+    """Pair intended Python entries (drop_reason == '') with TradingView entries on (direction, trig).
+
+    Duplicate keys (the engine re-emits a break after its candidate expired; the strategy can reopen on the
+    same trig) pair in time order: i-th Python row (by confirmed_ts) with i-th TV entry (by time).
+    """
     py_entries = [r for r in py_rows if r.get("drop_reason", "") == ""]
-    by_key = {(e["direction"], e["trig"]): e for e in entries}
-    matched, python_only, mismatches = 0, [], []
-    used = set()
+    py_groups: dict = {}
     for r in py_entries:
-        key = (r["direction"], int(r["trigger_bar_ts"]))
-        e = by_key.get(key)
-        if e is None or not _close(r["entry"], e["entry"], entry_tol):
-            python_only.append(r)
-            continue
-        used.add(key)
-        matched += 1
-        bad = [lvl for lvl in ("sl", "tp1", "tp2") if not _close(r.get(lvl, ""), e.get(lvl), level_tol)]
-        if bad:
-            mismatches.append({"trig": key[1], "direction": key[0], "levels": bad, "python": {k: r.get(k) for k in bad},
-                               "pine": {k: e.get(k) for k in bad}})
-    pine_only = [e for e in entries if (e["direction"], e["trig"]) not in used]
+        py_groups.setdefault(_key(r["direction"], r["trigger_bar_ts"]), []).append(r)
+    tv_groups: dict = {}
+    for e in entries:
+        tv_groups.setdefault(_key(e["direction"], e["trig"]), []).append(e)
+    matched, python_only, pine_only, mismatches = 0, [], [], []
+    for key in list(py_groups) + [k for k in tv_groups if k not in py_groups]:
+        prs = sorted(py_groups.get(key, []), key=lambda r: r["confirmed_ts"] if r.get("confirmed_ts", "") != "" else 0)
+        tes = sorted(tv_groups.get(key, []), key=lambda e: e["time"])
+        for r, e in zip(prs, tes):
+            matched += 1
+            bad = [] if _close(r["entry"], e["entry"], entry_tol) else ["entry"]
+            bad += [lvl for lvl in ("sl", "tp1", "tp2") if not _close(r.get(lvl, ""), e.get(lvl), level_tol)]
+            if bad:
+                mismatches.append({"trig": key[1], "direction": key[0], "levels": bad,
+                                   "python": {k: r.get(k) for k in bad}, "pine": {k: e.get(k) for k in bad}})
+        python_only.extend(prs[len(tes):])
+        pine_only.extend(tes[len(prs):])
     rate = matched / len(py_entries) if py_entries else 0.0
     return {"python_entries": len(py_entries), "matched": matched, "python_only": python_only, "pine_only": pine_only,
             "level_mismatch": mismatches, "guard_rejected": sum(1 for r in py_entries if r.get("python_guard_rejected")),
@@ -342,10 +353,15 @@ def format_compare(res: dict) -> str:
 
 
 def _cmd_compare(a) -> int:
-    py = read_rows(a.python)
-    entries = tv_entries(load_tv_trades(a.tv))
-    if py:
-        first = pd.Timestamp(min(r["confirmed_ts"] for r in py if r["confirmed_ts"] != ""), unit="ms")
+    try:
+        py = read_rows(a.python)
+        entries = tv_entries(load_tv_trades(a.tv))
+    except ValueError as exc:
+        print(f"compare: {exc}", file=sys.stderr)
+        return 2
+    stamps = [r["confirmed_ts"] for r in py if r["confirmed_ts"] != ""]
+    if stamps:
+        first = pd.Timestamp(min(stamps), unit="ms")
         entries = [e for e in entries if e["time"] >= first]
     res = compare(py, entries, entry_tol=a.entry_tol, level_tol=a.level_tol, gate=a.gate)
     print(format_compare(res))
