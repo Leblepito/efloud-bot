@@ -120,12 +120,6 @@ def test_failed_repair_retries_again_next_cycle(mgr, mock_client):
 
 def test_close_with_exhausted_tp1_no_tp1_attribution_or_cancel(mgr, mock_client):
     pos = _open_with_tp1_exhausted(mgr, mock_client)
-    mock_client.get_open_positions = MagicMock(return_value=[])  # closed on exchange
-    mock_client.exchange.fetch_open_orders = MagicMock(return_value=[])
-    mock_client.exchange.fapiPrivateGetOpenAlgoOrders = MagicMock(
-        return_value=[{"algoId": "SL-1"}, {"algoId": "TP2-1"}]
-    )
-
     # Attribution: SL + TP2 still live, TP1 never placed -> market price, not TP1.
     exit_price = mgr._estimate_exit_price(pos, {"SL-1", "TP2-1"}, fetch_ok=True)
     assert exit_price == 95500.0
