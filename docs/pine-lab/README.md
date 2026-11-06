@@ -52,3 +52,24 @@ TV planı bar/export limiti; T3 (limit emir) Python'da yok → parity dışı, y
 T6 FVG saklama penceresiyle sınırlıdır; T3 dolumları resting limit fiyatına göre modellenir.
 HTF ısınması: harness HTF'yi 15m export'tan resample eder; ilk ~25–50 gün 12h/50 bias UNDEF'tir → compare başlangıcını bu ısınmadan sonraya al.
 ATR200 tohumlama: Python her 750-bar pencerede ATR200'ü sıfırdan tohumlar (pencere sonunda ~%6 sapma), Pine tam geçmiş `ta.atr(200)` kullanır; FVG eşiği de farklı pencerelenir → küçük parity sapmaları beklenir (PINE_SPEC §20).
+
+## 5. Indicator görselleri (OB / BB-MB / FVG / likidite / OTE)
+
+Yalnız çizim katmanlarıdır (sinyal mantığına dokunmaz); girdiler `showObs`, `showZones`, `showLevels`, `showBreakers`, `showFvg`, `showLiq`, `showOte`, `showHistory`, `maxZonesPerSide`.
+
+**Python referansı:**
+```bash
+python -I C:/tmp/fetch_klines.py BTCUSDT 1782864000000 data/lab/BTC_15m.csv
+python scripts/pine_lab_parity.py visuals --ohlcv data/lab/BTC_15m.csv --out data/lab/BTC_visuals.json   # --window N pencereyi değiştirir
+```
+Python referansı pencereye duyarlıdır (FVG eşiği ve kümülatif durum); Pine yüklü tüm geçmişi görür. 750 pencerede Pine'da fazladan eski nesneler görünür; `--window 1000` ile de karşılaştır.
+
+**Katman izolasyonu (compile-varyantı):** `make_variant.py` (repo dışında) `pine/efloud_lab.pine` kopyasında yalnız yedi `show*` ile `showHistory` `input.bool` varsayılanlarını ve `maxZonesPerSide` varsayılanını yeniden yazar.
+Sonra `pine set --file <varyant>` + `pine compile`; 30 sn sonra sağlık kontrolü: `data indicator <id>` yaklaşık 61 girdi VE `data tables -f "EFloud Lab"` 9 satır.
+Ardından `data boxes/lines/labels/tables -f "EFloud Lab"` okunur ve Python JSON'u ile mintick toleransında eşleştirilir.
+
+**Kurallar:**
+- Önce "EFloud Lab" scriptini Pine Editor'da aç: compile açık scriptin içine kaydeder (`pine_open` yalnız içeriği yükler).
+- `indicator set` KULLANMA: TradingView "Can't parse pine" der ve çalışma ölür. Ayarı yalnız varyant derleyerek değiştir.
+- Çalışma sağlıksızsa (girdi yok / tablo yok): `indicator remove <id>`, sonra "Komut dosyalarım"dan "EFloud Lab" ekle (`indicator add`), yeni entity id'yi kullan, varyantı yeniden derle. Son adım: gerçek build'i `pine set --file pine/efloud_lab.pine` ile geri yükle.
+- Sonuçlar: `docs/pine-lab/2026-11-06-indicator-visuals-verify.md`.

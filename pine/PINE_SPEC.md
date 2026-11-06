@@ -654,3 +654,17 @@ Tasarım: `docs/superpowers/specs/2026-11-05-pine-lab-design.md`. Plan: `docs/su
 - `tp_pool_shift`: giriş/SL uyumlu ama TP merdiveni bir seviye kaymış çiftler `level_mismatch` yerine ayrı raporlanır. Neden: canlı 750-bar pencere artefaktı — pencerenin ilk swing pivotu `_Leg` bias-0 başlangıcı yüzünden kaydedilmez → Python TP havuzunda eksik seviye, Pine tam geçmişle görür. Mantık paritesi gate'ine dahil değil; canlı tarafta iyileştirme adayı (`kline_limit` / pivot durumu kalıcılığı).
 - `compare --since <ISO tarih|ms>` HTF ısınmasını kırpar (Python `confirmed_ts` ve TV entry zamanı; `trimmed`). Seviye farkı kapısı: `level_mismatch ≤ %5` (eşleşen başına), eşleşme ≥ %95, pine-only ≤ %5.
 - `f_confirm` de halka tamponlardan (`bufOpen/bufClose/bufTime`, `bufCap=992`) okur: koşullu çağrılan fonksiyonda `[off]` geçmişi güvenilmez — bkz. `f_storeOb` 2026-11-06 düzeltmesi.
+
+## 21. Indicator zone visuals (display-only, 2026-11-06)
+
+Spec: `docs/superpowers/specs/2026-11-06-lab-indicator-visuals-design.md`. Bu katmanlar yalnız çizimdir; sinyal, giriş, SL/TP kararları bu çizim kayıtlarından okunmaz. Tüm çizimler `maxZonesPerSide` / `maxDrawings` bütçesine tabidir (en yakın N).
+
+- **Order Block (`showObs`/`showZones`):** swing ve internal OB kutuları; mitigasyon yüksek/düşük veya kapanışa göre (`obMitHighLow`). Çizim OB kaydını değiştirmez.
+- **Breaker / Mitigation Block (`showBreakers`):** OB mitige olup yön çevirince oluşan kutu; sınıf BB veya MB, ölü kayıtlar çizilmez. T2 breaker kayıtları yeni OTE aralığı başlatmaz.
+- **FVG (`showFvg`):** üç mumluk boşluk, `fvgAuto` eşiği; dolunca kaldırılır. Eşik kümülatif ortalamadır, bu yüzden Python penceresine duyarlıdır (bkz. §20).
+- **Likidite (`showLiq`/`showHistory`):** eşit tepe/dip ve swing BSL/SSL seviyeleri çizgi + etiket; hacim onaylıysa yıldız ve kalın çizgi. Süpürülmüş seviye geçmişi yalnız EQ seviyelerini kapsar.
+- **OTE (`showOte`):** son swing high/low bacağından 0.618-0.786 kutusu, 0.705 ve EQ çizgileri, h/l çizgileri; yön dashboard OTE satırıyla aynıdır.
+
+Halka tampon indeks sözleşmesi: çekirdek her onaylı barda `bufHi/bufLo/bufOpen/bufClose/bufTime` tamponlarını kuyruktan önce besler; kuyrukta en yeni eleman kapanmış mevcut bardır ve `bufLastBar` o barı tutar.
+`f_bufAt(buf, barIdx)` mutlak `bar_index` ile okur: `j = size - 1 - (bufLastBar - barIdx)`, kapsam dışı `na`. Kapasite `bufCap=992` bardır.
+Not: breaker-kopya denetimi O(P) ve T2 kapalıyken atlanır (9dad0ca).
