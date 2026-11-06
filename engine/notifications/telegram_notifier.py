@@ -27,6 +27,9 @@ Optional:
   - EFLOUD_CUSTOMER_TG_THREAD_ID   forum topic id
   - EFLOUD_CUSTOMER_TG_PARSE_MODE  "Markdown" (default) | "HTML"
   - EFLOUD_CUSTOMER_TG_TIMEOUT_SECS  HTTP timeout (default 5.0)
+  - EFLOUD_CUSTOMER_TG_TRADES      "1"/"true"/"yes" enables per-trade posts
+                                   (open / TP1 / close) — default OFF. Customer-safe:
+                                   no balance, USD PnL, size or account data.
 """
 from __future__ import annotations
 
@@ -39,6 +42,20 @@ import requests
 log = logging.getLogger("efloud.notify.customer_tg")
 
 _DEFAULT_TIMEOUT_SECS = 5.0
+_TRUTHY = ("1", "true", "yes")
+_BRAND = "u2algo Price Action"
+_DISCLAIMER = "_Eğitim amaçlıdır, yatırım tavsiyesi değildir. / Not financial advice._"
+
+
+def _fmt_price(x) -> str:
+    """Compact price: up to 8 significant decimals, trailing zeros trimmed."""
+    s = f"{float(x):.8f}".rstrip("0").rstrip(".")
+    return s or "0"
+
+
+def _clean(text) -> str:
+    """Strip Markdown/HTML control characters from free text."""
+    return "".join(c for c in str(text).replace("_", " ") if c not in "*`[]<>&").strip()
 
 # Aggregate digest schema — the ONLY shape that leaves this module. Keeping it a
 # fixed whitelist is the structural guard against per-trade signal leakage.
@@ -101,6 +118,12 @@ class CustomerChannelNotifier:
         except ValueError:
             self.timeout = _DEFAULT_TIMEOUT_SECS
 
+        # Per-trade posts: independent env flag, default OFF.
+        self.trades_enabled: bool = (
+            os.environ.get("EFLOUD_CUSTOMER_TG_TRADES", "").strip().lower() in _TRUTHY
+            and bool(self.token and self.channel_id)
+        )
+
         # Double gate: config flag AND both credentials.
         self.enabled: bool = self.flag_enabled and bool(self.token and self.channel_id)
         if self.enabled:
@@ -119,6 +142,64 @@ class CustomerChannelNotifier:
         if not self.enabled:
             return False
         return self._send(self._format_digest(digest))
+
+    # ── per-trade posts (customer-safe; default OFF; never raise) ─────────────
+    def _post_trade(self, build) -> bool:
+        if not self.trades_enabled:
+            return False
+        try:
+            text = build()
+        except Exception as e:
+            log.warning(f"Customer Telegram trade post build failed: {e}")
+            return False
+        saved = self.enabled
+        try:
+            # _send is gated on `enabled` (digest flag); per-trade posts are gated
+            # by their own flag, so allow the send for this call only.
+            self.enabled = True
+            return self._send(text)
+        finally:
+            self.enabled = saved
+
+    def post_trade_opened(self, symbol, direction, entry, sl, tp1, tp2=None, setup=None) -> bool:
+        def build() -> str:
+            icon = "🟢" if str(direction).upper() == "LONG" else "🔴"
+            lines = [
+                f"{icon} *{_clean(symbol)} {_clean(direction).upper()}* — yeni işlem / new trade",
+                f"Entry: `{_fmt_price(entry)}`",
+                f"SL: `{_fmt_price(sl)}`",
+                f"TP1: `{_fmt_price(tp1)}`",
+            ]
+            if tp2:
+                lines.append(f"TP2: `{_fmt_price(tp2)}`")
+            if setup:
+                lines.append(f"Setup: {_clean(setup)}")
+            lines += [_BRAND, _DISCLAIMER]
+            return "\n".join(lines)
+        return self._post_trade(build)
+
+    def post_trade_tp1(self, symbol, direction, entry, price) -> bool:
+        def build() -> str:
+            return "\n".join([
+                f"🎯 *{_clean(symbol)} {_clean(direction).upper()}* — TP1 hit",
+                f"Entry: `{_fmt_price(entry)}` → TP1: `{_fmt_price(price)}`",
+                _BRAND, _DISCLAIMER,
+            ])
+        return self._post_trade(build)
+
+    def post_trade_closed(self, symbol, direction, entry, exit_price, pnl_r=None, reason=None) -> bool:
+        def build() -> str:
+            lines = [
+                f"🏁 *{_clean(symbol)} {_clean(direction).upper()}* — işlem kapandı / trade closed",
+                f"Entry: `{_fmt_price(entry)}` → Exit: `{_fmt_price(exit_price)}`",
+            ]
+            if pnl_r is not None:
+                lines.append(f"Sonuç / Result: `{float(pnl_r):+.2f}R`")
+            if reason:
+                lines.append(f"Neden / Reason: {_clean(reason)}")
+            lines += [_BRAND, _DISCLAIMER]
+            return "\n".join(lines)
+        return self._post_trade(build)
 
     def _format_digest(self, digest: dict) -> str:
         """Render the aggregate digest. Reads ONLY whitelisted aggregate keys.

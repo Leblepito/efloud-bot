@@ -26,6 +26,7 @@ from engine.instance_manager import InstanceManager
 from utils.logging import log_event
 from engine.journal import TradeJournal
 from engine.notifications import NotificationManager
+from engine.notifications.telegram_notifier import CustomerChannelNotifier
 from engine.content_jobs import ContentJobEmitter
 from engine.permissions import PermissionManager
 from engine.safety import MainnetGuard, OrphanProtector, load_orphan_protection_config
@@ -96,6 +97,9 @@ class BotRunner:
         # CHAT_ID are not set. Constructed once at runner init so that
         # subsequent env edits don't change behavior mid-run (predictable).
         self.notifier: TelegramNotifier = TelegramNotifier()
+        # Community (customer) channel — per-trade posts, default OFF
+        # (EFLOUD_CUSTOMER_TG_TRADES). Customer-safe payload, never raises.
+        self.community: CustomerChannelNotifier = CustomerChannelNotifier()
         # Audit engine — scores closed trades; uses backend.db pool when ready.
         # Lazy-bound to db.pool in start() because pool is created in main.py
         # before BotRunner.start(). Always-present sentinel so downstream code
@@ -831,6 +835,30 @@ class BotRunner:
                 )
         except Exception as e:
             log.warning(f"Telegram notification dispatch failed: {e}")
+
+        # Community channel posts — separate try so an ops-notifier failure can't
+        # suppress it and vice-versa. No size / balance / USD PnL is passed.
+        try:
+            if event_type == "position_opened":
+                self.community.post_trade_opened(
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry=pos.entry, sl=pos.sl, tp1=pos.tp1, tp2=pos.tp2,
+                    setup=getattr(pos, "entry_setup_source", None),
+                )
+            elif event_type == "tp1_hit":
+                self.community.post_trade_tp1(
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry=pos.entry, price=pos.tp1,
+                )
+            elif event_type in ("position_closed", "position_rolled_back"):
+                self.community.post_trade_closed(
+                    symbol=pos.symbol, direction=pos.direction,
+                    entry=pos.entry, exit_price=pos.exit_price or 0.0,
+                    reason=("VERIFY_ROLLBACK" if event_type == "position_rolled_back"
+                            else (pos.exit_reason or None)),
+                )
+        except Exception as e:
+            log.warning(f"Community Telegram dispatch failed: {e}")
 
         # Persist to DB (best-effort, fire-and-forget cross-thread)
         if not self.loop:
