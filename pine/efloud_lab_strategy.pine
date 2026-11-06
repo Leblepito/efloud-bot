@@ -170,6 +170,18 @@ var array<FVG>   fvgs     = array.new<FVG>()
 var array<Equal> equals   = array.new<Equal>()
 var array<Piv>   shPiv    = array.new<Piv>()
 var array<Piv>   slPiv    = array.new<Piv>()
+// Per-bar history for f_storeOb (oldest → newest, newest = previous closed bar). f_storeOb only runs on
+// break bars, and `x[off]` inside a function reads that function's own call history, not bar history.
+var array<float> bufPHi = array.new<float>()
+var array<float> bufPLo = array.new<float>()
+var array<float> bufHi  = array.new<float>()
+var array<float> bufLo  = array.new<float>()
+// f_confirm only runs for IN_ZONE candidates: same hazard, same fix (oldest → newest, newest = current closed bar,
+// pushed before the candidate pass). bufCap covers its scan depth min(recencyBars + timeoutBars + 2, 990) + 1 prior bar.
+var array<float> bufOpen  = array.new<float>()
+var array<float> bufClose = array.new<float>()
+var array<int>   bufTime  = array.new<int>()
+bufCap = 992
 
 f_mitigate(array<OB> pool) =>
     for o in pool
@@ -205,23 +217,26 @@ f_storeOb(Pivot p, bool internal, int bias) =>
     OB ob = na
     int a = p.bar
     int b = bar_index
-    if a >= 0 and b > a
-        int   span = math.min(b - a, liveWindowBars)      // live engine sees at most liveWindowBars bars
+    int n = array.size(bufPHi)                             // bar i sits at buffer index n - b + i
+    int span = math.min(math.min(b - a, liveWindowBars), n) // live engine sees at most liveWindowBars bars
+    if a >= 0 and b > a and span > 0
         int   k    = -1
         float best = na
         float rLo  = na
         float rHi  = na
         for i = b - span to b - 1
-            int off = b - i
-            float v = bias == -1 ? pHi[off] : pLo[off]
-            rLo := na(rLo) ? low[off]  : math.min(rLo, low[off])
-            rHi := na(rHi) ? high[off] : math.max(rHi, high[off])
+            int   j  = n - b + i
+            float v  = bias == -1 ? array.get(bufPHi, j) : array.get(bufPLo, j)
+            float lo = array.get(bufLo, j)
+            float hi = array.get(bufHi, j)
+            rLo := na(rLo) ? lo : math.min(rLo, lo)
+            rHi := na(rHi) ? hi : math.max(rHi, hi)
             if na(best) or (bias == -1 ? v > best : v < best)
                 best := v
                 k    := i
         if k >= 0
-            int offK = b - k
-            ob := OB.new(barHigh = pHi[offK], barLow = pLo[offK], idx = k, createdIdx = b, bias = bias, internal = internal, pivotBar = a, rawLow = rLo, rawHigh = rHi)
+            int jk = n - b + k
+            ob := OB.new(barHigh = array.get(bufPHi, jk), barLow = array.get(bufPLo, jk), idx = k, createdIdx = b, bias = bias, internal = internal, pivotBar = a, rawLow = rLo, rawHigh = rHi)
             array.push(internal ? intObs : swingObs, ob)
     ob
 
@@ -324,6 +339,22 @@ if barstate.isconfirmed
         if not e.swept and bar_index > e.idxB + eqLen and (e.isHigh ? high > e.priceB : low < e.priceB)
             e.swept := true
     f_prunePools()
+    // after the structure pass: f_storeOb on the next bar sees this bar as its newest entry
+    array.push(bufPHi, pHi)
+    array.push(bufPLo, pLo)
+    array.push(bufHi, high)
+    array.push(bufLo, low)
+    array.push(bufOpen, open)
+    array.push(bufClose, close)
+    array.push(bufTime, time)
+    if array.size(bufPHi) > bufCap          // >= liveWindowBars (max 900): f_storeOb span is capped separately
+        array.shift(bufPHi)
+        array.shift(bufPLo)
+        array.shift(bufHi)
+        array.shift(bufLo)
+        array.shift(bufOpen)
+        array.shift(bufClose)
+        array.shift(bufTime)
 
 // ==== [SECTION: BIAS + CANDIDATES] ====
 // HTF swing trend — the same leg/pivot/crossover rules as the chart-TF swing scope.
@@ -557,18 +588,20 @@ f_inZone(float px, Cand c) =>
 f_confirm(int dir, float zl, float zh, int sinceTime, bool lastOnly) =>
     bool  ok = false
     float px = na
-    int maxOff   = math.min(bar_index - 1, math.min(recencyBars + timeoutBars + 2, 990))   // max_bars_back = 1000
+    int n        = array.size(bufTime)                       // off 0 = newest element (current bar)
+    int maxOff   = math.min(math.min(n - 2, bar_index - 1), math.min(recencyBars + timeoutBars + 2, 990))
     int startOff = lastOnly ? 0 : maxOff
     if maxOff >= 0
         for off = startOff to 0
             if ok
                 break
-            if time[off] <= sinceTime
+            int j = n - 1 - off
+            if array.get(bufTime, j) <= sinceTime
                 continue
-            float pO = open[off + 1]
-            float pC = close[off + 1]
-            float cO = open[off]
-            float cC = close[off]
+            float pO = array.get(bufOpen, j - 1)
+            float pC = array.get(bufClose, j - 1)
+            float cO = array.get(bufOpen, j)
+            float cC = array.get(bufClose, j)
             if dir == -1
                 if pC > pO and cC < cO and cO >= pC and cC <= pO and zl <= cC and cC <= zh
                     ok := true

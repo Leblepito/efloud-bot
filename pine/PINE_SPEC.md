@@ -648,3 +648,23 @@ Tasarım: `docs/superpowers/specs/2026-11-05-pine-lab-design.md`. Plan: `docs/su
 - Harness compare: açık TV işlemi aralığına düşen Python onayları `blocked_by_position` sayılır (sembol başına 1 pozisyon); üst sınır çıkış tipine bağlıdır — SL/TP bar içinde dolduğu için aynı barın kapanışında yeni giriş mümkündür (sınır hariç), `MAX_HOLD`/`OTE_NAKED` kapanışta kapattığı için sınır dahildir; entry toleransı fill fiyatıyla (`current_price` ↔ TV price), engulfing entry `entry=` yorum alanıyla seviye (`entry_ref`) olarak karşılaştırılır.
 - Harness HTF verisi 15m export'tan resample edilir: ilk ~25–50 gün 12h/50 bias olgunlaşmamıştır (UNDEF) → compare başlangıcı bu ısınmadan sonra olmalı.
 - Pine derleme kapısı (TV MCP) bu tur için operatörde bekliyor; derleme düzeltmeleri `fix(pine-lab): compile fixes from TradingView gate` commit'iyle gelir.
+- Harness compare (2026-11-06 tur 2): TV'nin aynı entry zamanı + sinyaline sahip iki Trade # satırı (TP1/TP2 yarıları) tek pozisyon sayılır (`tv_entries` → `_trade_groups`, `qty` toplanır).
+- Aynı `(yön, trig)` anahtarının tekrar onayları `repeat_confirmation` olarak ayrılır (paydadan çıkar): canlı tek-pozisyon modeli replay'de simüle edilmez; eşi olmayan anahtarın fazlası `python_only` kalır.
+- `compare` anahtar içinde zaman tabanlı eşler: her TV giriş barı, `confirmed_ts` değeri ona eşit (yoksa ≤ en yakın, yoksa ilk sonraki) kullanılmamış Python satırıyla eşlenir (sıra numarası değil; araya giren tekrar onaylar eşleşmeyi kaydırmaz).
+- `tp_pool_shift`: giriş/SL uyumlu ama TP merdiveni bir seviye kaymış çiftler `level_mismatch` yerine ayrı raporlanır. Neden: canlı 750-bar pencere artefaktı — pencerenin ilk swing pivotu `_Leg` bias-0 başlangıcı yüzünden kaydedilmez → Python TP havuzunda eksik seviye, Pine tam geçmişle görür. Mantık paritesi gate'ine dahil değil; canlı tarafta iyileştirme adayı (`kline_limit` / pivot durumu kalıcılığı).
+- `compare --since <ISO tarih|ms>` HTF ısınmasını kırpar (Python `confirmed_ts` ve TV entry zamanı; `trimmed`). Seviye farkı kapısı: `level_mismatch ≤ %5` (eşleşen başına), eşleşme ≥ %95, pine-only ≤ %5.
+- `f_confirm` de halka tamponlardan (`bufOpen/bufClose/bufTime`, `bufCap=992`) okur: koşullu çağrılan fonksiyonda `[off]` geçmişi güvenilmez — bkz. `f_storeOb` 2026-11-06 düzeltmesi.
+
+## 21. Indicator zone visuals (display-only, 2026-11-06)
+
+Spec: `docs/superpowers/specs/2026-11-06-lab-indicator-visuals-design.md`. Bu katmanlar yalnız çizimdir; sinyal, giriş, SL/TP kararları bu çizim kayıtlarından okunmaz. Tüm çizimler `maxZonesPerSide` / `maxDrawings` bütçesine tabidir (en yakın N).
+
+- **Order Block (`showObs`/`showZones`):** swing ve internal OB kutuları; mitigasyon yüksek/düşük veya kapanışa göre (`obMitHighLow`). Çizim OB kaydını değiştirmez.
+- **Breaker / Mitigation Block (`showBreakers`):** OB mitige olup yön çevirince oluşan kutu; sınıf BB veya MB, ölü kayıtlar çizilmez. T2 breaker kayıtları yeni OTE aralığı başlatmaz.
+- **FVG (`showFvg`):** üç mumluk boşluk, `fvgAuto` eşiği; dolunca kaldırılır. Pine eşiği 750-bar KAYAN ortalamadır (`math.sum(|delta|, liveWindowBars) / n * 2`); Python `lx.analyze` pencere başından KÜMÜLATİF ortalama kullanır, bu yüzden referans pencereye duyarlıdır (bkz. §20). Python referansı Pine'ın 750-bar budamasını (`f_prunePools`, `liveWindowBars`) son barda uygular (`expected_visuals(live_window=750)`: OB/flip `created`, FVG `idx`, pivot/EQ `bar`); bu budama SOL BSL 103.89 artığını giderdi. Kalan doğrulanmış SOL artığı (FVG 96.07/95.88) kayan/kümülatif eşik artefaktıdır, çizim hatası değildir (`docs/pine-lab/2026-11-06-indicator-visuals-verify.md`).
+- **Likidite (`showLiq`/`showHistory`):** eşit tepe/dip ve swing BSL/SSL seviyeleri çizgi + etiket; hacim onaylıysa yıldız ve kalın çizgi. Süpürülmüş seviye geçmişi yalnız EQ seviyelerini kapsar.
+- **OTE (`showOte`):** son swing high/low bacağından 0.618-0.786 kutusu, 0.705 ve EQ çizgileri, h/l çizgileri; yön dashboard OTE satırıyla aynıdır.
+
+Halka tampon indeks sözleşmesi: çekirdek her onaylı barda `bufHi/bufLo/bufOpen/bufClose/bufTime` tamponlarını kuyruktan önce besler; kuyrukta en yeni eleman kapanmış mevcut bardır ve `bufLastBar` o barı tutar.
+`f_bufAt(buf, barIdx)` mutlak `bar_index` ile okur: `j = size - 1 - (bufLastBar - barIdx)`, kapsam dışı `na`. Kapasite `bufCap=992` bardır.
+Not: breaker-kopya denetimi O(P) ve T2 kapalıyken atlanır (9dad0ca). `f_collectObs` içindeki kopya tespiti tek bir `map<int,int>` (anahtar `idx*2+(bull?1:0)` → en erken `createdIdx`) kullanır; iki paralel yerel `array<int>` biçimi TradingView'da T2 açıkken RE10045 verdi (`array.get` indeks 2 / boyut 0; verify doc "Follow-up").

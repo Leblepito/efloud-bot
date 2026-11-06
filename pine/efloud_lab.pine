@@ -170,6 +170,18 @@ var array<FVG>   fvgs     = array.new<FVG>()
 var array<Equal> equals   = array.new<Equal>()
 var array<Piv>   shPiv    = array.new<Piv>()
 var array<Piv>   slPiv    = array.new<Piv>()
+// Per-bar history for f_storeOb (oldest → newest, newest = previous closed bar). f_storeOb only runs on
+// break bars, and `x[off]` inside a function reads that function's own call history, not bar history.
+var array<float> bufPHi = array.new<float>()
+var array<float> bufPLo = array.new<float>()
+var array<float> bufHi  = array.new<float>()
+var array<float> bufLo  = array.new<float>()
+// f_confirm only runs for IN_ZONE candidates: same hazard, same fix (oldest → newest, newest = current closed bar,
+// pushed before the candidate pass). bufCap covers its scan depth min(recencyBars + timeoutBars + 2, 990) + 1 prior bar.
+var array<float> bufOpen  = array.new<float>()
+var array<float> bufClose = array.new<float>()
+var array<int>   bufTime  = array.new<int>()
+bufCap = 992
 
 f_mitigate(array<OB> pool) =>
     for o in pool
@@ -205,23 +217,26 @@ f_storeOb(Pivot p, bool internal, int bias) =>
     OB ob = na
     int a = p.bar
     int b = bar_index
-    if a >= 0 and b > a
-        int   span = math.min(b - a, liveWindowBars)      // live engine sees at most liveWindowBars bars
+    int n = array.size(bufPHi)                             // bar i sits at buffer index n - b + i
+    int span = math.min(math.min(b - a, liveWindowBars), n) // live engine sees at most liveWindowBars bars
+    if a >= 0 and b > a and span > 0
         int   k    = -1
         float best = na
         float rLo  = na
         float rHi  = na
         for i = b - span to b - 1
-            int off = b - i
-            float v = bias == -1 ? pHi[off] : pLo[off]
-            rLo := na(rLo) ? low[off]  : math.min(rLo, low[off])
-            rHi := na(rHi) ? high[off] : math.max(rHi, high[off])
+            int   j  = n - b + i
+            float v  = bias == -1 ? array.get(bufPHi, j) : array.get(bufPLo, j)
+            float lo = array.get(bufLo, j)
+            float hi = array.get(bufHi, j)
+            rLo := na(rLo) ? lo : math.min(rLo, lo)
+            rHi := na(rHi) ? hi : math.max(rHi, hi)
             if na(best) or (bias == -1 ? v > best : v < best)
                 best := v
                 k    := i
         if k >= 0
-            int offK = b - k
-            ob := OB.new(barHigh = pHi[offK], barLow = pLo[offK], idx = k, createdIdx = b, bias = bias, internal = internal, pivotBar = a, rawLow = rLo, rawHigh = rHi)
+            int jk = n - b + k
+            ob := OB.new(barHigh = array.get(bufPHi, jk), barLow = array.get(bufPLo, jk), idx = k, createdIdx = b, bias = bias, internal = internal, pivotBar = a, rawLow = rLo, rawHigh = rHi)
             array.push(internal ? intObs : swingObs, ob)
     ob
 
@@ -324,6 +339,22 @@ if barstate.isconfirmed
         if not e.swept and bar_index > e.idxB + eqLen and (e.isHigh ? high > e.priceB : low < e.priceB)
             e.swept := true
     f_prunePools()
+    // after the structure pass: f_storeOb on the next bar sees this bar as its newest entry
+    array.push(bufPHi, pHi)
+    array.push(bufPLo, pLo)
+    array.push(bufHi, high)
+    array.push(bufLo, low)
+    array.push(bufOpen, open)
+    array.push(bufClose, close)
+    array.push(bufTime, time)
+    if array.size(bufPHi) > bufCap          // >= liveWindowBars (max 900): f_storeOb span is capped separately
+        array.shift(bufPHi)
+        array.shift(bufPLo)
+        array.shift(bufHi)
+        array.shift(bufLo)
+        array.shift(bufOpen)
+        array.shift(bufClose)
+        array.shift(bufTime)
 
 // ==== [SECTION: BIAS + CANDIDATES] ====
 // HTF swing trend — the same leg/pivot/crossover rules as the chart-TF swing scope.
@@ -557,18 +588,20 @@ f_inZone(float px, Cand c) =>
 f_confirm(int dir, float zl, float zh, int sinceTime, bool lastOnly) =>
     bool  ok = false
     float px = na
-    int maxOff   = math.min(bar_index - 1, math.min(recencyBars + timeoutBars + 2, 990))   // max_bars_back = 1000
+    int n        = array.size(bufTime)                       // off 0 = newest element (current bar)
+    int maxOff   = math.min(math.min(n - 2, bar_index - 1), math.min(recencyBars + timeoutBars + 2, 990))
     int startOff = lastOnly ? 0 : maxOff
     if maxOff >= 0
         for off = startOff to 0
             if ok
                 break
-            if time[off] <= sinceTime
+            int j = n - 1 - off
+            if array.get(bufTime, j) <= sinceTime
                 continue
-            float pO = open[off + 1]
-            float pC = close[off + 1]
-            float cO = open[off]
-            float cC = close[off]
+            float pO = array.get(bufOpen, j - 1)
+            float pC = array.get(bufClose, j - 1)
+            float cO = array.get(bufOpen, j)
+            float cC = array.get(bufClose, j)
             if dir == -1
                 if pC > pO and cC < cO and cO >= pC and cC <= pO and zl <= cC and cC <= zh
                     ok := true
@@ -838,9 +871,22 @@ showObs     = input.bool(true, "Active OB boxes", group = grpVis)
 showZones   = input.bool(true, "Pending candidate zones", group = grpVis)
 showLevels  = input.bool(true, "Entry/SL/TP lines", group = grpVis)
 showDash    = input.bool(true, "Dashboard", group = grpVis)
-maxDrawings = input.int(60, "Kept signal drawings", minval = 4, maxval = 150, group = grpVis)
+maxDrawings = input.int(60, "Kept signal drawings", minval = 4, maxval = 100, group = grpVis)   // 4 lines each: 100 × 4 = 400 < 500
 
-var array<box>   obBoxes   = array.new<box>()
+grpZones = "SMC bölgeleri (yalnız görüntü)"
+showBreakers     = input.bool(true,  "Breaker / Mitigation blocks (BB/MB)", group = grpZones)
+showFvg          = input.bool(true,  "FVG boxes",                           group = grpZones)
+showLiq          = input.bool(true,  "Liquidity levels (EQH/EQL/BSL/SSL)",  group = grpZones)
+showOte          = input.bool(true,  "OTE range (0.618–0.786, 0.705, EQ)",  group = grpZones)
+showHistory      = input.bool(false, "History: mitigated OBs, swept levels (faded)", group = grpZones)
+obBodyOnly       = input.bool(false, "OB/BB/MB boxes from candle body",     group = grpZones)
+liqVolumeConfirm = input.bool(true,  "Volume-confirmed liquidity (★)",      group = grpZones)
+maxZonesPerSide  = input.int(8, "Nearest zones per side (per layer)", minval = 1, maxval = 200, group = grpZones)
+colBull          = input.color(color.teal,   "Bull colour",    group = grpZones)
+colBear          = input.color(color.maroon, "Bear colour",    group = grpZones)
+colNeutral       = input.color(color.orange, "Liquidity colour", group = grpZones)
+zoneAlpha        = input.int(85, "Zone fill transparency", minval = 0, maxval = 100, group = grpZones)
+
 var array<box>   zoneBoxes = array.new<box>()
 var array<line>  sigLines  = array.new<line>()
 var array<label> sigLabels = array.new<label>()
@@ -852,6 +898,310 @@ f_clearBoxes(array<box> a) =>
 
 f_fmt(float x) =>
     na(x) ? "na" : str.tostring(x, "#.########")
+
+// ─── Zone layers (display only; spec docs/superpowers/specs/2026-11-06-lab-indicator-visuals-design.md) ───
+// Ring-buffer contract: core pushes bufHi/bufLo/bufOpen/bufClose/bufTime once per confirmed bar before the tail runs,
+// so in the tail's confirmed block the newest element is the current closed bar. bufLastBar remembers that bar.
+var int bufLastBar = -1
+if barstate.isconfirmed
+    bufLastBar := bar_index
+
+f_bufAt(array<float> buf, int barIdx) =>
+    int j = array.size(buf) - 1 - (bufLastBar - barIdx)
+    j >= 0 and j < array.size(buf) ? array.get(buf, j) : na
+
+type Zone
+    float  top
+    float  bot
+    int    x1
+    int    dir            // 1 bull / -1 bear (current role)
+    string txt            // "OB" | "iOB" | "BB" | "MB" | "FVG" | "OB ✓"
+    int    kind           // 0 OB, 1 iOB, 2 BB, 3 MB, 4 FVG
+    bool   faded
+
+var array<box> zoneLayerBoxes = array.new<box>()
+
+f_zoneColor(int dir) =>
+    dir == 1 ? colBull : colBear
+
+f_pushZone(array<Zone> z, float top, float bot, int x1, int dir, string txt, int kind, bool faded) =>
+    array.push(z, Zone.new(top = top, bot = bot, x1 = x1, dir = dir, txt = txt, kind = kind, faded = faded))
+
+f_boxZone(Zone z) =>
+    color base = f_zoneColor(z.dir)
+    int fillA   = z.faded ? math.min(100, zoneAlpha + 10) : zoneAlpha
+    int borderA = z.faded ? 70 : (z.kind == 1 ? 60 : 30)
+    string sty  = z.kind == 2 ? line.style_dashed : z.kind == 3 ? line.style_dotted : line.style_solid
+    array.push(zoneLayerBoxes, box.new(z.x1, z.top, bar_index + 5, z.bot, border_color = color.new(base, borderA), border_style = sty, bgcolor = color.new(base, fillA), text = z.txt, text_size = size.tiny, text_color = color.new(base, 0), text_halign = text.align_right))
+
+// Nearest n zones above and below close, per layer. Two passes per side: mark the n smallest distances
+// (O(n × P), no full sort). Distance = near edge − close (zones straddling close count as distance 0, below side).
+f_drawNearest(array<Zone> z, int n) =>
+    int p = array.size(z)
+    if p > 0
+        array<float> dist = array.new<float>(p, 0.0)
+        array<bool>  used = array.new<bool>(p, false)
+        for i = 0 to p - 1
+            Zone zi = array.get(z, i)
+            array.set(dist, i, zi.bot > close ? zi.bot - close : zi.top < close ? close - zi.top : 0.0)
+        for side = 0 to 1                                           // 0 above, 1 below/straddling
+            for k = 1 to n
+                int   best  = -1
+                float bestD = na
+                for i = 0 to p - 1
+                    Zone zi = array.get(z, i)
+                    bool above = zi.bot > close
+                    if not array.get(used, i) and (side == 0 ? above : not above)
+                        float d = array.get(dist, i)
+                        if na(bestD) or d < bestD
+                            bestD := d
+                            best  := i
+                if best >= 0
+                    array.set(used, best, true)
+                    f_boxZone(array.get(z, best))
+    true
+
+// ─── Liquidity (EQH/EQL from `equals`, BSL/SSL from shPiv/slPiv); volume confirmation per DGT-style rule ───
+volMa60 = ta.sma(volume, 60)                        // global, every bar (never inside a function)
+var array<float> bufVol   = array.new<float>()
+var array<float> bufVolMa = array.new<float>()
+if barstate.isconfirmed
+    array.push(bufVol, volume)
+    array.push(bufVolMa, volMa60)
+    if array.size(bufVol) > bufCap
+        array.shift(bufVol)
+        array.shift(bufVolMa)
+
+var array<line>  liqLines  = array.new<line>()
+var array<label> liqLabels = array.new<label>()
+var int dashLiq = 0
+
+// First bar after fromBar that trades through `price` (wick), or -1. Scans the ring buffers only.
+f_sweepBar(bool isHigh, float price, int fromBar) =>
+    int found = -1
+    int lo = math.max(fromBar + 1, bufLastBar - array.size(bufHi) + 1)
+    if lo <= bufLastBar
+        for b = lo to bufLastBar
+            if found < 0
+                float v = isHigh ? f_bufAt(bufHi, b) : f_bufAt(bufLo, b)
+                if not na(v) and (isHigh ? v > price : v < price)
+                    found := b
+    found
+
+// Level formed at barIdx is "volume confirmed" when the 3 bars ending there make rising highs (falling lows for a low),
+// volume rises on each bar and the last bar's volume is above its 60-bar SMA. All reads from ring buffers.
+f_volConfirmed(bool isHigh, int barIdx) =>
+    float v0 = f_bufAt(bufVol, barIdx - 2)
+    float v1 = f_bufAt(bufVol, barIdx - 1)
+    float v2 = f_bufAt(bufVol, barIdx)
+    float m2 = f_bufAt(bufVolMa, barIdx)
+    float p0 = isHigh ? f_bufAt(bufHi, barIdx - 2) : f_bufAt(bufLo, barIdx - 2)
+    float p1 = isHigh ? f_bufAt(bufHi, barIdx - 1) : f_bufAt(bufLo, barIdx - 1)
+    float p2 = isHigh ? f_bufAt(bufHi, barIdx)     : f_bufAt(bufLo, barIdx)
+    bool ok = not na(v0) and not na(v1) and not na(v2) and not na(m2) and not na(p0) and not na(p1) and not na(p2)
+    ok and v0 < v1 and v1 < v2 and v2 > m2 and (isHigh ? (p0 < p1 and p1 < p2) : (p0 > p1 and p1 > p2))
+
+f_drawLiq(bool isHigh, float price, int fromBar, bool swept, string tag) =>
+    bool conf = liqVolumeConfirm and f_volConfirmed(isHigh, fromBar)
+    int  x2   = swept ? f_sweepBar(isHigh, price, fromBar) : bar_index + 5
+    if x2 < 0
+        x2 := bar_index + 5
+    array.push(liqLines, line.new(fromBar, price, x2, price, color = color.new(colNeutral, swept ? 70 : 0), style = swept ? line.style_dashed : line.style_solid, width = conf ? 2 : 1))
+    if not swept
+        array.push(liqLabels, label.new(x2, price, tag + (conf ? " ★" : ""), style = label.style_label_left, color = color.new(colNeutral, 100), textcolor = colNeutral, size = size.tiny))
+    true
+
+// ─── OB layer ───
+var int dashObS = 0
+var int dashObI = 0
+
+f_obEdges(OB o) =>
+    float top = o.top()
+    float bot = o.bot()
+    if obBodyOnly
+        float oo = f_bufAt(bufOpen, o.idx)
+        float cc = f_bufAt(bufClose, o.idx)
+        if not na(oo) and not na(cc)
+            top := math.max(oo, cc)
+            bot := math.min(oo, cc)
+    [top, bot]
+
+// T2 (obInvalidate) pushes the flipped breaker as a new OB with the same candle idx and opposite bias.
+// Such a copy is neither drawn as an OB nor tracked for BB/MB (the tracker classifies the source OB instead).
+// Copies only exist when obInvalidate is on (core f_flipBreaker is the sole producer) → O(1) early-out otherwise.
+f_isBreakerCopy(OB o, array<OB> pool) =>
+    bool copy = false
+    if obInvalidate
+        for q in pool
+            if not copy and q.idx == o.idx and q.bias == -o.bias and q.createdIdx < o.createdIdx
+                copy := true
+    copy
+
+// Keys (idx*2+(bull?1:0)) of OBs that already flipped into a BB/MB: their faded "OB ✓" stops at the flip (spec §3.1).
+var array<int> flippedKeys = array.new<int>()
+
+f_collectObs(array<OB> pool, bool internal, array<Zone> z) =>
+    int active = 0
+    // Single forward pass (pool is in creation order): seenAt maps idx*2+(bull?1:0) → createdIdx of the earliest OB with that key.
+    // One map, not two parallel local arrays: on TradingView the parallel-array form hit RE10045 (array.get index out of
+    // bounds, size 0) under T2 — the two function-local arrays did not stay in lock-step (verify doc, "Follow-up").
+    map<int, int> seenAt = map.new<int, int>()
+    for o in pool
+        bool isCopy = false
+        if obInvalidate
+            int srcAt = map.get(seenAt, o.idx * 2 + (o.bias == -1 ? 1 : 0))
+            isCopy := not na(srcAt) and srcAt < o.createdIdx
+            int key = o.idx * 2 + (o.bias == 1 ? 1 : 0)
+            if not map.contains(seenAt, key)
+                map.put(seenAt, key, o.createdIdx)
+        if not isCopy
+            [top, bot] = f_obEdges(o)
+            if o.mitigatedIdx < 0
+                f_pushZone(z, top, bot, o.idx, o.bias, internal ? "iOB" : "OB", internal ? 1 : 0, false)
+                active += 1
+            else if showHistory and array.indexof(flippedKeys, o.idx * 2 + (o.bias == 1 ? 1 : 0)) < 0
+                f_pushZone(z, top, bot, o.idx, o.bias, (internal ? "iOB" : "OB") + " ✓", internal ? 1 : 0, true)
+    active
+
+// ─── Flip tracker: closed-through OB → Breaker (BB) or Mitigation Block (MB); two-scale rule (spec §3.2) ───
+type Flip
+    OB    ob
+    float refA            // frozen last swing pivot before the OB candle (bear OB: swing low; bull OB: swing high)
+    float legExt          // bear OB: min low over (ob.idx, flipBar); bull OB: max high
+    int   flipBar = -1
+    int   cls = 0         // 0 pending · 1 BB · 2 MB · 3 NONE (no reference pivot → never drawn)
+    bool  dead = false
+
+var array<Flip> flips = array.new<Flip>()
+var int dashBb  = 0
+var int dashMb  = 0
+var int dashFvg = 0
+
+f_lastPivotBefore(array<Piv> pivs, int barIdx) =>
+    float px = na
+    for p in pivs
+        if p.bar < barIdx
+            px := p.price
+    px
+
+f_legExtInit(OB o) =>
+    float ext = na
+    if o.createdIdx > o.idx
+        for b = o.idx + 1 to o.createdIdx
+            float v = o.bias == -1 ? f_bufAt(bufLo, b) : f_bufAt(bufHi, b)
+            if not na(v)
+                ext := na(ext) ? v : (o.bias == -1 ? math.min(ext, v) : math.max(ext, v))
+    ext
+
+f_recordNewObs(array<OB> pool) =>
+    int n = array.size(pool)
+    if n > 0
+        bool stop = false
+        for i = n - 1 to 0
+            if not stop
+                OB o = array.get(pool, i)
+                if o.createdIdx != bar_index
+                    stop := true
+                else if not f_isBreakerCopy(o, pool)
+                    float refA = o.bias == -1 ? f_lastPivotBefore(slPiv, o.idx) : f_lastPivotBefore(shPiv, o.idx)
+                    array.push(flips, Flip.new(ob = o, refA = refA, legExt = f_legExtInit(o), cls = na(refA) ? 3 : 0))
+    true
+
+f_trackFlips() =>
+    for fl in flips
+        OB o = fl.ob
+        if not fl.dead and fl.cls != 3
+            if fl.flipBar < 0
+                if bar_index > o.createdIdx
+                    bool flipped = o.bias == -1 ? close > o.top() : close < o.bot()
+                    if flipped
+                        fl.flipBar := bar_index
+                        array.push(flippedKeys, o.idx * 2 + (o.bias == 1 ? 1 : 0))
+                        bool swept = o.bias == -1 ? fl.legExt < fl.refA : fl.legExt > fl.refA
+                        fl.cls := swept ? 1 : 2
+                if fl.flipBar < 0                               // extend the leg only while still pending (excludes the flip bar)
+                    float v = o.bias == -1 ? low : high
+                    fl.legExt := na(fl.legExt) ? v : (o.bias == -1 ? math.min(fl.legExt, v) : math.max(fl.legExt, v))
+            else
+                fl.dead := o.bias == -1 ? close < o.bot() : close > o.top()
+    if array.size(flips) > 0
+        for i = array.size(flips) - 1 to 0
+            Flip pf = array.get(flips, i)
+            if pf.ob.createdIdx < bar_index - liveWindowBars
+                if pf.flipBar >= 0
+                    int ki = array.indexof(flippedKeys, pf.ob.idx * 2 + (pf.ob.bias == 1 ? 1 : 0))
+                    if ki >= 0
+                        array.remove(flippedKeys, ki)
+                array.remove(flips, i)
+    true
+
+if barstate.isconfirmed
+    f_recordNewObs(swingObs)
+    f_recordNewObs(intObs)
+    f_trackFlips()
+
+// ─── OTE on a fixed swing range (spec §3.5): changes only when price exceeds H/L or a swing break starts a new range ───
+var float rngH    = na
+var float rngL    = na
+var int rngHBar = -1
+var int rngLBar = -1
+var int rngDir  = 0
+var string dashOte = "-"
+
+// Bar in [fromBar, toBar] whose high (or low) equals `price`; last match wins. Ring buffers only.
+f_barOfExtreme(bool isHigh, float price, int fromBar, int toBar) =>
+    int found = -1
+    int lo = math.max(fromBar, bufLastBar - array.size(bufHi) + 1)
+    if lo <= toBar
+        for b = lo to toBar
+            float v = isHigh ? f_bufAt(bufHi, b) : f_bufAt(bufLo, b)
+            if not na(v) and v == price
+                found := b
+    found
+
+// Pine functions cannot modify globals: takes the current range, returns the updated one.
+f_updateRange(float h0, float l0, int hBar0, int lBar0, int dir0) =>
+    float h = h0
+    float l = l0
+    int hBar = hBar0
+    int lBar = lBar0
+    for b in breaks
+        if not b.internal and not b.breaker and b.idx == bar_index   // swing BOS/CHoCH only; T2 breaker records are not structure breaks
+            if na(b.ob)
+                l := swingLow.level
+                h := swingHigh.level
+                lBar := swingLow.bar
+                hBar := swingHigh.bar
+            else
+                l := math.min(b.ob.rawLow, low)
+                h := math.max(b.ob.rawHigh, high)
+                lBar := l == low  ? bar_index : f_barOfExtreme(false, l, b.pivotBar, bar_index)
+                hBar := h == high ? bar_index : f_barOfExtreme(true,  h, b.pivotBar, bar_index)
+                if lBar < 0                                           // extreme scrolled out of the ring buffer: anchor on this bar
+                    lBar := bar_index
+                if hBar < 0                                           // extreme scrolled out of the ring buffer: anchor on this bar
+                    hBar := bar_index
+    int dir = dir0
+    if not na(h) and not na(l)
+        if high > h
+            h := high
+            hBar := bar_index
+        if low < l
+            l := low
+            lBar := bar_index
+        dir := hBar > lBar ? 1 : hBar < lBar ? -1 : dir0
+    [h, l, hBar, lBar, dir]
+
+if barstate.isconfirmed
+    [nH, nL, nHBar, nLBar, nDir] = f_updateRange(rngH, rngL, rngHBar, rngLBar, rngDir)
+    rngH := nH
+    rngL := nL
+    rngHBar := nHBar
+    rngLBar := nLBar
+    rngDir := nDir
+
+var array<line> oteLines = array.new<line>()
+var box oteBox = na
 
 if barstate.isconfirmed
     for c in fired
@@ -870,28 +1220,120 @@ if barstate.isconfirmed
     while array.size(sigLabels) > maxDrawings
         label.delete(array.shift(sigLabels))
 
-f_drawObs(array<OB> pool, int alphaBorder, int alphaFill) =>
-    int shown = 0
-    if array.size(pool) > 0
-        for i = array.size(pool) - 1 to 0
-            OB o = array.get(pool, i)
-            if o.mitigatedIdx < 0 and shown < 40
-                color base = o.bias == 1 ? color.teal : color.maroon
-                array.push(obBoxes, box.new(o.idx, o.top(), bar_index + 5, o.bot(), border_color = color.new(base, alphaBorder), bgcolor = color.new(base, alphaFill)))
-                shown += 1
-
 if barstate.islast
-    f_clearBoxes(obBoxes)
+    for l in oteLines
+        line.delete(l)
+    array.clear(oteLines)
+    if not na(oteBox)
+        box.delete(oteBox)
+        oteBox := na
+    dashOte := "-"
+    if showOte and rngDir != 0 and not na(rngH) and not na(rngL) and (rngH - rngL) >= 2 * syminfo.mintick
+        float r    = rngH - rngL
+        float b618 = rngDir == 1 ? rngH - 0.618 * r : rngL + 0.618 * r
+        float b786 = rngDir == 1 ? rngH - 0.786 * r : rngL + 0.786 * r
+        float p705 = rngDir == 1 ? rngH - 0.705 * r : rngL + 0.705 * r
+        float eq   = rngL + 0.5 * r
+        int   x1   = math.min(rngHBar, rngLBar)
+        color oc   = f_zoneColor(rngDir)
+        oteBox := box.new(x1, math.max(b618, b786), bar_index + 5, math.min(b618, b786), border_color = color.new(oc, 60), bgcolor = color.new(oc, math.min(100, zoneAlpha + 8)), text = rngDir == 1 ? "OTE LONG" : "OTE SHORT", text_size = size.tiny, text_color = color.new(oc, 0), text_halign = text.align_right)
+        array.push(oteLines, line.new(x1, p705, bar_index + 5, p705, color = oc, width = 2))
+        array.push(oteLines, line.new(x1, eq,   bar_index + 5, eq,   color = color.new(oc, 40), style = line.style_dotted))
+        array.push(oteLines, line.new(x1, rngH, bar_index + 5, rngH, color = color.new(oc, 70)))
+        array.push(oteLines, line.new(x1, rngL, bar_index + 5, rngL, color = color.new(oc, 70)))
+        dashOte := (rngDir == 1 ? "LONG" : "SHORT") + " H=" + f_fmt(rngH) + " L=" + f_fmt(rngL) + " 0.705=" + f_fmt(p705)
+    f_clearBoxes(zoneLayerBoxes)
+    // z-order (bottom → top): OTE → FVG → OB/iOB → BB/MB → liquidity → pending zones → signal lines
+    dashFvg := 0
+    if showFvg
+        array<Zone> zf = array.new<Zone>()
+        for f in fvgs
+            if f.mitigatedIdx < 0
+                f_pushZone(zf, f.top, f.bot, f.idx, f.bias, "FVG", 4, false)
+        dashFvg := array.size(zf)
+        f_drawNearest(zf, maxZonesPerSide)
+    dashObS := 0
+    dashObI := 0
     if showObs
-        f_drawObs(swingObs, 30, 80)
-        f_drawObs(intObs, 60, 92)
+        array<Zone> zo = array.new<Zone>()
+        dashObS := f_collectObs(swingObs, false, zo)
+        dashObI := f_collectObs(intObs, true, zo)
+        f_drawNearest(zo, maxZonesPerSide)
+    dashBb := 0
+    dashMb := 0
+    if showBreakers
+        array<Zone> zb = array.new<Zone>()
+        for fl in flips
+            if fl.flipBar >= 0 and not fl.dead and (fl.cls == 1 or fl.cls == 2)
+                [top, bot] = f_obEdges(fl.ob)
+                f_pushZone(zb, top, bot, fl.ob.idx, -fl.ob.bias, fl.cls == 1 ? "BB" : "MB", fl.cls == 1 ? 2 : 3, false)
+                if fl.cls == 1
+                    dashBb += 1
+                else
+                    dashMb += 1
+        f_drawNearest(zb, maxZonesPerSide)
     f_clearBoxes(zoneBoxes)
     if showZones
         for c in cands
             if f_isActive(c)
                 array.push(zoneBoxes, box.new(c.trigIdx, c.zHigh, bar_index + 10, c.zLow, border_color = color.orange, bgcolor = color.new(color.orange, 80), text = c.state + (oteEntry and not na(c.limitPx) ? " @" + f_fmt(c.limitPx) : ""), text_size = size.tiny, text_color = color.orange))
+    for l in liqLines
+        line.delete(l)
+    array.clear(liqLines)
+    for l in liqLabels
+        label.delete(l)
+    array.clear(liqLabels)
+    dashLiq := 0
+    if showLiq
+        // unswept: nearest 10 to close (two-pass over a scratch list); swept: last 5, only with showHistory
+        array<float>  lp = array.new<float>()
+        array<bool>   lh = array.new<bool>()
+        array<int>    lb = array.new<int>()
+        array<string> lt = array.new<string>()
+        for e in equals
+            if not e.swept
+                array.push(lp, e.priceB)
+                array.push(lh, e.isHigh)
+                array.push(lb, e.idxB)
+                array.push(lt, e.isHigh ? "EQH" : "EQL")
+        for p in shPiv
+            if not p.swept
+                array.push(lp, p.price)
+                array.push(lh, true)
+                array.push(lb, p.bar)
+                array.push(lt, "BSL")
+        for p in slPiv
+            if not p.swept
+                array.push(lp, p.price)
+                array.push(lh, false)
+                array.push(lb, p.bar)
+                array.push(lt, "SSL")
+        int np = array.size(lp)
+        if np > 0
+            array<bool> used = array.new<bool>(np, false)
+            for k = 1 to math.min(10, np)
+                int best = -1
+                float bestD = na
+                for i = 0 to np - 1
+                    if not array.get(used, i)
+                        float d = math.abs(array.get(lp, i) - close)
+                        if na(bestD) or d < bestD
+                            bestD := d
+                            best  := i
+                if best >= 0
+                    array.set(used, best, true)
+                    f_drawLiq(array.get(lh, best), array.get(lp, best), array.get(lb, best), false, array.get(lt, best))
+                    dashLiq += 1
+        if showHistory
+            int shownSwept = 0
+            if array.size(equals) > 0
+                for i = array.size(equals) - 1 to 0
+                    Equal e = array.get(equals, i)
+                    if e.swept and shownSwept < 5
+                        f_drawLiq(e.isHigh, e.priceB, e.idxB, true, e.isHigh ? "EQH" : "EQL")
+                        shownSwept += 1
 
-var table dash = table.new(position.top_right, 2, 7, border_width = 1)
+var table dash = table.new(position.top_right, 2, 9, border_width = 1)
 f_cell(int row, string k, string v) =>
     table.cell(dash, 0, row, k, text_color = color.gray, text_size = size.small)
     table.cell(dash, 1, row, v, text_color = color.white, text_size = size.small)
@@ -928,3 +1370,5 @@ if barstate.islast and showDash
     f_cell(4, "Po3", po3Blocked ? "MANIPULATION (blocked)" : "ok")
     f_cell(5, "Range EQ", zoneOk ? f_fmt(zEq) : "-")
     f_cell(6, "Drops (last 20)", f_dropSummary())
+    f_cell(7, "Zones s/i·BB·MB·FVG·Liq", str.tostring(dashObS) + "/" + str.tostring(dashObI) + "·" + str.tostring(dashBb) + "·" + str.tostring(dashMb) + "·" + str.tostring(dashFvg) + "·" + str.tostring(dashLiq))
+    f_cell(8, "OTE", dashOte)
