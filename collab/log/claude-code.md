@@ -127,3 +127,10 @@
 - VPS: DEPLOYED 6d70ae0
 - istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
 
+
+## 2026-11-06 UTC+3 — T-20261106-05: ana klondaki TP_FAILED-sentinel WIP'i incelendi
+- task: T-20261106-05 | branch/PR: collab/claude-code/T-20261106-05-tp-failed-sentinel | commit: PR'da
+- ne yapıldı: ana klonda commit'lenmemiş `exchange/__init__.py` WIP'i (TP retry tükenince `TP_FAILED` sentinel + kullanılmayan `notification_mgr`) incelendi. Bulgu: iddia edilen hata master'da yok (`""` zaten repair'i tetikliyor, `_is_real_oid("")` False); WIP 6 mevcut testi kırıyor ve rollback'te sahte TP1 atfı riski taşıyor → port EDİLMEDİ. Yerine uçtan uca regresyon testi eklendi (4 test, mutasyonla doğrulandı); komşu 165 test + tam suite 2920 passed.
+- VPS: N/A
+- not: ana klondaki WIP olduğu gibi bırakıldı (operatör kararı). Ayrıca ana klonda kazara silinmiş `u2algo-site/**` + `backend/tests/test_disclaimer_wiring.py` `git restore` ile geri getirildi (28 test yeşil).
+- istek: operator → WIP'i atma kararı + PR review
