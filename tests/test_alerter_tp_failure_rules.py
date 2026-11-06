@@ -30,7 +30,8 @@ UNREACHABLE = "order_manager.tp_unreachable"
 def _rec(event=FAILED, leg="TP1", level="WARNING", logger="efloud.exchange", **kw):
     rec = {"level": level, "logger": logger, "message": f"{event}: BTC/USDT LONG tp_leg={leg}",
            "event": event, "symbol": "BTC/USDT", "direction": "LONG", "tp_leg": leg,
-           "error": "Request timed out", "attempt": 3, "max_attempts": 3}
+           "error": "Request timed out", "attempt": 3, "max_attempts": 3,
+           "retryable": True, "entry_order_id": "ENTRY-1"}
     rec.update(kw)
     return rec
 
@@ -57,6 +58,20 @@ def test_failed_tp_leg_fires(on, leg):
     assert "BTC/USDT LONG" in out and leg in out and "3/3" in out
     assert "Request timed out" in out
     assert "yeniden dener" in out
+
+
+def test_non_retryable_error_has_no_attempt_counter(on):
+    out = TpPlacementFailedRule().match_log(
+        _rec(error="insufficient margin", attempt=1, retryable=False))
+    assert out is not None
+    assert "1/3" not in out
+    assert "kalıcı hata" in out
+    assert "insufficient margin" in out
+
+
+def test_failed_wording_scopes_retry_to_open_position(on):
+    out = TpPlacementFailedRule().match_log(_rec())
+    assert "pozisyon açık kaldığı sürece" in out
 
 
 def test_unreachable_tp_fires_with_no_retry_wording(on):
@@ -91,6 +106,8 @@ def test_dedup_key_per_position_leg_and_kind():
     assert r.dedup_key(_rec(symbol="ETH/USDT")) != k_open
     assert r.dedup_key(_rec(direction="SHORT")) != k_open
     assert r.dedup_key(_rec(UNREACHABLE, level="CRITICAL")) != k_open
+    assert r.dedup_key(_rec(entry_order_id="ENTRY-2")) != k_open, (
+        "a new position on the same symbol+direction within the hour must still alert")
     assert r.dedup_window_sec == 60 * 60
     assert r.ai_format is False
 
@@ -150,4 +167,5 @@ def test_real_exchange_log_line_matches_rule(on, tp1_errors, expected_event):
     assert len(fired) == 1, [r.get("event") for r in cap.records]
     rec, text = fired[0]
     assert rec["event"] == expected_event
+    assert rec["entry_order_id"] == "ENTRY-1", "dedup key relies on this extra"
     assert "BTC/USDT LONG" in text and "TP1" in text

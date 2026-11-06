@@ -422,8 +422,10 @@ def _tp_event(rec: dict) -> Optional[str]:
 class TpPlacementFailedRule(Rule):
     """TP order could not be placed → operator message.
 
-    One message per (kind, symbol, direction, TP1|TP2) per hour: the repair
-    loop re-tries every reconcile cycle and would otherwise repeat the alert.
+    One message per (kind, position, TP1|TP2) per hour: the repair loop
+    re-tries every reconcile cycle and would otherwise repeat the alert. The
+    position is identified by entry_order_id (logged by every caller), so a
+    new position on the same symbol+direction is not silenced.
     """
     alert_key: str = "order.tp_failed"
     severity: str = "CRITICAL"
@@ -442,11 +444,15 @@ class TpPlacementFailedRule(Rule):
             return ("🚨 <b>TP yerleştirilemiyor — fiyat TP seviyesini geçmiş (-2021)</b>\n"
                     f"{head}\nhata: {error}\n"
                     "Bot bu TP bacağını yeniden denemez; pozisyonu kontrol et.")
+        # retryable=False → non-transient error, _retry_tp_order stopped after
+        # one call; an "1/3" counter would wrongly suggest more attempts.
+        tries = (f"deneme {_esc(rec.get('attempt'))}/{_esc(rec.get('max_attempts'))}"
+                 if rec.get("retryable", True) else "kalıcı hata (tekrar denenmedi)")
         return ("⚠️ <b>TP emri yerleştirilemedi</b>\n"
-                f"{head} · deneme {_esc(rec.get('attempt'))}/{_esc(rec.get('max_attempts'))}\n"
+                f"{head} · {tries}\n"
                 f"hata: {error}\n"
-                "Bot her reconcile döngüsünde TP'yi yeniden dener; "
-                "bu uyarı aynı bacak için saatte en fazla 1 kez gelir.")
+                "Bot, pozisyon açık kaldığı sürece her reconcile döngüsünde TP'yi "
+                "yeniden dener; bu uyarı aynı pozisyon/bacak için saatte en fazla 1 kez gelir.")
 
     def dedup_key(self, rec: dict) -> str:
         event = _tp_event(rec)
@@ -454,7 +460,8 @@ class TpPlacementFailedRule(Rule):
             return self.alert_key
         kind = "unreachable" if event == _TP_UNREACHABLE_EVENT else "failed"
         leg = str(rec.get("tp_leg", "")).split("_")[0]
-        return f"{self.alert_key}.{kind}.{rec.get('symbol')}.{rec.get('direction')}.{leg}"
+        return (f"{self.alert_key}.{kind}.{rec.get('symbol')}.{rec.get('direction')}."
+                f"{rec.get('entry_order_id')}.{leg}")
 
 
 # ─────────────────────────────────────────────────────────────────────

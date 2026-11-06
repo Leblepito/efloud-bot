@@ -129,7 +129,7 @@
 
 ## 2026-11-07 10:30 UTC+3 — T-20261107-03: TP yerleştirme hatası → Telegram (alerter kuralı)
 - task: T-20261107-03 | branch/PR: collab/claude-code/T-20261107-03-tp-failure-telegram-alert | commit: PR'da
-- ne yapıldı: `ops/alerter/rules.py`'ye `TpPlacementFailedRule` eklendi; exchange'in mevcut yapısal event'lerini (`order_manager.tp_placement_failed_after_sl`, `order_manager.tp_unreachable`) eşliyor. Trading koduna sıfır dokunuş. Kodda default OFF (`EFLOUD_ALERTER_TP_ALERTS`); prod açma satırı compose alerter env'inde ayrı commit. Testler RED→GREEN (17 + 2 config), alerter komşu 179, tam suite 2935 passed.
+- ne yapıldı: `ops/alerter/rules.py`'ye `TpPlacementFailedRule` eklendi; exchange'in mevcut yapısal event'lerini (`order_manager.tp_placement_failed_after_sl`, `order_manager.tp_unreachable`) eşliyor. Trading koduna sıfır dokunuş. Kodda default OFF (`EFLOUD_ALERTER_TP_ALERTS`); prod açma satırı compose alerter env'inde ayrı commit. Testler RED→GREEN (19 + 2 config); review düzeltmeleri: dedup anahtarına `entry_order_id`, kalıcı hatada sayaç yok, "pozisyon açık kaldığı sürece" ifadesi. Alerter komşu 130, tam suite yeşil (sayı PR'da).
 - VPS: N/A
 - not: alerter yalnız mid bot logunu okuyor → long/scalp kapsanmıyor.
 - istek: abacus → review · operator → merge + `docker compose up -d alerter`
