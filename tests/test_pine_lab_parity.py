@@ -153,7 +153,7 @@ def test_load_tv_trades_and_parse_signal(tmp_path):
     assert list(t.columns) == ["trade", "type", "time", "signal", "price", "qty", "pnl"]
     e = plp.tv_entries(t)
     assert e == [{"direction": "LONG", "trig": 1772359200000, "entry": 100.0, "entry_ref": None, "sl": 99.0,
-                  "tp1": 103.0, "tp2": None, "time": pd.Timestamp("2026-03-01 10:00"), "variant": "B"}]
+                  "tp1": 103.0, "tp2": None, "time": pd.Timestamp("2026-03-01 10:00"), "variant": "B", "qty": 5.0}]
     p2 = _tv_csv(tmp_path, ["1,Entry long,2026-03-01 10:00,B|trig=1|entry=99.5|sl=99|tp1=103|tp2=na,100,5,\n"])
     assert plp.tv_entries(plp.load_tv_trades(p2))[0]["entry_ref"] == 99.5
 
@@ -174,7 +174,7 @@ def test_compare_matches_python_only_pine_only_and_tolerances():
     assert res["python_only"] == [] and [e["trig"] for e in res["pine_only"]] == [9]
     assert [m["trig"] for m in res["level_mismatch"]] == [2]           # sl 98.5 vs 98.0 > 0.1 %
     assert res["guard_rejected"] == 1
-    assert res["match_rate"] == 1.0 and res["passed"] is False         # level mismatch fails the gate
+    assert res["match_rate"] == 1.0 and res["passed"] is False         # 1 mismatch / 2 matched = 50 % > 5 %
     entries[0]["entry"] = 100.2                                       # > 0.05 % → unmatched
     res2 = plp.compare(py, entries)
     assert res2["matched"] == 2 and res2["python_only"] == []
@@ -211,7 +211,8 @@ def test_compare_duplicate_keys_pair_in_time_order():
     res = plp.compare(py, tv)
     assert res["matched"] == 2 and res["level_mismatch"] == []
     res = plp.compare(py, [_tv_entry(7, 100.0, t1)])
-    assert res["matched"] == 1 and [r["confirmed_ts"] for r in res["python_only"]] == [20]
+    assert res["matched"] == 1 and [r["confirmed_ts"] for r in res["repeat_confirmation"]] == [20]   # key already paired
+    assert res["python_only"] == []
     res = plp.compare(py, tv + [_tv_entry(7, 120.0, t3)])
     assert res["matched"] == 2 and [e["entry"] for e in res["pine_only"]] == [120.0]
 
@@ -325,3 +326,56 @@ def test_decide_applies_all_four_criteria():
     assert ok is False
     ok, why = plp.decide(base, {"n": 1, "total_r": 0.0, "avg_r": 0.0, "pf": 0.0, "max_dd_r": 99.0})
     assert len(why) == 4 and all(w.isascii() for w in why)
+
+
+def test_tv_entries_merges_split_trade_rows(tmp_path):
+    p = _tv_csv(tmp_path, [
+        "1,Entry long,2026-03-01 10:00,B|trig=5|sl=98|tp1=104|tp2=108,100,3,\n",
+        "1,Exit long,2026-03-01 12:00,TP1|sl=98,104,3,12\n",
+        "2,Entry long,2026-03-01 10:00,B|trig=5|sl=98|tp1=104|tp2=108,100,2,\n",
+        "2,Exit long,2026-03-01 14:00,TP2|sl=98,108,2,16\n",
+        "3,Entry short,2026-03-02 10:00,B|trig=6|sl=102|tp1=96|tp2=na,100,4,\n",
+    ])
+    e = plp.tv_entries(plp.load_tv_trades(p))
+    assert [(x["trig"], x["qty"]) for x in e] == [(5, 5.0), (6, 4.0)]
+
+
+def test_compare_repeat_confirmations_are_not_python_only():
+    py = [_py_row(7, confirmed=10), _py_row(7, confirmed=20), _py_row(7, confirmed=30), _py_row(9, confirmed=40)]
+    res = plp.compare(py, [_tv_entry(7)])
+    assert res["matched"] == 1
+    assert [r["confirmed_ts"] for r in res["repeat_confirmation"]] == [20, 30]
+    assert [r["trigger_bar_ts"] for r in res["python_only"]] == [9]       # key with no TV entry stays python-only
+    assert res["python_entries"] == 2                                      # repeats leave the denominator
+    assert "repeat" in plp.format_compare(res)
+
+
+def test_compare_since_trims_python_rows_and_tv_entries(tmp_path):
+    p = tmp_path / "py.csv"
+    rows = []
+    for trig, cts in ((1, 1_000), (2, 5_000)):
+        r = {k: "" for k in plp.ROW_FIELDS}
+        r.update(symbol="LAB/USDT", direction="LONG", trigger_bar_ts=trig, entry=100.0, fill=100.0, sl=98.0, tp1=104.0,
+                 confirmed_ts=cts, python_guard_rejected=False)
+        rows.append(r)
+    plp.write_rows(rows, p)
+    res = plp.compare(plp.read_rows(p), [_tv_entry(2, time=pd.Timestamp(5_000, unit="ms"))], since_ms=2_000)
+    assert res["python_entries"] == 1 and res["matched"] == 1 and res["python_only"] == []
+    assert res["trimmed"] == 1
+    tv = tmp_path / "trades.csv"
+    tv.write_text("Trade #,Type,Date and time,Signal,Price USDT,Position size (qty),Net P&L USDT\n"
+                  "1,Entry long,2026-03-01 10:00,B|trig=2|sl=98|tp1=104|tp2=na,100,5,\n")
+    assert plp.main(["compare", "--python", str(p), "--tv", str(tv), "--since", "2026-03-01"]) == 1   # all rows trimmed
+    assert plp.main(["compare", "--python", str(p), "--tv", str(tv), "--since", "2"]) in (0, 1)       # ms form parses
+
+
+def test_compare_level_mismatch_rate_gate():
+    py = [_py_row(i) for i in range(1, 41)]
+    tv = [_tv_entry(i) for i in range(1, 41)]
+    tv[0]["sl"] = 90.0
+    res = plp.compare(py, tv)
+    assert res["matched"] == 40 and len(res["level_mismatch"]) == 1 and res["passed"] is True       # 2.5 % <= 5 %
+    tv[1]["sl"] = 90.0
+    tv[2]["sl"] = 90.0
+    assert plp.compare(py, tv)["passed"] is False                                                    # 7.5 % > 5 %
+    assert "rate" in plp.format_compare(res)

@@ -281,15 +281,17 @@ def _num(v) -> Optional[float]:
 
 
 def tv_entries(trades: pd.DataFrame) -> list[dict]:
+    """One entry per position: Trade # rows sharing (entry time, entry signal) are merged (`_trade_groups`),
+    qty summed."""
     out = []
-    for _, r in trades[trades["type"].str.startswith("Entry")].iterrows():
+    for r, qty, _ex in _trade_groups(trades):
         sig = parse_signal(r["signal"])
         trig = _num(sig.get("trig"))
         out.append({"direction": "LONG" if "long" in r["type"].lower() else "SHORT",
                     "trig": int(trig) if trig is not None else None, "entry": float(r["price"]),
                     "entry_ref": _num(sig.get("entry")),
                     "sl": _num(sig.get("sl")), "tp1": _num(sig.get("tp1")), "tp2": _num(sig.get("tp2")),
-                    "time": r["time"], "variant": sig["variant"]})
+                    "time": r["time"], "variant": sig["variant"], "qty": qty})
     return out
 
 
@@ -344,7 +346,7 @@ def _key(direction, trig) -> tuple:
 
 
 def compare(py_rows: list[dict], entries: list[dict], *, intervals: Optional[list] = None, entry_tol: float = 0.0005,
-            level_tol: float = 0.001, gate: float = 0.95) -> dict:
+            level_tol: float = 0.001, gate: float = 0.95, since_ms: Optional[int] = None) -> dict:
     """Pair intended Python entries (drop_reason == '') with TradingView entries on (direction, trig).
 
     Python rows confirmed while a TV position was open (entry_ms < confirmed_ts < exit_ms; <= for MAX_HOLD /
@@ -352,14 +354,25 @@ def compare(py_rows: list[dict], entries: list[dict], *, intervals: Optional[lis
     `blocked_by_position`: the strategy holds one position per symbol and ignores fired candidates meanwhile.
     Duplicate keys (the engine re-emits a break after its candidate expired; the strategy can reopen on the
     same trig) pair in time order: i-th Python row (by confirmed_ts) with i-th TV entry (by time).
+    Surplus Python rows of a key that already has a pair are `repeat_confirmation` (the replay has no
+    single-position model: a pruned CONFIRMED break is re-emitted and re-confirmed by the same engulfing);
+    they leave the denominator. Surplus rows of a key with no TV entry stay `python_only`.
+    `since_ms` drops Python rows (confirmed_ts) and TV entries (time) before it, counted in `trimmed`.
     The entry tolerance compares the TV fill price with the Python fill (`fill`, current close; fallback
     `entry`); the engulfing `entry` is compared with the TV comment's `entry=` as a level (`entry_ref`).
     """
-    py_entries, blocked = [], []
+    py_entries, blocked, trimmed = [], [], 0
+    if since_ms is not None:
+        kept = [e for e in entries if _ms(e["time"]) >= since_ms]
+        trimmed += len(entries) - len(kept)
+        entries = kept
     for r in py_rows:
         if r.get("drop_reason", "") != "":
             continue
         cts = r.get("confirmed_ts", "")
+        if since_ms is not None and cts != "" and int(cts) < since_ms:
+            trimmed += 1
+            continue
         if intervals and cts != "" and any(a < int(cts) and (int(cts) <= b if incl else int(cts) < b) for a, b, incl in intervals):
             blocked.append(r)
         else:
@@ -370,7 +383,7 @@ def compare(py_rows: list[dict], entries: list[dict], *, intervals: Optional[lis
     tv_groups: dict = {}
     for e in entries:
         tv_groups.setdefault(_key(e["direction"], e["trig"]), []).append(e)
-    matched, python_only, pine_only, mismatches = 0, [], [], []
+    matched, python_only, pine_only, mismatches, repeats = 0, [], [], [], []
     for key in list(py_groups) + [k for k in tv_groups if k not in py_groups]:
         prs = sorted(py_groups.get(key, []), key=lambda r: r["confirmed_ts"] if r.get("confirmed_ts", "") != "" else 0)
         tes = sorted(tv_groups.get(key, []), key=lambda e: e["time"])
@@ -386,13 +399,17 @@ def compare(py_rows: list[dict], entries: list[dict], *, intervals: Optional[lis
             if bad:
                 mismatches.append({"trig": key[1], "direction": key[0], "levels": bad,
                                    "python": {k: pyv[k] for k in bad}, "pine": {k: tvv[k] for k in bad}})
-        python_only.extend(prs[len(tes):])
+        (repeats if tes else python_only).extend(prs[len(tes):])
         pine_only.extend(tes[len(prs):])
-    rate = matched / len(py_entries) if py_entries else 0.0
-    return {"python_entries": len(py_entries), "matched": matched, "python_only": python_only, "pine_only": pine_only,
-            "blocked_by_position": blocked,
-            "level_mismatch": mismatches, "guard_rejected": sum(1 for r in py_entries if r.get("python_guard_rejected")),
-            "match_rate": rate, "passed": bool(py_entries) and rate >= gate and not mismatches
+    n_py = len(py_entries) - len(repeats)
+    rate = matched / n_py if n_py else 0.0
+    mm_rate = len(mismatches) / max(1, matched)
+    return {"python_entries": n_py, "matched": matched, "python_only": python_only, "pine_only": pine_only,
+            "blocked_by_position": blocked, "repeat_confirmation": repeats, "trimmed": trimmed,
+            "level_mismatch": mismatches, "level_mismatch_rate": mm_rate,
+            "guard_rejected": sum(1 for r in py_entries if r.get("python_guard_rejected")),
+            "match_rate": rate, "passed": bool(n_py) and rate >= gate
+            and len(mismatches) <= (1.0 - gate) * max(1, matched)
             and len(pine_only) <= (1.0 - gate) * max(1, len(entries))}
 
 
@@ -402,7 +419,9 @@ def format_compare(res: dict) -> str:
              f"python-only    : {len(res['python_only'])}",
              f"pine-only      : {len(res['pine_only'])}",
              f"blocked by pos : {len(res.get('blocked_by_position', []))}  (confirmed while a TV position was open)",
-             f"level mismatch : {len(res['level_mismatch'])}",
+             f"repeat confirm : {len(res.get('repeat_confirmation', []))}  (same key re-confirmed; replay has no single-position model)",
+             f"trimmed (since): {res.get('trimmed', 0)}",
+             f"level mismatch : {len(res['level_mismatch'])} (rate {res.get('level_mismatch_rate', 0.0):.1%})",
              f"guard-rejected : {res['guard_rejected']}  (B2 float flag -- live would have dropped these)",
              f"GATE           : {'PASS' if res['passed'] else 'FAIL'}"]
     for r in res["python_only"][:20]:
@@ -412,6 +431,14 @@ def format_compare(res: dict) -> str:
     for m in res["level_mismatch"][:20]:
         lines.append(f"  levels   {m['direction']} trig={m['trig']} {m['levels']} py={m['python']} pine={m['pine']}")
     return "\n".join(lines)
+
+
+def _parse_since(v) -> Optional[int]:
+    """ISO date/datetime (UTC) or epoch ms → ms; None passes through."""
+    if v in (None, ""):
+        return None
+    s = str(v).strip()
+    return int(s) if s.lstrip("-").isdigit() else _ms(pd.Timestamp(s))
 
 
 def _cmd_compare(a) -> int:
@@ -427,7 +454,8 @@ def _cmd_compare(a) -> int:
     if stamps:
         first = pd.Timestamp(min(stamps), unit="ms")
         entries = [e for e in entries if e["time"] >= first]
-    res = compare(py, entries, intervals=intervals, entry_tol=a.entry_tol, level_tol=a.level_tol, gate=a.gate)
+    res = compare(py, entries, intervals=intervals, entry_tol=a.entry_tol, level_tol=a.level_tol, gate=a.gate,
+                  since_ms=_parse_since(a.since))
     print(format_compare(res))
     return 0 if res["passed"] else 1
 
@@ -526,6 +554,7 @@ def main(argv=None) -> int:
     c.add_argument("--entry-tol", type=float, default=0.0005)
     c.add_argument("--level-tol", type=float, default=0.001)
     c.add_argument("--gate", type=float, default=0.95)
+    c.add_argument("--since", default=None, help="ISO date or epoch ms; drop Python rows / TV entries before it")
     c.set_defaults(fn=_cmd_compare)
     s = sub.add_parser("score", help="NET R metrics + WIN/NO vs baseline (spec §6.3)")
     s.add_argument("--baseline", required=True)

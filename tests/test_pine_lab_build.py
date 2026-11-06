@@ -91,3 +91,17 @@ def test_store_ob_reads_bar_history_from_global_buffers():
     body = _func_body(core, "f_storeOb")
     assert not re.search(r"[A-Za-z_]\w*\s*\[", body), re.search(r"[A-Za-z_]\w*\s*\[", body).group(0)
     assert "bufPHi" in body and "bufPLo" in body
+
+
+def test_confirm_reads_bar_history_from_global_buffers():
+    """f_confirm is only called for IN_ZONE candidates: the same call-history hazard as f_storeOb, so it
+    must index the open/close/time ring buffers (no `[off` history), and the buffers must cover the scan depth."""
+    core = (ROOT / "pine" / "lab" / "core.pine").read_text(encoding="utf-8")
+    body = _func_body(core, "f_confirm")
+    assert "[off" not in body, "history reference left in f_confirm"
+    assert not re.search(r"\b(open|close|high|low|time)[ \t]*\[", body)
+    for buf in ("bufOpen", "bufClose", "bufTime"):
+        assert buf in body and f"var array<" in core and re.search(rf"var array<\w+>\s+{buf}\b", core)
+    cap = int(re.search(r"^bufCap\s*=\s*(\d+)", core, re.M).group(1))
+    assert cap >= 992                                    # scan depth bound is min(recency + timeout + 2, 990) (+1 prior bar)
+    assert "bufCap" in core.split("// after the structure pass")[1].split("// ====")[0]
