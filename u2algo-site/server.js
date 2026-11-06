@@ -57,6 +57,34 @@ function readJson(req, maxBytes = 4096) {
   });
 }
 
+// Waitlist flood guard (T-20261107-04). Client = right-most X-Forwarded-For
+// entry (added by the platform edge; left-most is client-controlled) or the
+// socket address. A global cap bounds spoofed-header floods, like the bot
+// backend's login limiter.
+const WAITLIST_WINDOW_MS = 10 * 60 * 1000;
+const WAITLIST_PER_CLIENT_MAX = 5;
+const WAITLIST_GLOBAL_MAX = 200;
+const waitlistHits = new Map();
+
+function clientKey(req) {
+  const parts = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : (req.socket.remoteAddress || 'unknown');
+}
+
+function waitlistRateLimited(req, now = Date.now()) {
+  let total = 0;
+  for (const [key, hits] of waitlistHits) {
+    const fresh = hits.filter(t => now - t < WAITLIST_WINDOW_MS);
+    if (fresh.length) { waitlistHits.set(key, fresh); total += fresh.length; } else waitlistHits.delete(key);
+  }
+  const key = clientKey(req);
+  const hits = waitlistHits.get(key) || [];
+  if (hits.length >= WAITLIST_PER_CLIENT_MAX || total >= WAITLIST_GLOBAL_MAX) return true;
+  hits.push(now);
+  waitlistHits.set(key, hits);
+  return false;
+}
+
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -175,6 +203,22 @@ const types = {
   '.txt': 'text/plain; charset=utf-8'
 };
 
+// Only the public surface is served (T-20261107-04, security audit): top-level
+// pages + crawler/transparency files and the asset folders the pages use.
+// Everything else under root — server source, package/config files, scripts/,
+// supabase/, web/, brand-kit sources, dotfiles and the waitlist fallback in
+// data/ — falls back to index.html like any unknown path.
+const PUBLIC_TOP_FILE = /^[\w-]+\.html$|^(favicon\.ico|robots\.txt|sitemap\.xml|updates\.json|premium_proof\.json)$/;
+const PUBLIC_DIRS = ['brand', 'assets', path.join('brand-kit', 'assets')];
+const PUBLIC_CSS_DIR = path.join('brand-kit', 'css') + path.sep;  // only the built .css, not its TS/PostCSS sources
+
+function isPublicPath(rel) {
+  if (rel.split(path.sep).some(part => part.startsWith('.'))) return false;
+  if (!rel.includes(path.sep)) return PUBLIC_TOP_FILE.test(rel);
+  if (rel.startsWith(PUBLIC_CSS_DIR)) return rel.endsWith('.css');
+  return PUBLIC_DIRS.some(dir => rel.startsWith(dir + path.sep));
+}
+
 function safePath(urlPath) {
   let decoded;
   try {
@@ -185,7 +229,8 @@ function safePath(urlPath) {
   if (decoded === '/') decoded = '/index.html';
   const normalized = path.normalize(decoded).replace(/^([/\\])+/, '');
   const filePath = path.join(root, normalized);
-  if (!filePath.startsWith(root)) return path.join(root, 'index.html');
+  const rel = path.relative(root, filePath);
+  if (!filePath.startsWith(root + path.sep) || !isPublicPath(rel)) return path.join(root, 'index.html');
   return filePath;
 }
 
@@ -250,12 +295,16 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       const message = err && err.message ? err.message : 'internal_error';
       console.error('purchase_webhook_handler_failed', message);
-      sendJson(res, 500, { ok: false, error: 'internal_error', detail: message });
+      sendJson(res, 500, { ok: false, error: 'internal_error' });
     }
     return;
   }
 
   if (pathname === '/api/waitlist' && req.method === 'POST') {
+    if (waitlistRateLimited(req)) {
+      sendJson(res, 429, { ok: false, error: 'rate_limited' });
+      return;
+    }
     try {
       const payload = await readJson(req);
       const email = normalizeEmail(payload.email);
@@ -386,13 +435,22 @@ async function handlePurchaseWebhook(req, res) {
     return sendJson(res, 503, { ok: false, error: 'webhook_secret_not_configured' });
   }
 
-  // Raw body (HMAC için JSON parse ÖNCESİ)
+  // Raw body (HMAC için JSON parse ÖNCESİ). Bounded (T-20261107-04): bytes over
+  // the cap are drained and discarded, never buffered, then 413.
+  const MAX_WEBHOOK_BYTES = 64 * 1024;
   const chunks = [];
-  req.on('data', c => chunks.push(c));
+  let received = 0;
+  req.on('data', c => {
+    received += c.length;
+    if (received <= MAX_WEBHOOK_BYTES) chunks.push(c);
+  });
   await new Promise((resolve, reject) => {
     req.on('end', resolve);
     req.on('error', reject);
   });
+  if (received > MAX_WEBHOOK_BYTES) {
+    return sendJson(res, 413, { ok: false, error: 'payload_too_large' });
+  }
   const raw = Buffer.concat(chunks);
 
   // HMAC doğrula (timing-safe)
