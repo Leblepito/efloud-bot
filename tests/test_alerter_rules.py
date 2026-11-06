@@ -195,6 +195,8 @@ def test_rules_list_contains_in_scope_rules():
         # T-20261104-08: LuxAlgo zone early warning (default OFF via env).
         "lux.zone",
         "lux.reject",
+        # T-20261107-03: TP placement failure (default OFF via env).
+        "order.tp_failed",
     }
     assert set(keys) == expected, f"got {set(keys)}"
 

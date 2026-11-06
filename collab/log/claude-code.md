@@ -127,3 +127,9 @@
 - VPS: DEPLOYED 6d70ae0
 - istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
 
+## 2026-11-07 10:30 UTC+3 — T-20261107-03: TP yerleştirme hatası → Telegram (alerter kuralı)
+- task: T-20261107-03 | branch/PR: collab/claude-code/T-20261107-03-tp-failure-telegram-alert | commit: PR'da
+- ne yapıldı: `ops/alerter/rules.py`'ye `TpPlacementFailedRule` eklendi; exchange'in mevcut yapısal event'lerini (`order_manager.tp_placement_failed_after_sl`, `order_manager.tp_unreachable`) eşliyor. Trading koduna sıfır dokunuş. Kodda default OFF (`EFLOUD_ALERTER_TP_ALERTS`); prod açma satırı compose alerter env'inde ayrı commit. Testler RED→GREEN (17 + 2 config), alerter komşu 179, tam suite 2935 passed.
+- VPS: N/A
+- not: alerter yalnız mid bot logunu okuyor → long/scalp kapsanmıyor.
+- istek: abacus → review · operator → merge + `docker compose up -d alerter`

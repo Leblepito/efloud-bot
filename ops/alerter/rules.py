@@ -389,6 +389,75 @@ class V2RejectAlertRule(Rule):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# TP placement failure (T-20261107-03) — read-only, default OFF
+# ─────────────────────────────────────────────────────────────────────
+
+TP_ALERTS_ENV = "EFLOUD_ALERTER_TP_ALERTS"
+# Structured events emitted by exchange.OrderManager._retry_tp_order (extras
+# land in the JSON log line: event/symbol/direction/tp_leg/error/attempt/...).
+_TP_FAILED_EVENT = "order_manager.tp_placement_failed_after_sl"
+_TP_UNREACHABLE_EVENT = "order_manager.tp_unreachable"
+
+
+def _tp_alerts_on() -> bool:
+    return os.environ.get(TP_ALERTS_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _tp_event(rec: dict) -> Optional[str]:
+    """Return the event name for a TP-leg placement failure record, else None.
+    Labels: TP1 / TP2 (open + post-placement verify), TP1_REPAIR / TP2_REPAIR
+    (reconcile repair). SL legs are excluded — their failures go through the
+    rollback / fail-closed paths."""
+    if rec.get("logger") != "efloud.exchange":
+        return None
+    event = rec.get("event")
+    if event not in (_TP_FAILED_EVENT, _TP_UNREACHABLE_EVENT):
+        return None
+    if not str(rec.get("tp_leg", "")).startswith("TP"):
+        return None
+    return event
+
+
+@dataclass
+class TpPlacementFailedRule(Rule):
+    """TP order could not be placed → operator message.
+
+    One message per (kind, symbol, direction, TP1|TP2) per hour: the repair
+    loop re-tries every reconcile cycle and would otherwise repeat the alert.
+    """
+    alert_key: str = "order.tp_failed"
+    severity: str = "CRITICAL"
+    dedup_window_sec: int = 60 * 60
+    ai_format: bool = False
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if not _tp_alerts_on():
+            return None
+        event = _tp_event(rec)
+        if event is None:
+            return None
+        head = f"{_esc(rec.get('symbol'))} {_esc(rec.get('direction'))} · {_esc(rec.get('tp_leg'))}"
+        error = _esc(str(rec.get("error", ""))[:300])
+        if event == _TP_UNREACHABLE_EVENT:
+            return ("🚨 <b>TP yerleştirilemiyor — fiyat TP seviyesini geçmiş (-2021)</b>\n"
+                    f"{head}\nhata: {error}\n"
+                    "Bot bu TP bacağını yeniden denemez; pozisyonu kontrol et.")
+        return ("⚠️ <b>TP emri yerleştirilemedi</b>\n"
+                f"{head} · deneme {_esc(rec.get('attempt'))}/{_esc(rec.get('max_attempts'))}\n"
+                f"hata: {error}\n"
+                "Bot her reconcile döngüsünde TP'yi yeniden dener; "
+                "bu uyarı aynı bacak için saatte en fazla 1 kez gelir.")
+
+    def dedup_key(self, rec: dict) -> str:
+        event = _tp_event(rec)
+        if event is None:
+            return self.alert_key
+        kind = "unreachable" if event == _TP_UNREACHABLE_EVENT else "failed"
+        leg = str(rec.get("tp_leg", "")).split("_")[0]
+        return f"{self.alert_key}.{kind}.{rec.get('symbol')}.{rec.get('direction')}.{leg}"
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Overseer watchdog (file-mtime driven)
 # ─────────────────────────────────────────────────────────────────────
 
@@ -491,4 +560,5 @@ RULES: list[Rule] = [
     OverseerHeartbeatStaleRule(),
     LuxZoneAlertRule(),
     V2RejectAlertRule(),
+    TpPlacementFailedRule(),
 ]
