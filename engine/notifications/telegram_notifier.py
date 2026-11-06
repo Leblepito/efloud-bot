@@ -4,10 +4,16 @@ DISTINCT from `backend.notifications.TelegramNotifier` (the operator's real-time
 position alerter). This one feeds the PUBLIC u2algo customer channel and is built
 to stay on the safe side of the "signal service" regulatory line (P-003 §2b):
 
-  • AGGREGATE / DELAYED only — a once-daily digest summarising CLOSED trades in
-    aggregate (count, win-rate, aggregate return). It deliberately exposes NO
-    per-trade entry/SL/TP/symbol, so a subscriber cannot reconstruct a tradeable
-    signal from it.
+  • AGGREGATE / DELAYED digest — a once-daily digest summarising CLOSED trades in
+    aggregate (count, win-rate, aggregate return). The digest exposes NO
+    per-trade entry/SL/TP/symbol.
+  • PER-TRADE posts (post_trade_opened / _tp1 / _closed) ALSO exist: real-time
+    symbol + entry/SL/TP. They are default OFF (EFLOUD_CUSTOMER_TG_TRADES). WARNING:
+    these are NOT covered by the CMP-3 compliance gate and sit on the P-003 s2b
+    "signal service" line - enabling them on a PUBLIC channel requires operator /
+    legal sign-off first. The public close reason is whitelisted (TP1/TP2/SL/BE/closed).
+  • Per-trade posts are fire-and-forget: queued to a single daemon worker thread
+    (bounded queue, dropped when full) so a slow Telegram call never blocks the caller.
   • DOUBLE-GATED, default OFF — emits only when BOTH the config flag
     (`notifications.telegram.enabled`, default False) AND the two customer-channel
     credentials are present. Either missing → hard no-op, zero HTTP.
@@ -35,6 +41,9 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
+import re
+import threading
 from typing import Optional
 
 import requests
@@ -51,6 +60,23 @@ def _fmt_price(x) -> str:
     """Compact price: up to 8 significant decimals, trailing zeros trimmed."""
     s = f"{float(x):.8f}".rstrip("0").rstrip(".")
     return s or "0"
+
+
+_QUEUE_MAX = 100
+
+
+def _public_reason(reason) -> str:
+    """Whitelist the close reason shown publicly: TP1 / TP2 / SL / BE, else 'closed'."""
+    tokens = set(re.split(r"[^A-Z0-9]+", str(reason or "").upper()))
+    if "TP2" in tokens:
+        return "TP2"
+    if "TP1" in tokens:
+        return "TP1"
+    if tokens & {"SL", "STOP"}:
+        return "SL"
+    if tokens & {"BE", "BREAKEVEN"}:
+        return "BE"
+    return "closed"
 
 
 def _clean(text) -> str:
@@ -130,7 +156,12 @@ class CustomerChannelNotifier:
             log.info(f"Customer Telegram notifier enabled (channel={self.channel_id}, mode={self.mode})")
         else:
             why = "flag off" if not self.flag_enabled else "creds missing"
-            log.info(f"Customer Telegram notifier disabled ({why})")
+            log.info(f"Customer Telegram notifier digest disabled ({why})")
+        log.info(f"Customer Telegram per-trade posts: {'ENABLED' if self.trades_enabled else 'disabled'}")
+
+        self._queue: "queue.Queue[str]" = queue.Queue(maxsize=_QUEUE_MAX)
+        self._worker: Optional[threading.Thread] = None
+        self._worker_lock = threading.Lock()
 
     def post_daily_digest(self, digest: dict) -> bool:
         """Post an aggregate daily digest. No-op (returns False) when disabled.
@@ -152,9 +183,34 @@ class CustomerChannelNotifier:
         except Exception as e:
             log.warning(f"Customer Telegram trade post build failed: {e}")
             return False
-        # Per-trade posts are gated by trades_enabled (checked above), not the
-        # digest `enabled` flag, so deliver directly.
-        return self._deliver(text)
+        # Fire-and-forget: never block the caller (reconcile / kill-switch paths).
+        try:
+            self._ensure_worker()
+            self._queue.put_nowait(text)
+            return True
+        except queue.Full:
+            log.warning("Customer Telegram trade post dropped: queue full")
+            return False
+        except Exception as e:
+            log.warning(f"Customer Telegram trade post enqueue failed: {e}")
+            return False
+
+    def _ensure_worker(self) -> None:
+        with self._worker_lock:
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(
+                    target=self._run_worker, name="customer-tg-worker", daemon=True)
+                self._worker.start()
+
+    def _run_worker(self) -> None:
+        while True:
+            text = self._queue.get()
+            try:
+                self._deliver(text)
+            except Exception as e:  # _deliver never raises; belt and braces
+                log.warning(f"Customer Telegram worker error: {e}")
+            finally:
+                self._queue.task_done()
 
     def post_trade_opened(self, symbol, direction, entry, sl, tp1, tp2=None, setup=None) -> bool:
         def build() -> str:
@@ -191,7 +247,8 @@ class CustomerChannelNotifier:
             if pnl_r is not None:
                 lines.append(f"Sonuç / Result: `{float(pnl_r):+.2f}R`")
             if reason:
-                lines.append(f"Neden / Reason: {_clean(reason)}")
+                pub = _public_reason(reason)
+                lines.append(f"Neden / Reason: {pub if pub != 'closed' else 'kapandı / closed'}")
             lines += [_BRAND, _DISCLAIMER]
             return "\n".join(lines)
         return self._post_trade(build)

@@ -43,6 +43,8 @@ Güvenlik: notifier hiçbir zaman exception fırlatmaz (hata `warning` olarak lo
 Üç koşuldan biri eksikse (token, kanal id, `TRADES` bayrağı) notifier sessizce no-op'tur ve hiç HTTP isteği yapmaz.
 Kapatmak için `EFLOUD_CUSTOMER_TG_TRADES=0` + konteyner yeniden oluşturma.
 
+> **Uyum notu:** Gerçek zamanlı entry/SL/TP paylaşımı P-003 §2b "sinyal servisi" sınırındadır ve CMP-3 compliance gate bu postları kapsamaz. Kanal herkese açıksa operatör/hukuki onay olmadan `EFLOUD_CUSTOMER_TG_TRADES=1` yapılmaz. Kapanış nedeni yalnız TP1/TP2/SL/BE/kapandı olarak paylaşılır; postlar arka plan kuyruğundan gönderilir (işlem akışını bloklamaz).
+
 ## TradingView alert feed ile ilişkisi
 
 Gösterge (indicator) alert'leri TradingView'den kanala ayrı bir akışla gider: bkz. `docs/telegram/tradingview-to-telegram.md`

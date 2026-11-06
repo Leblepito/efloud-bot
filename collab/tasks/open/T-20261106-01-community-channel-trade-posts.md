@@ -21,6 +21,7 @@ Bot'un gerçek işlemleri (açılış, TP1, kapanış) topluluk Telegram kanalı
 - Topluluk kanalı: operatörün daha önce açtığı kanal; bot'u (@BotFather botu) kanala **admin** olarak eklemek gerekir.
 
 ## Beklenen çıktı (Definition of Done)
+- [ ] Operatör/hukuki onay: gerçek zamanlı entry/SL/TP paylaşımı P-003 §2b 'sinyal servisi' sınırı — kanal herkese açıksa onay olmadan `EFLOUD_CUSTOMER_TG_TRADES=1` yapılmaz.
 - [ ] PR merge edildikten sonra VPS kodu master'a çekildi (operatör onayıyla).
 - [ ] Üç env değişkeni prod env dosyasında set (değerler repo'ya/log'a yazılmaz).
 - [ ] Bot container'ı **flat (açık pozisyon yokken)** pencerede recreate edildi; AUTOSTART=0 olduğu için bot manuel start edildi; `/healthz` 200.
