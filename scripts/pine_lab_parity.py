@@ -600,8 +600,10 @@ def main(argv=None) -> int:
     vz.add_argument("--window", type=int, default=750)
     vz.add_argument("--warmup", type=int, default=100)      # 2 × swing_len
     vz.add_argument("--out", default="expected_visuals.json")
-    from scripts.pine_lab_visuals import cmd_visuals  # local import keeps the parity module import-light
-    vz.set_defaults(fn=cmd_visuals)
+    def _visuals(a):
+        from scripts.pine_lab_visuals import cmd_visuals  # imported only when the subcommand runs
+        return cmd_visuals(a)
+    vz.set_defaults(fn=_visuals)
     a = ap.parse_args(argv)
     return a.fn(a)
 

@@ -78,20 +78,25 @@ def classify_flips(result, h: np.ndarray, l: np.ndarray, c: np.ndarray, swing_le
         if ref is None:
             out.append(rec)
             continue
-        leg = l[ob.idx + 1:ob.created_idx + 1].min() if bear else h[ob.idx + 1:ob.created_idx + 1].max()
+        seg = (l if bear else h)[ob.idx + 1:ob.created_idx + 1]
+        leg = (seg.min() if bear else seg.max()) if seg.size else None     # None = no sweep observed yet
         for t in range(ob.created_idx + 1, min(n, ob.created_idx + 1 + window)):
             if (c[t] > top) if bear else (c[t] < bot):
                 rec["flip"] = t
-                rec["cls"] = "BB" if ((leg < ref) if bear else (leg > ref)) else "MB"
+                swept = leg is not None and ((leg < ref) if bear else (leg > ref))
+                rec["cls"] = "BB" if swept else "MB"
                 after = c[t + 1:]
                 rec["dead"] = bool(after.size and ((after < bot).any() if bear else (after > top).any()))
                 break
-            leg = min(leg, l[t]) if bear else max(leg, h[t])
+            if leg is None:
+                leg = l[t] if bear else h[t]
+            else:
+                leg = min(leg, l[t]) if bear else max(leg, h[t])
         out.append(rec)
     return out
 
 
-def ote_range(result, h: np.ndarray, l: np.ndarray, c: np.ndarray) -> Optional[dict]:
+def ote_range(result, h: np.ndarray, l: np.ndarray, c: np.ndarray, swing_len: int = 50) -> Optional[dict]:
     """Fixed swing range (spec §3.5) evaluated bar by bar up to the last bar."""
     n = len(c)
     swing = {}
@@ -103,14 +108,20 @@ def ote_range(result, h: np.ndarray, l: np.ndarray, c: np.ndarray) -> Optional[d
     d = 0
     for t in range(n):
         for b in swing.get(t, []):                       # last swing break on the bar wins (core order)
-            ob = b.order_block
-            if ob is None:
-                continue
-            lo_seg = l[b.pivot_idx:t + 1]
-            hi_seg = h[b.pivot_idx:t + 1]
-            L, H = float(lo_seg.min()), float(hi_seg.max())
-            lb = b.pivot_idx + int(np.flatnonzero(lo_seg == L)[-1])
-            hb = b.pivot_idx + int(np.flatnonzero(hi_seg == H)[-1])
+            if b.order_block is not None:
+                lo_seg = l[b.pivot_idx:t + 1]
+                hi_seg = h[b.pivot_idx:t + 1]
+                L, H = float(lo_seg.min()), float(hi_seg.max())
+                lows, highs = np.flatnonzero(lo_seg == L), np.flatnonzero(hi_seg == H)
+                lb = b.pivot_idx + int(lows[-1]) if lows.size else t
+                hb = b.pivot_idx + int(highs[-1]) if highs.size else t
+            else:                                        # no OB: last confirmed swing pivots (tail uses swingLow/High.level)
+                lo_p = [(i, p) for i, p in result.swing_low_pivots if i + swing_len <= t]
+                hi_p = [(i, p) for i, p in result.swing_high_pivots if i + swing_len <= t]
+                if not lo_p or not hi_p:
+                    continue
+                lb, L = lo_p[-1][0], float(lo_p[-1][1])
+                hb, H = hi_p[-1][0], float(hi_p[-1][1])
         if H is None:
             continue
         if h[t] > H:
@@ -129,7 +140,7 @@ def ote_range(result, h: np.ndarray, l: np.ndarray, c: np.ndarray) -> Optional[d
             "eq": L + 0.5 * r}
 
 
-def expected_visuals(df: pd.DataFrame, cfg: dict, warmup: int = 100) -> dict:
+def expected_visuals(df: pd.DataFrame, cfg: dict, warmup: int = 100, flip_window: int = 750) -> dict:
     lux_cfg = cfg.get("smc_v2", {}).get("luxalgo", {}) or {}
     lc = lx.LuxConfig.from_dict(lux_cfg)
     res = lx.analyze(df, lc)
@@ -157,8 +168,8 @@ def expected_visuals(df: pd.DataFrame, cfg: dict, warmup: int = 100) -> dict:
         "ob_internal": [box(o) for o in res.active_obs(internal=True) if o.idx >= warmup],
         "fvg": [{"top": float(f.top), "bot": float(f.bot), "idx": int(f.idx)} for f in res.active_fvgs() if f.idx >= warmup],
         "liquidity": liq,
-        "flips": [f for f in classify_flips(res, h, l, c, sw, 750) if f["idx"] >= warmup and f["flip"] >= 0 and not f["dead"]],
-        "ote": ote_range(res, h, l, c),
+        "flips": [f for f in classify_flips(res, h, l, c, sw, flip_window) if f["idx"] >= warmup and f["flip"] >= 0 and not f["dead"]],
+        "ote": ote_range(res, h, l, c, sw),
     }
 
 
