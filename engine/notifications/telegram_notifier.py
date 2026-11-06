@@ -4,13 +4,22 @@ DISTINCT from `backend.notifications.TelegramNotifier` (the operator's real-time
 position alerter). This one feeds the PUBLIC u2algo customer channel and is built
 to stay on the safe side of the "signal service" regulatory line (P-003 §2b):
 
-  • AGGREGATE / DELAYED only — a once-daily digest summarising CLOSED trades in
-    aggregate (count, win-rate, aggregate return). It deliberately exposes NO
-    per-trade entry/SL/TP/symbol, so a subscriber cannot reconstruct a tradeable
-    signal from it.
-  • DOUBLE-GATED, default OFF — emits only when BOTH the config flag
+  • AGGREGATE / DELAYED digest — a once-daily digest summarising CLOSED trades in
+    aggregate (count, win-rate, aggregate return). The digest exposes NO
+    per-trade entry/SL/TP/symbol.
+  • PER-TRADE posts (post_trade_opened / _tp1 / _closed) ALSO exist: real-time
+    symbol + entry/SL/TP. They are default OFF (EFLOUD_CUSTOMER_TG_TRADES). WARNING:
+    these are NOT covered by the CMP-3 compliance gate and sit on the P-003 s2b
+    "signal service" line - enabling them on a PUBLIC channel requires operator /
+    legal sign-off first. The public close reason is whitelisted (TP1/TP2/SL/BE/closed).
+  • Per-trade posts are fire-and-forget: queued to a single daemon worker thread
+    (bounded queue, dropped when full) so a slow Telegram call never blocks the caller.
+  • DIGEST is DOUBLE-GATED, default OFF — emits only when BOTH the config flag
     (`notifications.telegram.enabled`, default False) AND the two customer-channel
     credentials are present. Either missing → hard no-op, zero HTTP.
+  • PER-TRADE posts are gated separately: EFLOUD_CUSTOMER_TG_TRADES AND the two
+    credentials (the config flag is not consulted). They are always sent as
+    legacy Markdown, whatever EFLOUD_CUSTOMER_TG_PARSE_MODE says.
   • SEPARATE credentials from the operator alerter (EFLOUD_CUSTOMER_TG_* vs
     EFLOUD_TELEGRAM_*) so the two channels never cross.
   • BEST-EFFORT — every send swallows exceptions; a Telegram outage must never
@@ -25,13 +34,19 @@ Env (both required to enable, on top of the config flag):
   - EFLOUD_CUSTOMER_TG_CHANNEL_ID  public channel id (e.g. "-1001234567890")
 Optional:
   - EFLOUD_CUSTOMER_TG_THREAD_ID   forum topic id
-  - EFLOUD_CUSTOMER_TG_PARSE_MODE  "Markdown" (default) | "HTML"
+  - EFLOUD_CUSTOMER_TG_PARSE_MODE  "Markdown" (default) | "HTML" — digest only
   - EFLOUD_CUSTOMER_TG_TIMEOUT_SECS  HTTP timeout (default 5.0)
+  - EFLOUD_CUSTOMER_TG_TRADES      "1"/"true"/"yes" enables per-trade posts
+                                   (open / TP1 / close) — default OFF. Customer-safe:
+                                   no balance, USD PnL, size or account data.
 """
 from __future__ import annotations
 
 import logging
 import os
+import queue
+import re
+import threading
 from typing import Optional
 
 import requests
@@ -39,6 +54,39 @@ import requests
 log = logging.getLogger("efloud.notify.customer_tg")
 
 _DEFAULT_TIMEOUT_SECS = 5.0
+_TRUTHY = ("1", "true", "yes")
+_BRAND = "u2algo Price Action"
+_DISCLAIMER = "_Eğitim amaçlıdır, yatırım tavsiyesi değildir. / Not financial advice._"
+
+
+def _fmt_price(x) -> str:
+    """Compact price: up to 8 significant decimals, trailing zeros trimmed."""
+    s = f"{float(x):.8f}".rstrip("0").rstrip(".")
+    return s or "0"
+
+
+_QUEUE_MAX = 100
+_TRADE_PARSE_MODE = "Markdown"  # per-trade texts use legacy Markdown markup
+
+
+def _public_reason(reason) -> str:
+    """Whitelist the close reason shown publicly: TP1 / TP2 / SL / BE, else 'closed'."""
+    tokens = set(re.split(r"[^A-Z0-9]+", str(reason or "").upper()))
+    if "TP2" in tokens:
+        return "TP2"
+    if "TP1" in tokens:
+        return "TP1"
+    # BE before SL: a stop moved to breakeven ("SL_BE") is a breakeven exit.
+    if tokens & {"BE", "BREAKEVEN"}:
+        return "BE"
+    if tokens & {"SL", "STOP"}:
+        return "SL"
+    return "closed"
+
+
+def _clean(text) -> str:
+    """Strip Markdown/HTML control characters from free text."""
+    return "".join(c for c in str(text).replace("_", " ") if c not in "*`[]<>&").strip()
 
 # Aggregate digest schema — the ONLY shape that leaves this module. Keeping it a
 # fixed whitelist is the structural guard against per-trade signal leakage.
@@ -101,13 +149,24 @@ class CustomerChannelNotifier:
         except ValueError:
             self.timeout = _DEFAULT_TIMEOUT_SECS
 
+        # Per-trade posts: independent env flag, default OFF.
+        self.trades_enabled: bool = (
+            os.environ.get("EFLOUD_CUSTOMER_TG_TRADES", "").strip().lower() in _TRUTHY
+            and bool(self.token and self.channel_id)
+        )
+
         # Double gate: config flag AND both credentials.
         self.enabled: bool = self.flag_enabled and bool(self.token and self.channel_id)
         if self.enabled:
             log.info(f"Customer Telegram notifier enabled (channel={self.channel_id}, mode={self.mode})")
         else:
             why = "flag off" if not self.flag_enabled else "creds missing"
-            log.info(f"Customer Telegram notifier disabled ({why})")
+            log.info(f"Customer Telegram notifier digest disabled ({why})")
+        log.info(f"Customer Telegram per-trade posts: {'ENABLED' if self.trades_enabled else 'disabled'}")
+
+        self._queue: "queue.Queue[str]" = queue.Queue(maxsize=_QUEUE_MAX)
+        self._worker: Optional[threading.Thread] = None
+        self._worker_lock = threading.Lock()
 
     def post_daily_digest(self, digest: dict) -> bool:
         """Post an aggregate daily digest. No-op (returns False) when disabled.
@@ -119,6 +178,86 @@ class CustomerChannelNotifier:
         if not self.enabled:
             return False
         return self._send(self._format_digest(digest))
+
+    # ── per-trade posts (customer-safe; default OFF; never raise) ─────────────
+    def _post_trade(self, build) -> bool:
+        if not self.trades_enabled:
+            return False
+        try:
+            text = build()
+        except Exception as e:
+            log.warning(f"Customer Telegram trade post build failed: {e}")
+            return False
+        # Fire-and-forget: never block the caller (reconcile / kill-switch paths).
+        try:
+            self._ensure_worker()
+            self._queue.put_nowait(text)
+            return True
+        except queue.Full:
+            log.warning("Customer Telegram trade post dropped: queue full")
+            return False
+        except Exception as e:
+            log.warning(f"Customer Telegram trade post enqueue failed: {e}")
+            return False
+
+    def _ensure_worker(self) -> None:
+        with self._worker_lock:
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(
+                    target=self._run_worker, name="customer-tg-worker", daemon=True)
+                self._worker.start()
+
+    def _run_worker(self) -> None:
+        while True:
+            text = self._queue.get()
+            try:
+                self._deliver(text, parse_mode=_TRADE_PARSE_MODE)
+            except Exception as e:  # _deliver never raises; belt and braces
+                log.warning(f"Customer Telegram worker error: {e}")
+            finally:
+                self._queue.task_done()
+
+    def post_trade_opened(self, symbol, direction, entry, sl, tp1, tp2=None, setup=None) -> bool:
+        def build() -> str:
+            icon = "🟢" if str(direction).upper() == "LONG" else "🔴"
+            lines = [
+                f"{icon} *{_clean(symbol)} {_clean(direction).upper()}* — yeni işlem / new trade",
+                f"Entry: `{_fmt_price(entry)}`",
+                f"SL: `{_fmt_price(sl)}`",
+                f"TP1: `{_fmt_price(tp1)}`",
+            ]
+            if tp2:
+                lines.append(f"TP2: `{_fmt_price(tp2)}`")
+            if setup:
+                lines.append(f"Setup: {_clean(setup)}")
+            lines += [_BRAND, _DISCLAIMER]
+            return "\n".join(lines)
+        return self._post_trade(build)
+
+    def post_trade_tp1(self, symbol, direction, entry, price) -> bool:
+        def build() -> str:
+            return "\n".join([
+                f"🎯 *{_clean(symbol)} {_clean(direction).upper()}* — TP1 hit",
+                f"Entry: `{_fmt_price(entry)}` → TP1: `{_fmt_price(price)}`",
+                _BRAND, _DISCLAIMER,
+            ])
+        return self._post_trade(build)
+
+    def post_trade_closed(self, symbol, direction, entry, exit_price, pnl_r=None, reason=None) -> bool:
+        def build() -> str:
+            lines = [
+                f"🏁 *{_clean(symbol)} {_clean(direction).upper()}* — işlem kapandı / trade closed",
+                f"Entry: `{_fmt_price(entry)}` → Exit: `{_fmt_price(exit_price)}`"
+                if exit_price else f"Entry: `{_fmt_price(entry)}`",
+            ]
+            if pnl_r is not None:
+                lines.append(f"Sonuç / Result: `{float(pnl_r):+.2f}R`")
+            if reason:
+                pub = _public_reason(reason)
+                lines.append(f"Neden / Reason: {pub if pub != 'closed' else 'kapandı / closed'}")
+            lines += [_BRAND, _DISCLAIMER]
+            return "\n".join(lines)
+        return self._post_trade(build)
 
     def _format_digest(self, digest: dict) -> str:
         """Render the aggregate digest. Reads ONLY whitelisted aggregate keys.
@@ -150,14 +289,18 @@ class CustomerChannelNotifier:
         )
 
     def _send(self, text: str) -> bool:
-        """Best-effort POST to the customer channel. NEVER raises."""
+        """Digest path: gated on the digest `enabled` flag."""
         if not self.enabled:
             return False
+        return self._deliver(text)
+
+    def _deliver(self, text: str, parse_mode: Optional[str] = None) -> bool:
+        """Best-effort POST to the customer channel (no flag check). NEVER raises."""
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         payload = {
             "chat_id": self.channel_id,
             "text": text,
-            "parse_mode": self.parse_mode,
+            "parse_mode": parse_mode or self.parse_mode,
             "disable_web_page_preview": True,
         }
         if self.thread_id:
