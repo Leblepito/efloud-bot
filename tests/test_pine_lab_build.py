@@ -111,7 +111,7 @@ def test_confirm_reads_bar_history_from_global_buffers():
 
 
 TAIL = ROOT / "pine" / "lab" / "tail_indicator.pine"
-HISTORY_RE = re.compile(r"\b[A-Za-z_]\w*\s*\[\s*[A-Za-z0-9_]")   # ident[ expr  (array.get is a call, not this)
+HISTORY_RE = re.compile(r"\b[A-Za-z_]\w*[ \t]*\[[ \t]*[A-Za-z0-9_]")   # ident[ expr  (array.get is a call, not this)
 TA_RE = re.compile(r"\bta\.")
 
 
@@ -129,6 +129,13 @@ def test_tail_functions_use_no_history_operator_or_ta():
     for name, body in bodies.items():
         assert not HISTORY_RE.search(body), f"{name}: history operator"
         assert not TA_RE.search(body), f"{name}: ta.* call"
+
+
+def test_history_regex_ignores_tuple_literal_on_next_line():
+    assert not HISTORY_RE.search("    dir := d\n    [h, l, hBar, lBar, dir]\n")
+    assert HISTORY_RE.search("    float v = low[off]\n")
+    assert HISTORY_RE.search("    v := bufHi [2]\n")
+    assert HISTORY_RE.search("    x = close [1]\n")
 
 
 def test_signal_line_budget_fits_line_limit():

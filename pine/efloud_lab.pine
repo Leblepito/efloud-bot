@@ -1144,7 +1144,7 @@ f_updateRange(float h0, float l0, int hBar0, int lBar0, int dir0) =>
     int hBar = hBar0
     int lBar = lBar0
     for b in breaks
-        if not b.internal and b.idx == bar_index                  // swing BOS/CHoCH this bar: new range = impulse leg incl. the break bar
+        if not b.internal and not b.breaker and b.idx == bar_index   // swing BOS/CHoCH only; T2 breaker records are not structure breaks
             if na(b.ob)
                 l := swingLow.level
                 h := swingHigh.level
@@ -1155,6 +1155,10 @@ f_updateRange(float h0, float l0, int hBar0, int lBar0, int dir0) =>
                 h := math.max(b.ob.rawHigh, high)
                 lBar := l == low  ? bar_index : f_barOfExtreme(false, l, b.pivotBar, bar_index)
                 hBar := h == high ? bar_index : f_barOfExtreme(true,  h, b.pivotBar, bar_index)
+                if lBar < 0                                           // extreme scrolled out of the ring buffer: anchor on this bar
+                    lBar := bar_index
+                if hBar < 0                                           // extreme scrolled out of the ring buffer: anchor on this bar
+                    hBar := bar_index
     int dir = dir0
     if not na(h) and not na(l)
         if high > h
@@ -1163,7 +1167,7 @@ f_updateRange(float h0, float l0, int hBar0, int lBar0, int dir0) =>
         if low < l
             l := low
             lBar := bar_index
-        dir := (hBar > lBar ? 1 : hBar < lBar ? -1 : dir0)
+        dir := hBar > lBar ? 1 : hBar < lBar ? -1 : dir0
     [h, l, hBar, lBar, dir]
 
 if barstate.isconfirmed
