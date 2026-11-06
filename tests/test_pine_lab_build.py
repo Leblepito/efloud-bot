@@ -16,7 +16,8 @@ GEN_STR = ROOT / "pine" / "efloud_lab_strategy.pine"
 STRATEGY_ONLY_INPUTS = {"marginUsd", "leverage", "maxHoldHours", "tp1ClosePct", "moveSlToBe"}
 INDICATOR_ONLY_INPUTS = {"showObs", "showZones", "showLevels", "showDash", "maxDrawings",
                          "showBreakers", "showFvg", "showLiq", "showOte", "showHistory", "obBodyOnly",
-                         "liqVolumeConfirm", "maxZonesPerSide", "colBull", "colBear", "colNeutral", "zoneAlpha"}
+                         "liqVolumeConfirm", "maxZonesPerSide", "colBull", "colBear", "colNeutral", "zoneAlpha",
+                         "tgChatId", "tgTag"}
 
 INPUT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*input\.(?:int|float|bool|string|timeframe)\(", re.M)
 LEGACY_RE = re.compile(r"(?<![.\w])(study|security|ema|sma|atr|rsi|highest|lowest)\(")
@@ -192,3 +193,40 @@ def test_tail_ote_range_state_and_drawing():
         assert needle in text, needle
     body = _tail_function_bodies(text)["f_updateRange"]
     assert "b.internal" in body and "rawLow" in body and "rawHigh" in body and "b.breaker" in body
+
+
+def test_published_titles_are_u2algo_price_action():
+    """Public name (TradingView publish): indicator 'u2algo Price Action', strategy 'u2algo Price Action Strategy';
+    short titles stay within TradingView's 10-character limit; the CC BY-NC-SA licence line is in both heads."""
+    ind = (ROOT / "pine" / "lab" / "head_indicator.pine").read_text(encoding="utf-8")
+    stg = (ROOT / "pine" / "lab" / "head_strategy.pine").read_text(encoding="utf-8")
+    m_i = re.search(r'indicator\("([^"]+)",\s*"([^"]+)"', ind)
+    m_s = re.search(r'strategy\("([^"]+)",\s*"([^"]+)"', stg)
+    assert m_i and m_i.group(1) == "u2algo Price Action" and len(m_i.group(2)) <= 10
+    assert m_s and m_s.group(1) == "u2algo Price Action Strategy" and len(m_s.group(2)) <= 10
+    for head in (ind, stg):
+        assert "CC BY-NC-SA 4.0" in head and "LuxAlgo" in head
+
+
+def test_tail_alert_has_bot_json_and_telegram_branches():
+    tail = TAIL.read_text(encoding="utf-8")
+    assert re.search(r"^tgChatId\s*=\s*input\.string\(\"\"", tail, re.M)
+    assert "tgTag" in tail and "f_jsonEsc" in tail
+    assert tail.count("alert(") == 1
+    for key in ("symbol", "dir", "entry", "sl", "tp1", "tp2", "variant", "trigger_bar"):
+        assert f'"{key}"' in tail
+    for frag in ('"chat_id"', '"parse_mode":"HTML"', '"text"', "disable_web_page_preview"):
+        assert frag in tail
+    assert "tgChat == \"\"" in tail
+
+
+def test_tail_telegram_text_html_escaped_and_blank_chat_id_is_bot_mode():
+    """Fable review: footer/setup go through f_htmlEsc (parse_mode HTML → '<' '&' would 400);
+    a whitespace-only chat id must fall back to the bot JSON, not Telegram mode."""
+    tail = TAIL.read_text(encoding="utf-8")
+    assert re.search(r"^f_htmlEsc\(string s\) =>", tail, re.M)
+    for frag in ('"&amp;"', '"&lt;"', '"&gt;"'):
+        assert frag in tail
+    assert "f_jsonEsc(f_htmlEsc(tgTag))" in tail
+    assert "f_htmlEsc(c.src + " in tail
+    assert "str.trim(tgChatId)" in tail

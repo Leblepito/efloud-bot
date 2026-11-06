@@ -630,7 +630,7 @@ Tasarım: `docs/superpowers/specs/2026-11-05-pine-lab-design.md`. Plan: `docs/su
 - Baseline = canlı v2 LuxAlgo modu (`configs/config.phase2_1k.yaml`): tüm toggle'lar kapalıyken üretilen setup'lar `scripts/pine_lab_parity.py replay/compare` ile Python'la karşılaştırılır; kapı ≥ %95 eşleşme, SL/TP ≤ %0.1.
 - Bilinçli sapmalar: (1) Pine bar kapanışında 3 geçiş koşar (orchestrator'ın bar içi çoklu tick'i); (2) `liveWindowBars=750` havuzları ve FVG eşiğini canlı pencereye kırpar, pivotlar tam geçmişten gelir; (3) canlı B1 (kapı atlaması) ve B2 (float red) kopyalanmaz — ikisi de canlıda düzeltildi (B1: PR #292, B2: PR #293); harness `python_guard_rejected` sütunu B2 regresyon bekçisi olarak kalır (beklenen 0); (4) breaker'lar, entry drift, funding, çoklu sembol margin modellenmez.
 - Toggle'lar (default KAPALI): T1 `biasTf/biasMode/macroTf`, T2 `obInvalidate`, T3 `oteEntry` (0.705 limit; Python'da limit yolu yok, parity dışı), T4 `sweepSl`, T5 `freshConfirm`, T6 `obDisplacement`, T7 `tpSweptFilter`, T8 `emitOnce`. Kazanma kriteri spec §6.3; sonuçlar `docs/pine-lab/`.
-- Lisans: core LuxAlgo SMC (CnB3fSph) mantığını taşır — CC BY-NC-SA 4.0; script private/invite-only.
+- Lisans: core LuxAlgo SMC (CnB3fSph) mantığını taşır — CC BY-NC-SA 4.0. Indicator TradingView'de **açık kaynak, ticari olmayan** biçimde "u2algo Price Action" adıyla yayımlanır (LuxAlgo atfı; ücretli/davetli/korumalı sürüm yok; bkz. `docs/indicator/tradingview-publish.md`); strategy kayıtlı ama yayımlanmaz. (2026-11-06'ya kadar "private/invite-only" idi.)
 
 **Review notları (2026-11-05 uygulama turu)**
 

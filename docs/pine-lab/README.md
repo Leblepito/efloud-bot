@@ -8,7 +8,7 @@ Spec: `../superpowers/specs/2026-11-05-pine-lab-design.md` · Plan: `../superpow
 python scripts/build_pine_lab.py
 ```
 
-TradingView MCP (masaüstü, `skills/tradingview-mcp/SKILL.md`): `pine_set_source` ← `pine/efloud_lab.pine` → `pine_smart_compile` → `pine_get_errors` (0 hata) → `pine_save`. Aynısı `pine/efloud_lab_strategy.pine` için. Script'ler **private / invite-only** kalır (LuxAlgo CC BY-NC-SA 4.0).
+TradingView MCP (masaüstü, `skills/tradingview-mcp/SKILL.md`): `pine_set_source` ← `pine/efloud_lab.pine` → `pine_smart_compile` → `pine_get_errors` (0 hata) → `pine_save`. Aynısı `pine/efloud_lab_strategy.pine` için. Indicator TradingView'de **açık kaynak** olarak yayımlanır ("u2algo Price Action", CC BY-NC-SA 4.0, LuxAlgo atfı, ticari olmayan; bkz. [`../indicator/tradingview-publish.md`](../indicator/tradingview-publish.md)); strategy kayıtlı ama yayımlanmaz.
 
 ## 2. Baseline parity (sembol başına)
 

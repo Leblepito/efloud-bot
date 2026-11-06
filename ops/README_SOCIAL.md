@@ -16,6 +16,9 @@ u2algo_publisher.py               ig_webhook_server.py (port 8765)
                                             └──────────────► Instagram
 ```
 
+> Not (2026-11-06): diyagramdaki `u2algo_publisher.py` artık repoda yok. VPS tarafındaki yayın adımı
+> bugün `scripts/lane_g_publish.py` ile yapılır (bkz. `skills/social-publishing/SKILL.md`).
+
 ## Dosyalar
 
 | Dosya | Konum | Açıklama |
