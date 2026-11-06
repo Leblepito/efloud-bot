@@ -9,6 +9,9 @@ sb_vars.json
 # Local scratch / investigation files (untracked, machine-local)
 *.zip
 /scratch/
+/_to_delete/
+# Subagent/SDD run reports (machine-local, never published)
+.sdd-report-*.md
 /backup_rollout/
 *.diff
 /combined_migrations.sql
