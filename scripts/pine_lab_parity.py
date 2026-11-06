@@ -594,6 +594,14 @@ def main(argv=None) -> int:
     s.add_argument("--baseline", required=True)
     s.add_argument("--variant", action="append", default=[])
     s.set_defaults(fn=_cmd_score)
+    vz = sub.add_parser("visuals", help="expected zone sets for the indicator layers (spec §6.4)")
+    vz.add_argument("--ohlcv", required=True)
+    vz.add_argument("--config", default=str(ROOT / "configs" / "config.phase2_1k.yaml"))
+    vz.add_argument("--window", type=int, default=750)
+    vz.add_argument("--warmup", type=int, default=100)      # 2 × swing_len
+    vz.add_argument("--out", default="expected_visuals.json")
+    from scripts.pine_lab_visuals import cmd_visuals  # local import keeps the parity module import-light
+    vz.set_defaults(fn=cmd_visuals)
     a = ap.parse_args(argv)
     return a.fn(a)
 
