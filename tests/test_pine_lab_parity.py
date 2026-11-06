@@ -102,7 +102,10 @@ def test_replay_reads_recency_from_risk_block_like_live_orchestrator():
     assert plp.recency_bars({"smc_v2": {"recency_bars": 99}}) == 40
 
 
-def test_guard_rejected_flag_marks_floor_widened_stops(tmp_path):
+def test_guard_rejected_flag_never_fires_on_floor_widened_stops(tmp_path):
+    """B2 (float red) is fixed in calc_sl (PR #293): a floor-widened stop now sits a
+    hair past min_sl_atr, so the live guard's strict `< min_sl_atr` check accepts it.
+    The harness column stays as a B2 regression sentinel and must never fire."""
     cfg = _lab_config()
     cfg["safety"]["min_sl_atr"] = 2.0
     df = _trend_df(4)
@@ -124,8 +127,10 @@ def test_guard_rejected_flag_marks_floor_widened_stops(tmp_path):
         rec = orch.records[-1]
         if rec["drop_reason"] == "":
             assert rec["atr_source"] == "WILDER14"
+            # still exercising the floor-widen branch (0.2 ATR zone + buffer < 2.0 floor)
+            assert abs(entry - rec["sl"]) / atr == pytest.approx(2.0, rel=1e-6)
             flags.add(rec["python_guard_rejected"])
-    assert flags == {True, False}, "the B2 float flag must fire for some floor-widened stops and not others"
+    assert flags == {False}, "B2 regression: the live guard would reject a floor-widened stop"
 
 
 def test_write_rows_roundtrip(tmp_path):
