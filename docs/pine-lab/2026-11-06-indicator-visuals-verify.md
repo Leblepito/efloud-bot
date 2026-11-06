@@ -1,14 +1,22 @@
 # EFloud Lab — indicator zone visuals: TradingView verification (2026-11-06)
 
-Build: `pine/efloud_lab.pine` @ 9dad0ca (display-only layers: OB, BB/MB, FVG, liquidity, OTE). Chart BINANCE perpetuals, 15m.
+Build: `pine/efloud_lab.pine`, kaynak build 9dad0ca (display-only layers: OB, BB/MB, FVG, liquidity, OTE). Chart BINANCE perpetuals, 15m.
 Python reference: `scripts/pine_lab_parity.py visuals` on `data/lab/<S>_15m.csv` (closed bars, fetched right before each symbol's run).
 Last closed bar in the CSV (ms): BTC 1793952900000, ETH 1793953800000, SOL 1793953800000. TradingView's forming bar at read time: 1793954700 s for all three
 (Pine draws on it from state confirmed at the previous close). The BTC variant dumps spanned about one bar close; no object changed between dumps.
 Tolerance = mintick (BTC 0.1, ETH 0.01, SOL 0.01). Python objects with `idx` < 100 are excluded.
 
+## Sonuç / Verdict
+
+- BTC ve ETH: §6 katman eşiklerinin tamamını hizalı 1000-bar penceresinde geçer.
+- SOL: FVG recall 88.9 % ve likidite recall 85.7 % ile eşiğin altında kalır → §6 gate TAM karşılanmadı; **operatör kararı açık** (referans penceresi: Pine'ın yüklü ~950 bar geçmişi mi, canlı 750 mi).
+- 750-bar spec penceresi OB/FVG/likidite precision'da kalır: Pine ~950 bar geçmiş görür, fazladan eski nesneleri çizer (pencere artefaktı; recall her yerde 100 %).
+- Sinyal regresyonu geçti (60=60 x3, katmanlar ON/OFF aynı LONG/SHORT seti).
+- 1m stres sağlıklı (hata yok, 61 girdi, 9 satır dashboard).
+
 ## Method
 
-Each configuration is a compile-based source variant (never `indicator set`, see Incident). `make_variant.py` (kept outside the repo) copies `pine/efloud_lab.pine`
+Each configuration is a compile-based source variant (never `indicator set`, see Incident). `scripts/pine_lab_variant.py` copies `pine/efloud_lab.pine`
 and rewrites only the `input.bool` defaults of `showObs/showZones/showLevels/showBreakers/showFvg/showLiq/showOte`, `showHistory` and the `maxZonesPerSide` default.
 Variants: signalsON (all layers, N=8), signalsOFF (OB/zones/levels only, N=8), isoOB, isoBB, isoFVG, isoLIQ, isoOTE (one layer, N=200).
 After each compile: health check (61 inputs and 9-row dashboard) before reading boxes/lines/labels/tables.
@@ -57,17 +65,21 @@ With a longer Python `--window` they appear, so the 750 result is a reference-wi
 | ETH | 5/5 PASS | 6/6 PASS | 4/4 PASS | 3/3 PASS, stars 2/2 | PASS |
 | SOL | 6/6 PASS | Pine 8 / Python 9, precision 100, recall 88.9 FAIL | 6/6 PASS | Pine 6 / Python 7, precision 100, recall 85.7 FAIL | PASS |
 
-BTC passes every layer at any window 900-1400; ETH at 1000 and 1200. Precision is 100 % in every aligned cell.
+Per-window sweep claims (BTC 900-1400, ETH 1000/1200, SOL 925-975) were made during the session, but the sweep outputs were not kept (only the 750 and 1000 results are recorded in the dumps), so they are not reproduced here; re-run `pine_lab_parity.py visuals --window N` to regenerate. Precision is 100 % in every aligned cell.
+
+SOL does not meet the §6 thresholds at this window (FVG recall 88.9 %, liquidity recall 85.7 %).
+
+1000 was chosen as the nearest round window at or above the ~950 bars Pine had loaded at read time, so Python sees at least as much history as Pine.
 
 Dashboard row 8 (zone counts, N=200) equals the drawn counts (BTC 2/1, 3, 1, 5, 3; ETH 1/4, 3, 1, 6, 3; SOL 2/4, 5, 1, 8, 6) and the OTE row equals Python `ote`
 (BTC SHORT H=80927.5 L=75158 0.705=79225.4975; ETH SHORT H=2444.02 L=2205.11 0.705=2373.54155; SOL SHORT H=97.08 L=88.24 0.705=94.4722).
 
 ### Mismatches that remain
 
-- SOL FVG 96.07/95.88 (Python bar time 1793880900000, 81 bars old) appears in Python only for windows >= 975 and is absent in Pine; at windows 850-950 FVG matches 100/100.
+- SOL FVG 96.07/95.88 (Python bar time 1793880900000, 81 bars old) appeared in Python only at larger windows (>= 975 in the session notes) and is absent in Pine (unrecorded sweep).
   Probable cause (not proven): the FVG auto threshold is a cumulative mean, so the set depends on the window start (README section 4, PINE_SPEC section 20). OB/BB for SOL also flip between windows 925 and 975.
-- SOL liquidity BSL 103.89 (bar time 1793217600000, about 818 bars old): Python only; Liquidity passes at window 900 where it falls outside.
-- No single window gives 100 % on all SOL layers; each layer reaches 100/100 at some window in 850-1050 (FVG 850-950, Liquidity 900, OB and BB 975-1050).
+- SOL liquidity BSL 103.89 (bar time 1793217600000, about 818 bars old): Python only; a smaller window excluded it in the session notes (unrecorded sweep).
+- No single window was found that gives 100 % on all SOL layers (session notes; sweep data not kept).
   Open item: decide whether Pine's effective loaded history (about 950 bars at read time) or the 750 live window is the reference. The SOL FVG/liquidity residuals were not proven benign.
 
 ## Stress: 1m (SOL, variant signalsON)
@@ -75,12 +87,12 @@ Dashboard row 8 (zone counts, N=200) equals the drawn counts (BTC 2/1, 3, 1, 5, 
 Compile has_errors false; after 60 s the study is healthy (61 inputs, 9-row dashboard, 16 boxes, no runtime error badge). Screenshot:
 `C:/Users/utkuc/tradingview-mcp/screenshots/tv_full_2026-11-06T09-00-20-708Z.png`.
 
-## Screenshot checklist (1m SOL screenshot; the 15m visual review remains with the operator)
+## Screenshot checklist (1m SOL screenshot plus 15m controller screenshot)
 
 - Zone and level texts (BSL, SSL, FVG, iOB, IN_ZONE) readable: yes.
 - Z-order, zones behind candles and labels: yes.
-- OTE direction equals dashboard: dashboard row reads SHORT; box orientation not inspected at 15m.
-- Swept lines end at the sweep bar and star levels bold: not visually verified (history EQ drawing was not run).
+- 15m visual checklist verified by the controller's screenshot: boxes with OB/BB/MB/FVG text, OTE SHORT band, BSL lines with labels, 9-row dashboard, signal labels present.
+- Deferred (not checked): swept line ending at the sweep bar, bold star width (history EQ drawing was not run).
 
 ## Incident: "Can't parse pine"
 

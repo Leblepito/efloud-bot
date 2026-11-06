@@ -59,12 +59,16 @@ Yalnız çizim katmanlarıdır (sinyal mantığına dokunmaz); girdiler `showObs
 
 **Python referansı:**
 ```bash
-python -I C:/tmp/fetch_klines.py BTCUSDT 1782864000000 data/lab/BTC_15m.csv
+python -I scripts/pine_lab_fetch_klines.py BTCUSDT 1782864000000 data/lab/BTC_15m.csv
 python scripts/pine_lab_parity.py visuals --ohlcv data/lab/BTC_15m.csv --out data/lab/BTC_visuals.json   # --window N pencereyi değiştirir
 ```
 Python referansı pencereye duyarlıdır (FVG eşiği ve kümülatif durum); Pine yüklü tüm geçmişi görür. 750 pencerede Pine'da fazladan eski nesneler görünür; `--window 1000` ile de karşılaştır.
 
-**Katman izolasyonu (compile-varyantı):** `make_variant.py` (repo dışında) `pine/efloud_lab.pine` kopyasında yalnız yedi `show*` ile `showHistory` `input.bool` varsayılanlarını ve `maxZonesPerSide` varsayılanını yeniden yazar.
+**Katman izolasyonu (compile-varyantı):** `scripts/pine_lab_variant.py` `pine/efloud_lab.pine` kopyasında yalnız yedi `show*` ile `showHistory` `input.bool` varsayılanlarını ve `maxZonesPerSide` varsayılanını yeniden yazar.
+```bash
+python scripts/pine_lab_variant.py C:/tmp/pine_dbg/isoFVG.pine --zones 200 showFvg      # tek katman; N=200
+python scripts/pine_lab_variant.py C:/tmp/pine_dbg/signalsON.pine --zones 8 showObs showZones showLevels showBreakers showFvg showLiq showOte
+```
 Sonra `pine set --file <varyant>` + `pine compile`; 30 sn sonra sağlık kontrolü: `data indicator <id>` yaklaşık 61 girdi VE `data tables -f "EFloud Lab"` 9 satır.
 Ardından `data boxes/lines/labels/tables -f "EFloud Lab"` okunur ve Python JSON'u ile mintick toleransında eşleştirilir.
 
