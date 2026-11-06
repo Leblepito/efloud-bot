@@ -251,6 +251,65 @@ if barstate.isconfirmed
     f_recordNewObs(intObs)
     f_trackFlips()
 
+// ─── OTE on a fixed swing range (spec §3.5): changes only when price exceeds H/L or a swing break starts a new range ───
+var float rngH    = na
+var float rngL    = na
+var int rngHBar = -1
+var int rngLBar = -1
+var int rngDir  = 0
+var string dashOte = "-"
+
+// Bar in [fromBar, toBar] whose high (or low) equals `price`; last match wins. Ring buffers only.
+f_barOfExtreme(bool isHigh, float price, int fromBar, int toBar) =>
+    int found = -1
+    int lo = math.max(fromBar, bufLastBar - array.size(bufHi) + 1)
+    if lo <= toBar
+        for b = lo to toBar
+            float v = isHigh ? f_bufAt(bufHi, b) : f_bufAt(bufLo, b)
+            if not na(v) and v == price
+                found := b
+    found
+
+// Pine functions cannot modify globals: takes the current range, returns the updated one.
+f_updateRange(float h0, float l0, int hBar0, int lBar0, int dir0) =>
+    float h = h0
+    float l = l0
+    int hBar = hBar0
+    int lBar = lBar0
+    for b in breaks
+        if not b.internal and b.idx == bar_index                  // swing BOS/CHoCH this bar: new range = impulse leg incl. the break bar
+            if na(b.ob)
+                l := swingLow.level
+                h := swingHigh.level
+                lBar := swingLow.bar
+                hBar := swingHigh.bar
+            else
+                l := math.min(b.ob.rawLow, low)
+                h := math.max(b.ob.rawHigh, high)
+                lBar := l == low  ? bar_index : f_barOfExtreme(false, l, b.pivotBar, bar_index)
+                hBar := h == high ? bar_index : f_barOfExtreme(true,  h, b.pivotBar, bar_index)
+    int dir = dir0
+    if not na(h) and not na(l)
+        if high > h
+            h := high
+            hBar := bar_index
+        if low < l
+            l := low
+            lBar := bar_index
+        dir := (hBar > lBar ? 1 : hBar < lBar ? -1 : dir0)
+    [h, l, hBar, lBar, dir]
+
+if barstate.isconfirmed
+    [nH, nL, nHBar, nLBar, nDir] = f_updateRange(rngH, rngL, rngHBar, rngLBar, rngDir)
+    rngH := nH
+    rngL := nL
+    rngHBar := nHBar
+    rngLBar := nLBar
+    rngDir := nDir
+
+var array<line> oteLines = array.new<line>()
+var box oteBox = na
+
 if barstate.isconfirmed
     for c in fired
         color col = c.dir == 1 ? color.teal : color.maroon
@@ -269,6 +328,27 @@ if barstate.isconfirmed
         label.delete(array.shift(sigLabels))
 
 if barstate.islast
+    for l in oteLines
+        line.delete(l)
+    array.clear(oteLines)
+    if not na(oteBox)
+        box.delete(oteBox)
+        oteBox := na
+    dashOte := "-"
+    if showOte and rngDir != 0 and not na(rngH) and not na(rngL) and (rngH - rngL) >= 2 * syminfo.mintick
+        float r    = rngH - rngL
+        float b618 = rngDir == 1 ? rngH - 0.618 * r : rngL + 0.618 * r
+        float b786 = rngDir == 1 ? rngH - 0.786 * r : rngL + 0.786 * r
+        float p705 = rngDir == 1 ? rngH - 0.705 * r : rngL + 0.705 * r
+        float eq   = rngL + 0.5 * r
+        int   x1   = math.min(rngHBar, rngLBar)
+        color oc   = f_zoneColor(rngDir)
+        oteBox := box.new(x1, math.max(b618, b786), bar_index + 5, math.min(b618, b786), border_color = color.new(oc, 60), bgcolor = color.new(oc, math.min(100, zoneAlpha + 8)), text = rngDir == 1 ? "OTE LONG" : "OTE SHORT", text_size = size.tiny, text_color = color.new(oc, 0), text_halign = text.align_right)
+        array.push(oteLines, line.new(x1, p705, bar_index + 5, p705, color = oc, width = 2))
+        array.push(oteLines, line.new(x1, eq,   bar_index + 5, eq,   color = color.new(oc, 40), style = line.style_dotted))
+        array.push(oteLines, line.new(x1, rngH, bar_index + 5, rngH, color = color.new(oc, 70)))
+        array.push(oteLines, line.new(x1, rngL, bar_index + 5, rngL, color = color.new(oc, 70)))
+        dashOte := (rngDir == 1 ? "LONG" : "SHORT") + " H=" + f_fmt(rngH) + " L=" + f_fmt(rngL) + " 0.705=" + f_fmt(p705)
     f_clearBoxes(zoneLayerBoxes)
     // z-order (bottom → top): OTE → FVG → OB/iOB → BB/MB → liquidity → pending zones → signal lines
     dashFvg := 0
@@ -398,4 +478,4 @@ if barstate.islast and showDash
     f_cell(5, "Range EQ", zoneOk ? f_fmt(zEq) : "-")
     f_cell(6, "Drops (last 20)", f_dropSummary())
     f_cell(7, "Zones s/i·BB·MB·FVG·Liq", str.tostring(dashObS) + "/" + str.tostring(dashObI) + "·" + str.tostring(dashBb) + "·" + str.tostring(dashMb) + "·" + str.tostring(dashFvg) + "·" + str.tostring(dashLiq))
-    f_cell(8, "OTE", "-")
+    f_cell(8, "OTE", dashOte)

@@ -176,3 +176,11 @@ def test_tail_flip_tracker_present_and_buffer_only():
     bodies = _tail_function_bodies(text)
     assert "f_bufAt" in bodies["f_legExtInit"]
     assert "mitigatedIdx" not in bodies["f_trackFlips"], "flip tracking must not filter on mitigatedIdx (every flip happens on a mitigated OB)"
+
+
+def test_tail_ote_range_state_and_drawing():
+    text = TAIL.read_text(encoding="utf-8")
+    for needle in ("var float rngH", "var float rngL", "var int rngDir", "f_updateRange(", "f_barOfExtreme(", "if showOte", "0.705"):
+        assert needle in text, needle
+    body = _tail_function_bodies(text)["f_updateRange"]
+    assert "b.internal" in body and "rawLow" in body and "rawHigh" in body
