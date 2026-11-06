@@ -75,3 +75,19 @@ def test_security_calls_are_non_repainting(path):
 def test_check_mode_exit_code():
     res = subprocess.run([sys.executable, "scripts/build_pine_lab.py", "--check"], cwd=ROOT, capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
+
+
+def _func_body(text: str, name: str) -> str:
+    m = re.search(rf"^{name}\([^\n]*\)\s*=>\n((?:[ \t]+[^\n]*\n|\n)+)", text, re.M)
+    assert m, f"function {name} not found"
+    return "\n".join(ln.split("//")[0] for ln in m.group(1).splitlines())
+
+
+def test_store_ob_reads_bar_history_from_global_buffers():
+    """f_storeOb runs only on break bars; a `x[off]` inside it reads the function's own call history,
+    not bar history (TradingView 'should be called on each calculation'), so the OB scan must use
+    the per-bar global buffers instead of the history operator."""
+    core = (ROOT / "pine" / "lab" / "core.pine").read_text(encoding="utf-8")
+    body = _func_body(core, "f_storeOb")
+    assert not re.search(r"[A-Za-z_]\w*\s*\[", body), re.search(r"[A-Za-z_]\w*\s*\[", body).group(0)
+    assert "bufPHi" in body and "bufPLo" in body
