@@ -95,6 +95,56 @@ f_drawNearest(array<Zone> z, int n) =>
                     f_boxZone(array.get(z, best))
     true
 
+// ─── Liquidity (EQH/EQL from `equals`, BSL/SSL from shPiv/slPiv); volume confirmation per DGT-style rule ───
+volMa60 = ta.sma(volume, 60)                        // global, every bar (never inside a function)
+var array<float> bufVol   = array.new<float>()
+var array<float> bufVolMa = array.new<float>()
+if barstate.isconfirmed
+    array.push(bufVol, volume)
+    array.push(bufVolMa, volMa60)
+    if array.size(bufVol) > bufCap
+        array.shift(bufVol)
+        array.shift(bufVolMa)
+
+var array<line>  liqLines  = array.new<line>()
+var array<label> liqLabels = array.new<label>()
+var int dashLiq = 0
+
+// First bar after fromBar that trades through `price` (wick), or -1. Scans the ring buffers only.
+f_sweepBar(bool isHigh, float price, int fromBar) =>
+    int found = -1
+    int lo = math.max(fromBar + 1, bufLastBar - array.size(bufHi) + 1)
+    if lo <= bufLastBar
+        for b = lo to bufLastBar
+            if found < 0
+                float v = isHigh ? f_bufAt(bufHi, b) : f_bufAt(bufLo, b)
+                if not na(v) and (isHigh ? v > price : v < price)
+                    found := b
+    found
+
+// Level formed at barIdx is "volume confirmed" when the 3 bars ending there make rising highs (falling lows for a low),
+// volume rises on each bar and the last bar's volume is above its 60-bar SMA. All reads from ring buffers.
+f_volConfirmed(bool isHigh, int barIdx) =>
+    float v0 = f_bufAt(bufVol, barIdx - 2)
+    float v1 = f_bufAt(bufVol, barIdx - 1)
+    float v2 = f_bufAt(bufVol, barIdx)
+    float m2 = f_bufAt(bufVolMa, barIdx)
+    float p0 = isHigh ? f_bufAt(bufHi, barIdx - 2) : f_bufAt(bufLo, barIdx - 2)
+    float p1 = isHigh ? f_bufAt(bufHi, barIdx - 1) : f_bufAt(bufLo, barIdx - 1)
+    float p2 = isHigh ? f_bufAt(bufHi, barIdx)     : f_bufAt(bufLo, barIdx)
+    bool ok = not na(v0) and not na(v1) and not na(v2) and not na(m2) and not na(p0) and not na(p1) and not na(p2)
+    ok and v0 < v1 and v1 < v2 and v2 > m2 and (isHigh ? (p0 < p1 and p1 < p2) : (p0 > p1 and p1 > p2))
+
+f_drawLiq(bool isHigh, float price, int fromBar, bool swept, string tag) =>
+    bool conf = liqVolumeConfirm and f_volConfirmed(isHigh, fromBar)
+    int  x2   = swept ? f_sweepBar(isHigh, price, fromBar) : bar_index + 5
+    if x2 < 0
+        x2 := bar_index + 5
+    array.push(liqLines, line.new(fromBar, price, x2, price, color = color.new(colNeutral, swept ? 70 : 0), style = swept ? line.style_dashed : line.style_solid, width = conf ? 2 : 1))
+    if not swept
+        array.push(liqLabels, label.new(x2, price, tag + (conf ? " ★" : ""), style = label.style_label_left, color = color.new(colNeutral, 100), textcolor = colNeutral, size = size.tiny))
+    true
+
 if barstate.isconfirmed
     for c in fired
         color col = c.dir == 1 ? color.teal : color.maroon
@@ -140,6 +190,61 @@ if barstate.islast
         for c in cands
             if f_isActive(c)
                 array.push(zoneBoxes, box.new(c.trigIdx, c.zHigh, bar_index + 10, c.zLow, border_color = color.orange, bgcolor = color.new(color.orange, 80), text = c.state + (oteEntry and not na(c.limitPx) ? " @" + f_fmt(c.limitPx) : ""), text_size = size.tiny, text_color = color.orange))
+    for l in liqLines
+        line.delete(l)
+    array.clear(liqLines)
+    for l in liqLabels
+        label.delete(l)
+    array.clear(liqLabels)
+    dashLiq := 0
+    if showLiq
+        // unswept: nearest 10 to close (two-pass over a scratch list); swept: last 5, only with showHistory
+        array<float>  lp = array.new<float>()
+        array<bool>   lh = array.new<bool>()
+        array<int>    lb = array.new<int>()
+        array<string> lt = array.new<string>()
+        for e in equals
+            if not e.swept
+                array.push(lp, e.priceB)
+                array.push(lh, e.isHigh)
+                array.push(lb, e.idxB)
+                array.push(lt, e.isHigh ? "EQH" : "EQL")
+        for p in shPiv
+            if not p.swept
+                array.push(lp, p.price)
+                array.push(lh, true)
+                array.push(lb, p.bar)
+                array.push(lt, "BSL")
+        for p in slPiv
+            if not p.swept
+                array.push(lp, p.price)
+                array.push(lh, false)
+                array.push(lb, p.bar)
+                array.push(lt, "SSL")
+        int np = array.size(lp)
+        if np > 0
+            array<bool> used = array.new<bool>(np, false)
+            for k = 1 to math.min(10, np)
+                int best = -1
+                float bestD = na
+                for i = 0 to np - 1
+                    if not array.get(used, i)
+                        float d = math.abs(array.get(lp, i) - close)
+                        if na(bestD) or d < bestD
+                            bestD := d
+                            best  := i
+                if best >= 0
+                    array.set(used, best, true)
+                    f_drawLiq(array.get(lh, best), array.get(lp, best), array.get(lb, best), false, array.get(lt, best))
+                    dashLiq += 1
+        if showHistory
+            int shownSwept = 0
+            if array.size(equals) > 0
+                for i = array.size(equals) - 1 to 0
+                    Equal e = array.get(equals, i)
+                    if e.swept and shownSwept < 5
+                        f_drawLiq(e.isHigh, e.priceB, e.idxB, true, e.isHigh ? "EQH" : "EQL")
+                        shownSwept += 1
 
 var table dash = table.new(position.top_right, 2, 9, border_width = 1)
 f_cell(int row, string k, string v) =>

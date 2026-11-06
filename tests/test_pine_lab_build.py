@@ -152,3 +152,11 @@ def test_tail_defines_zone_helpers_and_fvg_layer():
         assert needle in text, needle
     body = _tail_function_bodies(text)["f_drawNearest"]
     assert "array.get" in body and "f_boxZone" in body
+
+
+def test_tail_liquidity_layer_uses_tail_volume_buffers():
+    text = TAIL.read_text(encoding="utf-8")
+    for needle in ("var array<float> bufVol", "var array<float> bufVolMa", "f_sweepBar(", "f_volConfirmed(", "if showLiq", "liqLines"):
+        assert needle in text, needle
+    # ta.sma(volume, 60) must be a global (unconditional) line, never inside a function
+    assert re.search(r"^volMa60\s*=\s*ta\.sma\(volume,\s*60\)", text, re.M)
