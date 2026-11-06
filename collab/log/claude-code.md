@@ -127,3 +127,9 @@
 - VPS: DEPLOYED 6d70ae0
 - istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
 
+
+## 2026-11-07 01:05 UTC+3 — T-20261107-02: Composio çalışma klasörü gitignore
+- task: T-20261107-02 | branch/PR: collab/claude-code/T-20261107-02-gitignore-local-data | commit: PR'da
+- ne yapıldı: `.gitignore`'a `Composio*/` (API anahtarı içeren `.env.local` + üretim çıktıları public repoya girmesin); `data/lab/` zaten ignore'lu. `git check-ignore` ile doğrulandı.
+- VPS: N/A
+- istek: operator → merge
