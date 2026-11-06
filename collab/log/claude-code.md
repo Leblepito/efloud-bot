@@ -127,3 +127,9 @@
 - VPS: DEPLOYED 6d70ae0
 - istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
 
+
+## 2026-11-06 23:55 UTC+3 — T-20261106-06: güvenlik denetimi (backlog madde 2)
+- task: T-20261106-06 | branch/PR: collab/claude-code/T-20261106-06-security-audit | commit: PR'da
+- ne yapıldı: sır taraması (ağaç + 1487 commit geçmiş), harness/CI/MCP, internete açık uygulama yüzeyi, deploy + bağımlılık denetimi. Ayrıntı yalnız private store'da (`security-audit-2026-11-06/REPORT.md`). Sızmış eski değerlerin sha256 özetleri VPS'te 7 env dosyası + 6 container env'i ile karşılaştırıldı → 0 eşleşme (değer okunmadı/basılmadı).
+- VPS: yalnız okuma (ssh: env özet karşılaştırması, `ss`, `ufw status`, `sshd -T`, `docker inspect`); değişiklik yok
+- istek: operator → private rapordaki eylem listesi (Railway bot servisleri, Hetzner token teyidi, sshd) · fix PR'ları sırayla
