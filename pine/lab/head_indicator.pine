@@ -1,0 +1,3 @@
+//@version=6
+// EFloud Lab — INDICATOR head. Generated target: pine/efloud_lab.pine (scripts/build_pine_lab.py)
+indicator("EFloud Lab", "EFloud Lab", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 1000)

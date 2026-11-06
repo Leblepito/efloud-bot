@@ -1,0 +1,828 @@
+// =============================================================================
+// EFloud Pine Lab — CORE (single source: pine/lab/core.pine)
+// Spec: docs/superpowers/specs/2026-11-05-pine-lab-design.md
+// Baseline (all toggles OFF) = live SMC v2 entry logic (engine/smc_v2/luxalgo.py,
+// LuxAlgo mode, profile mid). The structure engine ports the logic of
+// "Smart Money Concepts (SMC) [LuxAlgo]" (CnB3fSph), © LuxAlgo, licensed
+// CC BY-NC-SA 4.0 — https://creativecommons.org/licenses/by-nc-sa/4.0/
+// Non-commercial, share-alike: this script stays private / invite-only.
+// See THIRD_PARTY_NOTICES.md.
+// =============================================================================
+
+// ─── INPUTS: Baseline (live config values) ────────────────────────────────────
+grpBase = "Baseline (canlı bot)"
+swingLen        = input.int(50,     "Swing length",                         minval = 2,   group = grpBase)
+internalLen     = input.int(5,      "Internal length",                      minval = 2,   group = grpBase)
+eqLen           = input.int(3,      "Equal H/L length",                     minval = 1,   group = grpBase)
+eqThr           = input.float(0.1,  "Equal H/L threshold (×ATR200)",        minval = 0,   step = 0.05, group = grpBase)
+obFilterAtr     = input.bool(true,  "OB filter = ATR (off: cumulative mean range)", group = grpBase)
+obMitHighLow    = input.bool(true,  "OB mitigation = HIGHLOW (off: CLOSE)", group = grpBase)
+fvgAuto         = input.bool(true,  "FVG auto threshold",                   group = grpBase)
+kindChoch       = input.bool(true,  "Trigger kind: CHoCH",                  group = grpBase)
+kindBos         = input.bool(true,  "Trigger kind: BOS",                    group = grpBase)
+useInternal     = input.bool(true,  "Use internal breaks",                  group = grpBase)
+useSwing        = input.bool(true,  "Use swing breaks",                     group = grpBase)
+requirePD       = input.bool(true,  "Require premium/discount",             group = grpBase)
+minConfluence   = input.int(1,      "Min confluence tags",                  minval = 0,   group = grpBase)
+recencyBars     = input.int(168,    "Recency window (bars)",                minval = 1,   maxval = 900, group = grpBase)
+maxZoneDistAtr  = input.float(12.0, "Max zone distance (×ATR14, 0=off)",    minval = 0,   group = grpBase)
+maxOvershootAtr = input.float(6.0,  "Max zone overshoot (×ATR14)",          minval = 0,   group = grpBase)
+timeoutBars     = input.int(48,     "Pullback timeout (bars)",              minval = 1,   group = grpBase)
+maxPending      = input.int(6,      "Max pending candidates",               minval = 1,   group = grpBase)
+slBuffer        = input.float(0.5,  "SL buffer (×ATR14)",                   minval = 0,   step = 0.05, group = grpBase)
+minSlAtr        = input.float(2.0,  "Min SL distance (×ATR14, widen)",      minval = 0,   step = 0.1,  group = grpBase)
+maxSlAtr        = input.float(5.0,  "Max SL distance (×ATR14, reject)",     minval = 0.1, step = 0.1,  group = grpBase)
+minRr           = input.float(1.8,  "Min R:R for TP1",                      minval = 0.1, step = 0.1,  group = grpBase)
+tpWickBufferR   = input.float(0.15, "TP liquidity wick buffer (R)",         minval = 0,   step = 0.05, group = grpBase)
+po3Gate         = input.bool(true,  "Po3 manipulation gate",                group = grpBase)
+po3AccStart     = input.int(0,      "Po3 accumulation start (UTC hour)",    minval = 0,   maxval = 23, group = grpBase)
+po3AccEnd       = input.int(8,      "Po3 accumulation end (UTC hour, excl.)", minval = 1, maxval = 24, group = grpBase)
+po3DispMult     = input.float(1.5,  "Po3 displacement (×SMA(range,20))",    minval = 0.1, step = 0.1,  group = grpBase)
+htfSwingLen     = input.int(50,     "HTF swing length (bias)",              minval = 2,   group = grpBase)
+liveWindowBars  = input.int(750,    "Live kline window (bars)",             minval = 100, maxval = 900, group = grpBase)
+
+// ─── INPUTS: Improvements (all OFF = baseline) ────────────────────────────────
+grpLab = "Geliştirmeler (default KAPALI)"
+biasTf          = input.string("12h",  "T1 Bias TF (hard veto source)",      options = ["4h", "12h", "1d"],    group = grpLab)
+biasMode        = input.string("hard", "T1 Bias mode",                       options = ["hard", "soft"],       group = grpLab)
+macroTf         = input.string("none", "T1 Macro TF (soft, +1 tag)",         options = ["none", "12h", "1d"],  group = grpLab)
+obInvalidate    = input.bool(false,    "T2 OB invalidation + Breaker",       group = grpLab)
+oteEntry        = input.bool(false,    "T3 OTE 0.705 limit entry",           group = grpLab)
+sweepSl         = input.bool(false,    "T4 Sweep-aware SL anchor",           group = grpLab)
+freshConfirm    = input.bool(false,    "T5 Fresh confirmation (last bar)",   group = grpLab)
+obDisplacement  = input.bool(false,    "T6 OB needs displacement FVG",       group = grpLab)
+tpSweptFilter   = input.bool(false,    "T7 Drop swept TP levels",            group = grpLab)
+emitOnce        = input.bool(false,    "T8 Emit each break once",            group = grpLab)
+
+f_tf(string s) =>
+    s == "4h" ? "240" : s == "12h" ? "720" : "D"
+
+variantLabel = "B" + ((biasTf != "12h" or biasMode != "hard" or macroTf != "none") ? "|T1=" + biasTf + "/" + biasMode + (macroTf != "none" ? "+" + macroTf : "") : "") + (obInvalidate ? "|T2" : "") + (oteEntry ? "|T3" : "") + (sweepSl ? "|T4" : "") + (freshConfirm ? "|T5" : "") + (obDisplacement ? "|T6" : "") + (tpSweptFilter ? "|T7" : "") + (emitOnce ? "|T8" : "")
+
+// ==== [SECTION: STRUCTURE ENGINE] ==== LuxAlgo port — same per-bar order as luxalgo.analyze()
+type Pivot
+    float level   = na
+    int   bar     = -1
+    bool  crossed = false
+
+type OB
+    float barHigh                 // Python LuxOrderBlock.bar_high (parsedHigh; on a high-vol candle this is the LOW)
+    float barLow                  // parsedLow
+    int   idx                     // OB candle bar_index
+    int   createdIdx              // break bar
+    int   bias                    // 1 BULL / -1 BEAR
+    bool  internal
+    int   mitigatedIdx = -1
+    int   pivotBar = -1           // broken pivot bar (T4/T6)
+    float rawLow  = na            // raw lowest low over [pivotBar, createdIdx) (T4)
+    float rawHigh = na            // raw highest high over the same span (T4)
+
+type Brk
+    bool  isChoch
+    int   dir                     // 1 BULL / -1 BEAR
+    float level
+    int   pivotBar
+    int   idx                     // break bar_index
+    int   t                       // break bar open time (ms) == Python SetupCandidate.trigger_bar_ts
+    bool  internal
+    OB    ob = na
+    bool  emitted = false         // T8
+    bool  breaker = false         // T2
+
+type FVG
+    float top
+    float bot
+    int   idx                     // middle candle
+    int   bias
+    int   mitigatedIdx = -1
+
+type Equal
+    bool  isHigh                  // EQH (true) / EQL (false)
+    float priceA
+    float priceB
+    int   idxA
+    int   idxB
+    bool  swept = false           // T7
+
+type Piv
+    int   bar
+    float price
+    bool  swept = false           // T7
+
+method top(OB this) =>
+    math.max(this.barHigh, this.barLow)
+
+method bot(OB this) =>
+    math.min(this.barHigh, this.barLow)
+
+f_overlaps(float lo1, float hi1, float lo2, float hi2) =>
+    lo1 <= hi2 and lo2 <= hi1
+
+atr200  = ta.atr(200)
+atr14   = ta.atr(14)
+cumTr   = ta.cum(ta.tr)
+volRef  = obFilterAtr ? atr200 : (bar_index > 0 ? cumTr / bar_index : na)
+highVol = not na(volRef) and (high - low) >= 2.0 * volRef
+pHi     = highVol ? low : high
+pLo     = highVol ? high : low
+hiMit   = obMitHighLow ? high : close
+loMit   = obMitHighLow ? low  : close
+
+// Pine leg(size): bar[t-size] above highest(size) → bearish leg (0); below lowest(size) → bullish leg (1)
+// var state advances on every bar by design (TradingView rolls back the realtime bar): repaint-safe outside barstate.isconfirmed
+f_leg(int size) =>
+    var int leg = 0
+    hh = ta.highest(high, size)
+    ll = ta.lowest(low, size)
+    if bar_index >= size
+        if high[size] > hh
+            leg := 0
+        else if low[size] < ll
+            leg := 1
+    leg
+
+legSwing = f_leg(swingLen)
+legInt   = f_leg(internalLen)
+legEq    = f_leg(eqLen)
+chSwing  = ta.change(legSwing)     // +1 → pivot LOW at bar-size, -1 → pivot HIGH
+chInt    = ta.change(legInt)
+chEq     = ta.change(legEq)
+
+var Pivot swingHigh = Pivot.new()
+var Pivot swingLow  = Pivot.new()
+var Pivot intHigh   = Pivot.new()
+var Pivot intLow    = Pivot.new()
+var Pivot eqHigh    = Pivot.new()
+var Pivot eqLow     = Pivot.new()
+var int   swingBias = 0
+var int   intBias   = 0
+var float trailTop  = na
+var float trailBot  = na
+var array<OB>    swingObs = array.new<OB>()
+var array<OB>    intObs   = array.new<OB>()
+var array<Brk>   breaks   = array.new<Brk>()
+var array<FVG>   fvgs     = array.new<FVG>()
+var array<Equal> equals   = array.new<Equal>()
+var array<Piv>   shPiv    = array.new<Piv>()
+var array<Piv>   slPiv    = array.new<Piv>()
+
+f_mitigate(array<OB> pool) =>
+    for o in pool
+        if o.mitigatedIdx < 0
+            if o.bias == -1 and hiMit > o.barHigh
+                o.mitigatedIdx := bar_index
+            else if o.bias == 1 and loMit < o.barLow
+                o.mitigatedIdx := bar_index
+
+// Python _pivot_update: returns [isNew, isLow, newLevel, prevLevel, prevBar]
+f_pivotUpdate(Pivot pHigh, Pivot pLow, int ch, int size) =>
+    bool  isNew   = ch != 0
+    bool  isLow   = ch == 1
+    float lvl     = na
+    float prev    = na
+    int   prevBar = -1
+    if isNew
+        Pivot p = isLow ? pLow : pHigh
+        prev    := p.level
+        prevBar := p.bar
+        lvl     := isLow ? low[size] : high[size]
+        p.level   := lvl
+        p.bar     := bar_index - size
+        p.crossed := false
+    [isNew, isLow, lvl, prev, prevBar]
+
+f_equalCheck(bool isLow, float prevLvl, float lvl, int prevBar) =>
+    if not na(prevLvl) and not na(atr200) and math.abs(prevLvl - lvl) < eqThr * atr200
+        array.push(equals, Equal.new(isHigh = not isLow, priceA = prevLvl, priceB = lvl, idxA = prevBar, idxB = bar_index - eqLen))
+
+// Python _store_ob: argmin parsedLow (BULL) / argmax parsedHigh (BEAR) over [pivot.bar, break) — first hit wins
+f_storeOb(Pivot p, bool internal, int bias) =>
+    OB ob = na
+    int a = p.bar
+    int b = bar_index
+    if a >= 0 and b > a
+        int   span = math.min(b - a, liveWindowBars)      // live engine sees at most liveWindowBars bars
+        int   k    = -1
+        float best = na
+        float rLo  = na
+        float rHi  = na
+        for i = b - span to b - 1
+            int off = b - i
+            float v = bias == -1 ? pHi[off] : pLo[off]
+            rLo := na(rLo) ? low[off]  : math.min(rLo, low[off])
+            rHi := na(rHi) ? high[off] : math.max(rHi, high[off])
+            if na(best) or (bias == -1 ? v > best : v < best)
+                best := v
+                k    := i
+        if k >= 0
+            int offK = b - k
+            ob := OB.new(barHigh = pHi[offK], barLow = pLo[offK], idx = k, createdIdx = b, bias = bias, internal = internal, pivotBar = a, rawLow = rLo, rawHigh = rHi)
+            array.push(internal ? intObs : swingObs, ob)
+    ob
+
+// Python _structure(internal, t): bull check then bear check; bias re-read between them
+f_structure(bool internal, int biasIn) =>
+    int   biasOut = biasIn
+    Pivot ph = internal ? intHigh : swingHigh
+    Pivot pl = internal ? intLow  : swingLow
+    bool  extraH = internal ? (na(swingHigh.level) or intHigh.level != swingHigh.level) : true
+    bool  extraL = internal ? (na(swingLow.level)  or intLow.level  != swingLow.level)  : true
+    float lvlH = ph.level
+    if not na(lvlH) and close > lvlH and not (close[1] > lvlH) and not ph.crossed and extraH
+        bool isChoch = biasOut == -1
+        ph.crossed := true
+        OB ob = f_storeOb(ph, internal, 1)
+        array.push(breaks, Brk.new(isChoch = isChoch, dir = 1, level = lvlH, pivotBar = ph.bar, idx = bar_index, t = time, internal = internal, ob = ob))
+        biasOut := 1
+    float lvlL = pl.level
+    if not na(lvlL) and close < lvlL and not (close[1] < lvlL) and not pl.crossed and extraL
+        bool isChoch = biasOut == 1
+        pl.crossed := true
+        OB ob = f_storeOb(pl, internal, -1)
+        array.push(breaks, Brk.new(isChoch = isChoch, dir = -1, level = lvlL, pivotBar = pl.bar, idx = bar_index, t = time, internal = internal, ob = ob))
+        biasOut := -1
+    biasOut
+
+f_pruneObs(array<OB> pool) =>
+    if array.size(pool) > 0
+        for i = array.size(pool) - 1 to 0
+            if array.get(pool, i).createdIdx < bar_index - liveWindowBars
+                array.remove(pool, i)
+
+f_prunePools() =>
+    f_pruneObs(swingObs)
+    f_pruneObs(intObs)
+    if array.size(breaks) > 0
+        for i = array.size(breaks) - 1 to 0
+            if array.get(breaks, i).idx < bar_index - recencyBars - 1
+                array.remove(breaks, i)
+    if array.size(fvgs) > 0
+        for i = array.size(fvgs) - 1 to 0
+            if array.get(fvgs, i).idx < bar_index - liveWindowBars
+                array.remove(fvgs, i)
+    if array.size(equals) > 0
+        for i = array.size(equals) - 1 to 0
+            if array.get(equals, i).idxB < bar_index - liveWindowBars
+                array.remove(equals, i)
+    if array.size(shPiv) > 0
+        for i = array.size(shPiv) - 1 to 0
+            if array.get(shPiv, i).bar < bar_index - liveWindowBars
+                array.remove(shPiv, i)
+    if array.size(slPiv) > 0
+        for i = array.size(slPiv) - 1 to 0
+            if array.get(slPiv, i).bar < bar_index - liveWindowBars
+                array.remove(slPiv, i)
+
+// FVG auto threshold — Python: fvg_cum / t * 2 over the live window
+fvgDelta    = bar_index >= 2 and open[1] != 0 ? (close[1] - open[1]) / (open[1] * 100.0) : 0.0
+fvgAbsSum   = math.sum(math.abs(fvgDelta), liveWindowBars)
+fvgT        = math.max(1, math.min(bar_index, liveWindowBars))
+fvgThr      = fvgAuto ? fvgAbsSum / fvgT * 2.0 : 0.0
+
+if barstate.isconfirmed
+    f_mitigate(intObs)
+    f_mitigate(swingObs)
+    [nS, lowS, lvlS, prevS, pbS] = f_pivotUpdate(swingHigh, swingLow, chSwing, swingLen)
+    if nS
+        if lowS
+            trailBot := lvlS
+            array.push(slPiv, Piv.new(bar = bar_index - swingLen, price = lvlS))
+        else
+            trailTop := lvlS
+            array.push(shPiv, Piv.new(bar = bar_index - swingLen, price = lvlS))
+    [nI, lowI, lvlI, prevI, pbI] = f_pivotUpdate(intHigh, intLow, chInt, internalLen)
+    [nE, lowE, lvlE, prevE, pbE] = f_pivotUpdate(eqHigh, eqLow, chEq, eqLen)
+    if nE
+        f_equalCheck(lowE, prevE, lvlE, pbE)
+    intBias   := f_structure(true, intBias)
+    swingBias := f_structure(false, swingBias)
+    trailTop := na(trailTop) ? high : math.max(high, trailTop)
+    trailBot := na(trailBot) ? low  : math.min(low,  trailBot)
+    for f in fvgs
+        if f.mitigatedIdx < 0
+            if f.bias == 1 and low < f.bot
+                f.mitigatedIdx := bar_index
+            else if f.bias == -1 and high > f.top
+                f.mitigatedIdx := bar_index
+    if bar_index >= 2
+        if low > high[2] and close[1] > high[2] and fvgDelta > fvgThr
+            array.push(fvgs, FVG.new(top = low, bot = high[2], idx = bar_index - 1, bias = 1))
+        if high < low[2] and close[1] < low[2] and -fvgDelta > fvgThr
+            array.push(fvgs, FVG.new(top = low[2], bot = high, idx = bar_index - 1, bias = -1))
+    for p in shPiv
+        if not p.swept and bar_index > p.bar + swingLen and high > p.price
+            p.swept := true
+    for p in slPiv
+        if not p.swept and bar_index > p.bar + swingLen and low < p.price
+            p.swept := true
+    for e in equals
+        if not e.swept and bar_index > e.idxB + eqLen and (e.isHigh ? high > e.priceB : low < e.priceB)
+            e.swept := true
+    f_prunePools()
+
+// ==== [SECTION: BIAS + CANDIDATES] ====
+// HTF swing trend — the same leg/pivot/crossover rules as the chart-TF swing scope.
+// Non-repaint: returns bias[1] and is requested with lookahead_on (PINE_SPEC §15 recipe).
+// var state advances on every bar by design (TradingView rolls back the realtime bar): repaint-safe outside barstate.isconfirmed
+f_swingTrend(int size) =>
+    var int   leg       = 0
+    var float shLvl     = na
+    var bool  shCrossed = false
+    var float slLvl     = na
+    var bool  slCrossed = false
+    var int   bias      = 0
+    hh = ta.highest(high, size)
+    ll = ta.lowest(low, size)
+    if bar_index >= size
+        if high[size] > hh
+            leg := 0
+        else if low[size] < ll
+            leg := 1
+    ch = ta.change(leg)
+    if ch == 1
+        slLvl     := low[size]
+        slCrossed := false
+    else if ch == -1
+        shLvl     := high[size]
+        shCrossed := false
+    if not na(shLvl) and close > shLvl and not (close[1] > shLvl) and not shCrossed
+        shCrossed := true
+        bias      := 1
+    if not na(slLvl) and close < slLvl and not (close[1] < slLvl) and not slCrossed
+        slCrossed := true
+        bias      := -1
+    bias[1]
+
+htfBias      = request.security(syminfo.tickerid, f_tf(biasTf), f_swingTrend(htfSwingLen), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)
+macroBiasRaw = request.security(syminfo.tickerid, f_tf(macroTf == "none" ? "12h" : macroTf), f_swingTrend(htfSwingLen), lookahead = barmerge.lookahead_on, gaps = barmerge.gaps_off)
+macroBias    = macroTf == "none" ? 0 : macroBiasRaw
+
+zoneOk  = not na(trailTop) and not na(trailBot) and trailTop > trailBot
+zEq     = (trailTop + trailBot) / 2.0
+zEqLow  = 0.525 * trailBot + 0.475 * trailTop
+zEqHigh = 0.525 * trailTop + 0.475 * trailBot
+
+type Cand
+    int    dir
+    int    trigIdx
+    int    trigTime
+    float  trigPrice
+    OB     ob
+    float  zLow
+    float  zHigh
+    string tags
+    int    nTags
+    int    barsWaited = 0
+    string state = "AWAITING_PULLBACK"
+    bool   hasLeft = false
+    string src = "OB"
+    // T3 (OTE limit)
+    float  legLow  = na
+    float  legHigh = na
+    float  limitPx = na
+    int    limitBar = -1
+    bool   limitOk  = false      // SL/TP valid at limitPx (strategy places the order only when true)
+    float  limitTp1 = na         // TP1 estimated at limitPx (OTE_MISSED check)
+    float  limitSl  = na         // SL estimated at limitPx (exits armed on the pending limit entry)
+    float  limitTp2 = na         // TP2 estimated at limitPx
+    // filled on CONFIRMED
+    float  entry = na
+    float  sl    = na
+    float  tp1   = na
+    float  tp2   = na
+    string tp1Src = ""
+    string tp2Src = ""
+
+var array<Cand>   cands   = array.new<Cand>()
+var array<Cand>   fired   = array.new<Cand>()     // CONFIRMED on this bar with SL/TP computed (tails consume)
+var array<string> dropLog = array.new<string>()   // last 20 drop reasons (dashboard)
+
+f_drop(string why) =>
+    array.push(dropLog, why)
+    if array.size(dropLog) > 20
+        array.shift(dropLog)
+
+// Python zone_confluence: SWING_OB / OTE / EQ / FVG / SWEEP (+ BREAKER for T2)
+f_tags(int dir, Brk b, OB ob) =>
+    string tags = ""
+    int    n    = 0
+    if b.breaker
+        tags := "BREAKER"
+        n += 1
+    if not b.internal
+        tags := tags == "" ? "SWING_OB" : tags + "+SWING_OB"
+        n += 1
+    if zoneOk
+        float rng = trailTop - trailBot
+        float bLo = dir == 1 ? trailTop - rng * 0.786 : trailBot + rng * 0.618
+        float bHi = dir == 1 ? trailTop - rng * 0.618 : trailBot + rng * 0.786
+        if f_overlaps(ob.bot(), ob.top(), bLo, bHi)
+            tags := tags == "" ? "OTE" : tags + "+OTE"
+            n += 1
+        if f_overlaps(ob.bot(), ob.top(), zEqLow, zEqHigh)
+            tags := tags == "" ? "EQ" : tags + "+EQ"
+            n += 1
+    bool fvgHit = false
+    for f in fvgs
+        if not fvgHit and f.mitigatedIdx < 0 and f.bias == dir and f.idx >= ob.idx and f_overlaps(ob.bot(), ob.top(), f.bot, f.top)
+            fvgHit := true
+    if fvgHit
+        tags := tags == "" ? "FVG" : tags + "+FVG"
+        n += 1
+    float priorPx = na
+    array<Piv> piv = dir == 1 ? slPiv : shPiv
+    for p in piv
+        if p.bar < ob.idx
+            priorPx := p.price
+    if not na(priorPx) and ((dir == 1 and ob.bot() < priorPx) or (dir == -1 and ob.top() > priorPx))
+        tags := tags == "" ? "SWEEP" : tags + "+SWEEP"
+        n += 1
+    [tags, n]
+
+f_isActive(Cand c) =>
+    c.state == "AWAITING_PULLBACK" or c.state == "IN_ZONE" or c.state == "AWAITING_REENTRY"
+
+f_activeCount() =>
+    int n = 0
+    for c in cands
+        if f_isActive(c)
+            n += 1
+    n
+
+f_isDup(int dir, int trigTime) =>
+    bool d = false
+    for c in cands
+        if not d and c.dir == dir and c.trigTime == trigTime and f_isActive(c)
+            d := true
+    d
+
+// T6: the leg after the OB must have left a same-direction FVG (mitigated or not) before the break
+f_hasDisplacement(OB ob, int breakIdx, int dir) =>
+    bool hit = false
+    for f in fvgs
+        if not hit and f.bias == dir and f.idx > ob.idx and f.idx <= breakIdx
+            hit := true
+    hit
+
+// Python: generate_candidates → _emit_setup_candidates gates → store.add (dedup, cap)
+f_emit() =>
+    if htfBias != 0
+        int trigMin = bar_index - recencyBars
+        for b in breaks
+            if b.idx < trigMin
+                continue
+            if emitOnce and b.emitted
+                continue
+            bool counterBias = b.dir != htfBias
+            if counterBias and (biasMode == "hard" or not b.isChoch)      // soft: only CHoCH may run against the HTF
+                continue
+            int needTags = minConfluence + (counterBias ? 1 : 0) + (macroBias != 0 and b.dir != macroBias ? 1 : 0)
+            if (b.isChoch and not kindChoch) or (not b.isChoch and not kindBos)
+                continue
+            if (b.internal and not useInternal) or (not b.internal and not useSwing)
+                continue
+            OB ob = b.ob
+            if na(ob) or ob.mitigatedIdx >= 0
+                continue
+            int dir = b.dir
+            if f_isDup(dir, b.t)                                          // dedup + cap first: same outcome, skips f_tags' FVG loop
+                continue
+            if f_activeCount() >= maxPending
+                continue
+            if obDisplacement and not b.breaker and not f_hasDisplacement(ob, b.idx, dir)
+                continue
+            if requirePD and zoneOk
+                if dir == 1 and ob.top() > zEq
+                    continue
+                if dir == -1 and ob.bot() < zEq
+                    continue
+            [tags, n] = f_tags(dir, b, ob)
+            if n < needTags
+                if n >= minConfluence
+                    f_drop("BIAS_SOFT_TAGS")
+                continue
+            float zl = ob.bot()
+            float zh = ob.top()
+            if not na(atr14) and atr14 > 0
+                float near = dir == 1 ? close - zh : zl - close
+                if maxZoneDistAtr > 0 and near / atr14 > maxZoneDistAtr
+                    continue
+                float far = dir == 1 ? close - zl : zh - close
+                if -(far / atr14) > maxOvershootAtr
+                    continue
+            array.push(cands, Cand.new(dir = dir, trigIdx = b.idx, trigTime = b.t, trigPrice = b.level, ob = ob, zLow = zl, zHigh = zh, tags = tags, nTags = n, src = b.breaker ? "BREAKER" : "OB"))
+            b.emitted := true
+// ==== [SECTION: STATE MACHINE + SL/TP] ====
+// Po3 (engine/smc_v2/po3.py): UTC-day accumulation box; sweep after the box with no displacement yet = MANIPULATION
+utcHour  = hour(time, "UTC")
+dayKey   = math.floor(time / 86400000.0)
+bodyRef  = ta.sma(high - low, 20)
+var int   po3Day     = -1
+var float accHi      = na
+var float accLo      = na
+var int   accN       = 0
+var int   sweepSide  = 0
+var bool  dispAfter  = false
+if barstate.isconfirmed
+    if dayKey != po3Day
+        po3Day    := dayKey
+        accHi     := na
+        accLo     := na
+        accN      := 0
+        sweepSide := 0
+        dispAfter := false
+    if utcHour >= po3AccStart and utcHour < po3AccEnd
+        accHi := na(accHi) ? high : math.max(accHi, high)
+        accLo := na(accLo) ? low  : math.min(accLo, low)
+        accN  += 1
+    else if utcHour >= po3AccEnd and accN >= 2
+        if sweepSide == 0
+            if high > accHi
+                sweepSide := 1
+            else if low < accLo
+                sweepSide := -1
+        else if not dispAfter and math.abs(close - open) >= po3DispMult * bodyRef
+            dispAfter := true
+po3Blocked = po3Gate and accN >= 2 and sweepSide != 0 and not dispAfter
+
+f_inZone(float px, Cand c) =>
+    c.zLow <= px and px <= c.zHigh
+
+// confirmation.confirm_entry: engulfing whose close sits in the zone, bars with time > sinceTime, OLDEST first
+f_confirm(int dir, float zl, float zh, int sinceTime, bool lastOnly) =>
+    bool  ok = false
+    float px = na
+    int maxOff   = math.min(bar_index - 1, math.min(recencyBars + timeoutBars + 2, 990))   // max_bars_back = 1000
+    int startOff = lastOnly ? 0 : maxOff
+    if maxOff >= 0
+        for off = startOff to 0
+            if ok
+                break
+            if time[off] <= sinceTime
+                continue
+            float pO = open[off + 1]
+            float pC = close[off + 1]
+            float cO = open[off]
+            float cC = close[off]
+            if dir == -1
+                if pC > pO and cC < cO and cO >= pC and cC <= pO and zl <= cC and cC <= zh
+                    ok := true
+                    px := cC
+            else
+                if pC < pO and cC > cO and cO <= pC and cC >= pO and zl <= cC and cC <= zh
+                    ok := true
+                    px := cC
+    [ok, px]
+
+// sl_calc.calc_sl: structural = anchor ∓ buffer; widen to minSlAtr; reject above maxSlAtr; reject on bad ATR
+f_calcSl(int dir, float entry, float zl, float zh, float anchor) =>
+    bool  ok = not na(atr14) and atr14 > 0
+    float sl = na
+    if ok
+        float buffer     = slBuffer * atr14
+        float structural = dir == 1 ? math.min(zl, anchor) - buffer : math.max(zh, anchor) + buffer
+        float dist = math.abs(entry - structural)
+        float minD = minSlAtr * atr14
+        float maxD = maxSlAtr * atr14
+        if dist > maxD
+            ok := false
+        else
+            sl := dist < minD ? (dir == 1 ? entry - minD : entry + minD) : structural
+    [sl, ok]
+
+f_pushTp(array<float> px, array<string> src, float p, string s) =>
+    array.push(px, p)
+    array.push(src, s)
+
+f_tpPool(array<float> px, array<string> src, array<OB> pool, int dir, float entry) =>
+    for o in pool
+        if o.mitigatedIdx < 0 and o.bias == -dir and (dir == 1 ? o.bot() > entry : o.top() < entry)
+            f_pushTp(px, src, dir == 1 ? o.bot() : o.top(), "LUX_OB")
+
+// luxalgo.tp_targets — nearest candidate ≥ minRr×risk; TP2 next beyond, else fib extension of the trailing range
+f_tpTargets(int dir, float entry, float sl) =>
+    float risk    = math.abs(entry - sl)
+    float minDist = minRr * risk
+    float buf     = math.max(0.0, tpWickBufferR) * risk
+    array<float>  px  = array.new<float>()
+    array<string> src = array.new<string>()
+    f_tpPool(px, src, swingObs, dir, entry)
+    f_tpPool(px, src, intObs, dir, entry)
+    for f in fvgs
+        if f.mitigatedIdx < 0 and f.bias == -dir and (dir == 1 ? f.bot > entry : f.top < entry)
+            f_pushTp(px, src, dir == 1 ? f.bot : f.top, "LUX_FVG")
+    for e in equals
+        if e.isHigh == (dir == 1) and not (tpSweptFilter and e.swept)
+            float lvl = dir == 1 ? e.priceB - buf : e.priceB + buf
+            if dir == 1 ? lvl > entry : lvl < entry
+                f_pushTp(px, src, lvl, dir == 1 ? "LUX_EQH" : "LUX_EQL")
+    array<Piv> pivs = dir == 1 ? shPiv : slPiv
+    for p in pivs
+        if not (tpSweptFilter and p.swept)
+            float lvl = dir == 1 ? p.price - buf : p.price + buf
+            if dir == 1 ? lvl > entry : lvl < entry
+                f_pushTp(px, src, lvl, dir == 1 ? "LUX_LIQ_HIGH" : "LUX_LIQ_LOW")
+    if zoneOk
+        if dir == 1 ? zEq > entry : zEq < entry
+            f_pushTp(px, src, zEq, "LUX_EQUILIBRIUM")
+        float trailLvl = dir == 1 ? trailTop - buf : trailBot + buf
+        if dir == 1 ? trailLvl > entry : trailLvl < entry
+            f_pushTp(px, src, trailLvl, dir == 1 ? "LUX_TRAIL_TOP" : "LUX_TRAIL_BOTTOM")
+    int n = array.size(px)
+    if n > 1
+        for i = 0 to n - 2
+            int m = i
+            for j = i + 1 to n - 1
+                float a = array.get(px, j)
+                float b = array.get(px, m)
+                if dir == 1 ? a < b : a > b
+                    m := j
+            if m != i
+                float tp = array.get(px, i)
+                array.set(px, i, array.get(px, m))
+                array.set(px, m, tp)
+                string ts = array.get(src, i)
+                array.set(src, i, array.get(src, m))
+                array.set(src, m, ts)
+    float  tp1 = na
+    float  tp2 = na
+    string s1  = "NONE"
+    string s2  = "NONE"
+    bool   ok  = true
+    if n == 0
+        tp1 := dir == 1 ? entry + minDist : entry - minDist
+        s1  := "RR_PROJECTION"
+    else
+        int k1 = -1
+        for i = 0 to n - 1
+            float p = array.get(px, i)
+            if k1 < 0 and (dir == 1 ? p - entry : entry - p) >= minDist
+                k1 := i
+        if k1 < 0
+            ok := false
+        else
+            tp1 := array.get(px, k1)
+            s1  := array.get(src, k1)
+            if k1 + 1 <= n - 1
+                for i = k1 + 1 to n - 1
+                    float p = array.get(px, i)
+                    if na(tp2) and (dir == 1 ? p > tp1 : p < tp1)
+                        tp2 := p
+                        s2  := array.get(src, i)
+            if na(tp2) and zoneOk
+                float rng  = trailTop - trailBot
+                float best = na
+                for r in array.from(1.272, 1.618, 2.618)
+                    float e = dir == 1 ? trailBot + rng * r : trailTop - rng * r
+                    if (dir == 1 ? e > tp1 : e < tp1) and (na(best) or (dir == 1 ? e < best : e > best))
+                        best := e
+                if not na(best)
+                    tp2 := best
+                    s2  := "FIB_EXT"
+    [tp1, tp2, s1, s2, ok]
+
+// _place_v2_entry_order (SL/TP part): rejected setups are consumed (CONFIRMED, no trade) — same as live
+f_onConfirmed(Cand c, float px) =>
+    // For BREAKER candidates c.ob is the flipped box, so this anchor already yields the breaker's far edge.
+    float anchor = oteEntry and not na(c.legLow) ? c.legLow : (c.dir == 1 ? c.ob.bot() : c.ob.top())
+    if sweepSl and not na(atr14)
+        anchor := c.dir == 1 ? math.min(anchor, c.ob.rawLow) : math.max(anchor, c.ob.rawHigh)   // raw extreme incl. the high-vol sweep candle
+        for e in equals
+            if c.dir == 1 and not e.isHigh and e.priceB < c.zLow and e.priceB >= c.zLow - atr14
+                anchor := math.min(anchor, e.priceB)
+            if c.dir == -1 and e.isHigh and e.priceB > c.zHigh and e.priceB <= c.zHigh + atr14
+                anchor := math.max(anchor, e.priceB)
+    [sl, okSl] = f_calcSl(c.dir, px, c.zLow, c.zHigh, anchor)
+    if not okSl
+        f_drop(na(atr14) or atr14 <= 0 ? "ATR_NA" : "SL_TOO_FAR")
+    else
+        [tp1, tp2, s1, s2, okTp] = f_tpTargets(c.dir, px, sl)
+        if not okTp
+            f_drop("TP_INSUFFICIENT")
+        else
+            c.entry  := px
+            c.sl     := sl
+            c.tp1    := tp1
+            c.tp2    := tp2
+            c.tp1Src := s1
+            c.tp2Src := s2
+            array.push(fired, c)
+    true    // explicit return: the if/else above mixes series string (f_drop) and void (array.push) branches
+
+// T2: a closed-through OB becomes an opposite-direction Breaker zone (same box) with its own break record
+f_flipBreaker(Cand c) =>
+    OB src = c.ob
+    OB bb = OB.new(barHigh = src.barHigh, barLow = src.barLow, idx = src.idx, createdIdx = bar_index, bias = -src.bias, internal = src.internal, pivotBar = src.pivotBar, rawLow = src.rawLow, rawHigh = src.rawHigh)
+    array.push(src.internal ? intObs : swingObs, bb)
+    array.push(breaks, Brk.new(isChoch = true, dir = -c.dir, level = close, pivotBar = src.pivotBar, idx = bar_index, t = time, internal = src.internal, ob = bb, breaker = true))
+
+// T3: impulse leg = OB origin → running extreme since the break; OTE band [0.618, 0.786]; limit at 0.705, clamped into band ∩ OB
+f_oteUpdate(Cand c) =>
+    bool ok = true
+    if na(c.legLow)
+        c.legLow  := c.dir == 1 ? c.ob.bot() : c.ob.top()
+        c.legHigh := c.dir == 1 ? high : low
+    c.legHigh := c.dir == 1 ? math.max(c.legHigh, high) : math.min(c.legHigh, low)
+    float r = math.abs(c.legHigh - c.legLow)
+    if r <= 0
+        ok := false
+    else
+        float bLo = c.dir == 1 ? c.legHigh - 0.786 * r : c.legHigh + 0.618 * r
+        float bHi = c.dir == 1 ? c.legHigh - 0.618 * r : c.legHigh + 0.786 * r
+        float lo  = math.max(math.min(bLo, bHi), c.zLow)
+        float hi  = math.min(math.max(bLo, bHi), c.zHigh)
+        if lo > hi
+            ok := false
+        else
+            float px = c.dir == 1 ? c.legHigh - 0.705 * r : c.legHigh + 0.705 * r
+            c.limitPx := math.min(math.max(px, lo), hi)
+            if c.limitBar < 0
+                c.limitBar := bar_index
+            // pre-validate SL/TP at the limit so a resting order can never fill into a setup the lab would reject
+            c.limitOk  := false
+            c.limitTp1 := na
+            c.limitSl  := na
+            c.limitTp2 := na
+            [slEst, okSl] = f_calcSl(c.dir, c.limitPx, c.zLow, c.zHigh, c.legLow)
+            if okSl
+                [tp1Est, tp2Est, s1Est, s2Est, okTp] = f_tpTargets(c.dir, c.limitPx, slEst)
+                if okTp
+                    c.limitOk  := true
+                    c.limitTp1 := tp1Est
+                    c.limitSl  := slEst
+                    c.limitTp2 := tp2Est
+    ok
+
+f_pruneTerminal() =>
+    if array.size(cands) > 0
+        for i = array.size(cands) - 1 to 0
+            if not f_isActive(array.get(cands, i))
+                array.remove(cands, i)
+
+// Per closed bar: 3 passes of (advance → prune → emit). The live orchestrator ticks several
+// times per closed bar on identical data; pass 0 is the "new bar" tick (bars_waited += 1).
+if barstate.isconfirmed
+    array.clear(fired)
+    for pass = 0 to 2
+        bool isNewBar = pass == 0
+        for c in cands
+            if not f_isActive(c)
+                continue
+            if isNewBar
+                c.barsWaited += 1
+            if c.barsWaited > timeoutBars
+                c.state := "EXPIRED"
+                f_drop("EXPIRED")
+                continue
+            if oteEntry and c.state == "AWAITING_PULLBACK"
+                if not isNewBar
+                    continue                                   // the limit is evaluated once per bar (pass 0); later passes only re-emit
+                float restingPx  = c.limitPx                    // the order that was actually live during this bar (placed at the prior close)
+                bool  restingOk  = c.limitOk
+                float restingTp1 = c.limitTp1
+                if not f_oteUpdate(c)
+                    c.state := "INVALIDATED"
+                    f_drop("NO_OTE_OVERLAP")
+                    continue
+                if c.dir == 1 ? close < c.legLow : close > c.legLow
+                    c.state := "INVALIDATED"
+                    f_drop("OTE_LEG_BROKEN")
+                    continue
+                if po3Blocked or na(restingPx) or not restingOk or c.limitBar >= bar_index
+                    continue                                   // no live order this bar: first bar, invalid SL/TP at the limit, or pulled during manipulation
+                bool filled = c.dir == 1 ? low <= restingPx : high >= restingPx
+                if filled
+                    c.state := "CONFIRMED"
+                    f_onConfirmed(c, restingPx)
+                else if c.dir == 1 ? high >= restingTp1 : low <= restingTp1
+                    c.state := "INVALIDATED"
+                    f_drop("OTE_MISSED")
+                continue
+            bool inZ = f_inZone(close, c)
+            if obInvalidate and (c.dir == 1 ? close < c.ob.bot() : close > c.ob.top())
+                c.state := "INVALIDATED"
+                f_drop("OB_INVALIDATED")
+                f_flipBreaker(c)
+                continue
+            if c.state == "AWAITING_PULLBACK"
+                if inZ
+                    if not c.hasLeft
+                        c.state := "IN_ZONE"
+                        continue
+                    else
+                        c.state := "IN_ZONE"
+            if c.state == "IN_ZONE"
+                if not inZ
+                    c.hasLeft := true
+                    c.state   := "AWAITING_REENTRY"
+                    continue
+                [ok, px] = f_confirm(c.dir, c.zLow, c.zHigh, c.trigTime, freshConfirm)
+                if ok and not po3Blocked
+                    c.state := "CONFIRMED"
+                    f_onConfirmed(c, px)
+                continue
+            if c.state == "AWAITING_REENTRY"
+                if inZ
+                    c.state := "IN_ZONE"
+        f_pruneTerminal()
+        f_emit()

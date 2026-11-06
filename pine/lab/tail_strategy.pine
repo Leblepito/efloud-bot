@@ -1,0 +1,113 @@
+// ─── STRATEGY TAIL: live order lifecycle model (spec §6.1) ───────────────────
+grpStr = "Strategy (canlı sizing)"
+marginUsd    = input.float(50.0, "Margin per trade (USD)", minval = 1, group = grpStr)
+leverage     = input.int(10, "Leverage", minval = 1, maxval = 125, group = grpStr)
+maxHoldHours = input.int(36, "Max hold (hours)", minval = 1, group = grpStr)
+tp1ClosePct  = input.float(50.0, "TP1 close %", minval = 1, maxval = 100, group = grpStr)
+moveSlToBe   = input.bool(true, "Move SL to BE after TP1", group = grpStr)
+
+var float  posEntry = na
+var float  posSl    = na
+var float  posTp1   = na
+var float  posTp2   = na
+var int    posDir   = 0
+var bool   tp1Hit   = false
+var int    closedSeen = 0
+
+f_sfmt(float x) =>
+    na(x) ? "na" : str.tostring(x, "#.########")
+
+f_cmt(Cand c) =>
+    variantLabel + "|trig=" + str.tostring(c.trigTime) + "|entry=" + f_sfmt(c.entry) + "|sl=" + f_sfmt(c.sl) + "|tp1=" + f_sfmt(c.tp1) + "|tp2=" + f_sfmt(c.tp2)
+
+// Both legs armed from the entry bar (live bot: full-size STOP_MARKET). An SL hit closes X1 (its share) and
+// X2 (the remainder) at the same stop; after TP1 the X2 stop moves to BE.
+f_exits() =>
+    string id = posDir == 1 ? "L" : "S"
+    string slTag = "|sl=" + f_sfmt(posSl)
+    if na(posTp2)
+        strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = 100, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+    else
+        if not tp1Hit
+            strategy.exit("X1", id, stop = posSl, limit = posTp1, qty_percent = tp1ClosePct, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+        strategy.exit("X2", id, stop = tp1Hit and moveSlToBe ? posEntry : posSl, limit = posTp2, qty_percent = 100, comment_profit = "TP2" + slTag, comment_loss = (tp1Hit and moveSlToBe ? "BE" : "SL") + slTag)
+
+// T3: exits attached to the pending limit entry activate on its fill (intrabar), so the fill bar is protected
+f_armPending(string id, int dir, Cand c) =>
+    string slTag = "|sl=" + f_sfmt(c.limitSl)
+    if na(c.limitTp2)
+        strategy.exit("X1", id, stop = c.limitSl, limit = c.limitTp1, qty_percent = 100, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+    else
+        strategy.exit("X1", id, stop = c.limitSl, limit = c.limitTp1, qty_percent = tp1ClosePct, comment_profit = "TP1" + slTag, comment_loss = "SL" + slTag)
+        strategy.exit("X2", id, stop = c.limitSl, limit = c.limitTp2, qty_percent = 100, comment_profit = "TP2" + slTag, comment_loss = "SL" + slTag)
+
+if barstate.isconfirmed
+    // TP1 partial: a trade closed while the position is still open can only be the X1 take-profit leg
+    // (an SL/BE stop closes both legs and leaves the position flat)
+    if strategy.closedtrades > closedSeen and strategy.position_size != 0 and not tp1Hit
+        tp1Hit := true
+    closedSeen := strategy.closedtrades
+    if strategy.position_size == 0
+        tp1Hit := false
+        posDir := 0                         // flat (closed, or an entry that never filled) → ready for the next setup
+    else
+        posDir := strategy.position_size > 0 ? 1 : -1
+    // T3: keep one limit order per direction at the nearest pending OTE candidate; cancel when none
+    if oteEntry and strategy.position_size == 0
+        Cand bestL = na
+        Cand bestS = na
+        for c in cands
+            if c.state == "AWAITING_PULLBACK" and c.limitOk and not na(c.limitPx) and not po3Blocked
+                if c.dir == 1 and (na(bestL) or c.limitPx > bestL.limitPx)
+                    bestL := c
+                if c.dir == -1 and (na(bestS) or c.limitPx < bestS.limitPx)
+                    bestS := c
+        if not na(bestL)
+            strategy.entry("L", strategy.long, qty = marginUsd * leverage / bestL.limitPx, limit = bestL.limitPx, comment = variantLabel + "|trig=" + str.tostring(bestL.trigTime) + "|ote=1")
+            f_armPending("L", 1, bestL)
+        else
+            strategy.cancel("L")
+        if not na(bestS)
+            strategy.entry("S", strategy.short, qty = marginUsd * leverage / bestS.limitPx, limit = bestS.limitPx, comment = variantLabel + "|trig=" + str.tostring(bestS.trigTime) + "|ote=1")
+            f_armPending("S", -1, bestS)
+        else
+            strategy.cancel("S")
+    else if oteEntry
+        strategy.cancel("L")                 // in a position: no resting entry on either side (pyramiding = 1, no reversals)
+        strategy.cancel("S")
+    // flat → open (market mode), or the bar an OTE limit filled (position already open at this close):
+    // take the fired candidate that matches the direction we are in, arm exits now
+    bool justFilledOte = oteEntry and strategy.position_size != 0 and strategy.position_size[1] == 0
+    if justFilledOte or (strategy.position_size == 0 and array.size(fired) > 0)
+        int   wantDir = strategy.position_size > 0 ? 1 : strategy.position_size < 0 ? -1 : 0
+        float fillPx  = strategy.opentrades > 0 ? strategy.opentrades.entry_price(strategy.opentrades - 1) : na
+        Cand  c       = na
+        bool  matched = false
+        for f in fired
+            if wantDir == 0
+                if na(c)
+                    c       := f
+                    matched := true
+            else if f.dir == wantDir and (not matched or (not na(fillPx) and math.abs(f.entry - fillPx) <= 2 * syminfo.mintick))
+                c       := f                                 // prefer the fired candidate whose entry equals the fill price
+                matched := true
+        if not matched
+            strategy.close_all(comment = "OTE_NAKED")        // a filled order with no fired candidate is never left unprotected
+        else
+            posEntry := c.entry
+            posSl    := c.sl
+            posTp1   := c.tp1
+            posTp2   := c.tp2
+            posDir   := c.dir
+            tp1Hit   := false
+            if not oteEntry
+                float qty = marginUsd * leverage / c.entry
+                if c.dir == 1
+                    strategy.entry("L", strategy.long, qty = qty, comment = f_cmt(c))
+                else
+                    strategy.entry("S", strategy.short, qty = qty, comment = f_cmt(c))
+            f_exits()                       // armed now so the fill is protected from its first bar
+    else if strategy.position_size != 0
+        f_exits()
+        if strategy.opentrades > 0 and time - strategy.opentrades.entry_time(strategy.opentrades - 1) >= maxHoldHours * 3600000
+            strategy.close(posDir == 1 ? "L" : "S", comment = "MAX_HOLD")

@@ -40,6 +40,12 @@ The migration follows a progressive approach:
 - Checks readiness for next phase
 - Usage: `python scripts/validate_phase_completion.py {1|2|3|all}`
 
+### `build_pine_lab.py`
+- `build_pine_lab.py` — assembles `pine/lab/*` into the generated lab indicator/strategy (`--check` for CI).
+
+### `pine_lab_parity.py`
+- `pine_lab_parity.py` — `replay` (live v2 glue bar by bar), `compare` (vs TradingView trades), `score` (NET R, WIN/NO).
+
 ## Usage Examples
 
 ```bash
