@@ -23,9 +23,11 @@ Bot'un gerçek işlemleri (açılış, TP1, kapanış) topluluk Telegram kanalı
 ## Beklenen çıktı (Definition of Done)
 - [ ] Operatör/hukuki onay: gerçek zamanlı entry/SL/TP paylaşımı P-003 §2b 'sinyal servisi' sınırı — kanal herkese açıksa onay olmadan `EFLOUD_CUSTOMER_TG_TRADES=1` yapılmaz.
 - [ ] PR merge edildikten sonra VPS kodu master'a çekildi (operatör onayıyla).
-- [ ] Üç env değişkeni prod env dosyasında set (değerler repo'ya/log'a yazılmaz).
-- [ ] Bot container'ı **flat (açık pozisyon yokken)** pencerede recreate edildi; AUTOSTART=0 olduğu için bot manuel start edildi; `/healthz` 200.
+- [ ] Üç env değişkeni prod env dosyasında (`.env.production`, `docker-compose.prod.yml` `efloud-bot` servisinin `env_file`'ı) set (değerler repo'ya/log'a yazılmaz). `EFLOUD_CUSTOMER_TG_PARSE_MODE` ayarlanmaz (Markdown kalır).
+- [ ] Bot container'ı **flat (açık pozisyon yokken)** pencerede recreate edildi: `docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps efloud-bot`; `EFLOUD_AUTOSTART=0` olduğu için bot manuel start edildi; `/healthz` 200.
+- [ ] Açılış logunda `Customer Telegram per-trade posts: ENABLED` satırı var (`digest disabled (flag off)` normal).
 - [ ] İlk gerçek işlem açılışında topluluk kanalında mesaj göründü (ekran görüntüsü `collab/outputs/hermes/` altına, kişisel veri yok).
+- [ ] Ayrı küçük PR: `deploy/.env.production.example`'a üç değişkenin yorumlu satırları eklendi (değer yok).
 - [ ] Ops kanalı (EFLOUD_TELEGRAM_*) davranışı değişmedi.
 - [ ] `collab/log/hermes.md`'ye tek satır kayıt.
 

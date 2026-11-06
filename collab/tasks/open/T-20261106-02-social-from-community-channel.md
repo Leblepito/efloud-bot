@@ -18,8 +18,8 @@ Operatör, Telegram topluluk kanalına düşen işlemleri (bot işlemleri + u2al
 - `skills/social-publishing/SKILL.md` (hat dokümanı), `scripts/daily_social_run.py`, `scripts/lane_g_social.py`, `scripts/lane_g_publish.py`, `scripts/chart_render.py`
 - Kaynak seçenekleri (birini seç, gerekçeyi yaz):
   1. Bot journal (Lane A JSONL, `engine/content_jobs.py`) — en güvenilir; bot işlemleriyle birebir.
-  2. Telegram topluluk kanalı mesajları (bot hesabıyla `getUpdates`/kanal geçmişi) — indicator sinyallerini de kapsar.
-- Mesaj formatları: `docs/telegram/community-channel.md` (bot) ve `docs/telegram/tradingview-to-telegram.md` (indicator).
+  2. Telegram topluluk kanalı mesajları — indicator sinyallerini de kapsar. Dikkat: Bot API kanal geçmişini okuyamaz; `getUpdates` yalnız bot admin iken gelen **yeni** `channel_post`'ları verir (webhook set edilmişse hiç vermez). Bu yolu seçersen yeni postları yerel bir JSONL'ye biriktiren bir toplayıcı gerekir.
+- Mesaj formatları: `docs/telegram/community-channel.md` (bot) ve `docs/telegram/tradingview-to-telegram.md` (indicator, PR #299).
 
 ## Beklenen çıktı (Definition of Done)
 - [ ] `docs/social/telegram-to-social.md`: seçilen kaynak, akış şeması, operatör komutları (dry-run, onay, live).
