@@ -1,0 +1,3 @@
+//@version=6
+// EFloud Lab — STRATEGY head. Generated target: pine/efloud_lab_strategy.pine (scripts/build_pine_lab.py)
+strategy("EFloud Lab Strategy", "EFloud Lab S", overlay = true, initial_capital = 1363, currency = currency.USD, commission_type = strategy.commission.percent, commission_value = 0.04, slippage = 1, pyramiding = 1, process_orders_on_close = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 1000)

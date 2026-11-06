@@ -129,3 +129,6 @@ hermes_tasks/
 
 # Desk working notes (tickets, briefs, journal) — local only
 /desk/
+
+# Pine lab exports / replay outputs (local only)
+data/lab/

@@ -619,3 +619,32 @@ Referans: `engine/smc_v2/sl_calc.py`, `engine/safe_orchestrator.py:1900-1903/196
    fill script SONRASI) → exit bloğu hiç kurulmuyordu. Reset artık yalnız
    open→flat geçişinde (`position_size[1] != 0`). Eski backtest sonuçları
    (bu fix öncesi) GEÇERSİZDİR — exit'siz koşuyorlardı.
+
+---
+
+## §20 — 2026-11 Pine Lab (baseline parity + geliştirme toggle'ları)
+
+Tasarım: `docs/superpowers/specs/2026-11-05-pine-lab-design.md`. Plan: `docs/superpowers/plans/2026-11-05-pine-lab.md`.
+
+- Dosyalar: `pine/lab/{head_indicator,head_strategy,core,tail_indicator,tail_strategy}.pine` tek kaynak; `scripts/build_pine_lab.py` → `pine/efloud_lab.pine` + `pine/efloud_lab_strategy.pine` (üretilen, elle düzenlenmez; `--check` CI kapısı `tests/test_pine_lab_build.py`).
+- Baseline = canlı v2 LuxAlgo modu (`configs/config.phase2_1k.yaml`): tüm toggle'lar kapalıyken üretilen setup'lar `scripts/pine_lab_parity.py replay/compare` ile Python'la karşılaştırılır; kapı ≥ %95 eşleşme, SL/TP ≤ %0.1.
+- Bilinçli sapmalar: (1) Pine bar kapanışında 3 geçiş koşar (orchestrator'ın bar içi çoklu tick'i); (2) `liveWindowBars=750` havuzları ve FVG eşiğini canlı pencereye kırpar, pivotlar tam geçmişten gelir; (3) canlı B1 (kapı atlaması) ve B2 (float red, harness `python_guard_rejected` sütunu) kopyalanmaz; (4) breaker'lar, entry drift, funding, çoklu sembol margin modellenmez.
+- Toggle'lar (default KAPALI): T1 `biasTf/biasMode/macroTf`, T2 `obInvalidate`, T3 `oteEntry` (0.705 limit; Python'da limit yolu yok, parity dışı), T4 `sweepSl`, T5 `freshConfirm`, T6 `obDisplacement`, T7 `tpSweptFilter`, T8 `emitOnce`. Kazanma kriteri spec §6.3; sonuçlar `docs/pine-lab/`.
+- Lisans: core LuxAlgo SMC (CnB3fSph) mantığını taşır — CC BY-NC-SA 4.0; script private/invite-only.
+
+**Review notları (2026-11-05 uygulama turu)**
+
+- `internal_confluence_filter` kasıtlı olarak port edilmedi: canlı config `false`, `LuxConfig` default `False` → baseline etkilenmez.
+- Orchestrator `recency_bars`'ı `risk.recency_bars` (168) altından okur; harness `recency_bars(config)` aynı kaynağı kullanır.
+- Pine OTE (T3): dolum, önceki kapanışta konan "resting" limit fiyatına göre değerlendirilir (bar içi look-ahead yok); limit yalnız SL/TP'si `limitPx`'te geçerli adaylar için konur (`limitOk`); dolan limitin eşleşen adayı yoksa strategy `close_all("OTE_NAKED")` ile düzleşir (fee/slippage gerçekleşir).
+- T2×T3 etkileşimi: OTE adayında `OTE_LEG_BROKEN` (`close < legLow`) T2 breaker flip'inden önce çalışır → T3 açıkken bekleyen OTE adayları breaker üretmez (isteğe bağlı: `OTE_LEG_BROKEN` dalına `if obInvalidate: f_flipBreaker(c)`).
+- T3 `legHigh` adayın ilk işlendiği barın high'ıyla başlar (kırılım barı değil); Po3 bloğu core'da N+1 kapanışında, strategy'de N kapanışında değerlendirilir (sınırlarda küçük fark).
+- T6 (`obDisplacement`) FVG havuzu `liveWindowBars` ile budandığı için eski leg'ler displacement'sız görünebilir.
+- `fired` içinde aynı barda birden fazla aday olabilir; strategy yalnız ilkini (OTE'de yön/fiyat eşleşenini) açar; indicator `alert()` çağrıları `freq_once_per_bar_close` ile birleşebilir.
+- HTF bias `[1]` + `lookahead_on`: HTF barının kapandığı 15m barında Pine bir HTF bar geç görür (K-2), canlı/harness K-1'i görür → 48 barda 1 bar emit zamanlaması farkı olabilir.
+- ATR200 tohumlama: Python her 750-bar pencerede `_rma_atr`'ı sıfırdan başlatır (ilk 199 bar NaN, pencere sonunda ~%6 tohum sapması); Pine tam geçmiş `ta.atr(200)` kullanır. FVG eşiği de Python'da pencere başından genişleyen ortalama, Pine'da 750-bar kayan toplam. "Aynı geçmiş" yaklaşıktır; parity sapmaları buradan gelebilir.
+- Strategy çıkış modeli: X1 (TP1, `tp1ClosePct`) ve X2 (TP2, kalan) giriş barında birlikte kurulur; SL her iki bacağı kapatır; TP1 sonrası X2 stop'u BE'ye taşınır (TP1 tespiti: pozisyon açıkken kapanan işlem, `strategy.closedtrades`); çıkış yorumları `TP1|sl=`, `SL|sl=`, `TP2|sl=`, `BE|sl=`.
+- T3: bekleyen limit emre bağlı X1/X2 çıkışları yerleştirme anında kurulur (`limitSl`/`limitTp1`/`limitTp2`, dolum barında koruma); yerleştirme anında zaten pazarlanabilir (close limitin ötesinde) bir limit TV'de o kapanışta dolar, core dolumu bir sonraki bar resting fiyatıyla kaydeder.
+- Harness compare: açık TV işlemi aralığına düşen Python onayları `blocked_by_position` sayılır (sembol başına 1 pozisyon); üst sınır çıkış tipine bağlıdır — SL/TP bar içinde dolduğu için aynı barın kapanışında yeni giriş mümkündür (sınır hariç), `MAX_HOLD`/`OTE_NAKED` kapanışta kapattığı için sınır dahildir; entry toleransı fill fiyatıyla (`current_price` ↔ TV price), engulfing entry `entry=` yorum alanıyla seviye (`entry_ref`) olarak karşılaştırılır.
+- Harness HTF verisi 15m export'tan resample edilir: ilk ~25–50 gün 12h/50 bias olgunlaşmamıştır (UNDEF) → compare başlangıcı bu ısınmadan sonra olmalı.
+- Pine derleme kapısı (TV MCP) bu tur için operatörde bekliyor; derleme düzeltmeleri `fix(pine-lab): compile fixes from TradingView gate` commit'iyle gelir.

@@ -23,7 +23,7 @@ EF-20261105-03 deploy'undan sonra (`042c3a3`) WS gölge akışı bağlanıyor am
 ## Beklenen çıktı (Definition of Done)
 - [x] `exchange/ws_klines.py` `build_url`: `/stream` → `/market/stream` (tek satır + docstring).
 - [x] Test: `backend/tests/test_ws_klines.py` mainnet + testnet yol assert'leri (önce kırmızı, sonra yeşil).
-- [ ] Merge + deploy ticket + operatör onayı (claude-code uygular). Deploy sonrası: sonraki 15m kapanışta `[ws shadow] parity=OK`.
+- [x] Merge + deploy ticket + operatör onayı (claude-code uygular; EF-20261105-04, `6d70ae0`, 16:47 UTC). Deploy sonrası: sonraki 15m kapanışta `[ws shadow] parity=OK`.
 - [ ] 3 gün: `parity=MISMATCH` = 0 (T-20261105-04 ölçümü).
 
 ## Kısıtlar
@@ -32,5 +32,6 @@ EF-20261105-03 deploy'undan sonra (`042c3a3`) WS gölge akışı bağlanıyor am
 
 ## Log
 - 2026-11-05 claude-code: fix + test; `backend/tests/test_ws_klines.py backend/tests/test_audit_journal.py tests/engine/test_touch_entry.py tests/config` 87 passed.
+- 2026-11-05 claude-code: deploy `6d70ae0`; 17:00 UTC 10/10 `parity=OK`, 0 MISMATCH. Kalan: 3 gün MISMATCH=0 takibi (T-20261105-04 ile birlikte).
 
 ## Review

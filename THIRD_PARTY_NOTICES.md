@@ -95,3 +95,7 @@ Creative Commons Attribution-NonCommercial-ShareAlike 4.0
 (https://creativecommons.org/licenses/by-nc-sa/4.0/). The non-commercial and
 share-alike terms apply to that logic; see `skills/luxalgo-smc/SKILL.md` for the
 open licensing decision.
+
+`pine/lab/core.pine` (and the generated `pine/efloud_lab.pine`, `pine/efloud_lab_strategy.pine`)
+carry the same ported logic in Pine Script and the same licence terms; these lab scripts are
+kept private / invite-only on TradingView and are not distributed commercially.
