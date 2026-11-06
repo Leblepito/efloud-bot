@@ -4,7 +4,7 @@
 "u2algo Price Action" göstergesi her onaylanmış sinyalde (bar kapanışında) tek bir `alert()` üretir. İndikatör ayarlarında **Telegram alerts -> Telegram chat id** doluysa mesaj doğrudan Telegram `sendMessage` JSON'u olur; TradingView webhook'u bunu Telegram API'ye postalar. Alan boşsa mesaj eski bot JSON'u kalır (bot tüketicileri etkilenmez).
 
 ## Ön koşullar
-- TradingView ücretli plan (webhook desteği; Plus yeterli).
+- TradingView ücretli plan (webhook bildirimi ücretsiz planda yok; Essential ve üzeri yeterli).
 - @BotFather'dan açılmış bir Telegram botu; bot topluluk kanalına **admin** olarak eklenmiş olmalı.
 - Kanal kimliği: `@kanaladi` veya sayısal `-100…`. Sayısal id için kanalda bir mesaj yazın, sonra tarayıcıda `https://api.telegram.org/bot<TOKEN>/getUpdates` açın; `chat.id` değerini alın.
 
@@ -33,8 +33,10 @@ u2algo Price Action
 ## Sorun giderme
 - **403**: bot kanalda admin değil.
 - **400 chat not found**: chat id yanlış (`@` unutulmuş veya `-100…` hatalı).
+- **400 can't parse entities**: mesaj `parse_mode: HTML` ile gider; `Message footer` alanında `<`, `>` veya `&` kullanmayın.
 - **Hiçbir şey gelmiyor**: planda webhook yok, alert süresi dolmuş veya Condition "Any alert() function call" değil.
+- Alert mesajı `alert()` çağrısından gelir; alert penceresindeki Message alanına bir şey yazarsanız gösterge mesajının yerine geçmez ama kafa karıştırır — boş bırakın.
 
 ## İki akış farkı
 - **Gösterge (bu doc)**: alert eklediğiniz TÜM semboller; risk kapıları yok.
-- **Bot bildirimi**: botun gerçek dolumları ayrıca Telegram'a gider (bot notifier görevi); yalnız canlı 10 sembol ve risk kapılarından geçenler.
+- **Bot bildirimi**: botun gerçek dolumları ayrıca Telegram'a gider (`EFLOUD_CUSTOMER_TG_TRADES`, varsayılan kapalı; PR #298 → `docs/telegram/community-channel.md`); yalnız canlı 10 sembol ve risk kapılarından geçenler.

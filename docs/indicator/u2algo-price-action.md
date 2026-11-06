@@ -95,7 +95,7 @@ Ek kapılar: **HTF yön filtresi** (varsayılan 12 saatlik bias; yön ters ise s
 | History | Kapalı | Mitigate OB ve süpürülmüş seviyeler (soluk) |
 | OB/BB/MB boxes from candle body | Kapalı | Kutuları fitil yerine mum gövdesinden çiz |
 | Volume-confirmed liquidity (★) | Açık | Hacim teyidi |
-| Nearest zones per side | 8 | Katman başına her yönde en yakın bölge sayısı (1–200) |
+| Nearest zones per side | 8 | OB, BB/MB ve FVG katmanlarında her yönde en yakın bölge sayısı (1–200). Likidite katmanı sabittir: en yakın 10 süpürülmemiş seviye. |
 | Bull / Bear / Liquidity colour | teal / maroon / orange | Renkler |
 | Zone fill transparency | 85 | Dolgu şeffaflığı (0–100) |
 

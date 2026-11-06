@@ -169,7 +169,7 @@ trade, because the bot applies extra risk gates.
 
 | Channel | Source | Content |
 |---|---|---|
-| **Ops (operator)** | `ops/alerter` (`EFLOUD_TELEGRAM_*`) | Breaker trips, `/healthz` failures, drawdown and position alerts |
+| **Ops (operator)** | `ops/alerter` and `backend/notifications/` (`EFLOUD_TELEGRAM_*`) | Breaker trips, `/healthz` failures, drawdown and position alerts (full detail: size, USD PnL) |
 | **Community (public)** | `engine/notifications/telegram_notifier.py` (`EFLOUD_CUSTOMER_TG_*`, default off) and TradingView indicator alerts | Aggregate daily digest of closed trades; indicator signals via TradingView webhook; optional real-time bot trade posts (`EFLOUD_CUSTOMER_TG_TRADES`, default off, PR #298 — see `docs/telegram/community-channel.md` once merged) |
 
 Setup for indicator alerts: [`docs/telegram/tradingview-to-telegram.md`](docs/telegram/tradingview-to-telegram.md).

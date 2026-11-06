@@ -61,7 +61,8 @@ For educational and informational purposes only. This is not financial advice. T
 
 ## (c) TradingView House Rules uyum kontrol listesi
 
-- [ ] Açıklama ve grafikte harici bağlantı, Telegram/sosyal medya hesabı veya kanal adı yok (Telegram yalnızca ayar adı olarak anılır).
+- [ ] Açıklama ve grafikte harici bağlantı, Telegram/sosyal medya hesabı veya kanal adı yok (Telegram yalnızca ayar adı olarak anılır; moderasyon itiraz ederse Alerts paragrafındaki "Telegram sendMessage API" ifadesini "messaging webhook payload" olarak yumuşatın).
+- [ ] Yayın görselinde göstergenin dashboard'u ve alert ayarları kanal id/token göstermiyor (`Telegram chat id` alanı boş).
 - [ ] Performans veya kâr vaadi yok; "kazandırır", "garantili" gibi ifadeler yok.
 - [ ] Özgün katkı açıklanmış: iki ölçekli BB/MB ayrımı, sabit aralıklı OTE, hacim teyitli likidite, bota ayna sinyal motoru, Telegram'a hazır alert mesajları (LuxAlgo'dan farkı).
 - [ ] Açıklama İngilizce.
