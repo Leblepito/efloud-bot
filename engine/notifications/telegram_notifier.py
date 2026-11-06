@@ -152,14 +152,9 @@ class CustomerChannelNotifier:
         except Exception as e:
             log.warning(f"Customer Telegram trade post build failed: {e}")
             return False
-        saved = self.enabled
-        try:
-            # _send is gated on `enabled` (digest flag); per-trade posts are gated
-            # by their own flag, so allow the send for this call only.
-            self.enabled = True
-            return self._send(text)
-        finally:
-            self.enabled = saved
+        # Per-trade posts are gated by trades_enabled (checked above), not the
+        # digest `enabled` flag, so deliver directly.
+        return self._deliver(text)
 
     def post_trade_opened(self, symbol, direction, entry, sl, tp1, tp2=None, setup=None) -> bool:
         def build() -> str:
@@ -231,9 +226,13 @@ class CustomerChannelNotifier:
         )
 
     def _send(self, text: str) -> bool:
-        """Best-effort POST to the customer channel. NEVER raises."""
+        """Digest path: gated on the digest `enabled` flag."""
         if not self.enabled:
             return False
+        return self._deliver(text)
+
+    def _deliver(self, text: str) -> bool:
+        """Best-effort POST to the customer channel (no flag check). NEVER raises."""
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         payload = {
             "chat_id": self.channel_id,

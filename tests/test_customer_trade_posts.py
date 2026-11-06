@@ -136,3 +136,12 @@ def test_runner_ops_exception_does_not_block_community():
     r.notifier.notify_position_opened.side_effect = RuntimeError("ops")
     r._on_position_change("position_opened", _pos())
     r.community.post_trade_opened.assert_called_once()
+
+
+def test_rollback_not_posted_to_community_but_ops_notified():
+    r = _runner()
+    r._on_position_change("position_rolled_back", _pos())
+    r.notifier.notify_position_closed.assert_called_once()
+    r.community.post_trade_closed.assert_not_called()
+    r.community.post_trade_opened.assert_not_called()
+    r.community.post_trade_tp1.assert_not_called()

@@ -850,12 +850,13 @@ class BotRunner:
                     symbol=pos.symbol, direction=pos.direction,
                     entry=pos.entry, price=pos.tp1,
                 )
-            elif event_type in ("position_closed", "position_rolled_back"):
+            elif event_type == "position_closed":
+                # position_rolled_back (verify rollback) is ops-only: customers
+                # see only real opens, TP1 and real closes.
                 self.community.post_trade_closed(
                     symbol=pos.symbol, direction=pos.direction,
                     entry=pos.entry, exit_price=pos.exit_price or 0.0,
-                    reason=("VERIFY_ROLLBACK" if event_type == "position_rolled_back"
-                            else (pos.exit_reason or None)),
+                    reason=(pos.exit_reason or None),
                 )
         except Exception as e:
             log.warning(f"Community Telegram dispatch failed: {e}")
