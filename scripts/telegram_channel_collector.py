@@ -290,7 +290,8 @@ def http_get_updates(token: str, params: dict, *, timeout: float = 10.0) -> dict
         with urllib.request.urlopen(url, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8"))
     except Exception as e:  # network / HTTP error body
-        raise CollectorError(f"getUpdates failed: {type(e).__name__}: {e}") from e
+        msg = str(e).replace(token, "<redacted>") if token else str(e)
+        raise CollectorError(f"getUpdates failed: {type(e).__name__}: {msg}") from None
 
 
 Transport = Callable[[dict], dict]

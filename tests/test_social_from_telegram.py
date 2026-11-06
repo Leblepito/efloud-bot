@@ -299,6 +299,9 @@ def test_ingest_posts_is_idempotent(tmp_path):
 @pytest.fixture()
 def drafted(tmp_path):
     """Run the real Lane B→G chain over the fixture feed, offline."""
+    # Chart render needs matplotlib (optional dep, not in requirements.txt —
+    # same guard as tests/test_social_publishing.py::TestRenderTradeChart).
+    pytest.importorskip("matplotlib")
     cache = _seed_cache(tmp_path / "cache")
     jobs = tmp_path / "jobs"
     TelegramChannelCollector(
@@ -409,3 +412,16 @@ def test_export_flags_oversize_media(drafted):
     res = export_bundles(bundle_dir=drafted["work"] / "bundles", date=DATE,
                          out_dir=drafted["tmp"] / "export2", max_bytes=1024)
     assert res["oversize"], "a 1 KB cap must flag the chart PNGs"
+
+
+def test_http_transport_error_redacts_token(monkeypatch):
+    import scripts.telegram_channel_collector as tcc
+
+    def boom(url, timeout):
+        raise OSError(f"cannot open {url}")
+
+    monkeypatch.setattr(tcc.urllib.request, "urlopen", boom)
+    with pytest.raises(tcc.CollectorError) as ei:
+        tcc.http_get_updates("123:SECRET", {"offset": 1})
+    assert "SECRET" not in str(ei.value)
+    assert ei.value.__cause__ is None
