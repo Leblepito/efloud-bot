@@ -205,13 +205,13 @@ def test_compare_pass_path_and_gate_boundary():
 
 
 def test_compare_duplicate_keys_pair_in_time_order():
-    py = [_py_row(7, 100.0, confirmed=10), _py_row(7, 110.0, confirmed=20)]
     t1, t2, t3 = "2026-01-01 00:00", "2026-01-01 01:00", "2026-01-01 02:00"
+    py = [_py_row(7, 100.0, confirmed=plp._ms(pd.Timestamp(t1))), _py_row(7, 110.0, confirmed=plp._ms(pd.Timestamp(t2)))]
     tv = [_tv_entry(7, 110.0, t2), _tv_entry(7, 100.0, t1)]
     res = plp.compare(py, tv)
     assert res["matched"] == 2 and res["level_mismatch"] == []
     res = plp.compare(py, [_tv_entry(7, 100.0, t1)])
-    assert res["matched"] == 1 and [r["confirmed_ts"] for r in res["repeat_confirmation"]] == [20]   # key already paired
+    assert res["matched"] == 1 and [r["confirmed_ts"] for r in res["repeat_confirmation"]] == [py[1]["confirmed_ts"]]   # key already paired
     assert res["python_only"] == []
     res = plp.compare(py, tv + [_tv_entry(7, 120.0, t3)])
     assert res["matched"] == 2 and [e["entry"] for e in res["pine_only"]] == [120.0]
@@ -342,7 +342,7 @@ def test_tv_entries_merges_split_trade_rows(tmp_path):
 
 def test_compare_repeat_confirmations_are_not_python_only():
     py = [_py_row(7, confirmed=10), _py_row(7, confirmed=20), _py_row(7, confirmed=30), _py_row(9, confirmed=40)]
-    res = plp.compare(py, [_tv_entry(7)])
+    res = plp.compare(py, [_tv_entry(7, time=pd.Timestamp(10, unit="ms"))])
     assert res["matched"] == 1
     assert [r["confirmed_ts"] for r in res["repeat_confirmation"]] == [20, 30]
     assert [r["trigger_bar_ts"] for r in res["python_only"]] == [9]       # key with no TV entry stays python-only
@@ -367,6 +367,45 @@ def test_compare_since_trims_python_rows_and_tv_entries(tmp_path):
                   "1,Entry long,2026-03-01 10:00,B|trig=2|sl=98|tp1=104|tp2=na,100,5,\n")
     assert plp.main(["compare", "--python", str(p), "--tv", str(tv), "--since", "2026-03-01"]) == 1   # all rows trimmed
     assert plp.main(["compare", "--python", str(p), "--tv", str(tv), "--since", "2"]) in (0, 1)       # ms form parses
+
+
+def test_compare_pairs_by_time_inside_a_key_not_by_ordinal():
+    py = [_py_row(7, 100.0 + i, confirmed=ts) for i, ts in enumerate((10, 20, 30))]
+    tv = [_tv_entry(7, 100.0, time=pd.Timestamp(10, unit="ms")), _tv_entry(7, 102.0, time=pd.Timestamp(30, unit="ms"))]
+    res = plp.compare(py, tv)
+    assert res["matched"] == 2 and res["level_mismatch"] == []
+    assert [r["confirmed_ts"] for r in res["repeat_confirmation"]] == [20]
+    assert res["pine_only"] == [] and res["python_only"] == []
+
+
+def _tp_row_pair(py_tp1, py_tp2, pine_tp1, pine_tp2, pine_entry=100.0):
+    r = _py_row(7)
+    r.update(tp1=py_tp1, tp2=py_tp2)
+    e = _tv_entry(7, pine_entry, time=pd.Timestamp(7, unit="ms"))
+    e.update(tp1=pine_tp1, tp2=pine_tp2)
+    return [r], [e]
+
+
+def test_compare_tp_pool_shift_is_separate_from_level_mismatch():
+    py, tv = _tp_row_pair(62622, 61900, 63235.6, 62622)
+    res = plp.compare(py, tv)
+    assert len(res["tp_pool_shift"]) == 1 and res["tp_pool_shift"][0]["shift"] == "pine_extra_level"
+    assert res["level_mismatch"] == [] and res["level_mismatch_rate"] == 0.0 and res["passed"] is True
+    assert "tp pool shift" in plp.format_compare(res)
+    py, tv = _tp_row_pair(63235.6, 62622, 62622, 61900)
+    assert plp.compare(py, tv)["tp_pool_shift"][0]["shift"] == "python_extra_level"
+
+
+def test_compare_genuine_tp_mismatch_stays_level_mismatch():
+    py, tv = _tp_row_pair(62622, 61900, 63235.6, 60000)
+    res = plp.compare(py, tv)
+    assert res["tp_pool_shift"] == [] and len(res["level_mismatch"]) == 1
+
+
+def test_compare_entry_mismatch_with_shifted_tps_is_level_mismatch():
+    py, tv = _tp_row_pair(62622, 61900, 63235.6, 62622, pine_entry=90.0)
+    res = plp.compare(py, tv)
+    assert res["tp_pool_shift"] == [] and len(res["level_mismatch"]) == 1
 
 
 def test_compare_level_mismatch_rate_gate():

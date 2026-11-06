@@ -23,7 +23,7 @@ python scripts/pine_lab_parity.py replay --ohlcv data/lab/BTC_15m.csv --symbol B
 4. Karşılaştır:
 
 ```bash
-python scripts/pine_lab_parity.py compare --python data/lab/BTC_python.csv --tv data/lab/BTC_B.csv --since 2026-07-09
+python scripts/pine_lab_parity.py compare --python data/lab/BTC_python.csv --tv data/lab/BTC_B.csv --since 2026-07-12
 ```
 
 Export kuralları:
@@ -34,7 +34,7 @@ Export kuralları:
 - Kısmi TP1 "List of trades"te iki ayrı Trade # satırı olarak görünebilir; `score` (ve `tv_intervals`) bunları entry zamanı + entry sinyaliyle birleştirir.
 - `compare`, açık bir TV pozisyonu sırasında onaylanan Python setup'larını `blocked by pos` olarak ayırır; entry toleransı fill fiyatıyla, engulfing entry `entry=` yorumuyla (`entry_ref`) ölçülür.
 
-`--since 2026-07-09` ilk Pine-ısınmış barı belirler (öncesi kırpılır). `GATE: PASS` (eşleşme ≥ %95, pine-only ≤ %5, seviye sapması ≤ %5) olmadan toggle turuna geçilmez. FAIL → `pine/lab/*` düzelt ya da sapmayı `pine/PINE_SPEC.md §20`'ye yaz.
+`--since` Pine ısınması + 2–3 gün sonrasına konur (ör. `--since 2026-07-12`); öncesi kırpılır. `tp pool shift` satırı: giriş/SL aynı, TP merdiveni bir seviye kaymış çiftler (canlı 750-bar pencere artefaktı — Python TP havuzunda pencere başı pivotu eksik); seviye sapması kapısına dahil değildir, ayrı raporlanır. `GATE: PASS` (eşleşme ≥ %95, pine-only ≤ %5, seviye sapması ≤ %5) olmadan toggle turuna geçilmez. FAIL → `pine/lab/*` düzelt ya da sapmayı `pine/PINE_SPEC.md §20`'ye yaz.
 
 ## 3. Toggle turu
 
