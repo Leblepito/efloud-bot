@@ -900,6 +900,68 @@ f_clearBoxes(array<box> a) =>
 f_fmt(float x) =>
     na(x) ? "na" : str.tostring(x, "#.########")
 
+// ─── Zone layers (display only; spec docs/superpowers/specs/2026-11-06-lab-indicator-visuals-design.md) ───
+// Ring-buffer contract: core pushes bufHi/bufLo/bufOpen/bufClose/bufTime once per confirmed bar before the tail runs,
+// so in the tail's confirmed block the newest element is the current closed bar. bufLastBar remembers that bar.
+var int bufLastBar = -1
+if barstate.isconfirmed
+    bufLastBar := bar_index
+
+f_bufAt(array<float> buf, int barIdx) =>
+    int j = array.size(buf) - 1 - (bufLastBar - barIdx)
+    j >= 0 and j < array.size(buf) ? array.get(buf, j) : na
+
+type Zone
+    float  top
+    float  bot
+    int    x1
+    int    dir            // 1 bull / -1 bear (current role)
+    string txt            // "OB" | "iOB" | "BB" | "MB" | "FVG" | "OB ✓"
+    int    kind           // 0 OB, 1 iOB, 2 BB, 3 MB, 4 FVG
+    bool   faded
+
+var array<box> zoneLayerBoxes = array.new<box>()
+
+f_zoneColor(int dir) =>
+    dir == 1 ? colBull : colBear
+
+f_pushZone(array<Zone> z, float top, float bot, int x1, int dir, string txt, int kind, bool faded) =>
+    array.push(z, Zone.new(top = top, bot = bot, x1 = x1, dir = dir, txt = txt, kind = kind, faded = faded))
+
+f_boxZone(Zone z) =>
+    color base = f_zoneColor(z.dir)
+    int fillA   = z.faded ? math.min(100, zoneAlpha + 10) : zoneAlpha
+    int borderA = z.faded ? 70 : (z.kind == 1 ? 60 : 30)
+    string sty  = z.kind == 2 ? line.style_dashed : z.kind == 3 ? line.style_dotted : line.style_solid
+    array.push(zoneLayerBoxes, box.new(z.x1, z.top, bar_index + 5, z.bot, border_color = color.new(base, borderA), border_style = sty, bgcolor = color.new(base, fillA), text = z.txt, text_size = size.tiny, text_color = color.new(base, 0), text_halign = text.align_right))
+
+// Nearest n zones above and below close, per layer. Two passes per side: mark the n smallest distances
+// (O(n × P), no full sort). Distance = near edge − close (zones straddling close count as distance 0, below side).
+f_drawNearest(array<Zone> z, int n) =>
+    int p = array.size(z)
+    if p > 0
+        array<float> dist = array.new<float>(p, 0.0)
+        array<bool>  used = array.new<bool>(p, false)
+        for i = 0 to p - 1
+            Zone zi = array.get(z, i)
+            array.set(dist, i, zi.bot > close ? zi.bot - close : zi.top < close ? close - zi.top : 0.0)
+        for side = 0 to 1                                           // 0 above, 1 below/straddling
+            for k = 1 to n
+                int   best  = -1
+                float bestD = na
+                for i = 0 to p - 1
+                    Zone zi = array.get(z, i)
+                    bool above = zi.bot > close
+                    if not array.get(used, i) and (side == 0 ? above : not above)
+                        float d = array.get(dist, i)
+                        if na(bestD) or d < bestD
+                            bestD := d
+                            best  := i
+                if best >= 0
+                    array.set(used, best, true)
+                    f_boxZone(array.get(z, best))
+    true
+
 if barstate.isconfirmed
     for c in fired
         color col = c.dir == 1 ? color.teal : color.maroon
@@ -928,6 +990,14 @@ f_drawObs(array<OB> pool, int alphaBorder, int alphaFill) =>
                 shown += 1
 
 if barstate.islast
+    f_clearBoxes(zoneLayerBoxes)
+    // z-order (bottom → top): OTE → FVG → OB/iOB → BB/MB → liquidity → pending zones → signal lines
+    if showFvg
+        array<Zone> zf = array.new<Zone>()
+        for f in fvgs
+            if f.mitigatedIdx < 0
+                f_pushZone(zf, f.top, f.bot, f.idx, f.bias, "FVG", 4, false)
+        f_drawNearest(zf, maxZonesPerSide)
     f_clearBoxes(obBoxes)
     if showObs
         f_drawObs(swingObs, 30, 80)

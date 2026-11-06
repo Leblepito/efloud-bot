@@ -144,3 +144,11 @@ def test_indicator_declares_visual_layer_inputs():
                  "liqVolumeConfirm", "maxZonesPerSide", "colBull", "colBear", "colNeutral", "zoneAlpha"):
         assert re.search(rf"^{name}\s*=\s*input\.", text, re.M), name
     assert re.search(r"table\.new\(position\.top_right,\s*2,\s*9", text), "dashboard must have 9 rows"
+
+
+def test_tail_defines_zone_helpers_and_fvg_layer():
+    text = TAIL.read_text(encoding="utf-8")
+    for needle in ("type Zone", "f_bufAt(", "f_drawNearest(", "var int bufLastBar", "zoneLayerBoxes", "if showFvg"):
+        assert needle in text, needle
+    body = _tail_function_bodies(text)["f_drawNearest"]
+    assert "array.get" in body and "f_boxZone" in body
