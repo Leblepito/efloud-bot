@@ -155,6 +155,9 @@ services:
       # T-20261105-05 (#275): LuxAlgo bölge uyarıları (near/touch/confirmed + v2 reject) → Telegram.
       # Yalnız bildirim; emir yolu yok. Kapatmak: satırı sil → `docker compose up -d alerter`.
       - EFLOUD_ALERTER_LUX_ALERTS=1
+      # T-20261107-03: TP emri yerleştirilemezse (retry tükendi / -2021) → Telegram.
+      # Yalnız bildirim; emir yolu yok. Kapatmak: satırı sil → `docker compose up -d alerter`.
+      - EFLOUD_ALERTER_TP_ALERTS=1
     volumes:
       - efloud_logs:/app/logs:ro      # read-only — alerter only tails
       - efloud_state:/app/state       # read-write — dedup + heartbeat live here
