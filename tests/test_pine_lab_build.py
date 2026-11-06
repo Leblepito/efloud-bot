@@ -14,7 +14,9 @@ from scripts.build_pine_lab import PARTS, build  # noqa: E402
 GEN_IND = ROOT / "pine" / "efloud_lab.pine"
 GEN_STR = ROOT / "pine" / "efloud_lab_strategy.pine"
 STRATEGY_ONLY_INPUTS = {"marginUsd", "leverage", "maxHoldHours", "tp1ClosePct", "moveSlToBe"}
-INDICATOR_ONLY_INPUTS = {"showObs", "showZones", "showLevels", "showDash", "maxDrawings"}
+INDICATOR_ONLY_INPUTS = {"showObs", "showZones", "showLevels", "showDash", "maxDrawings",
+                         "showBreakers", "showFvg", "showLiq", "showOte", "showHistory", "obBodyOnly",
+                         "liqVolumeConfirm", "maxZonesPerSide", "colBull", "colBear", "colNeutral", "zoneAlpha"}
 
 INPUT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*input\.(?:int|float|bool|string|timeframe)\(", re.M)
 LEGACY_RE = re.compile(r"(?<![.\w])(study|security|ema|sma|atr|rsi|highest|lowest)\(")
@@ -105,3 +107,40 @@ def test_confirm_reads_bar_history_from_global_buffers():
     cap = int(re.search(r"^bufCap\s*=\s*(\d+)", core, re.M).group(1))
     assert cap >= 992                                    # scan depth bound is min(recency + timeout + 2, 990) (+1 prior bar)
     assert "bufCap" in core.split("// after the structure pass")[1].split("// ====")[0]
+
+
+
+TAIL = ROOT / "pine" / "lab" / "tail_indicator.pine"
+HISTORY_RE = re.compile(r"\b[A-Za-z_]\w*\s*\[\s*[A-Za-z0-9_]")   # ident[ expr  (array.get is a call, not this)
+TA_RE = re.compile(r"\bta\.")
+
+
+def _tail_function_bodies(text: str) -> dict:
+    out = {}
+    for m in re.finditer(r"^(f_\w+)\([^\n]*\)\s*=>\n((?:[ \t]+[^\n]*\n|\n)+)", text, re.M):
+        out[m.group(1)] = "\n".join(ln.split("//")[0] for ln in m.group(2).splitlines())
+    return out
+
+
+def test_tail_functions_use_no_history_operator_or_ta():
+    """Tail functions run conditionally (loops, islast): `x[off]`/`ta.*` there read call history, not bar history."""
+    bodies = _tail_function_bodies(TAIL.read_text(encoding="utf-8"))
+    assert bodies, "tail defines no f_* functions"
+    for name, body in bodies.items():
+        assert not HISTORY_RE.search(body), f"{name}: history operator"
+        assert not TA_RE.search(body), f"{name}: ta.* call"
+
+
+def test_signal_line_budget_fits_line_limit():
+    """4 lines per kept signal; maxDrawings.maxval * 4 must stay under max_lines_count=500."""
+    text = TAIL.read_text(encoding="utf-8")
+    m = re.search(r"maxDrawings\s*=\s*input\.int\([^)]*maxval\s*=\s*(\d+)", text)
+    assert m and int(m.group(1)) * 4 <= 500, "maxDrawings.maxval * 4 exceeds the 500-line budget"
+
+
+def test_indicator_declares_visual_layer_inputs():
+    text = TAIL.read_text(encoding="utf-8")
+    for name in ("showBreakers", "showFvg", "showLiq", "showOte", "showHistory", "obBodyOnly",
+                 "liqVolumeConfirm", "maxZonesPerSide", "colBull", "colBear", "colNeutral", "zoneAlpha"):
+        assert re.search(rf"^{name}\s*=\s*input\.", text, re.M), name
+    assert re.search(r"table\.new\(position\.top_right,\s*2,\s*9", text), "dashboard must have 9 rows"

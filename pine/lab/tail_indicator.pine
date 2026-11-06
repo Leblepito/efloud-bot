@@ -4,7 +4,21 @@ showObs     = input.bool(true, "Active OB boxes", group = grpVis)
 showZones   = input.bool(true, "Pending candidate zones", group = grpVis)
 showLevels  = input.bool(true, "Entry/SL/TP lines", group = grpVis)
 showDash    = input.bool(true, "Dashboard", group = grpVis)
-maxDrawings = input.int(60, "Kept signal drawings", minval = 4, maxval = 150, group = grpVis)
+maxDrawings = input.int(60, "Kept signal drawings", minval = 4, maxval = 100, group = grpVis)   // 4 lines each: 100 × 4 = 400 < 500
+
+grpZones = "SMC bölgeleri (yalnız görüntü)"
+showBreakers     = input.bool(true,  "Breaker / Mitigation blocks (BB/MB)", group = grpZones)
+showFvg          = input.bool(true,  "FVG boxes",                           group = grpZones)
+showLiq          = input.bool(true,  "Liquidity levels (EQH/EQL/BSL/SSL)",  group = grpZones)
+showOte          = input.bool(true,  "OTE range (0.618–0.786, 0.705, EQ)",  group = grpZones)
+showHistory      = input.bool(false, "History: mitigated OBs, swept levels (faded)", group = grpZones)
+obBodyOnly       = input.bool(false, "OB/BB/MB boxes from candle body",     group = grpZones)
+liqVolumeConfirm = input.bool(true,  "Volume-confirmed liquidity (★)",      group = grpZones)
+maxZonesPerSide  = input.int(8, "Nearest zones per side (per layer)", minval = 1, maxval = 200, group = grpZones)
+colBull          = input.color(color.teal,   "Bull colour",    group = grpZones)
+colBear          = input.color(color.maroon, "Bear colour",    group = grpZones)
+colNeutral       = input.color(color.orange, "Liquidity colour", group = grpZones)
+zoneAlpha        = input.int(85, "Zone fill transparency", minval = 0, maxval = 100, group = grpZones)
 
 var array<box>   obBoxes   = array.new<box>()
 var array<box>   zoneBoxes = array.new<box>()
@@ -57,7 +71,7 @@ if barstate.islast
             if f_isActive(c)
                 array.push(zoneBoxes, box.new(c.trigIdx, c.zHigh, bar_index + 10, c.zLow, border_color = color.orange, bgcolor = color.new(color.orange, 80), text = c.state + (oteEntry and not na(c.limitPx) ? " @" + f_fmt(c.limitPx) : ""), text_size = size.tiny, text_color = color.orange))
 
-var table dash = table.new(position.top_right, 2, 7, border_width = 1)
+var table dash = table.new(position.top_right, 2, 9, border_width = 1)
 f_cell(int row, string k, string v) =>
     table.cell(dash, 0, row, k, text_color = color.gray, text_size = size.small)
     table.cell(dash, 1, row, v, text_color = color.white, text_size = size.small)
@@ -94,3 +108,5 @@ if barstate.islast and showDash
     f_cell(4, "Po3", po3Blocked ? "MANIPULATION (blocked)" : "ok")
     f_cell(5, "Range EQ", zoneOk ? f_fmt(zEq) : "-")
     f_cell(6, "Drops (last 20)", f_dropSummary())
+    f_cell(7, "Zones s/i·BB·MB·FVG·Liq", "-")
+    f_cell(8, "OTE", "-")
