@@ -140,7 +140,14 @@ def ote_range(result, h: np.ndarray, l: np.ndarray, c: np.ndarray, swing_len: in
             "eq": L + 0.5 * r}
 
 
-def expected_visuals(df: pd.DataFrame, cfg: dict, warmup: int = 100, flip_window: int = 750) -> dict:
+def prune_window(items: list, key: str, last: int, window: int) -> list:
+    """core.pine f_prunePools at the last bar: keep objects with items[key] >= last - window (liveWindowBars)."""
+    cutoff = last - window
+    return [x for x in items if x[key] >= cutoff]
+
+
+def expected_visuals(df: pd.DataFrame, cfg: dict, warmup: int = 100, flip_window: int = 750,
+                     live_window: int = 750) -> dict:
     lux_cfg = cfg.get("smc_v2", {}).get("luxalgo", {}) or {}
     lc = lx.LuxConfig.from_dict(lux_cfg)
     res = lx.analyze(df, lc)
@@ -149,8 +156,11 @@ def expected_visuals(df: pd.DataFrame, cfg: dict, warmup: int = 100, flip_window
     vma = pd.Series(v).rolling(60).mean().to_numpy()
     sw, eqn = int(lux_cfg.get("swing_length", 50)), int(lux_cfg.get("eq_length", 3))
 
+    last = len(df) - 1
+
     def box(o):
-        return {"top": float(max(o.bar_high, o.bar_low)), "bot": float(min(o.bar_high, o.bar_low)), "idx": int(o.idx)}
+        return {"top": float(max(o.bar_high, o.bar_low)), "bot": float(min(o.bar_high, o.bar_low)), "idx": int(o.idx),
+                "created": int(o.created_idx)}
 
     liq = []
     for is_high, pivs in ((True, res.swing_high_pivots), (False, res.swing_low_pivots)):
@@ -162,13 +172,16 @@ def expected_visuals(df: pd.DataFrame, cfg: dict, warmup: int = 100, flip_window
         if e.idx_b >= warmup:
             liq.append({"kind": e.kind, "price": float(e.price_b), "bar": int(e.idx_b), "swept": swept,
                         "vol": volume_confirmed(e.idx_b, e.kind == "EQH", h, l, v, vma)})
+    # core.pine f_prunePools (liveWindowBars): OBs by created bar, FVGs by idx, pivots/equals by bar, applied at the last bar
     return {
-        "meta": {"bars": len(df), "warmup": warmup, "swing_len": sw},
-        "ob_swing": [box(o) for o in res.active_obs(internal=False) if o.idx >= warmup],
-        "ob_internal": [box(o) for o in res.active_obs(internal=True) if o.idx >= warmup],
-        "fvg": [{"top": float(f.top), "bot": float(f.bot), "idx": int(f.idx)} for f in res.active_fvgs() if f.idx >= warmup],
-        "liquidity": liq,
-        "flips": [f for f in classify_flips(res, h, l, c, sw, flip_window) if f["idx"] >= warmup and f["flip"] >= 0 and not f["dead"]],
+        "meta": {"bars": len(df), "warmup": warmup, "swing_len": sw, "live_window": live_window},
+        "ob_swing": prune_window([box(o) for o in res.active_obs(internal=False) if o.idx >= warmup], "created", last, live_window),
+        "ob_internal": prune_window([box(o) for o in res.active_obs(internal=True) if o.idx >= warmup], "created", last, live_window),
+        "fvg": prune_window([{"top": float(f.top), "bot": float(f.bot), "idx": int(f.idx)} for f in res.active_fvgs() if f.idx >= warmup],
+                            "idx", last, live_window),
+        "liquidity": prune_window(liq, "bar", last, live_window),
+        "flips": prune_window([f for f in classify_flips(res, h, l, c, sw, flip_window) if f["idx"] >= warmup and f["flip"] >= 0 and not f["dead"]],
+                              "created", last, live_window),
         "ote": ote_range(res, h, l, c, sw),
     }
 

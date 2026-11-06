@@ -175,16 +175,18 @@ var array<int> flippedKeys = array.new<int>()
 
 f_collectObs(array<OB> pool, bool internal, array<Zone> z) =>
     int active = 0
-    // Single forward pass (pool is in creation order): seenKeys/seenAt hold earlier OBs as idx*2+(bull?1:0) → createdIdx.
-    array<int> seenKeys = array.new<int>()
-    array<int> seenAt = array.new<int>()
+    // Single forward pass (pool is in creation order): seenAt maps idx*2+(bull?1:0) → createdIdx of the earliest OB with that key.
+    // One map, not two parallel local arrays: on TradingView the parallel-array form hit RE10045 (array.get index out of
+    // bounds, size 0) under T2 — the two function-local arrays did not stay in lock-step (verify doc, "Follow-up").
+    map<int, int> seenAt = map.new<int, int>()
     for o in pool
         bool isCopy = false
         if obInvalidate
-            int src = array.indexof(seenKeys, o.idx * 2 + (o.bias == -1 ? 1 : 0))
-            isCopy := src >= 0 and array.get(seenAt, src) < o.createdIdx
-            array.push(seenKeys, o.idx * 2 + (o.bias == 1 ? 1 : 0))
-            array.push(seenAt, o.createdIdx)
+            int srcAt = map.get(seenAt, o.idx * 2 + (o.bias == -1 ? 1 : 0))
+            isCopy := not na(srcAt) and srcAt < o.createdIdx
+            int key = o.idx * 2 + (o.bias == 1 ? 1 : 0)
+            if not map.contains(seenAt, key)
+                map.put(seenAt, key, o.createdIdx)
         if not isCopy
             [top, bot] = f_obEdges(o)
             if o.mitigatedIdx < 0

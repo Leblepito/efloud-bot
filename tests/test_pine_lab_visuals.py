@@ -186,3 +186,25 @@ def test_expected_visuals_nonempty_zigzag():
     out = vis.expected_visuals(df, {"smc_v2": {"luxalgo": {"swing_length": 50}}}, warmup=100)
     assert len(out["liquidity"]) > 0 and all(x["bar"] >= 100 for x in out["liquidity"])
     assert out["meta"]["swing_len"] == 50
+
+
+def test_prune_window_drops_objects_older_than_live_window():
+    items = [{"k": 100}, {"k": 149}, {"k": 150}, {"k": 899}]
+    # core f_prunePools: drop when key < last - window (last=899, window=750 -> cutoff 149)
+    assert vis.prune_window(items, "k", last=899, window=750) == [{"k": 149}, {"k": 150}, {"k": 899}]
+    assert vis.prune_window([], "k", last=899, window=750) == []
+
+
+def test_expected_visuals_applies_live_window_prune_at_last_bar():
+    idx = pd.date_range("2026-01-01", periods=900, freq="15min")
+    close = 100 + 10 * np.sin(np.arange(900) / 10)                       # pivots every ~31 bars
+    df = pd.DataFrame({"open": close, "high": close + 0.5, "low": close - 0.5, "close": close, "volume": 1.0}, index=idx)
+    cfg = {"smc_v2": {"luxalgo": {"swing_length": 20}}}
+    full = vis.expected_visuals(df, cfg, warmup=100, live_window=10_000)
+    pruned = vis.expected_visuals(df, cfg, warmup=100, live_window=750)
+    last = len(df) - 1
+    assert any(x["bar"] < last - 750 for x in full["liquidity"])        # the window really cuts something
+    assert pruned["liquidity"] and all(x["bar"] >= last - 750 for x in pruned["liquidity"])
+    assert all(x["created"] >= last - 750 for x in pruned["flips"])
+    assert all(f["idx"] >= last - 750 for f in pruned["fvg"])
+    assert pruned["meta"]["live_window"] == 750
