@@ -20,7 +20,6 @@ colBear          = input.color(color.maroon, "Bear colour",    group = grpZones)
 colNeutral       = input.color(color.orange, "Liquidity colour", group = grpZones)
 zoneAlpha        = input.int(85, "Zone fill transparency", minval = 0, maxval = 100, group = grpZones)
 
-var array<box>   obBoxes   = array.new<box>()
 var array<box>   zoneBoxes = array.new<box>()
 var array<line>  sigLines  = array.new<line>()
 var array<label> sigLabels = array.new<label>()
@@ -145,6 +144,42 @@ f_drawLiq(bool isHigh, float price, int fromBar, bool swept, string tag) =>
         array.push(liqLabels, label.new(x2, price, tag + (conf ? " ★" : ""), style = label.style_label_left, color = color.new(colNeutral, 100), textcolor = colNeutral, size = size.tiny))
     true
 
+// ─── OB layer ───
+var int dashObS = 0
+var int dashObI = 0
+
+f_obEdges(OB o) =>
+    float top = o.top()
+    float bot = o.bot()
+    if obBodyOnly
+        float oo = f_bufAt(bufOpen, o.idx)
+        float cc = f_bufAt(bufClose, o.idx)
+        if not na(oo) and not na(cc)
+            top := math.max(oo, cc)
+            bot := math.min(oo, cc)
+    [top, bot]
+
+// T2 (obInvalidate) pushes the flipped breaker as a new OB with the same candle idx and opposite bias.
+// Such a copy is neither drawn as an OB nor tracked for BB/MB (the tracker classifies the source OB instead).
+f_isBreakerCopy(OB o, array<OB> pool) =>
+    bool copy = false
+    for q in pool
+        if not copy and q.idx == o.idx and q.bias == -o.bias and q.createdIdx < o.createdIdx
+            copy := true
+    copy
+
+f_collectObs(array<OB> pool, bool internal, array<Zone> z) =>
+    int active = 0
+    for o in pool
+        if not f_isBreakerCopy(o, pool)
+            [top, bot] = f_obEdges(o)
+            if o.mitigatedIdx < 0
+                f_pushZone(z, top, bot, o.idx, o.bias, internal ? "iOB" : "OB", internal ? 1 : 0, false)
+                active += 1
+            else if showHistory
+                f_pushZone(z, top, bot, o.idx, o.bias, (internal ? "iOB" : "OB") + " ✓", internal ? 1 : 0, true)
+    active
+
 if barstate.isconfirmed
     for c in fired
         color col = c.dir == 1 ? color.teal : color.maroon
@@ -162,16 +197,6 @@ if barstate.isconfirmed
     while array.size(sigLabels) > maxDrawings
         label.delete(array.shift(sigLabels))
 
-f_drawObs(array<OB> pool, int alphaBorder, int alphaFill) =>
-    int shown = 0
-    if array.size(pool) > 0
-        for i = array.size(pool) - 1 to 0
-            OB o = array.get(pool, i)
-            if o.mitigatedIdx < 0 and shown < 40
-                color base = o.bias == 1 ? color.teal : color.maroon
-                array.push(obBoxes, box.new(o.idx, o.top(), bar_index + 5, o.bot(), border_color = color.new(base, alphaBorder), bgcolor = color.new(base, alphaFill)))
-                shown += 1
-
 if barstate.islast
     f_clearBoxes(zoneLayerBoxes)
     // z-order (bottom → top): OTE → FVG → OB/iOB → BB/MB → liquidity → pending zones → signal lines
@@ -181,10 +206,13 @@ if barstate.islast
             if f.mitigatedIdx < 0
                 f_pushZone(zf, f.top, f.bot, f.idx, f.bias, "FVG", 4, false)
         f_drawNearest(zf, maxZonesPerSide)
-    f_clearBoxes(obBoxes)
+    dashObS := 0
+    dashObI := 0
     if showObs
-        f_drawObs(swingObs, 30, 80)
-        f_drawObs(intObs, 60, 92)
+        array<Zone> zo = array.new<Zone>()
+        dashObS := f_collectObs(swingObs, false, zo)
+        dashObI := f_collectObs(intObs, true, zo)
+        f_drawNearest(zo, maxZonesPerSide)
     f_clearBoxes(zoneBoxes)
     if showZones
         for c in cands

@@ -160,3 +160,10 @@ def test_tail_liquidity_layer_uses_tail_volume_buffers():
         assert needle in text, needle
     # ta.sma(volume, 60) must be a global (unconditional) line, never inside a function
     assert re.search(r"^volMa60\s*=\s*ta\.sma\(volume,\s*60\)", text, re.M)
+
+
+def test_tail_ob_layer_uses_zone_pipeline():
+    text = TAIL.read_text(encoding="utf-8")
+    assert "f_drawObs(" not in text and "obBoxes" not in text
+    for needle in ("f_obEdges(", "f_isBreakerCopy(", "f_collectObs(", "obBodyOnly"):
+        assert needle in text, needle
