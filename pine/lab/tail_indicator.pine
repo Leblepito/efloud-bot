@@ -161,17 +161,28 @@ f_obEdges(OB o) =>
 
 // T2 (obInvalidate) pushes the flipped breaker as a new OB with the same candle idx and opposite bias.
 // Such a copy is neither drawn as an OB nor tracked for BB/MB (the tracker classifies the source OB instead).
+// Copies only exist when obInvalidate is on (core f_flipBreaker is the sole producer) → O(1) early-out otherwise.
 f_isBreakerCopy(OB o, array<OB> pool) =>
     bool copy = false
-    for q in pool
-        if not copy and q.idx == o.idx and q.bias == -o.bias and q.createdIdx < o.createdIdx
-            copy := true
+    if obInvalidate
+        for q in pool
+            if not copy and q.idx == o.idx and q.bias == -o.bias and q.createdIdx < o.createdIdx
+                copy := true
     copy
 
 f_collectObs(array<OB> pool, bool internal, array<Zone> z) =>
     int active = 0
+    // Single forward pass (pool is in creation order): seenKeys/seenAt hold earlier OBs as idx*2+(bull?1:0) → createdIdx.
+    array<int> seenKeys = array.new<int>()
+    array<int> seenAt = array.new<int>()
     for o in pool
-        if not f_isBreakerCopy(o, pool)
+        bool isCopy = false
+        if obInvalidate
+            int src = array.indexof(seenKeys, o.idx * 2 + (o.bias == -1 ? 1 : 0))
+            isCopy := src >= 0 and array.get(seenAt, src) < o.createdIdx
+            array.push(seenKeys, o.idx * 2 + (o.bias == 1 ? 1 : 0))
+            array.push(seenAt, o.createdIdx)
+        if not isCopy
             [top, bot] = f_obEdges(o)
             if o.mitigatedIdx < 0
                 f_pushZone(z, top, bot, o.idx, o.bias, internal ? "iOB" : "OB", internal ? 1 : 0, false)
