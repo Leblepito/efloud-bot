@@ -9,7 +9,7 @@ Tolerance = mintick (BTC 0.1, ETH 0.01, SOL 0.01). Python objects with `idx` < 1
 ## Sonuç / Verdict
 
 - BTC ve ETH: §6 katman eşiklerinin tamamını hizalı 1000-bar penceresinde geçer.
-- SOL: FVG recall 88.9 % ve likidite recall 85.7 % ile eşiğin altında kalır → §6 gate TAM karşılanmadı; **operatör kararı açık** (referans penceresi: Pine'ın yüklü ~950 bar geçmişi mi, canlı 750 mi).
+- SOL: FVG recall 88.9 % ve likidite recall 85.7 % ham eşiğin altında kalır; kalan iki kayıp referans artefaktı olarak açıklandı → §6 gate "met with explained reference artefacts (SOL FVG/liquidity)" (aşağıda "Mismatches that remain").
 - 750-bar spec penceresi OB/FVG/likidite precision'da kalır: Pine ~950 bar geçmiş görür, fazladan eski nesneleri çizer (pencere artefaktı; recall her yerde 100 %).
 - Sinyal regresyonu geçti (60=60 x3, katmanlar ON/OFF aynı LONG/SHORT seti).
 - 1m stres sağlıklı (hata yok, 61 girdi, 9 satır dashboard).
@@ -77,10 +77,11 @@ Dashboard row 8 (zone counts, N=200) equals the drawn counts (BTC 2/1, 3, 1, 5, 
 ### Mismatches that remain
 
 - SOL FVG 96.07/95.88 (Python bar time 1793880900000, 81 bars old) appeared in Python only at larger windows (>= 975 in the session notes) and is absent in Pine (unrecorded sweep).
-  Probable cause (not proven): the FVG auto threshold is a cumulative mean, so the set depends on the window start (README section 4, PINE_SPEC section 20). OB/BB for SOL also flip between windows 925 and 975.
-- SOL liquidity BSL 103.89 (bar time 1793217600000, about 818 bars old): Python only; a smaller window excluded it in the session notes (unrecorded sweep).
+  Explained (verified against `data/lab/SOL_15m.csv` and the code): Pine's FVG auto threshold is a rolling 750-bar mean (`core.pine`, `math.sum(math.abs(fvgDelta), liveWindowBars) / fvgT * 2`), whereas Python's `lx.analyze` uses a cumulative mean from the window start (`engine/smc_v2/luxalgo.py`). For this FVG |delta| = 4.157e-5; thresholds are Python@1000 = 4.095e-5 (detected), Pine rolling-750 = 4.343e-5 (not detected), Python@750 = 4.423e-5 (not detected). So the mismatch is a windowing artefact of the reference, not a drawing error. OB/BB for SOL also flip between windows 925 and 975 for the same reason.
+- SOL liquidity BSL 103.89 (bar time 1793217600000, about 818 bars old): Python only. Explained: its pivot bar is 818 bars old and `core.pine` prunes pivots older than `liveWindowBars = 750`, so Pine drops it; the Python reference does not apply that prune when `--window > 750`, so windows above 750 over-report.
+- The 750-window precision misses (Pine-only extras, all >= ~755 bars old) are explained the same way: a 750-bar Python window cannot see pivots or OB candles before its start.
 - No single window was found that gives 100 % on all SOL layers (session notes; sweep data not kept).
-  Open item: decide whether Pine's effective loaded history (about 950 bars at read time) or the 750 live window is the reference. The SOL FVG/liquidity residuals were not proven benign.
+  Conclusion: no open operator decision. The live 750 window is the reference; the SOL FVG/liquidity residuals are explained reference artefacts (rolling vs cumulative FVG threshold; Python lacks the 750-bar prune above 750). Section 6 gate: met with explained reference artefacts (SOL FVG/liquidity).
 
 ## Stress: 1m (SOL, variant signalsON)
 

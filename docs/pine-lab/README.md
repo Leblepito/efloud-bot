@@ -55,14 +55,14 @@ ATR200 tohumlama: Python her 750-bar pencerede ATR200'ü sıfırdan tohumlar (pe
 
 ## 5. Indicator görselleri (OB / BB-MB / FVG / likidite / OTE)
 
-Yalnız çizim katmanlarıdır (sinyal mantığına dokunmaz); girdiler `showObs`, `showZones`, `showLevels`, `showBreakers`, `showFvg`, `showLiq`, `showOte`, `showHistory`, `maxZonesPerSide`.
+Yalnız çizim katmanlarıdır (sinyal mantığına dokunmaz); girdiler `showObs`, `showZones`, `showLevels`, `showBreakers`, `showFvg`, `showLiq`, `showOte`, `showHistory`, `maxZonesPerSide`, `obBodyOnly`, `liqVolumeConfirm`, `colBull`/`colBear`/`colNeutral`, `zoneAlpha`.
 
 **Python referansı:**
 ```bash
 python -I scripts/pine_lab_fetch_klines.py BTCUSDT 1782864000000 data/lab/BTC_15m.csv
 python scripts/pine_lab_parity.py visuals --ohlcv data/lab/BTC_15m.csv --out data/lab/BTC_visuals.json   # --window N pencereyi değiştirir
 ```
-Python referansı pencereye duyarlıdır (FVG eşiği ve kümülatif durum); Pine yüklü tüm geçmişi görür. 750 pencerede Pine'da fazladan eski nesneler görünür; `--window 1000` ile de karşılaştır.
+Python referansı pencereye duyarlıdır: FVG otomatik eşiği Pine'da 750-bar KAYAN ortalama (`core.pine`), Python `lx.analyze`'de pencere başından KÜMÜLATİF ortalamadır; ayrıca Python referansı `--window > 750` iken Pine'ın 750-bar pivot budamasını (`liveWindowBars`) uygulamaz, bu yüzden 750 üstü pencereler fazladan (eski) nesne raporlar. Pine yüklü tüm geçmişi görür; 750 pencerede Pine'da fazladan eski nesneler görünür (precision artefaktı). `--window 1000` ile de karşılaştır.
 
 **Katman izolasyonu (compile-varyantı):** `scripts/pine_lab_variant.py` `pine/efloud_lab.pine` kopyasında yalnız yedi `show*` ile `showHistory` `input.bool` varsayılanlarını ve `maxZonesPerSide` varsayılanını yeniden yazar.
 ```bash

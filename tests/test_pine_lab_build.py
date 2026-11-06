@@ -183,6 +183,7 @@ def test_tail_flip_tracker_present_and_buffer_only():
     bodies = _tail_function_bodies(text)
     assert "f_bufAt" in bodies["f_legExtInit"]
     assert "mitigatedIdx" not in bodies["f_trackFlips"], "flip tracking must not filter on mitigatedIdx (every flip happens on a mitigated OB)"
+    assert "flippedKeys" in bodies["f_collectObs"], "faded OB check must stop at the flip (spec §3.1)"
 
 
 def test_tail_ote_range_state_and_drawing():
@@ -190,4 +191,4 @@ def test_tail_ote_range_state_and_drawing():
     for needle in ("var float rngH", "var float rngL", "var int rngDir", "f_updateRange(", "f_barOfExtreme(", "if showOte", "0.705"):
         assert needle in text, needle
     body = _tail_function_bodies(text)["f_updateRange"]
-    assert "b.internal" in body and "rawLow" in body and "rawHigh" in body
+    assert "b.internal" in body and "rawLow" in body and "rawHigh" in body and "b.breaker" in body

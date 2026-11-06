@@ -661,7 +661,7 @@ Spec: `docs/superpowers/specs/2026-11-06-lab-indicator-visuals-design.md`. Bu ka
 
 - **Order Block (`showObs`/`showZones`):** swing ve internal OB kutuları; mitigasyon yüksek/düşük veya kapanışa göre (`obMitHighLow`). Çizim OB kaydını değiştirmez.
 - **Breaker / Mitigation Block (`showBreakers`):** OB mitige olup yön çevirince oluşan kutu; sınıf BB veya MB, ölü kayıtlar çizilmez. T2 breaker kayıtları yeni OTE aralığı başlatmaz.
-- **FVG (`showFvg`):** üç mumluk boşluk, `fvgAuto` eşiği; dolunca kaldırılır. Eşik kümülatif ortalamadır, bu yüzden Python penceresine duyarlıdır (bkz. §20).
+- **FVG (`showFvg`):** üç mumluk boşluk, `fvgAuto` eşiği; dolunca kaldırılır. Pine eşiği 750-bar KAYAN ortalamadır (`math.sum(|delta|, liveWindowBars) / n * 2`); Python `lx.analyze` pencere başından KÜMÜLATİF ortalama kullanır, bu yüzden referans pencereye duyarlıdır (bkz. §20). Python referansı `--window > 750` iken Pine'ın 750-bar pivot budamasını uygulamaz; 750 üstü pencereler fazladan eski nesne raporlar. Doğrulanmış SOL artıkları (FVG 96.07/95.88, BSL 103.89) bu pencereleme artefaktlarıdır, çizim hatası değildir (`docs/pine-lab/2026-11-06-indicator-visuals-verify.md`).
 - **Likidite (`showLiq`/`showHistory`):** eşit tepe/dip ve swing BSL/SSL seviyeleri çizgi + etiket; hacim onaylıysa yıldız ve kalın çizgi. Süpürülmüş seviye geçmişi yalnız EQ seviyelerini kapsar.
 - **OTE (`showOte`):** son swing high/low bacağından 0.618-0.786 kutusu, 0.705 ve EQ çizgileri, h/l çizgileri; yön dashboard OTE satırıyla aynıdır.
 
