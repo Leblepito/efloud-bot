@@ -1,0 +1,117 @@
+{
+  "date": "2026-11-06",
+  "note": "Dry-run örnek çıktı — tests/fixtures/telegram_channel_posts_2026-11-06.json içindeki 3 örnek kanal postundan üretildi. Canlı paylaşım yapılmadı; bundle'lar pending_review.",
+  "bundle_dir": "C:\\tmp\\t02-final\\work\\bundles",
+  "max_bytes": 153600,
+  "oversize": [],
+  "files": [
+    {
+      "draft_id": "1998d4e7-e482-5b52-ae6c-94dff26d8654:instagram",
+      "event_id": "1998d4e7-e482-5b52-ae6c-94dff26d8654",
+      "platform": "instagram",
+      "symbol": "SOL/USDT",
+      "state": "pending_review",
+      "violations": [],
+      "disclaimer_present": true,
+      "caption_chars": 386,
+      "media": [
+        {
+          "path": "1998d4e7-e482-5b52-ae6c-94dff26d8654.instagram.png",
+          "bytes": 61834
+        }
+      ],
+      "caption_file": "1998d4e7-e482-5b52-ae6c-94dff26d8654.instagram.caption.txt",
+      "caption_bytes": 438
+    },
+    {
+      "draft_id": "1998d4e7-e482-5b52-ae6c-94dff26d8654:x",
+      "event_id": "1998d4e7-e482-5b52-ae6c-94dff26d8654",
+      "platform": "x",
+      "symbol": "SOL/USDT",
+      "state": "pending_review",
+      "violations": [],
+      "disclaimer_present": true,
+      "caption_chars": 218,
+      "media": [
+        {
+          "path": "1998d4e7-e482-5b52-ae6c-94dff26d8654.x.png",
+          "bytes": 61834
+        }
+      ],
+      "caption_file": "1998d4e7-e482-5b52-ae6c-94dff26d8654.x.caption.txt",
+      "caption_bytes": 242
+    },
+    {
+      "draft_id": "c5fe0d3c-9fb9-5ec9-9489-fc235e6621c3:instagram",
+      "event_id": "c5fe0d3c-9fb9-5ec9-9489-fc235e6621c3",
+      "platform": "instagram",
+      "symbol": "BTC/USDT",
+      "state": "pending_review",
+      "violations": [],
+      "disclaimer_present": true,
+      "caption_chars": 390,
+      "media": [
+        {
+          "path": "c5fe0d3c-9fb9-5ec9-9489-fc235e6621c3.instagram.png",
+          "bytes": 64197
+        }
+      ],
+      "caption_file": "c5fe0d3c-9fb9-5ec9-9489-fc235e6621c3.instagram.caption.txt",
+      "caption_bytes": 442
+    },
+    {
+      "draft_id": "c5fe0d3c-9fb9-5ec9-9489-fc235e6621c3:x",
+      "event_id": "c5fe0d3c-9fb9-5ec9-9489-fc235e6621c3",
+      "platform": "x",
+      "symbol": "BTC/USDT",
+      "state": "pending_review",
+      "violations": [],
+      "disclaimer_present": true,
+      "caption_chars": 218,
+      "media": [
+        {
+          "path": "c5fe0d3c-9fb9-5ec9-9489-fc235e6621c3.x.png",
+          "bytes": 64197
+        }
+      ],
+      "caption_file": "c5fe0d3c-9fb9-5ec9-9489-fc235e6621c3.x.caption.txt",
+      "caption_bytes": 242
+    },
+    {
+      "draft_id": "db418c1a-cddb-5fae-a91a-ebece290e177:instagram",
+      "event_id": "db418c1a-cddb-5fae-a91a-ebece290e177",
+      "platform": "instagram",
+      "symbol": "ETH/USDT",
+      "state": "pending_review",
+      "violations": [],
+      "disclaimer_present": true,
+      "caption_chars": 388,
+      "media": [
+        {
+          "path": "db418c1a-cddb-5fae-a91a-ebece290e177.instagram.png",
+          "bytes": 56781
+        }
+      ],
+      "caption_file": "db418c1a-cddb-5fae-a91a-ebece290e177.instagram.caption.txt",
+      "caption_bytes": 440
+    },
+    {
+      "draft_id": "db418c1a-cddb-5fae-a91a-ebece290e177:x",
+      "event_id": "db418c1a-cddb-5fae-a91a-ebece290e177",
+      "platform": "x",
+      "symbol": "ETH/USDT",
+      "state": "pending_review",
+      "violations": [],
+      "disclaimer_present": true,
+      "caption_chars": 219,
+      "media": [
+        {
+          "path": "db418c1a-cddb-5fae-a91a-ebece290e177.x.png",
+          "bytes": 56781
+        }
+      ],
+      "caption_file": "db418c1a-cddb-5fae-a91a-ebece290e177.x.caption.txt",
+      "caption_bytes": 243
+    }
+  ]
+}

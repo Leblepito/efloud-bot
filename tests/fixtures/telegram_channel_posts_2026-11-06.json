@@ -1,0 +1,37 @@
+[
+  {
+    "message_id": 9101,
+    "chat_id": "-1002000000001",
+    "occurred_at": "2026-11-06T09:15:00Z",
+    "note": "bot trade post (engine/notifications/telegram_notifier.py::post_trade_opened)",
+    "text": "🟢 *BTCUSDT LONG* — yeni işlem / new trade\nEntry: `76,186.0`\nSL: `75,700.0`\nTP1: `77,150.0`\nTP2: `78,100.0`\nSetup: OB BREAKER+OTE\nu2algo Price Action\nEğitim amaçlıdır, yatırım tavsiyesi değildir. / Not financial advice."
+  },
+  {
+    "message_id": 9102,
+    "chat_id": "-1002000000001",
+    "occurred_at": "2026-11-06T09:45:00Z",
+    "note": "indicator alert (docs/telegram/tradingview-to-telegram.md)",
+    "text": "🔴 SHORT ETHUSDT.P · 15\nEntry: 2245.46\nSL: 2271.2\nTP1: 2201.5\nTP2: —\nSetup: FVG RETEST\nu2algo Price Action"
+  },
+  {
+    "message_id": 9103,
+    "chat_id": "-1002000000001",
+    "occurred_at": "2026-11-06T10:30:00Z",
+    "note": "indicator alert, LONG, with TP2",
+    "text": "🟢 LONG SOLUSDT.P · 15\nEntry: 90.52\nSL: 88.9\nTP1: 93.4\nTP2: 95.1\nSetup: CHoCH + OB\nu2algo Price Action"
+  },
+  {
+    "message_id": 9104,
+    "chat_id": "-1002000000001",
+    "occurred_at": "2026-11-06T11:05:00Z",
+    "note": "TP1 hit — recorded by the collector, not turned into a social draft",
+    "text": "🎯 *BTCUSDT LONG* — TP1 hit\nEntry: `76,186.0` → TP1: `77,150.0`\nu2algo Price Action\nEğitim amaçlıdır, yatırım tavsiyesi değildir. / Not financial advice."
+  },
+  {
+    "message_id": 9105,
+    "chat_id": "-1002000000001",
+    "occurred_at": "2026-11-06T12:40:00Z",
+    "note": "closed — recorded by the collector, not turned into a social draft",
+    "text": "🏁 *ETHUSDT SHORT* — işlem kapandı / trade closed\nEntry: `2,245.46` → Exit: `2,201.5`\nNeden / Reason: TP1\nu2algo Price Action\nEğitim amaçlıdır, yatırım tavsiyesi değildir. / Not financial advice."
+  }
+]

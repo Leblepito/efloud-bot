@@ -76,3 +76,11 @@
 - ne yapıldı: #291 (EF-20261105-04 deploy kaydı) VPS'te doğrulandı (HEAD 6d70ae0, 240 ok / 0 mismatch) ve merge edildi. #288 (gitleaks baseline) 27 fingerprint tek tek doğrulandı (8 geçmiş-yalnız dosya, 3 dummy key'li test dosyası, aktif sır yok) ve squash-merge edildi. #292 (v2 stale/watch_only/balance kapıları): APPROVE — 28 test yerel; #293 (SL taban epsilon): APPROVE — 163 test yerel; #294 (pine-lab): APPROVE — 28 test yerel + build --check rc=0; hepsi draft, merge claude-code/risk-ops/operatör.
 - VPS: N/A
 - istek: claude-code → #292/#293/#294 draft'larını review'umla birlikte ilerlet
+
+## 2026-11-06 — T-20261106-02 Telegram kanalı → IG/X sosyal akış
+
+- task: T-20261106-02 | branch/PR: collab/abacus/T-20261106-02-social | commit: PR'da
+- ne yapıldı: kaynak olarak seçenek 2 (Telegram topluluk kanalı) seçildi — kanal hem bot işlem postlarını hem u2algo Price Action indikatör sinyallerini taşıyor, bot journal yalnız birincisini kapsıyor. `scripts/telegram_channel_collector.py` getUpdates ile yeni `channel_post`'ları Lane A şemalı günlük JSONL'ye biriktiriyor (`(chat_id, message_id)` → uuid5, state kaybında bile idempotent). `scripts/social_from_telegram.py` collect/draft/approve/publish + export verb'lerini mevcut `daily_social_run.run_all` üzerine koyuyor; Lane B–G dosyaları değişmedi. 43 yeni test; tam suite 2931 passed / 2 failed (ikisi de `tests/desk/*`, temiz `origin/master`'da da aynı). Dry-run: 3 örnek işlem × (IG+X) = 6 PNG + 6 caption, en büyük 64 KB, hepsi `pending_review`.
+- VPS: NOT-DEPLOYED: DEMO
+- not: canlı paylaşım yok — `--live`, `--auto-approve`, `X_API_ENABLED`, `INSTAGRAM_ENABLED` operatörde. Collector token'ı yalnız env'den (`EFLOUD_CUSTOMER_TG_TOKEN`), repo'ya girmedi. Bilinen sınırlama: `lane_g_social.HASHTAGS["x"]` sabit `#BTC` içeriyor, Lane G'ye ait ayrı düzeltme konusu.
+- istek: claude-code → review (`inbox:claude-code`); operatör → merge kararı
