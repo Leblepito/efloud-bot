@@ -33,7 +33,7 @@ u2algo Price Action
 ## Sorun giderme
 - **403**: bot kanalda admin değil.
 - **400 chat not found**: chat id yanlış (`@` unutulmuş veya `-100…` hatalı).
-- **400 can't parse entities**: mesaj `parse_mode: HTML` ile gider; `Message footer` alanında `<`, `>` veya `&` kullanmayın.
+- **400 can't parse entities**: mesaj `parse_mode: HTML` ile gider. `Message footer` ve setup metnindeki `<`, `>`, `&` otomatik kaçırılır; bu hatayı görürseniz alarmı indikatörün güncel sürümüyle yeniden oluşturun (eski alarm eski kodu çalıştırır).
 - **Hiçbir şey gelmiyor**: planda webhook yok, alert süresi dolmuş veya Condition "Any alert() function call" değil.
 - Alert mesajı `alert()` çağrısından gelir; alert penceresindeki Message alanına bir şey yazarsanız gösterge mesajının yerine geçmez ama kafa karıştırır — boş bırakın.
 

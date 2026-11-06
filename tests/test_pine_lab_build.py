@@ -217,4 +217,16 @@ def test_tail_alert_has_bot_json_and_telegram_branches():
         assert f'"{key}"' in tail
     for frag in ('"chat_id"', '"parse_mode":"HTML"', '"text"', "disable_web_page_preview"):
         assert frag in tail
-    assert 'tgChatId == ""' in tail
+    assert "tgChat == \"\"" in tail
+
+
+def test_tail_telegram_text_html_escaped_and_blank_chat_id_is_bot_mode():
+    """Fable review: footer/setup go through f_htmlEsc (parse_mode HTML → '<' '&' would 400);
+    a whitespace-only chat id must fall back to the bot JSON, not Telegram mode."""
+    tail = TAIL.read_text(encoding="utf-8")
+    assert re.search(r"^f_htmlEsc\(string s\) =>", tail, re.M)
+    for frag in ('"&amp;"', '"&lt;"', '"&gt;"'):
+        assert frag in tail
+    assert "f_jsonEsc(f_htmlEsc(tgTag))" in tail
+    assert "f_htmlEsc(c.src + " in tail
+    assert "str.trim(tgChatId)" in tail

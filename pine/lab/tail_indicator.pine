@@ -39,6 +39,10 @@ f_fmt(float x) =>
 f_jsonEsc(string s) =>
     str.replace_all(str.replace_all(s, "\\", "\\\\"), '"', '\\"')
 
+// Telegram parse_mode HTML: '&' first so the other entities are not double-escaped.
+f_htmlEsc(string s) =>
+    str.replace_all(str.replace_all(str.replace_all(s, "&", "&amp;"), "<", "&lt;"), ">", "&gt;")
+
 // ─── Zone layers (display only; spec docs/superpowers/specs/2026-11-06-lab-indicator-visuals-design.md) ───
 // Ring-buffer contract: core pushes bufHi/bufLo/bufOpen/bufClose/bufTime once per confirmed bar before the tail runs,
 // so in the tail's confirmed block the newest element is the current closed bar. bufLastBar remembers that bar.
@@ -356,11 +360,12 @@ if barstate.isconfirmed
             array.push(sigLabels, label.new(bar_index, c.sl, (c.dir == 1 ? "LONG " : "SHORT ") + c.src + " " + c.tags, style = c.dir == 1 ? label.style_label_up : label.style_label_down, color = col, textcolor = color.white, size = size.small))
         string dirTxt = c.dir == 1 ? "LONG" : "SHORT"
         string alertMsg = ""
-        if tgChatId == ""
+        string tgChat = str.trim(tgChatId)
+        if tgChat == ""
             alertMsg := '{"symbol":"' + syminfo.ticker + '","dir":"' + dirTxt + '","entry":' + f_fmt(c.entry) + ',"sl":' + f_fmt(c.sl) + ',"tp1":' + f_fmt(c.tp1) + ',"tp2":' + (na(c.tp2) ? "null" : f_fmt(c.tp2)) + ',"variant":"' + variantLabel + '","trigger_bar":' + str.tostring(c.trigTime) + '}'
         else
-            string tgText = (c.dir == 1 ? "🟢" : "🔴") + " <b>" + dirTxt + "</b> " + syminfo.ticker + " · " + timeframe.period + '\\n' + "Entry: " + f_fmt(c.entry) + '\\n' + "SL: " + f_fmt(c.sl) + '\\n' + "TP1: " + f_fmt(c.tp1) + '\\n' + "TP2: " + (na(c.tp2) ? "—" : f_fmt(c.tp2)) + '\\n' + "Setup: " + c.src + " " + c.tags + '\\n' + f_jsonEsc(tgTag)
-            alertMsg := '{"chat_id":"' + f_jsonEsc(tgChatId) + '","text":"' + tgText + '","parse_mode":"HTML","disable_web_page_preview":true}'
+            string tgText = (c.dir == 1 ? "🟢" : "🔴") + " <b>" + dirTxt + "</b> " + syminfo.ticker + " · " + timeframe.period + '\\n' + "Entry: " + f_fmt(c.entry) + '\\n' + "SL: " + f_fmt(c.sl) + '\\n' + "TP1: " + f_fmt(c.tp1) + '\\n' + "TP2: " + (na(c.tp2) ? "—" : f_fmt(c.tp2)) + '\\n' + "Setup: " + f_jsonEsc(f_htmlEsc(c.src + " " + c.tags)) + '\\n' + f_jsonEsc(f_htmlEsc(tgTag))
+            alertMsg := '{"chat_id":"' + f_jsonEsc(tgChat) + '","text":"' + tgText + '","parse_mode":"HTML","disable_web_page_preview":true}'
         alert(alertMsg, alert.freq_once_per_bar_close)
     while array.size(sigLines) > maxDrawings * 4
         line.delete(array.shift(sigLines))
