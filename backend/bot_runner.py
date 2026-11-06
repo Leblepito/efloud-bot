@@ -855,7 +855,7 @@ class BotRunner:
                 # see only real opens, TP1 and real closes.
                 self.community.post_trade_closed(
                     symbol=pos.symbol, direction=pos.direction,
-                    entry=pos.entry, exit_price=pos.exit_price or 0.0,
+                    entry=pos.entry, exit_price=pos.exit_price,
                     reason=(pos.exit_reason or None),
                 )
         except Exception as e:

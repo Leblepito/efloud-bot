@@ -238,3 +238,36 @@ def test_runner_real_notifier_flag_off_no_http(monkeypatch, post):
         r._on_position_change(ev, p)
     post.assert_not_called()
     assert r.community._worker is None
+
+
+# --- Fable 5.1 review follow-ups (2026-11-06) ---
+
+@pytest.mark.parametrize("exit_price", [None, 0, 0.0])
+def test_close_unknown_exit_price_not_shown(monkeypatch, post, exit_price):
+    n = _make(monkeypatch)
+    n.post_trade_closed("BTCUSDT", "LONG", 65000.0, exit_price, reason="SL")
+    _drain(n)
+    text = post.call_args.kwargs["json"]["text"]
+    assert "65000" in text and "Exit" not in text
+
+
+def test_runner_passes_none_exit_price_through():
+    r = _runner()
+    r._on_position_change("position_closed", _pos(exit_price=None))
+    assert r.community.post_trade_closed.call_args.kwargs["exit_price"] is None
+
+
+def test_trade_posts_always_markdown_even_if_env_html(monkeypatch, post):
+    monkeypatch.setenv("EFLOUD_CUSTOMER_TG_PARSE_MODE", "HTML")
+    n = _make(monkeypatch)
+    _open(n)
+    _drain(n)
+    assert post.call_args.kwargs["json"]["parse_mode"] == "Markdown"
+
+
+@pytest.mark.parametrize("raw", ["SL_BE", "be_sl", "STOP_BREAKEVEN"])
+def test_breakeven_stop_reported_as_be(monkeypatch, post, raw):
+    n = _make(monkeypatch)
+    n.post_trade_closed("BTCUSDT", "LONG", 1.0, 1.0, reason=raw)
+    _drain(n)
+    assert "Reason: BE" in post.call_args.kwargs["json"]["text"]

@@ -14,9 +14,12 @@ to stay on the safe side of the "signal service" regulatory line (P-003 §2b):
     legal sign-off first. The public close reason is whitelisted (TP1/TP2/SL/BE/closed).
   • Per-trade posts are fire-and-forget: queued to a single daemon worker thread
     (bounded queue, dropped when full) so a slow Telegram call never blocks the caller.
-  • DOUBLE-GATED, default OFF — emits only when BOTH the config flag
+  • DIGEST is DOUBLE-GATED, default OFF — emits only when BOTH the config flag
     (`notifications.telegram.enabled`, default False) AND the two customer-channel
     credentials are present. Either missing → hard no-op, zero HTTP.
+  • PER-TRADE posts are gated separately: EFLOUD_CUSTOMER_TG_TRADES AND the two
+    credentials (the config flag is not consulted). They are always sent as
+    legacy Markdown, whatever EFLOUD_CUSTOMER_TG_PARSE_MODE says.
   • SEPARATE credentials from the operator alerter (EFLOUD_CUSTOMER_TG_* vs
     EFLOUD_TELEGRAM_*) so the two channels never cross.
   • BEST-EFFORT — every send swallows exceptions; a Telegram outage must never
@@ -31,7 +34,7 @@ Env (both required to enable, on top of the config flag):
   - EFLOUD_CUSTOMER_TG_CHANNEL_ID  public channel id (e.g. "-1001234567890")
 Optional:
   - EFLOUD_CUSTOMER_TG_THREAD_ID   forum topic id
-  - EFLOUD_CUSTOMER_TG_PARSE_MODE  "Markdown" (default) | "HTML"
+  - EFLOUD_CUSTOMER_TG_PARSE_MODE  "Markdown" (default) | "HTML" — digest only
   - EFLOUD_CUSTOMER_TG_TIMEOUT_SECS  HTTP timeout (default 5.0)
   - EFLOUD_CUSTOMER_TG_TRADES      "1"/"true"/"yes" enables per-trade posts
                                    (open / TP1 / close) — default OFF. Customer-safe:
@@ -63,6 +66,7 @@ def _fmt_price(x) -> str:
 
 
 _QUEUE_MAX = 100
+_TRADE_PARSE_MODE = "Markdown"  # per-trade texts use legacy Markdown markup
 
 
 def _public_reason(reason) -> str:
@@ -72,10 +76,11 @@ def _public_reason(reason) -> str:
         return "TP2"
     if "TP1" in tokens:
         return "TP1"
-    if tokens & {"SL", "STOP"}:
-        return "SL"
+    # BE before SL: a stop moved to breakeven ("SL_BE") is a breakeven exit.
     if tokens & {"BE", "BREAKEVEN"}:
         return "BE"
+    if tokens & {"SL", "STOP"}:
+        return "SL"
     return "closed"
 
 
@@ -206,7 +211,7 @@ class CustomerChannelNotifier:
         while True:
             text = self._queue.get()
             try:
-                self._deliver(text)
+                self._deliver(text, parse_mode=_TRADE_PARSE_MODE)
             except Exception as e:  # _deliver never raises; belt and braces
                 log.warning(f"Customer Telegram worker error: {e}")
             finally:
@@ -242,7 +247,8 @@ class CustomerChannelNotifier:
         def build() -> str:
             lines = [
                 f"🏁 *{_clean(symbol)} {_clean(direction).upper()}* — işlem kapandı / trade closed",
-                f"Entry: `{_fmt_price(entry)}` → Exit: `{_fmt_price(exit_price)}`",
+                f"Entry: `{_fmt_price(entry)}` → Exit: `{_fmt_price(exit_price)}`"
+                if exit_price else f"Entry: `{_fmt_price(entry)}`",
             ]
             if pnl_r is not None:
                 lines.append(f"Sonuç / Result: `{float(pnl_r):+.2f}R`")
@@ -288,13 +294,13 @@ class CustomerChannelNotifier:
             return False
         return self._deliver(text)
 
-    def _deliver(self, text: str) -> bool:
+    def _deliver(self, text: str, parse_mode: Optional[str] = None) -> bool:
         """Best-effort POST to the customer channel (no flag check). NEVER raises."""
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         payload = {
             "chat_id": self.channel_id,
             "text": text,
-            "parse_mode": self.parse_mode,
+            "parse_mode": parse_mode or self.parse_mode,
             "disable_web_page_preview": True,
         }
         if self.thread_id:

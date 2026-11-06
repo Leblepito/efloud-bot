@@ -27,7 +27,6 @@ Bot'un gerçek işlemleri (açılış, TP1, kapanış) topluluk Telegram kanalı
 - [ ] Bot container'ı **flat (açık pozisyon yokken)** pencerede recreate edildi: `docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps efloud-bot`; `EFLOUD_AUTOSTART=0` olduğu için bot manuel start edildi; `/healthz` 200.
 - [ ] Açılış logunda `Customer Telegram per-trade posts: ENABLED` satırı var (`digest disabled (flag off)` normal).
 - [ ] İlk gerçek işlem açılışında topluluk kanalında mesaj göründü (ekran görüntüsü `collab/outputs/hermes/` altına, kişisel veri yok).
-- [ ] Ayrı küçük PR: `deploy/.env.production.example`'a üç değişkenin yorumlu satırları eklendi (değer yok).
 - [ ] Ops kanalı (EFLOUD_TELEGRAM_*) davranışı değişmedi.
 - [ ] `collab/log/hermes.md`'ye tek satır kayıt.
 

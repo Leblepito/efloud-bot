@@ -37,9 +37,8 @@ Güvenlik: notifier hiçbir zaman exception fırlatmaz (hata `warning` olarak lo
    EFLOUD_CUSTOMER_TG_CHANNEL_ID=<-100...>
    EFLOUD_CUSTOMER_TG_TRADES=1
    ```
-   Opsiyonel: `EFLOUD_CUSTOMER_TG_THREAD_ID`, `EFLOUD_CUSTOMER_TG_PARSE_MODE` (varsayılan `Markdown`; işlem mesajları
-   Markdown biçimlendirmesi kullanır, `HTML`'e almayın). `deploy/.env.production.example` şablonunda bu satırlar henüz yok;
-   elle ekleyin.
+   Opsiyonel: `EFLOUD_CUSTOMER_TG_THREAD_ID`, `EFLOUD_CUSTOMER_TG_PARSE_MODE` (yalnız günlük özeti etkiler;
+   işlem mesajları her zaman Markdown gönderilir). Yorumlu satırlar `deploy/.env.production.example` şablonunda da var.
 4. Bot konteynerini **pozisyonsuz (flat) bir pencerede** yeniden oluştur (prod compose servisi `efloud-bot`):
    `docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps efloud-bot`.
    `EFLOUD_AUTOSTART=0` ise bot restart sonrası idle açılır; **manuel olarak start edilmelidir**.
