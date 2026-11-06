@@ -180,6 +180,77 @@ f_collectObs(array<OB> pool, bool internal, array<Zone> z) =>
                 f_pushZone(z, top, bot, o.idx, o.bias, (internal ? "iOB" : "OB") + " ✓", internal ? 1 : 0, true)
     active
 
+// ─── Flip tracker: closed-through OB → Breaker (BB) or Mitigation Block (MB); two-scale rule (spec §3.2) ───
+type Flip
+    OB    ob
+    float refA            // frozen last swing pivot before the OB candle (bear OB: swing low; bull OB: swing high)
+    float legExt          // bear OB: min low over (ob.idx, flipBar); bull OB: max high
+    int   flipBar = -1
+    int   cls = 0         // 0 pending · 1 BB · 2 MB · 3 NONE (no reference pivot → never drawn)
+    bool  dead = false
+
+var array<Flip> flips = array.new<Flip>()
+var int dashBb  = 0
+var int dashMb  = 0
+var int dashFvg = 0
+
+f_lastPivotBefore(array<Piv> pivs, int barIdx) =>
+    float px = na
+    for p in pivs
+        if p.bar < barIdx
+            px := p.price
+    px
+
+f_legExtInit(OB o) =>
+    float ext = na
+    if o.createdIdx > o.idx
+        for b = o.idx + 1 to o.createdIdx
+            float v = o.bias == -1 ? f_bufAt(bufLo, b) : f_bufAt(bufHi, b)
+            if not na(v)
+                ext := na(ext) ? v : (o.bias == -1 ? math.min(ext, v) : math.max(ext, v))
+    ext
+
+f_recordNewObs(array<OB> pool) =>
+    int n = array.size(pool)
+    if n > 0
+        bool stop = false
+        for i = n - 1 to 0
+            if not stop
+                OB o = array.get(pool, i)
+                if o.createdIdx != bar_index
+                    stop := true
+                else if not f_isBreakerCopy(o, pool)
+                    float refA = o.bias == -1 ? f_lastPivotBefore(slPiv, o.idx) : f_lastPivotBefore(shPiv, o.idx)
+                    array.push(flips, Flip.new(ob = o, refA = refA, legExt = f_legExtInit(o), cls = na(refA) ? 3 : 0))
+    true
+
+f_trackFlips() =>
+    for fl in flips
+        OB o = fl.ob
+        if not fl.dead and fl.cls != 3
+            if fl.flipBar < 0
+                if bar_index > o.createdIdx
+                    bool flipped = o.bias == -1 ? close > o.top() : close < o.bot()
+                    if flipped
+                        fl.flipBar := bar_index
+                        bool swept = o.bias == -1 ? fl.legExt < fl.refA : fl.legExt > fl.refA
+                        fl.cls := swept ? 1 : 2
+                if fl.flipBar < 0                               // extend the leg only while still pending (excludes the flip bar)
+                    float v = o.bias == -1 ? low : high
+                    fl.legExt := na(fl.legExt) ? v : (o.bias == -1 ? math.min(fl.legExt, v) : math.max(fl.legExt, v))
+            else
+                fl.dead := o.bias == -1 ? close < o.bot() : close > o.top()
+    if array.size(flips) > 0
+        for i = array.size(flips) - 1 to 0
+            if array.get(flips, i).ob.createdIdx < bar_index - liveWindowBars
+                array.remove(flips, i)
+    true
+
+if barstate.isconfirmed
+    f_recordNewObs(swingObs)
+    f_recordNewObs(intObs)
+    f_trackFlips()
+
 if barstate.isconfirmed
     for c in fired
         color col = c.dir == 1 ? color.teal : color.maroon
@@ -200,11 +271,13 @@ if barstate.isconfirmed
 if barstate.islast
     f_clearBoxes(zoneLayerBoxes)
     // z-order (bottom → top): OTE → FVG → OB/iOB → BB/MB → liquidity → pending zones → signal lines
+    dashFvg := 0
     if showFvg
         array<Zone> zf = array.new<Zone>()
         for f in fvgs
             if f.mitigatedIdx < 0
                 f_pushZone(zf, f.top, f.bot, f.idx, f.bias, "FVG", 4, false)
+        dashFvg := array.size(zf)
         f_drawNearest(zf, maxZonesPerSide)
     dashObS := 0
     dashObI := 0
@@ -213,6 +286,19 @@ if barstate.islast
         dashObS := f_collectObs(swingObs, false, zo)
         dashObI := f_collectObs(intObs, true, zo)
         f_drawNearest(zo, maxZonesPerSide)
+    dashBb := 0
+    dashMb := 0
+    if showBreakers
+        array<Zone> zb = array.new<Zone>()
+        for fl in flips
+            if fl.flipBar >= 0 and not fl.dead and (fl.cls == 1 or fl.cls == 2)
+                [top, bot] = f_obEdges(fl.ob)
+                f_pushZone(zb, top, bot, fl.ob.idx, -fl.ob.bias, fl.cls == 1 ? "BB" : "MB", fl.cls == 1 ? 2 : 3, false)
+                if fl.cls == 1
+                    dashBb += 1
+                else
+                    dashMb += 1
+        f_drawNearest(zb, maxZonesPerSide)
     f_clearBoxes(zoneBoxes)
     if showZones
         for c in cands
@@ -311,5 +397,5 @@ if barstate.islast and showDash
     f_cell(4, "Po3", po3Blocked ? "MANIPULATION (blocked)" : "ok")
     f_cell(5, "Range EQ", zoneOk ? f_fmt(zEq) : "-")
     f_cell(6, "Drops (last 20)", f_dropSummary())
-    f_cell(7, "Zones s/i·BB·MB·FVG·Liq", "-")
+    f_cell(7, "Zones s/i·BB·MB·FVG·Liq", str.tostring(dashObS) + "/" + str.tostring(dashObI) + "·" + str.tostring(dashBb) + "·" + str.tostring(dashMb) + "·" + str.tostring(dashFvg) + "·" + str.tostring(dashLiq))
     f_cell(8, "OTE", "-")

@@ -167,3 +167,12 @@ def test_tail_ob_layer_uses_zone_pipeline():
     assert "f_drawObs(" not in text and "obBoxes" not in text
     for needle in ("f_obEdges(", "f_isBreakerCopy(", "f_collectObs(", "obBodyOnly"):
         assert needle in text, needle
+
+
+def test_tail_flip_tracker_present_and_buffer_only():
+    text = TAIL.read_text(encoding="utf-8")
+    for needle in ("type Flip", "var array<Flip> flips", "f_lastPivotBefore(", "f_legExtInit(", "f_trackFlips(", "if showBreakers"):
+        assert needle in text, needle
+    bodies = _tail_function_bodies(text)
+    assert "f_bufAt" in bodies["f_legExtInit"]
+    assert "mitigatedIdx" not in bodies["f_trackFlips"], "flip tracking must not filter on mitigatedIdx (every flip happens on a mitigated OB)"
