@@ -143,6 +143,15 @@ def test_ote_range_bearish_extension_and_tie():
     assert r["hBar"] == r["lBar"] == 8 and r["dir"] == -1
 
 
+def test_ote_range_tie_keeps_previous_direction():
+    res, h, l, c = _bull_break_ote()              # no l[7] extension: direction is +1 after the break
+    r = vis.ote_range(res, h, l, c)
+    assert r["dir"] == 1 and r["hBar"] == 6 and r["lBar"] == 2
+    h[8], l[8] = 111.0, 89.0                      # outside bar sets both extremes on bar 8 -> tie keeps +1
+    r = vis.ote_range(res, h, l, c)
+    assert r["hBar"] == r["lBar"] == 8 and r["dir"] == 1
+
+
 def test_ote_range_falls_back_to_swing_pivots_without_ob():
     from engine.smc_v2.luxalgo import LuxBreak
     brk = LuxBreak(kind="BOS", direction="BULL", level=100.0, pivot_idx=2, idx=6, ts="t6", internal=False, order_block=None)
@@ -150,6 +159,23 @@ def test_ote_range_falls_back_to_swing_pivots_without_ob():
     h = np.full(9, 100.0); l = np.full(9, 100.0); c = np.full(9, 100.0)
     r = vis.ote_range(res, h, l, c, swing_len=2)
     assert r["l"] == 95.0 and r["h"] == 108.0 and r["dir"] == 1
+
+
+def test_ote_range_ignores_unconfirmed_swing_low_pivot():
+    from engine.smc_v2.luxalgo import LuxBreak
+    brk = LuxBreak(kind="BOS", direction="BULL", level=100.0, pivot_idx=2, idx=6, ts="t6", internal=False, order_block=None)
+    res = types.SimpleNamespace(breaks=[brk], swing_low_pivots=[(1, 95.0), (5, 80.0)], swing_high_pivots=[(3, 108.0)])
+    h = np.full(9, 100.0); l = np.full(9, 100.0); c = np.full(9, 100.0)
+    r = vis.ote_range(res, h, l, c, swing_len=2)  # pivot 5 is confirmed only at bar 7 > break bar 6 -> ignored
+    assert r["l"] == 95.0 and r["lBar"] == 1
+
+
+def test_ote_range_none_without_confirmed_swing_high():
+    from engine.smc_v2.luxalgo import LuxBreak
+    brk = LuxBreak(kind="BOS", direction="BULL", level=100.0, pivot_idx=2, idx=6, ts="t6", internal=False, order_block=None)
+    res = types.SimpleNamespace(breaks=[brk], swing_low_pivots=[(1, 95.0)], swing_high_pivots=[])
+    h = np.full(9, 100.0); l = np.full(9, 100.0); c = np.full(9, 100.0)
+    assert vis.ote_range(res, h, l, c, swing_len=2) is None
 
 
 def test_expected_visuals_nonempty_zigzag():
