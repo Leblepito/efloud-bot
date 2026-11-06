@@ -13,7 +13,8 @@ strategy("u2algo Price Action Strategy", "u2algo PAS", overlay = true, initial_c
 // LuxAlgo mode, profile mid). The structure engine ports the logic of
 // "Smart Money Concepts (SMC) [LuxAlgo]" (CnB3fSph), © LuxAlgo, licensed
 // CC BY-NC-SA 4.0 — https://creativecommons.org/licenses/by-nc-sa/4.0/
-// Non-commercial, share-alike: this script stays private / invite-only.
+// Published open-source on TradingView under CC BY-NC-SA 4.0 (attribution: LuxAlgo;
+// non-commercial, share-alike; no paid / invite-only / protected version).
 // See THIRD_PARTY_NOTICES.md.
 // =============================================================================
 

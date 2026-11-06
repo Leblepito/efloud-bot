@@ -94,3 +94,4 @@ cd frontend && npx vitest run
 - `HERMES.md` — operatör/agent kılavuzu
 - `AGENTS.md`, `CLAUDE.md` — AI agent bağlamı
 - `CHANGELOG.md` — değişiklik geçmişi
+- `docs/indicator/u2algo-price-action.md` — u2algo Price Action (TradingView göstergesi) rehberi; yayın kiti: `docs/indicator/tradingview-publish.md`. TradingView: <!-- TV_URL -->
