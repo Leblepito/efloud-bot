@@ -27,7 +27,16 @@ and scratch folders. The items flagged by the pre-survey were re-checked:
 
 ### Removed / moved
 
-None. No tracked path met all three removal criteria.
+Second pass (operator asked for unnecessary files to be removed). All three are unreferenced,
+untouched since May 2026 and superseded; they stay recoverable from git history.
+
+| Path | Why removed |
+|---|---|
+| `pine/prompts_for_claude.md` | One-time May 2026 prompts for the first Pine translation; the Pine lab build (`scripts/build_pine_lab.py`) replaced that workflow. |
+| `scripts/generate_daily_report.py` | 42-line excursion report into `reports/` (ignored); superseded by `ops/daily_report/` and `scripts/routines/equity_report.py`. |
+| `scripts/print_remote_positions.py` | One-off 49-line diagnostic for an old `state_1k/positions.json` layout. |
+
+`ops/README_SOCIAL.md` was kept and given a note: `u2algo_publisher.py` no longer exists, the publish step is `scripts/lane_g_publish.py`.
 
 ### Added to `.gitignore`
 
@@ -46,14 +55,11 @@ obsolete, so they were kept:
 | Path | Why kept / what to decide |
 |---|---|
 | `docker-compose.testnet.yml` | No file references it; testnet stack with `.env.testnet`. Keep if testnet runs still use it, otherwise fold into `docker-compose.yml` + `configs/config.testnet.yaml`. |
-| `scripts/generate_daily_report.py` | Writes `reports/DAILY_TRADE_REPORT.md`; may be superseded by `ops/daily_report/` and `scripts/routines/equity_report.py`. |
-| `scripts/print_remote_positions.py` | 49-line diagnostic for `state_1k/positions.json`; one-off ops helper. |
 | `scripts/binance_monitor.py` | Standalone CCXT monitor; overlaps with `scripts/routines/position_audit.py` / `margin_watch.py`. |
 | `scripts/sync_live_stats.py` | DB → stats sync; unclear whether still run anywhere. |
 | `scripts/pre_deployment_checklist.py` | Mainnet pre-flight checklist; overlaps with `preflight.py`. |
 | `scripts/run_tests_docker.ps1` | Windows Docker test gate (documented inside the file). |
 | `scripts/setup_git_hooks.py` | Optional Graphify hook installer. |
-| `ops/README_SOCIAL.md` | Documents the IG/X webhook files in `ops/`; mentions `u2algo_publisher.py`, which is no longer in the repo (partly stale). |
 | `docs/runbooks/*` (9 files not linked by name) | Linked as a folder from `README.md`, `HERMES.md`, `docs/OPERATOR_GUIDE.md`; operational value. |
 | `pine/efloud_signals_v1.pine`, `pine/efloud_strategy_v1.pine` | Older v1 Pine ports; kept as SMC port history (policy: never overwrite the v2 port, do not delete). |
 | `engine/safe_orchestrator.py` (174 KB), `package-lock.json` (189 KB) | Exceed the 150 KB guideline but are core code / lockfile; not changed. |
