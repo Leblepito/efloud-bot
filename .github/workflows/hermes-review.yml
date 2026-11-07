@@ -121,8 +121,12 @@ jobs:
           (github.event.inputs.issue_number != '' || github.event.issue.number != '' || steps.target_issue.outputs.issue_number != '')
         env:
           GH_TOKEN: ${{ github.token }}
+          # inputs reach the shell via env, not inline ${{ }} (T-20261107-08)
+          INPUT_ISSUE: ${{ github.event.inputs.issue_number }}
+          EVENT_ISSUE: ${{ github.event.issue.number }}
+          TARGET_ISSUE: ${{ steps.target_issue.outputs.issue_number }}
         run: |
-          ISSUE_NUM="${{ github.event.inputs.issue_number || github.event.issue.number || steps.target_issue.outputs.issue_number }}"
+          ISSUE_NUM="${INPUT_ISSUE:-${EVENT_ISSUE:-$TARGET_ISSUE}}"
           if [ -z "$ISSUE_NUM" ]; then
             echo "No issue number provided — skipping comment."
             exit 0

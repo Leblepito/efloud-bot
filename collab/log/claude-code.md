@@ -160,3 +160,8 @@
 - ne yapıldı: denetimde (T-20261106-06) bulunan 3 boşluk kapatıldı — şemasız bot API URL'leri (+docker servis adı:port), httpie, ssh üzerinden compose durum değişikliği (heredoc/çok satırlı dahil). TDD: RED 9+10 → GREEN; `tests/hooks`+`tests/collab` 164 passed. Yerel `docker compose up` sessiz kalır. Regex'ler doğrusal (192 KB < 0.05 sn).
 - VPS: N/A
 - istek: operator → review/merge (yalnız gate'i güçlendirir; touches_live=false)
+## 2026-11-07 13:30 UTC+3 — T-20261107-08: CI sertleştirme (güvenlik fix #4)
+- task: T-20261107-08 | branch/PR: collab/claude-code/T-20261107-08-ci-hardening | commit: PR'da
+- ne yapıldı: claude-review `pull_request_target`'a taşındı (workflow + script base'den; PR kodu çalıştırılmıyor, diff `gh pr diff` ile veri; fork PR'ları atlanıyor; SDK + paths-filter sabit; büyük diff'te job düşmüyor), hermes girdileri env ile, gitleaks baseline yalnız manuel. `tests/ci/test_workflow_hardening.py` 10 passed. security-reviewer: tur 1 CHANGES → tur 2 APPROVE_WITH_NITS (uygulandı).
+- VPS: N/A
+- istek: operator → merge; ilk ilgili PR'da review yorumlarının geldiğini kontrol
