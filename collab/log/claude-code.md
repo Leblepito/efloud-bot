@@ -127,3 +127,9 @@
 - VPS: DEPLOYED 6d70ae0
 - istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
 
+
+## 2026-11-06 UTC+3 — T-20261106-04: ECC skill backlog + CLAUDE.md ölü referansları
+- task: T-20261106-04 | branch/PR: collab/claude-code/T-20261106-04-ecc-skill-backlog | commit: PR'da
+- ne yapıldı: ECC `.agents/skills` (47) + `skills` (314) tarandı; ~47 ilgili skill laptop `.claude/skills/<ad>/`'a kuruldu (eski `.claude/skills/ecc/` iç içe kurulum keşfedilmiyordu). docs-governance read-only audit: proje-içi 2 gerçek kırık referans (`CLAUDE.md` → `f96b7d8`'de silinen 2 handoff) → `git show f96b7d8^:<yol>` biçimine çevrildi. mcp-dependency-review: `.mcp.json` github sunucusu sürümsüz (HIGH) → madde 2'ye. 14 maddelik iş listesi task dosyasında.
+- VPS: N/A
+- istek: operator → backlog sırası onayı + merge · abacus/hermes → bilgi (madde 7–9 sosyal/SEO/video ile kesişiyor)
