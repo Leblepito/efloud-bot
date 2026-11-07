@@ -9,7 +9,7 @@ bozabiliyor (`.git/index` null-byte korupsiyonu, `.git/config` boşalması, Wind
 edit'lerinin Linux'ta kesik görünmesi). Kural: (1) commit'leri `GIT_INDEX_FILE=/tmp/...`
 sandbox-local index ile yap, (2) her git hatasında önce ilgili `.git/` dosyasında
 null-byte kontrolü yap, (3) dosya yazımlarını tek seferde deterministik yap.
-Detay: `docs/handoff/2026-07-03-merge-bugfix-and-repo-hardening.md`.
+Detay: `git show f96b7d8^:docs/handoff/2026-07-03-merge-bugfix-and-repo-hardening.md` (doküman `f96b7d8`'de repodan kaldırıldı, git geçmişinde duruyor).
 
 ## Amaç
 Bu repo Python ile yazılmış bir trading botudur (`efloud-bot`). Hedef: bu botun
@@ -39,7 +39,7 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
 3. **Surgical Changes ↔ atomic-PR + guard koruması + SMC v2 port** — Sadece gerekeni değiştir; her değişen satır isteğe izlenebilir olmalı. Mevcut safety guard'ı ASLA zayıflatma; SMC v2 port'unu (`pine/efloud_signals.pine`, `engine/smc_v2/`) ezme; ilgisiz/önceden var olan dead-code'u SİLME — işaretle (örn. audit H7 ölü rr1-gate). Sadece KENDİ değişikliğinin orphan'larını temizle.
 4. **Goal-Driven Execution ↔ backtest-gate + TDD** — Her görevi test-önce doğrulanabilir hedefe çevir: edge/scoring değişikliği → NET-cost backtest gate (Edge Measurement Core, PR #227); bug fix → önce reprodüksiyon testi. Yeni davranış toggle'ı default OFF / fail-closed. Bu audit'in C1–C4 / H1–H7 / M1–M5 bulguları önceden yazılmış hedeflerdir: her fix bir failing test + cerrahi diff + geçilen gate (risk-ops/backtest/operatör) gösterir.
 
-> Bu sözleşme `docs/handoff/2026-06-20-algorithm-audit-and-next-session-plan.md` audit'inin fix'lerini yürütmek için standing dev-contract'tır.
+> Bu sözleşme `git show f96b7d8^:docs/handoff/2026-06-20-algorithm-audit-and-next-session-plan.md` audit'inin fix'lerini yürütmek için standing dev-contract'tır.
 
 ## TradingView MCP Araçları (Desktop debug portu açık olmalı)
 - `tv_health_check` → bağlantı + aktif sembol kontrolü
