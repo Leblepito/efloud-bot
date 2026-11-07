@@ -138,3 +138,8 @@
 - ne yapıldı: sır taraması (ağaç + 1487 commit geçmiş), harness/CI/MCP, internete açık uygulama yüzeyi, deploy + bağımlılık denetimi. Ayrıntı yalnız private store'da (`security-audit-2026-11-06/REPORT.md`). Sızmış eski değerlerin sha256 özetleri VPS'te 7 env dosyası + 6 container env'i ile karşılaştırıldı → 0 eşleşme (değer okunmadı/basılmadı). VPS notu: yalnız okuma (ssh: env özet karşılaştırması, `ss`, `ufw status`, `sshd -T`, `docker inspect`); değişiklik yok.
 - VPS: N/A
 - istek: operator → private rapordaki eylem listesi (Railway bot servisleri, Hetzner token teyidi, sshd) · fix PR'ları sırayla
+## 2026-11-07 01:05 UTC+3 — T-20261107-02: Composio çalışma klasörü gitignore
+- task: T-20261107-02 | branch/PR: collab/claude-code/T-20261107-02-gitignore-local-data | commit: PR'da
+- ne yapıldı: `.gitignore`'a `Composio*/` (API anahtarı içeren `.env.local` + üretim çıktıları public repoya girmesin); `data/lab/` zaten ignore'lu. `git check-ignore` ile doğrulandı.
+- VPS: N/A
+- istek: operator → merge
