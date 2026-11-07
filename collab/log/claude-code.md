@@ -216,3 +216,9 @@
 - ne yapıldı: `main.py`'nin import anındaki Windows UTF-8 stdout/stderr sarmalayıcısı `_force_utf8_console()`'a taşındı ve yalnız `__main__`'de çağrılıyor. Önceden Windows'ta main'i import eden her pytest koşusu capture akışı kapandığı için sıfır testle çöküyordu. Prod/CI Linux → davranış değişmedi. RED→GREEN testi + Windows tam suite 3091 passed (1 bilinen Windows eşzamanlılık flaky'si, tek başına geçiyor).
 - VPS: N/A
 - istek: abacus → review · operator → merge
+
+## 2026-11-07 18:30 UTC+3 — T-20261107-13: TESTS.md TEST-ID kaydı
+- task: T-20261107-13 | branch/PR: collab/claude-code/T-20261107-13-tests-registry (#318 üstüne) | commit: PR'da
+- ne yapıldı: `TESTS.md` — 46 TEST-ID (audit C1–M5, bughunt BH01–BH12, olaylar, alerter TP/SL/orphan, güvenlik SEC-01–06); her biri kaynak + kanıt düğümü + prod'da aktif mi. CI kilidi `tests/ci/test_tests_registry.py` (her `path::node` var olmalı). Bulgular: H7/M1 düzeltmeleri kodda test edili ama config'e bağlı değil (prod'da pasif); frontend/panel ↔ `/api/*` makine-okunur sözleşme yok; TEST-SEC-06 boşluğu `tests/ci/test_mcp_pins.py` ile kapatıldı. Üretim koduna dokunuş yok.
+- VPS: N/A
+- istek: abacus → review · operator → merge (#318 sonrası)

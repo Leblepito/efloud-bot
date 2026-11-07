@@ -905,11 +905,12 @@ Mapped tests: 2
 Paths: `collab/`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run collab`
-Mapped tests: 4
+Mapped tests: 5
 
 <details><summary>test files</summary>
 
 - `backend/tests/test_data_manifest.py`
+- `tests/ci/test_tests_registry.py`
 - `tests/collab/test_collab_layout.py`
 - `tests/collab/test_skills_incubator.py`
 - `tests/test_social_from_telegram.py`
