@@ -54,7 +54,26 @@ Kurallar:
 ## Beklenen çıktı (Definition of Done)
 - [x] `CLAUDE.md`'deki 2 ölü referans (`f96b7d8`'de silinen handoff'lar) git-geçmiş yoluna çevrildi
 - [x] İş listesi bu dosyada
-- [ ] Madde 2–14 her biri kendi task'ı + PR'ı ile
+- [x] Madde 2–14 her biri kendi task'ı + PR'ı ile (durum 2026-11-07, aşağıda)
+
+## İlerleme (2026-11-07)
+
+| # | Durum | PR / task |
+|---|---|---|
+| 1 | ✅ | #302 |
+| 2 | ✅ rapor + 7 düzeltme + TP/SL/orphan uyarıları | #303–#316 |
+| 3 | ✅ | #317 (T-20261107-12) |
+| 4 | ✅ | #319 (T-20261107-13) · yan bulgu #318 |
+| 5 | ✅ | #320 (T-20261107-15) |
+| 6 | ✅ rapor · A3/A4 düzeltildi + deploy | #321, #322, #323 · **A1/A2 operatör kararı** |
+| 7 | ✅ canlıda doğrulandı | #324 (T-20261107-18) |
+| 8 | ✅ | #325 (T-20261107-19) |
+| 9 | ✅ seslendirme kesilmesi + ses seviyesi | #327 (T-20261107-21) · **demo videosu: operatör kararı (hangi veri)** |
+| 10 | ✅ canary canlıda ALL GREEN | #326 (T-20261107-20) |
+| 11 | ✅ kusur yok | #328 (T-20261107-22) |
+| 12 | ⛔ bloklu | `backtest/` master'da yok (`562a6a3`) → **geri yükleme operatör kararı** |
+| 13 | ✅ ölçüm raporu | #328 · **L1 (yapı doğrulama) operatör + risk-ops kararı** |
+| 14 | ◐ kısım 1 | #329 (T-20261107-23) · **kısım 2 (CLAUDE.md anayasa ↔ durum ayrımı) operatör kararı** |
 
 ## Kısıtlar
 - Kod değişikliği yok; yalnız `CLAUDE.md` 2 satır + collab dosyaları.
