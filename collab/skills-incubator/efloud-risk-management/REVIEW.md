@@ -20,7 +20,7 @@ backtest'le seçilmiş değerler geri alınır:
 | daily_loss_limit_pct | 3.0 | 10.0 (`:348`) | operatör kararı |
 | weekly_drawdown_limit_pct | 8.0 | 25.0 (`:349`) | operatör kararı 2026-06-01 |
 | max_total_exposure | 3.0 | 6.0 (`:380`) | 10 pozisyon hedefi için |
-| max_holding_hours | 48 | 36 (`:381`) | BT-sweep5: 48h daha kötü |
+| max_holding_hours | 48 | 0 = kapalı (2026-11-08 operatör; önceki 36) | BT-sweep5: 48h daha kötüydü; operatör süre sınırını kaldırdı |
 | min_sl_atr | 0.5 | 2.0 (`:383`) | BT-sweep5: 0.5 daha kötü |
 | risk_per_trade_pct | 1-2% | 1.0 (`:248`) | |
 
