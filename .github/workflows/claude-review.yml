@@ -4,8 +4,16 @@ name: Claude Code Review (risk/safety + SMC strategy)
 # posts a review comment, never pushes commits or auto-merges. Mainnet/risk
 # config changes still require a human merge decision; this only automates
 # producing the review, not the approval.
+#
+# Security (audit T-20261106-06 / T-20261107-08): these jobs hold
+# ANTHROPIC_API_KEY. On `pull_request` GitHub runs the PR's OWN copy of this
+# workflow, so any write-access PR could edit it and exfiltrate the key.
+# `pull_request_target` runs the BASE branch's workflow + checkout instead. PR
+# code is never checked out or executed here: the diff is read as data via
+# `gh pr diff`. Fork PRs (which would receive secrets under
+# pull_request_target) are skipped — they never got these reviews before.
 on:
-  pull_request:
+  pull_request_target:
     paths:
       - 'engine/safety/**'
       - 'configs/**'
@@ -25,16 +33,16 @@ permissions:
 jobs:
   detect-scope:
     name: Detect which agent(s) apply
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     outputs:
       risk_safety: ${{ steps.filter.outputs.risk_safety }}
       smc_strategy: ${{ steps.filter.outputs.smc_strategy }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      # paths-filter lists the PR's changed files through the API on
+      # pull_request_target; no checkout of PR code needed.
       - id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad   # v3.0.4
         with:
           filters: |
             risk_safety:
@@ -53,37 +61,37 @@ jobs:
   risk-safety-review:
     name: risk-safety-auditor
     needs: detect-scope
-    if: needs.detect-scope.outputs.risk_safety == 'true'
+    if: github.event.pull_request.head.repo.full_name == github.repository && needs.detect-scope.outputs.risk_safety == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4   # base branch (pull_request_target default)
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install anthropic
+      - run: pip install anthropic==0.117.0   # = constraints.txt pin
       - env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/ci/claude_review.py risk-safety-auditor "${{ github.event.pull_request.number }}"
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/ci/claude_review.py risk-safety-auditor "$PR_NUMBER"
 
   smc-strategy-review:
     name: smc-strategy-reviewer
     needs: detect-scope
-    if: needs.detect-scope.outputs.smc_strategy == 'true'
+    if: github.event.pull_request.head.repo.full_name == github.repository && needs.detect-scope.outputs.smc_strategy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4   # base branch (pull_request_target default)
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install anthropic
+      - run: pip install anthropic==0.117.0   # = constraints.txt pin
       - env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/ci/claude_review.py smc-strategy-reviewer "${{ github.event.pull_request.number }}"
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/ci/claude_review.py smc-strategy-reviewer "$PR_NUMBER"

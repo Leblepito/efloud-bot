@@ -127,3 +127,9 @@
 - VPS: DEPLOYED 6d70ae0
 - istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
 
+
+## 2026-11-07 13:30 UTC+3 — T-20261107-08: CI sertleştirme (güvenlik fix #4)
+- task: T-20261107-08 | branch/PR: collab/claude-code/T-20261107-08-ci-hardening | commit: PR'da
+- ne yapıldı: claude-review `pull_request_target`'a taşındı (workflow + script base'den; PR kodu çalıştırılmıyor, diff `gh pr diff` ile veri; fork PR'ları atlanıyor; SDK + paths-filter sabit; büyük diff'te job düşmüyor), hermes girdileri env ile, gitleaks baseline yalnız manuel. `tests/ci/test_workflow_hardening.py` 10 passed. security-reviewer: tur 1 CHANGES → tur 2 APPROVE_WITH_NITS (uygulandı).
+- VPS: N/A
+- istek: operator → merge; ilk ilgili PR'da review yorumlarının geldiğini kontrol
