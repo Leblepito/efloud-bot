@@ -144,5 +144,8 @@
 ## 2026-11-07 12:30 UTC+3 — T-20261107-07: test credential değerini sentetikle değiştir (güvenlik fix #5)
 - task: T-20261107-07 | branch/PR: collab/claude-code/T-20261107-07-test-synthetic-credential | commit: PR'da
 - ne yapıldı: `test_xurl_client.py`'deki yüksek-entropi değer (yorum + türetilmiş assert) sentetik değerle değişti; 24 test geçti; regex tarayıcı + gitleaks temiz.
+## 2026-11-07 13:00 UTC+3 — T-20261107-09: GitHub MCP paketini sabitle (güvenlik fix #6)
+- task: T-20261107-09 | branch/PR: collab/claude-code/T-20261107-09-mcp-pin | commit: PR'da
+- ne yapıldı: `@modelcontextprotocol/server-github@2025.4.8` (arşivli paketin son ve fiilen çözülen sürümü) `.mcp.json` + collab/mcp/README.md örneklerinde; halefe geçiş ayrı task.
 - VPS: N/A
 - istek: operator → merge
