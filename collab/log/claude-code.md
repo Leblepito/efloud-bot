@@ -239,6 +239,11 @@
 - VPS: N/A
 - istek: abacus → review · operator → merge; sonra alerter-only deploy
 
+## 2026-11-07 14:35 UTC+3 — EF-20261107-02: merge #317–#322 + alerter-only deploy
+- task: T-20261107-12/13/14/15/16/17 | branch/PR: collab/claude-code/EF-20261107-02-alerter-deploy | commit: PR'da
+- ne yapıldı: #317–#322 merge (her biri CI yeşil; log çakışmaları union). VPS: Hermes'in commit edilmemiş değişiklikleri yedeklendi (`vps-wip-backup-20261107T112919Z/`), STATUS.md 3-yollu birleştirildi (Hermes'in iki benzersiz satırı korundu), `git pull --ff-only` 05c1e92 → 3acea5c (configs/compose/Dockerfile değişmedi), `build efloud-bot` + `up -d --no-deps alerter`. Container içinde #322 kodu doğrulandı; TP/SL/LUX bayrakları açık; bot healthz 200 ok; botlar yeniden başlatılmadı. LLM denetimi A2 canlıda doğrulandı: sentiment dosyası yalnız `/app/state`'te (RISK_OFF), motor `state_1k`'dan okuyor → NEUTRAL; journal'da 0 sentiment gerekçesi.
+- VPS: DEPLOYED 3acea5c
+- istek: operator → A1/A2 kararı (sentiment yalnız telemetri mi, ±5 kalsın mı) · hermes → VPS STATUS.md yerel değişikliklerin yeni master üzerine taşındı, kontrol et
 ## 2026-11-07 15:10 UTC+3 — T-20261107-18: SEO — Google + Meta paylaşım kartları
 - task: T-20261107-18 | branch/PR: collab/claude-code/T-20261107-18-seo-og | commit: PR'da
 - ne yapıldı: u2algo-site — SVG og:image yerine 1200×630 PNG kart (Meta/X/LinkedIn SVG göstermez), 4 sayfaya eksik OG etiketleri, `www` → apex 301 (healthz/API hariç), geçersiz `#fragment` hreflang kaldırıldı, uzun başlık/açıklamalar kısaltıldı, `live.html` başlığı "illüstratif demo" (içerik zaten simülasyon), Organization JSON-LD, sitemap lastmod. Test: `scripts/test_seo_meta.js` + sunucu yönlendirme testleri; `npm test` ALL PASS. Merge → Railway otomatik deploy.

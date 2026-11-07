@@ -8,12 +8,12 @@
 
 | Alan | Değer | Kaynak / zaman (UTC) | Gözlemleyen |
 | --- | --- | --- | --- |
-| GitHub master | `05c1e92` (#302–#315 ECC backlog + güvenlik denetimi düzeltmeleri + TP/SL/orphan Telegram uyarıları; 14 PR merged) | `git fetch` 2026-11-07 10:20 | claude-code |
-| VPS `/opt/efloud-bot` HEAD | `05c1e92` = master (EF-20261107-01). Çalışma ağacında Hermes'in commit edilmemiş `collab/STATUS.md` + `collab/log/hermes.md` değişiklikleri korundu; yedek private store `vps-wip-backup-20261107T101847Z/` | `ssh efloud-bot git rev-parse` 2026-11-07 10:21 | claude-code |
-| VPS container'lar | Yalnız **alerter** yeniden oluşturuldu (yeni image `71b15a1`); efloud-bot / -long / -scalp, overseer, routines **dokunulmadı** (Up 42h, eski image `2a8fd64`, healthz `ok`) | `docker ps` + `docker inspect` 2026-11-07 10:21 | claude-code |
+| GitHub master | `3acea5c` (#317–#322: REGRESSION.md, Windows test fix, TESTS.md, ADR + CONTEXT.md, LLM katmanı denetimi, CRITICAL uyarı düzeltmesi) | `git fetch` 2026-11-07 11:30 | claude-code |
+| VPS `/opt/efloud-bot` HEAD | `3acea5c` = master (EF-20261107-02). Hermes'in commit edilmemiş `collab/STATUS.md` + `collab/log/hermes.md` + `outputs/hermes/T-20261106-01-deploy-diff.md` korundu (STATUS.md 3-yollu birleştirildi); yedek private store `vps-wip-backup-20261107T112919Z/` | `ssh efloud-bot git log -1` 2026-11-07 11:30 | claude-code |
+| VPS container'lar | Yalnız **alerter** yeniden oluşturuldu (11:30 UTC, #322 kodu doğrulandı); efloud-bot / -long / -scalp, overseer, routines **dokunulmadı** (Up 43h, healthz `ok`) | `docker ps` + `docker exec` 2026-11-07 11:31 | claude-code |
 | Canlı config (mid) | `configs/config.phase2_1k.yaml` — MAINNET, `smc_version: v2`, **`smc_v2.luxalgo.enabled: true`** (`:182-183`, 2026-11-01; "NET-cost backtest yapılmadı" notu `:180-181`), `min_confluence: 50`, daily %10 / weekly %25 | repo @ `71dfff5` | claude-code |
 | Canlı config (scalp) | `configs/config.phase2_scalp_1k.yaml` — `profile: scalp` (5m entry / 1h / 4h) | repo @ `645a5dc` | claude-code |
-| Alerter (Telegram) | **Aktif**: LuxAlgo bölge (`EFLOUD_ALERTER_LUX_ALERTS=1`) + **TP yerleştirme hatası** (`_TP_ALERTS=1`, #308) + **SL koruma / stop'suz pozisyon** ve **orphan pozisyon** (`_SL_ALERTS=1`, #314/#315). Yalnız mid bot logu. Manuel pozisyon susturma: `EFLOUD_ALERTER_ORPHAN_IGNORE_SYMBOLS` | `docker exec efloud-alerter printenv` + kural listesi 2026-11-07 10:22 | claude-code |
+| Alerter (Telegram) | **Aktif**: LuxAlgo bölge (`EFLOUD_ALERTER_LUX_ALERTS=1`) + **TP yerleştirme hatası** (`_TP_ALERTS=1`, #308) + **SL koruma / stop'suz pozisyon** ve **orphan pozisyon** (`_SL_ALERTS=1`, #314/#315). CRITICAL uyarılar LLM formatlayıcıdan geçmez + HTML kaçışı / düz metin yedeği (#322, 2026-11-07 11:30). Yalnız mid bot logu. Manuel pozisyon susturma: `EFLOUD_ALERTER_ORPHAN_IGNORE_SYMBOLS` | `docker exec efloud-alerter printenv` + kural listesi 2026-11-07 10:22 | claude-code |
 | master branch koruması | **YOK** (`protected: false`) — kural yalnız protokolle; karar T-20261104-04 | `gh api …/branches/master` 2026-11-04 | claude-code |
 
 ## Model durumu
