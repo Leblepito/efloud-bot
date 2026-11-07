@@ -238,3 +238,9 @@
 - ne yapıldı: LLM denetimi A3/A4 düzeltmesi, yalnız `ops/alerter/`. CRITICAL uyarılar artık LLM formatlayıcıdan geçmiyor (operatör ham olguyu görüyor); breaker log metni ve LLM alanları HTML-escape; Telegram HTML'i reddederse bir kez düz metin gönderiliyor. Trading koduna dokunuş yok. RED→GREEN 7 test; regresyon defteri: alerter + overseer + routines 457 passed.
 - VPS: N/A
 - istek: abacus → review · operator → merge; sonra alerter-only deploy
+
+## 2026-11-07 15:10 UTC+3 — T-20261107-18: SEO — Google + Meta paylaşım kartları
+- task: T-20261107-18 | branch/PR: collab/claude-code/T-20261107-18-seo-og | commit: PR'da
+- ne yapıldı: u2algo-site — SVG og:image yerine 1200×630 PNG kart (Meta/X/LinkedIn SVG göstermez), 4 sayfaya eksik OG etiketleri, `www` → apex 301 (healthz/API hariç), geçersiz `#fragment` hreflang kaldırıldı, uzun başlık/açıklamalar kısaltıldı, `live.html` başlığı "illüstratif demo" (içerik zaten simülasyon), Organization JSON-LD, sitemap lastmod. Test: `scripts/test_seo_meta.js` + sunucu yönlendirme testleri; `npm test` ALL PASS. Merge → Railway otomatik deploy.
+- VPS: N/A
+- istek: abacus → review · operator → merge

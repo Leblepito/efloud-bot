@@ -208,6 +208,8 @@ const types = {
 // Everything else under root — server source, package/config files, scripts/,
 // supabase/, web/, brand-kit sources, dotfiles and the waitlist fallback in
 // data/ — falls back to index.html like any unknown path.
+const CANONICAL_HOST = 'u2algo.com';
+const WWW_HOST = `www.${CANONICAL_HOST}`;
 const PUBLIC_TOP_FILE = /^[\w-]+\.html$|^(favicon\.ico|robots\.txt|sitemap\.xml|updates\.json|premium_proof\.json)$/;
 const PUBLIC_DIRS = ['brand', 'assets', path.join('brand-kit', 'assets')];
 const PUBLIC_CSS_DIR = path.join('brand-kit', 'css') + path.sep;  // only the built .css, not its TS/PostCSS sources
@@ -244,6 +246,16 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/healthz') {
     sendJson(res, 200, { ok: true, service: 'u2algo-site' });
+    return;
+  }
+
+  // One canonical host for search engines: www.u2algo.com → u2algo.com (301).
+  // Pages only — API calls and health checks are never redirected.
+  const host = String(req.headers.host || '').toLowerCase().split(':')[0];
+  if (host === WWW_HOST && (req.method === 'GET' || req.method === 'HEAD') && !pathname.startsWith('/api/')) {
+    const target = String(req.url || '/').startsWith('/') ? req.url : '/';
+    res.writeHead(301, { Location: `https://${CANONICAL_HOST}${target}` });
+    res.end();
     return;
   }
 
