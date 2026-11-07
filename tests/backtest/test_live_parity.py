@@ -122,3 +122,40 @@ class TestEngineExits:
         df = _flat(highs={300: 111.0})
         res = _run(monkeypatch, live_cfg, df, [(df.index[210], _open(None))])
         assert res["trades"][0]["exit_reason"] == "TP1"
+
+
+class TestLiveConfigAndOffline:
+    def test_smc_version_comes_from_the_config(self, monkeypatch, live_cfg):
+        assert live_cfg["engine"]["smc_version"] == "v2"
+        res = _run(monkeypatch, live_cfg, _flat(), [])
+        assert res["smc_version"] == "v2"
+
+    def test_explicit_smc_version_still_overrides(self, monkeypatch, live_cfg):
+        assert _run(monkeypatch, live_cfg, _flat(), [], smc_version="v1")["smc_version"] == "v1"
+
+    def test_run_config_disables_agent_team_and_kronos(self, monkeypatch, live_cfg):
+        live_cfg.setdefault("agent_team", {})["enabled"] = True
+        _run(monkeypatch, live_cfg, _flat(), [])
+        seen = _Scripted.SEEN["config"]
+        assert seen["agent_team"]["enabled"] is False
+        assert seen.get("kronos", {}).get("enabled") is False
+        assert live_cfg["agent_team"]["enabled"] is True  # caller's dict untouched
+
+    def test_llm_factory_is_null_during_the_run(self, monkeypatch, live_cfg):
+        seen = []
+
+        def probe(orch):
+            import engine.agents.llm as llm
+            client = llm.make_llm_client({"provider": "openrouter"})
+            seen.append((type(client).__name__, client.complete_json("x")))
+
+        import engine.agents.llm as llm
+        original = llm.make_llm_client
+        df = _flat()
+        _run(monkeypatch, live_cfg, df, [(df.index[210], probe)])
+        assert seen == [("_NullLLM", {})]
+        assert llm.make_llm_client is original  # restored after the run
+
+    def test_live_config_backtest_block_makes_runs_net(self, live_cfg):
+        assert live_cfg["backtest"]["commission_pct"] == 0.04
+        assert live_cfg["backtest"]["funding_pct_per_8h"] == 0.01

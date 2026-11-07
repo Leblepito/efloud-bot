@@ -335,14 +335,15 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 Advisory LLM layer (clients, roles, team, sentiment, Kronos)
 
 Paths: `engine/agents/`, `engine/ai/`
-Downstream consumers: alerter, backend-api, orchestrator, smc-v1
+Downstream consumers: alerter, backend-api, backtest, orchestrator, smc-v1
 Regression acceptance command: `python scripts/regression_ledger.py run llm-agents`
-Mapped tests: 11
+Mapped tests: 12
 
 <details><summary>test files</summary>
 
 - `backend/tests/test_kronos_integration.py`
 - `tests/alerter/test_alerter_formatter_ai.py`
+- `tests/backtest/test_live_parity.py`
 - `tests/config/test_agent_team_observation.py`
 - `tests/engine/test_ai_sentiment.py`
 - `tests/test_agent_team.py`
@@ -362,7 +363,7 @@ SafeOrchestrator, lifecycle, journal, ledgers, notifications
 Paths: `engine/__init__.py`, `engine/safe_orchestrator.py`, `engine/lifecycle.py`, `engine/journal.py`, `engine/memory.py`, `engine/postmortem.py`, `engine/report.py`, `engine/allocation.py`, `engine/instance_manager.py`, `engine/signal_ledger.py`, `engine/edge_costs.py`, `engine/edge_metrics.py`, `engine/notifications/`, `main.py`, `preflight.py`
 Downstream consumers: backend-api, backtest, exchange, pine, routines, scripts-misc, smc-v1, alerter (unverified), overseer (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run orchestrator`
-Mapped tests: 90
+Mapped tests: 91
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -423,6 +424,7 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `backend/tests/test_telegram_digest.py`
 - `backend/tests/test_timeout_panel_seam.py`
 - `backend/tests/test_trade_journal_wiring.py`
+- `tests/backtest/test_live_parity.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/engine/test_async_agent_review.py`
 - `tests/engine/test_htf_slope.py`
@@ -692,7 +694,7 @@ NET-cost backtest harness (drives the live SafeOrchestrator)
 Paths: `backtest/`, `scripts/evaluate_backtest_gates.py`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run backtest`
-Mapped tests: 14
+Mapped tests: 15
 Note: ADR-0003 gate. Slow full-engine tests run in the CI job `backtest (slow)`.
 
 <details><summary>test files</summary>
@@ -709,6 +711,7 @@ Note: ADR-0003 gate. Slow full-engine tests run in the CI job `backtest (slow)`.
 - `backend/tests/test_backtest_sim_time.py`
 - `backend/tests/test_backtest_social_tags.py`
 - `backend/tests/test_evaluate_backtest_gates.py`
+- `tests/backtest/test_live_parity.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/test_backtest_max_hold.py`
 
@@ -858,7 +861,7 @@ Bot configs (live: configs/config.phase2_1k.yaml)
 Paths: `configs/`, `config.yaml`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run configs`
-Mapped tests: 45
+Mapped tests: 46
 
 <details><summary>test files</summary>
 
@@ -889,6 +892,7 @@ Mapped tests: 45
 - `backend/tests/test_signal_ledger_config.py`
 - `backend/tests/test_timeframe_profiles.py`
 - `backend/tests/test_trade_journal_wiring.py`
+- `tests/backtest/test_live_parity.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/ci/test_workflow_hardening.py`
 - `tests/config/test_agent_team_observation.py`

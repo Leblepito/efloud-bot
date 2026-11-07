@@ -52,8 +52,12 @@ def synthetic_data():
     }
 
 
-def test_v1_default_byte_identical(base_config, synthetic_data):
-    """Omitting smc_version must equal explicit smc_version='v1'."""
+def test_default_follows_config_smc_version_byte_identical(base_config, synthetic_data):
+    """Omitting smc_version must equal the config's engine.smc_version.
+
+    drift since 562a6a3 (spec 2026-11-07): the default used to be a hard-coded
+    'v1'; it now follows the live config so a plain run tests live logic.
+    """
     r1 = run_backtest(
         symbols=["ETH/USDT"],
         data=synthetic_data,
@@ -65,8 +69,9 @@ def test_v1_default_byte_identical(base_config, synthetic_data):
         data=synthetic_data,
         config=base_config,
         initial_balance=2000.0,
-        smc_version="v1",
+        smc_version=base_config["engine"]["smc_version"],
     )
+    assert r1["smc_version"] == base_config["engine"]["smc_version"]
     assert r1["total_trades"] == r2["total_trades"]
     assert r1["final_balance"] == r2["final_balance"]
     assert r1["trades"] == r2["trades"]
@@ -83,7 +88,8 @@ def test_v2_records_marker(base_config, synthetic_data):
 
 
 def test_v1_records_marker(base_config, synthetic_data):
-    r = run_backtest(symbols=["ETH/USDT"], data=synthetic_data, config=base_config)
+    # spec 2026-11-07: the default now follows config engine.smc_version (live: v2); v1 is explicit
+    r = run_backtest(symbols=["ETH/USDT"], data=synthetic_data, config=base_config, smc_version="v1")
     assert r["smc_version"] == "v1"
 
 
@@ -135,5 +141,6 @@ def test_v1_orchestrator_setup_state_store_is_none(base_config, synthetic_data, 
             super().__init__(*args, **kwargs)
 
     monkeypatch.setattr(bt_engine, "SafeOrchestrator", SpyOrch)
-    run_backtest(symbols=["ETH/USDT"], data=synthetic_data, config=base_config)
+    # spec 2026-11-07: default follows the config (v2); v1 must be requested explicitly
+    run_backtest(symbols=["ETH/USDT"], data=synthetic_data, config=base_config, smc_version="v1")
     assert captured["setup_state_store"] is None

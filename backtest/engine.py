@@ -1,8 +1,10 @@
 """Pure backtest engine — walk-forward simulation with no I/O."""
 from __future__ import annotations
 
+import copy
 import logging
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -93,6 +95,37 @@ def stamp_sim_times(trade_dicts: list[dict], sim_open_ts: dict, sim_close_ts: di
 _DEFAULT_SMC_WINDOW = 500
 
 
+class _NullLLM:
+    """Offline stand-in: every advisory LLM call degrades to its designed fallback."""
+
+    def complete_json(self, *args, **kwargs) -> dict:
+        return {}
+
+    def complete(self, *args, **kwargs) -> str:
+        return ""
+
+
+@contextmanager
+def _offline_llm():
+    """A backtest must never reach a network: patch the shared LLM factory."""
+    import engine.agents.llm as llm
+    original = llm.make_llm_client
+    llm.make_llm_client = lambda *a, **k: _NullLLM()
+    try:
+        yield
+    finally:
+        llm.make_llm_client = original
+
+
+def _offline_run_config(config: dict) -> dict:
+    """Copy of the live config with the network-bound advisory layers off."""
+    cfg = copy.deepcopy(config)
+    for key in ("agent_team", "kronos"):
+        block = cfg.get(key) if isinstance(cfg.get(key), dict) else {}
+        cfg[key] = {**block, "enabled": False}
+    return cfg
+
+
 def run_backtest(
     *,
     symbols: list[str],
@@ -102,7 +135,7 @@ def run_backtest(
     warmup_bars: int = 200,
     step_every_n_bars: int = 1,
     smc_window_bars: int = _DEFAULT_SMC_WINDOW,
-    smc_version: Literal["v1", "v2"] = "v1",
+    smc_version: Literal["v1", "v2"] | None = None,
     commission_pct: float | None = None,
     funding_pct_per_8h: float | None = None,
     max_holding_hours: float | None = None,
@@ -125,11 +158,15 @@ def run_backtest(
 
     Returns: dict with initial_balance, final_balance, trades, symbols, etc.
     """
+    # Live trade logic by default: the engine version comes from the config
+    # (spec 2026-11-07); an explicit argument still overrides.
+    smc_version = smc_version or config.get("engine", {}).get("smc_version", "v1")
+    config = _offline_run_config(config)
     # Process symbols in alphabetical order for deterministic results
     symbols = sorted(symbols)
 
     # Use a temp state_dir — persist=False means no disk writes but orch __init__ needs a dir
-    with tempfile.TemporaryDirectory(prefix="bt_") as state_dir:
+    with _offline_llm(), tempfile.TemporaryDirectory(prefix="bt_") as state_dir:
         setup_state_store = None
         if smc_version == "v2":
             # Lazy import: v1 path must not import engine.smc_v2 (preserves the

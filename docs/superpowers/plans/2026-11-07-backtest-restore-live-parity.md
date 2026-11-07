@@ -310,13 +310,14 @@ class TestLiveConfigAndOffline:
 
         def probe(orch):
             import engine.agents.llm as llm
-            seen.append(llm.make_llm_client({"provider": "openrouter"}).complete_json("x"))
+            client = llm.make_llm_client({"provider": "openrouter"})
+            seen.append((type(client).__name__, client.complete_json("x")))
 
         import engine.agents.llm as llm
         original = llm.make_llm_client
         df = _flat()
         _run(monkeypatch, live_cfg, df, [(df.index[210], probe)])
-        assert seen == [{}]
+        assert seen == [("_NullLLM", {})]
         assert llm.make_llm_client is original  # restored after the run
 
     def test_live_config_backtest_block_makes_runs_net(self, live_cfg):
