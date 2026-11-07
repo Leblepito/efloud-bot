@@ -294,5 +294,8 @@
 ## 2026-11-07 20:10 UTC+3 — T-20261107-25: LLM yapı doğrulaması varsayılan kapalı
 - task: T-20261107-25 | branch/PR: collab/claude-code/T-20261107-25-structure-validation-off | commit: PR'da
 - ne yapıldı: `engine/signals.py` senkron yapı doğrulaması `structure_validation` bayrağı arkasında (varsayılan False), orkestratör config'ten okur, canlı config `engine.structure_validation.enabled: false`. Canlıda zaten %100 pass-through olduğundan işlem kararı değişmez. Regresyon defteri (smc-v1 → orkestratör, backend-api, alerter …) 2763 passed.
+## 2026-11-07 20:40 UTC+3 — T-20261107-26: sentiment yalnız telemetri + state_dir hizalama
+- task: T-20261107-26 | branch/PR: collab/claude-code/T-20261107-26-sentiment-telemetry | commit: PR'da
+- ne yapıldı: Karar 1 (a). `engine/signals.py` ±5 sentiment bonusu kaldırıldı → `sig.meta["macro_sentiment"]`; sentiment yazıcısı botun `state_dir`'ine yazar, dashboard aynı yerden okur. Canlıda işlem değişikliği yok (motor zaten NEUTRAL). ADR-0002 sapma notu "çözüldü". RED→GREEN 6 test; regresyon defteri 2760 passed.
 - VPS: N/A
 - istek: operator → merge; deploy bot yeniden başlatma ister (AUTOSTART=0) · abacus → review

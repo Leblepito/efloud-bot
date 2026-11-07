@@ -41,12 +41,9 @@ for later edge measurement and never gates an order. The provider is a config/en
 - A future change could quietly make a verdict gating. Mitigation: `gating` defaults to false, and
   flipping it requires a new ADR that supersedes this one.
 
-## Known deviation (found 2026-11-07, operator decision pending)
+## Known deviation (found and resolved 2026-11-07)
 
-The LLM macro sentiment (`RISK_ON`/`RISK_OFF`) adds ±5 to the confluence score **before** the
-`min_confluence` gate (`engine/signals.py`). A working LLM can therefore push a marginal setup over
-the threshold or under it, which contradicts this ADR. In prod the effect is most likely dormant:
-the sentiment writer and the orchestrator use different state directories, so the engine sees
-NEUTRAL. See `collab/outputs/claude-code/2026-11-07-llm-agent-layer-audit.md` (A1/A2). Until the
-operator decides, do not "fix" the path on its own, because that would activate the LLM's effect
-on mainnet entries.
+The LLM macro sentiment used to add ±5 to the confluence score before the `min_confluence` gate.
+In prod it was dormant (the writer and the engine used different state directories). Resolved by
+operator decision 1 (spec 2026-11-07): sentiment is telemetry only (`sig.meta["macro_sentiment"]`)
+and the writer, engine and dashboard share the bot's `state_dir`.

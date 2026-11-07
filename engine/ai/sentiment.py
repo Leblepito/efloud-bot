@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 _cache = SentimentCache()
 
 async def fetch_and_save_sentiment(api_key: str = None, db_url: str = None,
-                                   llm_config: dict = None) -> dict:
+                                   llm_config: dict = None, state_dir: str = None) -> dict:
     """Asenkron Fear & Greed ve LLM macro sentiment analizini yurutur.
 
     Analiz sonuclarini local state/ai_sentiment_registry.json dosyasina yazar.
@@ -87,7 +87,9 @@ async def fetch_and_save_sentiment(api_key: str = None, db_url: str = None,
     sentiment_data["last_updated"] = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
 
     # Registry dosyasina kaydet
-    registry_path = ROOT / "state" / "ai_sentiment_registry.json"
+    # The bot's own state_dir (prod ./state_1k): the same file the engine and the
+    # dashboard read. <repo>/state is only the legacy default (audit A2).
+    registry_path = (Path(state_dir) if state_dir else ROOT / "state") / "ai_sentiment_registry.json"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     with open(registry_path, "w", encoding="utf-8") as f:
         json.dump(sentiment_data, f, indent=2)
