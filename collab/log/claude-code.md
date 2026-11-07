@@ -133,3 +133,9 @@
 - VPS: N/A
 - not: alerter yalnız mid bot logunu okuyor → long/scalp kapsanmıyor.
 - istek: abacus → review · operator → merge + `docker compose up -d alerter`
+
+## 2026-11-07 12:00 UTC+3 — T-20261107-05: SL koruma hatası → Telegram (alerter kuralları)
+- task: T-20261107-05 | branch/PR: collab/claude-code/T-20261107-05-sl-failure-telegram-alert (#308 üstüne) | commit: PR'da
+- ne yapıldı: `ops/alerter/rules.py`'ye `SlUnprotectedRule` (CRITICAL, 15 dk) + `SlProtectionEventRule` (1 sa) eklendi; exchange'in mevcut yapısal event'lerini eşliyor, trading koduna sıfır dokunuş. Kodda default OFF (`EFLOUD_ALERTER_SL_ALERTS`); prod açma satırı compose alerter env'inde ayrı commit. Testler RED→GREEN (32 + 2 config, gerçek OrderManager sözleşme testleri dahil).
+- VPS: N/A
+- istek: abacus → review · operator → #308 + bu PR merge, alerter build + `up -d --no-deps alerter`

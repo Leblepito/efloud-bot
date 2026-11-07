@@ -399,8 +399,16 @@ _TP_FAILED_EVENT = "order_manager.tp_placement_failed_after_sl"
 _TP_UNREACHABLE_EVENT = "order_manager.tp_unreachable"
 
 
-def _tp_alerts_on() -> bool:
-    return os.environ.get(TP_ALERTS_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+def _flag_on(env: str) -> bool:
+    return os.environ.get(env, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _tries(rec: dict) -> str:
+    """retryable=False → non-transient error, _retry_tp_order stopped after
+    one call; an "1/3" counter would wrongly suggest more attempts."""
+    if rec.get("retryable", True):
+        return f"deneme {_esc(rec.get('attempt'))}/{_esc(rec.get('max_attempts'))}"
+    return "kalıcı hata (tekrar denenmedi)"
 
 
 def _tp_event(rec: dict) -> Optional[str]:
@@ -433,7 +441,7 @@ class TpPlacementFailedRule(Rule):
     ai_format: bool = False
 
     def match_log(self, rec: dict) -> Optional[str]:
-        if not _tp_alerts_on():
+        if not _flag_on(TP_ALERTS_ENV):
             return None
         event = _tp_event(rec)
         if event is None:
@@ -444,12 +452,8 @@ class TpPlacementFailedRule(Rule):
             return ("🚨 <b>TP yerleştirilemiyor — fiyat TP seviyesini geçmiş (-2021)</b>\n"
                     f"{head}\nhata: {error}\n"
                     "Bot bu TP bacağını yeniden denemez; pozisyonu kontrol et.")
-        # retryable=False → non-transient error, _retry_tp_order stopped after
-        # one call; an "1/3" counter would wrongly suggest more attempts.
-        tries = (f"deneme {_esc(rec.get('attempt'))}/{_esc(rec.get('max_attempts'))}"
-                 if rec.get("retryable", True) else "kalıcı hata (tekrar denenmedi)")
         return ("⚠️ <b>TP emri yerleştirilemedi</b>\n"
-                f"{head} · {tries}\n"
+                f"{head} · {_tries(rec)}\n"
                 f"hata: {error}\n"
                 "Bot, pozisyon açık kaldığı sürece her reconcile döngüsünde TP'yi "
                 "yeniden dener; bu uyarı aynı pozisyon/bacak için saatte en fazla 1 kez gelir.")
@@ -462,6 +466,124 @@ class TpPlacementFailedRule(Rule):
         leg = str(rec.get("tp_leg", "")).split("_")[0]
         return (f"{self.alert_key}.{kind}.{rec.get('symbol')}.{rec.get('direction')}."
                 f"{rec.get('entry_order_id')}.{leg}")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# SL protection failure (T-20261107-05) — read-only, default OFF
+# ─────────────────────────────────────────────────────────────────────
+
+SL_ALERTS_ENV = "EFLOUD_ALERTER_SL_ALERTS"
+# Position may be open WITHOUT a stop right now → SlUnprotectedRule.
+_SL_UNPROTECTED_KINDS = ("repair_failed", "rollback_failed", "close_failed")
+
+
+def _sl_kind(rec: dict) -> Optional[str]:
+    """Classify an exchange SL-protection event (structured extras), else None.
+
+    The initial SL at open (tp_leg="SL") and the -2021 SL_REPAIR line are not
+    matched directly: their outcome is reported by the rollback /
+    sl_repair_unreachable_closing / fallback_close_failed events below.
+    verify.sl_unconfirmed_rollback always ends in one of the two rollback
+    events (whose original_error names the verify path)."""
+    if rec.get("logger") != "efloud.exchange":
+        return None
+    event = rec.get("event")
+    if event == _TP_FAILED_EVENT and rec.get("tp_leg") == "SL_REPAIR":
+        return "repair_failed"
+    if event == "order_manager.entry_rollback_failed":
+        return "rollback_failed"
+    if event == "order_manager.fallback_close_failed" and rec.get("reason") == "SL_REPAIR_UNREACHABLE":
+        return "close_failed"
+    if event == "order_manager.repair_missing_sl":
+        return "missing"
+    if event == "order_manager.sl_repair_unreachable_closing":
+        return "closing"
+    if event == "order_manager.entry_rollback_after_sl_failure":
+        return "rolled_back"
+    return None
+
+
+def _sl_text(kind: str, rec: dict) -> str:
+    head = f"{_esc(rec.get('symbol'))} {_esc(rec.get('direction'))}"
+    if kind == "repair_failed":
+        return ("🚨 <b>POZİSYON STOP'SUZ — SL yeniden gönderilemedi</b>\n"
+                f"{head} · {_tries(rec)}\nhata: {_esc(str(rec.get('error', ''))[:300])}\n"
+                "Bot, pozisyon açık kaldığı sürece her reconcile döngüsünde SL'yi yeniden dener; "
+                "sorun sürerse bu uyarı 15 dakikada bir tekrarlanır.")
+    if kind == "rollback_failed":
+        return ("🚨 <b>GİRİŞ GERİ ALINAMADI — borsada STOP'SUZ pozisyon olabilir</b>\n"
+                f"{head}\nsebep: {_esc(str(rec.get('original_error', ''))[:200])}\n"
+                f"kapatma hatası: {_esc(str(rec.get('rollback_error', ''))[:200])}\n"
+                "Bot bu pozisyonu artık takip etmiyor. Hemen Binance'te kontrol et "
+                "(orphan koruması açıksa sonraki reconcile'da SL koymayı dener).")
+    if kind == "close_failed":
+        return ("🚨 <b>Stop'suz pozisyon KAPATILAMADI</b>\n"
+                f"{head} · fiyat SL seviyesini geçmişti, market kapatma başarısız\n"
+                f"{_esc(str(rec.get('message', ''))[:300])}\n"
+                "Pozisyon açık ve korumasız; bot sonraki reconcile döngüsünde yeniden dener. "
+                "Manuel kontrol et.")
+    if kind == "missing":
+        return ("⚠️ <b>SL emri borsada yok — bot yeniden gönderiyor</b>\n"
+                f"{head}\n"
+                "SL hiç konmamış ya da borsadan kaybolmuş. Gönderim başarısız olursa "
+                "ayrı bir STOP'SUZ uyarısı gelir.")
+    if kind == "closing":
+        return ("⚠️ <b>SL konamıyor — fiyat SL seviyesini geçmiş (-2021)</b>\n"
+                f"{head}\n"
+                "Bot pozisyonu market emriyle kapatıyor. Kapatma başarısız olursa ayrı uyarı gelir.")
+    return ("ℹ️ <b>Giriş geri alındı — SL konamadı</b>\n"
+            f"{head}\nsebep: {_esc(str(rec.get('original_error', ''))[:200])}\n"
+            "Pozisyon için reduceOnly market kapatma emri gönderildi "
+            f"(rollback emri {_esc(rec.get('rollback_order_id'))}).")
+
+
+def _sl_dedup_key(alert_key: str, kind: str, rec: dict) -> str:
+    # entry_order_id identifies the position where the caller logs it
+    # (repair_failed / rollback events); otherwise symbol+direction.
+    return (f"{alert_key}.{kind}.{rec.get('symbol')}.{rec.get('direction')}."
+            f"{rec.get('entry_order_id')}")
+
+
+@dataclass
+class SlUnprotectedRule(Rule):
+    """Position may be open without a stop loss right now.
+
+    15-minute window (vs 1 h for TP): an unprotected position is the
+    2026-05-14 bare-position failure mode, so the operator is reminded every
+    15 min while the repair loop keeps failing — not every 30 s cycle."""
+    alert_key: str = "order.sl_unprotected"
+    severity: str = "CRITICAL"
+    dedup_window_sec: int = 15 * 60
+    ai_format: bool = False
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if not _flag_on(SL_ALERTS_ENV):
+            return None
+        kind = _sl_kind(rec)
+        return _sl_text(kind, rec) if kind in _SL_UNPROTECTED_KINDS else None
+
+    def dedup_key(self, rec: dict) -> str:
+        return _sl_dedup_key(self.alert_key, _sl_kind(rec) or "", rec)
+
+
+@dataclass
+class SlProtectionEventRule(Rule):
+    """SL went missing / could not be placed and the bot handled it (re-send
+    attempted, position closed, or entry rolled back). WARNING: informational —
+    a failed outcome is reported separately by SlUnprotectedRule."""
+    alert_key: str = "order.sl_event"
+    severity: str = "WARNING"
+    dedup_window_sec: int = 60 * 60
+    ai_format: bool = False
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if not _flag_on(SL_ALERTS_ENV):
+            return None
+        kind = _sl_kind(rec)
+        return _sl_text(kind, rec) if kind and kind not in _SL_UNPROTECTED_KINDS else None
+
+    def dedup_key(self, rec: dict) -> str:
+        return _sl_dedup_key(self.alert_key, _sl_kind(rec) or "", rec)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -568,4 +690,6 @@ RULES: list[Rule] = [
     LuxZoneAlertRule(),
     V2RejectAlertRule(),
     TpPlacementFailedRule(),
+    SlUnprotectedRule(),
+    SlProtectionEventRule(),
 ]
