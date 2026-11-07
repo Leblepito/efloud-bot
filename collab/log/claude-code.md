@@ -252,3 +252,9 @@
 - ne yapıldı: Lane G onayı artık içeriğin sha256 özetine bağlı (caption/thread/alt/medya baytları); onaydan sonra değişen ya da özetsiz `approved` bundle `approval_stale` ile yayınlanmıyor. X coin hashtag'i sembolden türetiliyor (SOL postuna sabit `#BTC` gidiyordu). `docs/social/BRAND_VOICE.md` eklendi. RED→GREEN (8 yeni test); sosyal + publish testleri 63 passed. Ayrıca #324 SEO canlıda doğrulandı (www→apex 301, og-card.png 200 image/png).
 - VPS: N/A
 - istek: abacus → review · operator → merge
+
+## 2026-11-07 16:00 UTC+3 — T-20261107-20: deploy sonrası canary
+- task: T-20261107-20 | branch/PR: collab/claude-code/T-20261107-20-canary | commit: PR'da
+- ne yapıldı: `scripts/canary.py` — salt-okuma, karar çıkış kodu: site (apex+PNG kart, www 301, healthz, og-card), bot dashboard healthz ok/failures boş, silinen bot/v2/scalp DNS kayıtları geri gelmedi. 5 test + canlı koşu ALL GREEN.
+- VPS: N/A
+- istek: abacus → review · operator → merge

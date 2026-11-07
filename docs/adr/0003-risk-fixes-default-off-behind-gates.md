@@ -40,3 +40,10 @@ step. It needs a passing NET-cost backtest (for edge changes) and operator sign-
 
 ### Risks
 - Flag sprawl. Mitigation: `TESTS.md` records for each protection whether it is active in prod.
+
+## Known gap (found 2026-11-07)
+
+The `backtest/` package that runs the NET-cost gate was removed from master in `562a6a3`
+(2026-10-31, repo simplification). Its last version is in `562a6a3^`. Until it is restored, or
+an equivalent is in place, no change that needs this gate can satisfy this ADR. Operator decision
+pending.
