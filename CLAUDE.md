@@ -1,6 +1,6 @@
 # EFloud-Bot — TradingView Pine Script Projesi
 
-> **🚀 Sonraki Claude için Başlangıç Noktası:** Bu README projenin giriş noktasıdır. **Son çalışma (2026-10-02, operatör revizyonları):** BOS kırılımları da setup üretiyor (`658a905` — CHoCH ile aynı pullback giriş akışı), acil bakiye HALTI kaldırıldı (`b2154c5` — emergency_balance_threshold=0), v1 MARKET girişi v2 canlı sembolde susturuldu (`b2154c5`), bölge aşım toleransı 0.5→2.0 ATR + volatil rejim girişleri açıldı (`228382d`). **v2 AKTİF:** `smc_version=v2`, `smc_v2_symbols` dolu, `smc_v2_shadow=false`. *(Önceki: 2026-08-12 audit-fixes — 10 bayat test onarıldı, sızmış kimlik bilgileri env'e taşındı, birleşik panel Faz 2, backend event-loop + login rate-limit, /api/equity şema birleştirmesi.)* **Dashboard:** `https://2-28-139-82.nip.io` / panel: `https://bot.u2algo.com`. **Ana iş:** Bot mantığını TradingView Pine Script'e çevirmek (hem indicator hem strategy). **Kritik kurallar:** (1) Python kaynak mantığı DEĞİŞTİRME — sadece oku ve referans al, (2) Pine v6 syntax ZORUNLU, (3) Her değişiklik TDD + risk-ops review + backtest-gate.
+> **🚀 Sonraki Claude için Başlangıç Noktası:** Bu README projenin giriş noktasıdır. **Son çalışma (2026-10-02, operatör revizyonları):** BOS kırılımları da setup üretiyor (`658a905` — CHoCH ile aynı pullback giriş akışı), acil bakiye HALTI kaldırıldı (`b2154c5` — emergency_balance_threshold=0), v1 MARKET girişi v2 canlı sembolde susturuldu (`b2154c5`), bölge aşım toleransı 0.5→2.0 ATR + volatil rejim girişleri açıldı (`228382d`). **v2 AKTİF:** `smc_version=v2`, `smc_v2_symbols` dolu, `smc_v2_shadow=false`. *(Önceki: 2026-08-12 audit-fixes — 10 bayat test onarıldı, sızmış kimlik bilgileri env'e taşındı, birleşik panel Faz 2, backend event-loop + login rate-limit, /api/equity şema birleştirmesi.)* **Dashboard:** `https://2-28-139-82.nip.io` / panel: VPS'teki birleşik panel (`panel/main.py`; `bot.u2algo.com` Railway kopyası ve DNS kaydı 2026-11-07'de silindi). **Ana iş:** Bot mantığını TradingView Pine Script'e çevirmek (hem indicator hem strategy). **Kritik kurallar:** (1) Python kaynak mantığı DEĞİŞTİRME — sadece oku ve referans al, (2) Pine v6 syntax ZORUNLU, (3) Her değişiklik TDD + risk-ops review + backtest-gate.
 
 ## Cowork/Sandbox Git Uyarısı (2026-07-03)
 
@@ -41,6 +41,13 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
 
 > Bu sözleşme `git show f96b7d8^:docs/handoff/2026-06-20-algorithm-audit-and-next-session-plan.md` audit'inin fix'lerini yürütmek için standing dev-contract'tır.
 
+## Kanonik kaynaklar (2026-11-07)
+- Alan dili (V1/V2 bot ↔ SMC v1/v2, breaker OPEN = normal, orphan ↔ bare): `CONTEXT.md`
+- Kararlar ve gerekçeleri: `docs/adr/README.md` (ADR-0003 = risk/edge değişiklik kapısı)
+- Korunan kurallar → test kanıtı: `TESTS.md` · modül regresyonu: `REGRESSION.md` (`python scripts/regression_ledger.py run --base origin/master`)
+- Deploy sonrası: `python scripts/canary.py` · anlık durum: `collab/STATUS.md`
+- ⚠️ NET-cost backtest kapısının aracı (`backtest/`) master'da yok — `562a6a3`'te kaldırıldı; geri yükleme operatör kararı (ADR-0003 "Known gap").
+
 ## TradingView MCP Araçları (Desktop debug portu açık olmalı)
 - `tv_health_check` → bağlantı + aktif sembol kontrolü
 - `pine_set_source` → kodu Pine Editor'a enjekte et
@@ -79,15 +86,15 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
    - Test: 229 test, sıfır regresyon
 
 2. **u2algo-site & Railway Servisi** (Railway root dir `/u2algo-site`; bu repoda KALMALI):
-   - Next.js 15 ve Node.js 20 tabanlı pazarlama sayfası Railway üzerinde `considerate-intuition` projesi (`u2algo-site` servisi) altında yayındadır.
-   - Canlı URL: `https://u2algo-site-production.up.railway.app`
+   - Statik HTML + Node.js 20 `server.js` (Railway NIXPACKS, `startCommand: node server.js`) pazarlama sayfası; `u2algo-site` servisi.
+   - Canlı URL: `https://u2algo.com` (`www` → apex 301, #324). Eski `u2algo-site-production.up.railway.app` adresi 404 döner (2026-11-07).
 
 2. **Supabase REST & Fallback Entegrasyonu**:
    - `server.js` backend katmanı 3'lü veritabanı korumasıyla güncellendi:
      1. `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` varsa Supabase REST API ile kayıt. (Canlıda şu an bu aktif!).
      2. `DATABASE_URL` veya `SUPABASE_DATABASE_URL` varsa doğrudan PostgreSQL (`pg` driver) ile kayıt ve otomatik tablo migrasyonu (`ensureWaitlistTable`).
      3. Her iki DB bağlantısı koptuğunda veya erişilemez olduğunda `local-jsonl` (`data/waitlist_leads.jsonl`) fallback korumasıyla kesintisiz `200 OK` yanıtı.
-   - **Mevcut Canlı Durum**: Kırık direct Postgres bağlantısı (`DATABASE_URL`) kaldırıldı. `SUPABASE_URL` ve Key'ler Railway'e başarıyla bağlandı. REST API yetkilendirmesi çalışıyor (health check `PGRST205` dönüyor; yani tablo henüz hazır değil). Tablo oluşturulana kadar waitlist kayıtları yerel JSONL fallback'ine güvenle yazılıyor.
+   - **Mevcut Canlı Durum (2026-11-07 doğrulandı)**: `GET https://u2algo.com/api/waitlist/health` → `database: ready, backend: supabase`. Waitlist kayıtları Supabase'e yazılıyor; yerel JSONL yalnız yedek (Railway dosya sistemi her deploy'da sıfırlanır).
 
 3. **Hermes MCP Postgres Sunucusu**:
    - Local makinede `supabase_postgres` MCP server kuruldu (7 tool: `health`, `list_tables`, `table_columns`, `ensure_waitlist_leads`, `waitlist_count`, `waitlist_list`, `waitlist_insert`).
