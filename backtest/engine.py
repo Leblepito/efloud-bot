@@ -190,6 +190,7 @@ def run_backtest(
         balance = float(initial_balance)
         peak_balance = balance
         skipped_cycles = 0  # cycles where run_cycle raised — see "skipped_cycles" in return dict
+        cycles = 0  # run_cycle calls attempted (denominator for the CLI skipped-ratio gate)
         slippage_cfg = SlippageConfig()
         # BT-4 (2026-07-11 review): entry fill'lerine slippage. run_cycle icinde
         # lifecycle'a eklenen her YENI Entry tranche'i (ilk giris + piramit) tam
@@ -257,6 +258,7 @@ def run_backtest(
                     d_slice = _closed_higher_tf_bars(d_slice, 1440, decision_ts)
                 if len(h_slice) < 50 or len(m_slice) < 50:
                     continue
+                cycles += 1
                 try:
                     orch.run_cycle(symbol, h_slice, m_slice, e_slice, d_slice,
                                    balance=balance, now=sim_now)
@@ -442,6 +444,7 @@ def run_backtest(
             "equity_curve": [],
             "symbols": symbols,
             "skipped_cycles": skipped_cycles,
+            "cycles": cycles,
             "max_drawdown_pct": round(max_drawdown_pct, 2),
             "smc_version": smc_version,
             "commission_pct": cp,

@@ -62,6 +62,18 @@ def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohl
     return data
 
 
+def skipped_ratio_exceeded(result: dict, limit: float = 0.01) -> bool:
+    """True when more than ``limit`` of the cycles raised inside run_cycle."""
+    cycles = int(result.get("cycles") or 0)
+    return cycles > 0 and int(result.get("skipped_cycles") or 0) / cycles > limit
+
+
+def _fail_on_skipped(result: dict) -> None:
+    if skipped_ratio_exceeded(result):
+        print(f"FAIL: {result['skipped_cycles']}/{result['cycles']} cycles raised - see DEBUG log")
+        raise SystemExit(3)
+
+
 def cmd_single(args):
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -86,6 +98,7 @@ def cmd_single(args):
         f"PF: {result.get('profit_factor', 0)}  "
         f"Return: {result.get('total_return_pct', 0)}%"
     )
+    _fail_on_skipped(result)
 
 
 def cmd_portfolio(args):
@@ -114,6 +127,7 @@ def cmd_portfolio(args):
         f"Return: {result.get('total_return_pct', 0)}%  "
         f"DD: {result.get('max_drawdown_pct', 0)}%"
     )
+    _fail_on_skipped(result)
 
 
 def _grid_run_one(cfg_with_meta: dict) -> dict:
@@ -270,7 +284,8 @@ def build_parser():
     p_grid.add_argument("--symbols", required=True)
     p_grid.add_argument("--period-days", type=int, default=365)
     p_grid.add_argument("--balance", type=float, default=2000.0)
-    p_grid.add_argument("--workers", type=int, default=4)
+    # Serial by default: ProcessPoolExecutor hangs on Windows/py3.14 (opt in with --workers N).
+    p_grid.add_argument("--workers", type=int, default=1)
     p_grid.set_defaults(func=cmd_grid)
 
     p_cmp = sub.add_parser("compare", help="Run v1 vs v2 SMC backtest comparison")

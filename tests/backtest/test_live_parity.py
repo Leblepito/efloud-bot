@@ -159,3 +159,32 @@ class TestLiveConfigAndOffline:
     def test_live_config_backtest_block_makes_runs_net(self, live_cfg):
         assert live_cfg["backtest"]["commission_pct"] == 0.04
         assert live_cfg["backtest"]["funding_pct_per_8h"] == 0.01
+
+
+def test_cli_flags_runs_with_too_many_skipped_cycles():
+    from backtest.cli import skipped_ratio_exceeded
+    assert skipped_ratio_exceeded({"skipped_cycles": 2, "cycles": 100}) is True
+    assert skipped_ratio_exceeded({"skipped_cycles": 1, "cycles": 100}) is False
+    assert skipped_ratio_exceeded({"skipped_cycles": 0}) is False
+
+
+def test_engine_reports_cycle_count(monkeypatch, live_cfg):
+    res = _run(monkeypatch, live_cfg, _flat(), [])
+    assert res["cycles"] > 0
+
+
+def _grid_one(cfg):
+    return {"config_hash": cfg["h"], "value": cfg["h"] * 2}
+
+
+def test_grid_with_one_worker_runs_in_process(tmp_path, monkeypatch):
+    import backtest.grid as grid
+
+    class _Boom:
+        def __init__(self, *a, **k):
+            raise AssertionError("ProcessPoolExecutor must not be used for workers=1")
+
+    monkeypatch.setattr(grid, "ProcessPoolExecutor", _Boom)
+    runner = grid.GridRunner(tmp_path)
+    out = runner.run([{"h": 1}, {"h": 2}], run_one_fn=_grid_one, workers=1)
+    assert sorted(r["value"] for r in out) == [2, 4]

@@ -105,6 +105,17 @@ class GridRunner:
         if not pending:
             return results
 
+        if workers <= 1:
+            # Serial, in-process: ProcessPoolExecutor hangs on Windows/py3.14.
+            for h, cfg in pending:
+                try:
+                    res = run_one_fn(cfg)
+                except Exception as e:
+                    res = {"config_hash": h, "error": str(e), "error_type": type(e).__name__}
+                self.save_result(h, res)
+                results.append(res)
+            return results
+
         with ProcessPoolExecutor(max_workers=workers, initializer=_worker_init) as pool:
             futures = {pool.submit(run_one_fn, cfg): h for h, cfg in pending}
             for fut in as_completed(futures):
