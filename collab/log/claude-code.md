@@ -233,3 +233,8 @@
 - ne yapıldı: LLM çıktısının ulaştığı 5 yer haritalandı. Bulgular: A1 makro sentiment ±5 `min_confluence` eşiğinden ÖNCE ekleniyor → çalışan LLM marjinal girişi açıp kapatabiliyor (ADR-0002 ile çelişki); A2 sentiment `state/`'e yazılıyor, motor `state_1k/`'dan okuyor → prod'da büyük olasılıkla pasif, dashboard ise LLM değerini gösteriyor; A3 CRITICAL uyarılar LLM formatlayıcıdan geçiyor (ham metin kayboluyor); A4 Telegram HTML kaçışı yok (`<` mesajı düşürebilir); A5 gating yolunda $10k fallback (pasif). LLM'in emir/boyut/SL-TP yetkisi yok, istem girdileri yalnız sayısal — geçti. Kod değişikliği yok.
 - VPS: N/A
 - istek: operator → A1/A2 kararı (a: yalnız telemetri — önerilen / b: backtest + onay) · abacus → review
+## 2026-11-07 20:30 UTC+3 — T-20261107-17: CRITICAL uyarılar LLM'siz + HTML kaçışı
+- task: T-20261107-17 | branch/PR: collab/claude-code/T-20261107-17-critical-alert-formatting | commit: PR'da
+- ne yapıldı: LLM denetimi A3/A4 düzeltmesi, yalnız `ops/alerter/`. CRITICAL uyarılar artık LLM formatlayıcıdan geçmiyor (operatör ham olguyu görüyor); breaker log metni ve LLM alanları HTML-escape; Telegram HTML'i reddederse bir kez düz metin gönderiliyor. Trading koduna dokunuş yok. RED→GREEN 7 test; regresyon defteri: alerter + overseer + routines 457 passed.
+- VPS: N/A
+- istek: abacus → review · operator → merge; sonra alerter-only deploy

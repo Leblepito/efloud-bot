@@ -6,8 +6,10 @@ retry, escalate, or drop.
 """
 from __future__ import annotations
 
+import html
 import json
 import logging
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,6 +18,12 @@ log = logging.getLogger("efloud.alerter.telegram")
 
 API_BASE = "https://api.telegram.org"
 TIMEOUT_SEC = 10
+_TAG_RE = re.compile(r"</?(?:b|strong|i|em|u|s|code|pre|a)(?:\s[^>]*)?>", re.IGNORECASE)
+
+
+def _html_to_plain(text: str) -> str:
+    """Strip Telegram HTML markup and unescape entities for a plain-text resend."""
+    return html.unescape(_TAG_RE.sub("", text))
 
 
 def inline_keyboard(rows: list[list[tuple[str, str]]]) -> dict:
@@ -56,11 +64,9 @@ def send_message(
         return False
 
     url = f"{API_BASE}/bot{token}/sendMessage"
-    fields = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": parse_mode,
-    }
+    fields = {"chat_id": chat_id, "text": text}
+    if parse_mode:
+        fields["parse_mode"] = parse_mode
     if reply_markup is not None:
         fields["reply_markup"] = json.dumps(reply_markup, ensure_ascii=False)
     payload = urllib.parse.urlencode(fields).encode("utf-8")
@@ -78,6 +84,11 @@ def send_message(
     except urllib.error.HTTPError as e:
         body = e.read(500).decode("utf-8", errors="replace") if e.fp else ""
         log.warning(f"telegram sendMessage HTTPError {e.code}: {body}")
+        if e.code == 400 and parse_mode and "parse entities" in body:
+            # A stray `<`/`&` made Telegram reject the HTML; an alert must not be
+            # lost over markup, so resend once as plain text.
+            return send_message(token, chat_id, _html_to_plain(text),
+                                parse_mode="", reply_markup=reply_markup)
         return False
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         log.warning(f"telegram sendMessage transport error: {e}")

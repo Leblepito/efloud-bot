@@ -1,5 +1,7 @@
-import pydantic
+import html
 from typing import Optional
+
+import pydantic
 
 class StructuredAlert(pydantic.BaseModel):
     """Pydantic schema for structured alert notifications (Genkit compliant)."""
@@ -12,16 +14,22 @@ class StructuredAlert(pydantic.BaseModel):
     action_required: Optional[str] = None
 
 def render_alert_html(alert: StructuredAlert) -> str:
-    """Render a structured alert into consistent, beautiful Telegram HTML format."""
+    """Render a structured alert into consistent, beautiful Telegram HTML format.
+
+    Every LLM-written field is HTML-escaped: Telegram rejects the whole message
+    on a stray `<`/`&` (parse_mode=HTML), and the text is model output."""
+    def e(v) -> str:
+        return html.escape(str(v), quote=False)
+
     lines = [
-        f"{alert.emoji} <b>{alert.title}</b> ({alert.severity})",
+        f"{e(alert.emoji)} <b>{e(alert.title)}</b> ({e(alert.severity)})",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━",
-        f"<b>Event:</b> <code>{alert.event_type}</code>",
-        f"<b>Summary:</b> {alert.summary}",
-        f"<b>Details:</b> {alert.details}"
+        f"<b>Event:</b> <code>{e(alert.event_type)}</code>",
+        f"<b>Summary:</b> {e(alert.summary)}",
+        f"<b>Details:</b> {e(alert.details)}"
     ]
     if alert.action_required:
-        lines.append(f"\n⚠️ <b>Action Required:</b> <i>{alert.action_required}</i>")
+        lines.append(f"\n⚠️ <b>Action Required:</b> <i>{e(alert.action_required)}</i>")
     return "\n".join(lines)
 
 import logging
