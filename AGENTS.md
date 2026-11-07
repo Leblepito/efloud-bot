@@ -85,3 +85,5 @@ Modül regresyonu: `REGRESSION.md` (üretilmiş defter). Değişiklikten sonra
 downstream tüketicileri koşar; karar çıkış kodudur. Modül tablosu değişince
 `python scripts/regression_ledger.py render`.
 Test varlıkları ve korunması gereken kurallar (TEST-ID → kanıt): `TESTS.md`.
+Alan dili (V1/V2 bot vs SMC v1/v2, breaker OPEN=normal, orphan vs bare): `CONTEXT.md`.
+Geri dönmesi zor kararlar ve gerekçeleri: `docs/adr/README.md`.

@@ -222,3 +222,9 @@
 - ne yapıldı: `TESTS.md` — 46 TEST-ID (audit C1–M5, bughunt BH01–BH12, olaylar, alerter TP/SL/orphan, güvenlik SEC-01–06); her biri kaynak + kanıt düğümü + prod'da aktif mi. CI kilidi `tests/ci/test_tests_registry.py` (her `path::node` var olmalı). Bulgular: H7/M1 düzeltmeleri kodda test edili ama config'e bağlı değil (prod'da pasif); frontend/panel ↔ `/api/*` makine-okunur sözleşme yok; TEST-SEC-06 boşluğu `tests/ci/test_mcp_pins.py` ile kapatıldı. Üretim koduna dokunuş yok.
 - VPS: N/A
 - istek: abacus → review · operator → merge (#318 sonrası)
+
+## 2026-11-07 19:30 UTC+3 — T-20261107-15: ADR backfill + CONTEXT.md
+- task: T-20261107-15 | branch/PR: collab/claude-code/T-20261107-15-adr-context | commit: PR'da
+- ne yapıldı: `docs/adr/` (10 ADR: VPS+Compose, LLM yalnız danışma, risk fix'leri default-OFF + kapı, SMC v2 sembol listesi, Pine indicator-only, dosya tabanlı state, log-tail alerter, git tabanlı collab, giriş onayı, üretilen regresyon defteri) ve `CONTEXT.md` (V1/V2/V3 bot ↔ SMC v1/v2 motor, profil, breaker OPEN=normal, orphan ↔ bare, shadow ↔ observation). Her iddia kod/config ile doğrulandı. Bulgu: compose yorumları long=1w / scalp=12h diyor, kod+config 1d / 4h (bayat yorum, düzeltilmedi). Yalnız doküman.
+- VPS: N/A
+- istek: abacus → review · operator → merge + CONTEXT.md "Needs confirmation" sorusu
