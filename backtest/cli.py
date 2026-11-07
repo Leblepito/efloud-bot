@@ -20,11 +20,15 @@ from data.timeframes import resolve_timeframes, tf_to_minutes
 log = logging.getLogger("efloud.backtest.cli")
 
 
-def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohlcv", verify_sha=True):
+def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohlcv", verify_sha=True,
+                          history_bars=0):
     """Load OHLCV data from cache for a period.
 
     verify_sha=True (default) -> sha256 check on every read (~50-200ms/file).
     verify_sha=False (grid worker mode) -> trust the cache, skip checksum.
+    history_bars -> extra bars of EACH timeframe before the period start. Live
+    fetches `timeframes.kline_limit` (500) bars per TF; without the same history
+    the 12h LuxAlgo swing trend never forms and v2 opens nothing (2026-11-07).
     """
     cache = OHLCVCache(cache_dir, verify_sha=verify_sha)
     end_ms = int(time.time() * 1000)
@@ -56,8 +60,8 @@ def _load_data_for_period(symbols, timeframes, period_days, cache_dir="cache/ohl
                         s, tf, lag_ms / 86_400_000.0,
                         pd.Timestamp(int(entry["max_ts"]), unit="ms"),
                     )
-            # Slice to period
-            cutoff = pd.Timestamp(start_ms, unit="ms")
+            # Slice to period (+ the live kline window of this TF before it)
+            cutoff = pd.Timestamp(start_ms - history_bars * tf_to_minutes(tf) * 60_000, unit="ms")
             data[s][tf] = df[df.index >= cutoff]
     return data
 
@@ -74,12 +78,18 @@ def _fail_on_skipped(result: dict) -> None:
         raise SystemExit(3)
 
 
+def _live_window(cfg: dict) -> int:
+    """Bars per TF the live runner fetches (backend/bot_runner.py kline_limit)."""
+    return int(cfg.get("timeframes", {}).get("kline_limit", 500))
+
+
 def cmd_single(args):
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     resolve_timeframes(cfg)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
-    data = _load_data_for_period([args.symbol], tfs, args.period_days)
+    window = _live_window(cfg)
+    data = _load_data_for_period([args.symbol], tfs, args.period_days, history_bars=window)
 
     run_id = uuid.uuid4().hex[:8]
     out_dir = Path(
@@ -89,7 +99,8 @@ def cmd_single(args):
     capture_provenance(out_dir)
 
     result = run_backtest(
-        symbols=[args.symbol], data=data, config=cfg, initial_balance=args.balance
+        symbols=[args.symbol], data=data, config=cfg, initial_balance=args.balance,
+        warmup_bars=window, smc_window_bars=window,
     )
     (out_dir / "result.json").write_text(json.dumps(result, indent=2, default=str))
     print(f"OK Single backtest complete: {out_dir}")
@@ -107,7 +118,8 @@ def cmd_portfolio(args):
     resolve_timeframes(cfg)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
-    data = _load_data_for_period(symbols, tfs, args.period_days)
+    window = _live_window(cfg)
+    data = _load_data_for_period(symbols, tfs, args.period_days, history_bars=window)
 
     run_id = uuid.uuid4().hex[:8]
     out_dir = Path(
@@ -117,7 +129,8 @@ def cmd_portfolio(args):
     capture_provenance(out_dir)
 
     result = run_backtest(
-        symbols=symbols, data=data, config=cfg, initial_balance=args.balance
+        symbols=symbols, data=data, config=cfg, initial_balance=args.balance,
+        warmup_bars=window, smc_window_bars=window,
     )
     (out_dir / "result.json").write_text(json.dumps(result, indent=2, default=str))
     print(f"OK Portfolio backtest: {out_dir}")
@@ -149,8 +162,10 @@ def _grid_run_one(cfg_with_meta: dict) -> dict:
     balance = cfg_with_meta["balance"]
     resolve_timeframes(cfg)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
-    data = _load_data_for_period(symbols, tfs, period_days, verify_sha=False)
-    result = run_backtest(symbols=symbols, data=data, config=cfg, initial_balance=balance)
+    window = _live_window(cfg)
+    data = _load_data_for_period(symbols, tfs, period_days, verify_sha=False, history_bars=window)
+    result = run_backtest(symbols=symbols, data=data, config=cfg, initial_balance=balance,
+                          warmup_bars=window, smc_window_bars=window)
     result["config_hash"] = config_hash(cfg)
     # Flatten the grid-varied fields into top-level for ranking
     for k in cfg_with_meta.get("grid_keys", []):
@@ -229,7 +244,8 @@ def cmd_compare(args):
     resolve_timeframes(cfg)
     tfs = [cfg["timeframes"]["htf"], cfg["timeframes"]["mtf"], cfg["timeframes"]["entry"], "1d"]
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
-    data = _load_data_for_period(symbols, tfs, args.period_days)
+    window = _live_window(cfg)
+    data = _load_data_for_period(symbols, tfs, args.period_days, history_bars=window)
 
     run_id = uuid.uuid4().hex[:8]
     out_dir = Path(
@@ -240,6 +256,7 @@ def cmd_compare(args):
 
     report = run_v1_v2_comparison(
         symbols=symbols, data=data, config=cfg, initial_balance=args.balance,
+        warmup_bars=window, smc_window_bars=window,
         hypothesis=args.hypothesis, doctrine_tags=doctrine_tags
     )
     (out_dir / "comparison.json").write_text(json.dumps(report, indent=2, default=str))

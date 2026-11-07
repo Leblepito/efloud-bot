@@ -1,6 +1,7 @@
 """Backtest live-parity (spec 2026-11-07 §3.2)."""
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -219,3 +220,69 @@ def test_reconcile_matches_backtest_trades_on_simulated_time():
            "sim_opened_at": "2026-10-01T10:15:00+00:00"}]  # bar time
     out = reconcile(live, bt)
     assert out["matched_pairs"] == 1 and out["unmatched_live"] == []
+
+
+def _cache_with(tmp_path, frames):
+    from data.cache import OHLCVCache
+    cache = OHLCVCache(tmp_path)
+    for (sym, tf), df in frames.items():
+        cache.put(sym, tf, df)
+    return tmp_path
+
+
+def _bars(tf_minutes, n):
+    end = pd.Timestamp.now(tz="UTC").tz_localize(None).floor("h")  # cache index is tz-naive UTC
+    idx = pd.date_range(end=end, periods=n, freq=f"{tf_minutes}min")
+    return pd.DataFrame({"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}, index=idx)
+
+
+def test_every_timeframe_gets_the_live_kline_window_before_the_period(tmp_path):
+    """Live feeds each TF `kline_limit` bars; the backtest must too, or the
+    12h LuxAlgo swing trend never forms (root cause of 0 v2 trades, 2026-11-07)."""
+    from backtest.cli import _load_data_for_period
+    d = _cache_with(tmp_path, {("X/USDT", "12h"): _bars(720, 1000), ("X/USDT", "15m"): _bars(15, 5000)})
+    plain = _load_data_for_period(["X/USDT"], ["12h", "15m"], period_days=10, cache_dir=d,
+                                  verify_sha=False)
+    data = _load_data_for_period(["X/USDT"], ["12h", "15m"], period_days=10, cache_dir=d,
+                                 verify_sha=False, history_bars=500)
+    for tf in ("12h", "15m"):  # exactly 500 extra bars of each TF, all before the period
+        extra = data["X/USDT"][tf].index.difference(plain["X/USDT"][tf].index)
+        assert len(extra) == 500 and extra.max() < plain["X/USDT"][tf].index.min()
+
+
+def test_cli_runs_with_the_live_window(monkeypatch, tmp_path):
+    import backtest.cli as cli
+    seen = {}
+    monkeypatch.setattr(cli, "_load_data_for_period",
+                        lambda *a, **k: seen.update(load=k) or {"BTC/USDT": {}})
+    monkeypatch.setattr(cli, "run_backtest", lambda **k: seen.update(run=k) or {"cycles": 1, "skipped_cycles": 0})
+    monkeypatch.setattr(cli, "capture_provenance", lambda out: out.mkdir(parents=True, exist_ok=True))
+    monkeypatch.chdir(tmp_path)
+    import shutil
+    (tmp_path / "configs").mkdir()
+    shutil.copy(Path(__file__).resolve().parents[2] / "configs" / "config.phase2_1k.yaml", tmp_path / "configs")
+    args = type("A", (), {"config": "configs/config.phase2_1k.yaml", "symbol": "BTC/USDT",
+                          "period_days": 60, "balance": 2000.0})()
+    cli.cmd_single(args)
+    window = yaml.safe_load(open(tmp_path / "configs" / "config.phase2_1k.yaml", encoding="utf-8"))[
+        "timeframes"].get("kline_limit", 500)
+    assert seen["load"]["history_bars"] == window
+    assert seen["run"]["warmup_bars"] == window and seen["run"]["smc_window_bars"] == window
+
+
+def test_daily_frame_is_capped_like_live(monkeypatch, live_cfg):
+    """Live passes 100 daily bars (backend/bot_runner.py fetch_ohlcv(sym, "1d", 100))."""
+    seen = []
+
+    class _Daily(_Scripted):
+        def run_cycle(self, symbol, df_htf, df_mtf, df_entry, df_daily=None, balance=0.0, now=None):
+            seen.append(len(df_daily) if df_daily is not None else None)
+
+    monkeypatch.setattr(bt_engine, "SafeOrchestrator", _Daily)
+    df = _flat(n=400)
+    daily = _flat(n=300)
+    daily.index = pd.date_range(end=df.index[-1], periods=300, freq="1D")
+    tfs = {live_cfg["timeframes"][k]: df for k in ("htf", "mtf", "entry")}
+    tfs["1d"] = daily
+    run_backtest(symbols=["BTC/USDT"], data={"BTC/USDT": tfs}, config=live_cfg, initial_balance=2000.0)
+    assert seen and max(seen) <= 100

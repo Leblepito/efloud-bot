@@ -95,6 +95,9 @@ def stamp_sim_times(trade_dicts: list[dict], sim_open_ts: dict, sim_close_ts: di
 _DEFAULT_SMC_WINDOW = 500
 
 
+_LIVE_DAILY_BARS = 100  # daily bars the live runner fetches per cycle
+
+
 class _NullLLM:
     """Offline stand-in: every advisory LLM call degrades to its designed fallback."""
 
@@ -255,7 +258,8 @@ def run_backtest(
                     m_slice = m_slice.iloc[-smc_window_bars:]
                 d_slice = tfs.get("1d")
                 if d_slice is not None:
-                    d_slice = _closed_higher_tf_bars(d_slice, 1440, decision_ts)
+                    # live: fetch_ohlcv(sym, "1d", 100) (backend/bot_runner.py)
+                    d_slice = _closed_higher_tf_bars(d_slice, 1440, decision_ts).iloc[-_LIVE_DAILY_BARS:]
                 if len(h_slice) < 50 or len(m_slice) < 50:
                     continue
                 cycles += 1
