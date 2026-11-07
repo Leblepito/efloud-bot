@@ -483,8 +483,12 @@ def _sl_kind(rec: dict) -> Optional[str]:
     The initial SL at open (tp_leg="SL") and the -2021 SL_REPAIR line are not
     matched directly: their outcome is reported by the rollback /
     sl_repair_unreachable_closing / fallback_close_failed events below.
-    verify.sl_unconfirmed_rollback always ends in one of the two rollback
-    events (whose original_error names the verify path)."""
+    verify.sl_unconfirmed_rollback is not matched either: it always ends in
+    one of the two rollback events (original_error names the verify path)
+    because the sibling cancel before the rollback swallows its own errors
+    (_cancel_position_siblings). be_sl_placement_failed and
+    verify.no_read_tolerated are left to the next reconcile repair, whose
+    repair_missing_sl / SL_REPAIR events are matched."""
     if rec.get("logger") != "efloud.exchange":
         return None
     event = rec.get("event")
@@ -492,11 +496,13 @@ def _sl_kind(rec: dict) -> Optional[str]:
         return "repair_failed"
     if event == "order_manager.entry_rollback_failed":
         return "rollback_failed"
-    if event == "order_manager.fallback_close_failed" and rec.get("reason") == "SL_REPAIR_UNREACHABLE":
+    if (event == "order_manager.fallback_close_failed"
+            and rec.get("reason") in ("SL_REPAIR_UNREACHABLE", "SL_BE_UNREACHABLE")):
         return "close_failed"
     if event == "order_manager.repair_missing_sl":
         return "missing"
-    if event == "order_manager.sl_repair_unreachable_closing":
+    if event in ("order_manager.sl_repair_unreachable_closing",
+                 "order_manager.be_sl_unreachable_closing"):
         return "closing"
     if event == "order_manager.entry_rollback_after_sl_failure":
         return "rolled_back"
@@ -514,11 +520,14 @@ def _sl_text(kind: str, rec: dict) -> str:
         return ("🚨 <b>GİRİŞ GERİ ALINAMADI — borsada STOP'SUZ pozisyon olabilir</b>\n"
                 f"{head}\nsebep: {_esc(str(rec.get('original_error', ''))[:200])}\n"
                 f"kapatma hatası: {_esc(str(rec.get('rollback_error', ''))[:200])}\n"
-                "Bot bu pozisyonu artık takip etmiyor. Hemen Binance'te kontrol et "
-                "(orphan koruması açıksa sonraki reconcile'da SL koymayı dener).")
+                "Bot bu pozisyonu artık takip etmiyor. Hemen Binance'te kontrol et. "
+                "Orphan koruması açıksa sonraki reconcile'larda girişten varsayılan %2 "
+                "uzaklıkta bir SL koymayı dener (döngü başına 1 pozisyon, emir okuması "
+                "başarısızsa atlanır) — garanti değil.")
     if kind == "close_failed":
         return ("🚨 <b>Stop'suz pozisyon KAPATILAMADI</b>\n"
-                f"{head} · fiyat SL seviyesini geçmişti, market kapatma başarısız\n"
+                f"{head} · fiyat stop seviyesini (SL ya da break-even) geçmişti, "
+                "market kapatma başarısız\n"
                 f"{_esc(str(rec.get('message', ''))[:300])}\n"
                 "Pozisyon açık ve korumasız; bot sonraki reconcile döngüsünde yeniden dener. "
                 "Manuel kontrol et.")
@@ -528,9 +537,12 @@ def _sl_text(kind: str, rec: dict) -> str:
                 "SL hiç konmamış ya da borsadan kaybolmuş. Gönderim başarısız olursa "
                 "ayrı bir STOP'SUZ uyarısı gelir.")
     if kind == "closing":
-        return ("⚠️ <b>SL konamıyor — fiyat SL seviyesini geçmiş (-2021)</b>\n"
+        where = ("break-even" if rec.get("event") == "order_manager.be_sl_unreachable_closing"
+                 else "SL")
+        return (f"⚠️ <b>Stop konamıyor — fiyat {where} seviyesini geçmiş (-2021)</b>\n"
                 f"{head}\n"
-                "Bot pozisyonu market emriyle kapatıyor. Kapatma başarısız olursa ayrı uyarı gelir.")
+                "Bot pozisyonu (kalan kısmını) market emriyle kapatıyor. "
+                "Kapatma başarısız olursa ayrı uyarı gelir.")
     return ("ℹ️ <b>Giriş geri alındı — SL konamadı</b>\n"
             f"{head}\nsebep: {_esc(str(rec.get('original_error', ''))[:200])}\n"
             "Pozisyon için reduceOnly market kapatma emri gönderildi "

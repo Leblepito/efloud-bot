@@ -129,6 +129,24 @@ def test_close_failed_only_for_sl_repair_unreachable(on):
     assert SlUnprotectedRule().match_log(rec) is None
 
 
+def test_close_failed_after_break_even_unreachable_is_unprotected(on):
+    rec = dict(UNPROTECTED[2], reason="SL_BE_UNREACHABLE")
+    out = SlUnprotectedRule().match_log(rec)
+    assert out is not None and "break-even" in out
+
+
+def test_be_unreachable_closing_is_info_event(on):
+    rec = _rec("order_manager.be_sl_unreachable_closing")
+    out = SlProtectionEventRule().match_log(rec)
+    assert out is not None and "BTC/USDT LONG" in out and "break-even" in out
+    assert SlUnprotectedRule().match_log(rec) is None
+
+
+def test_orphan_wording_is_not_a_guarantee(on):
+    out = SlUnprotectedRule().match_log(UNPROTECTED[1])
+    assert "%2" in out and "garanti değil" in out
+
+
 def test_rollback_success_shows_cause(on):
     out = SlProtectionEventRule().match_log(EVENTS[2])
     assert "geri alındı" in out and "post-placement verify" in out and "RB-1" in out
@@ -264,6 +282,21 @@ def test_contract_sl_repair_unreachable_close_failed(on):
     fired = [(f[0], f[1]) for f in _fired(records)]
     assert fired == [("SlProtectionEventRule", MISSING),
                      ("SlProtectionEventRule", CLOSING),
+                     ("SlUnprotectedRule", CLOSE_FAILED)]
+
+
+def test_contract_break_even_unreachable_close_failed(on):
+    client, om = _order_manager()
+    pos = _tracked_pos(om, sl_order_id="SL-1")
+    pos.tp1_hit = True
+    client.exchange.create_order.side_effect = [
+        Exception('binance {"code":-2021,"msg":"Order would immediately trigger."}'),  # SL_BE
+        RuntimeError("Service unavailable"),                                            # market close
+    ]
+    with patch.object(om, "_cancel_order_any", return_value="cancelled"):
+        records = _capture(lambda: om._move_sl_to_breakeven(pos))
+    fired = [(f[0], f[1]) for f in _fired(records)]
+    assert fired == [("SlProtectionEventRule", "order_manager.be_sl_unreachable_closing"),
                      ("SlUnprotectedRule", CLOSE_FAILED)]
 
 

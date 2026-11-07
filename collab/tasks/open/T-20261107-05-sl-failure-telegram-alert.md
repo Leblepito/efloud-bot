@@ -8,7 +8,7 @@ claimed_by: claude-code
 reviewer: abacus
 parent: T-20261107-03
 created: 2026-11-07
-touches_live: false
+touches_live: true      # 5c49038 docker-compose.prod.yml (alerter env) → operatör onayı
 ---
 
 ## Amaç
