@@ -103,7 +103,9 @@ def reconcile(
         for bt_idx, bt in candidates:
             if bt_idx in used_bt_indices:
                 continue
-            bt_dt = _parse_dt(bt["opened_at"])
+            # Backtest `opened_at` is the wall clock of the run; the bar time is
+            # `sim_opened_at` (engine.stamp_sim_times). Match on simulated time.
+            bt_dt = _parse_dt(bt.get("sim_opened_at") or bt["opened_at"])
             gap = abs(live_dt - bt_dt)
             if gap <= window:
                 if best_gap is None or gap < best_gap:

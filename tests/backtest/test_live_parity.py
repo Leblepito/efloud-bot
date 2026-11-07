@@ -209,3 +209,13 @@ def test_fetcher_supports_every_profile_timeframe():
     needed = {tf for chain in PROFILES.values() for tf in chain} | {"1d"}
     assert needed <= set(OHLCVFetcher.tf_minutes)
     assert all(OHLCVFetcher.tf_minutes[tf] == tf_to_minutes(tf) for tf in needed)
+
+
+def test_reconcile_matches_backtest_trades_on_simulated_time():
+    from backtest.compare_live import reconcile
+    live = [{"symbol": "BTC/USDT", "direction": "LONG", "opened_at": "2026-10-01T10:00:00+00:00", "pnl": 5.0}]
+    bt = [{"symbol": "BTC/USDT", "direction": "LONG", "pnl": 4.0,
+           "opened_at": "2026-11-07T12:00:00",            # wall clock of the backtest run
+           "sim_opened_at": "2026-10-01T10:15:00+00:00"}]  # bar time
+    out = reconcile(live, bt)
+    assert out["matched_pairs"] == 1 and out["unmatched_live"] == []
