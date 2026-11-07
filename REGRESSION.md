@@ -42,7 +42,7 @@ Market data fetch/cache + timeframe profiles
 Paths: `data/`
 Downstream consumers: backend-api, backtest, orchestrator, routines, scripts-misc, smc-v2, social-pipeline
 Regression acceptance command: `python scripts/regression_ledger.py run data`
-Mapped tests: 6
+Mapped tests: 7
 
 <details><summary>test files</summary>
 
@@ -51,6 +51,7 @@ Mapped tests: 6
 - `backend/tests/test_data_manifest.py`
 - `backend/tests/test_tf_normalization.py`
 - `backend/tests/test_timeframe_profiles.py`
+- `tests/backtest/test_live_parity.py`
 - `tests/test_social_from_telegram.py`
 
 </details>
@@ -724,12 +725,13 @@ Other operator/analysis scripts
 Paths: `scripts/`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run scripts-misc`
-Mapped tests: 12
+Mapped tests: 13
 
 <details><summary>test files</summary>
 
 - `backend/tests/test_bigquery_archive.py`
 - `backend/tests/test_report_doctrine_engine_gap.py`
+- `tests/backtest/test_live_parity.py`
 - `tests/ci/test_canary.py`
 - `tests/collab/test_collab_layout.py`
 - `tests/collab/test_skills_incubator.py`

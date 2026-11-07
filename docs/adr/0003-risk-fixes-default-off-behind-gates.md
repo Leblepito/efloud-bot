@@ -41,9 +41,8 @@ step. It needs a passing NET-cost backtest (for edge changes) and operator sign-
 ### Risks
 - Flag sprawl. Mitigation: `TESTS.md` records for each protection whether it is active in prod.
 
-## Known gap (found 2026-11-07)
+## Known gap (found and resolved 2026-11-07)
 
-The `backtest/` package that runs the NET-cost gate was removed from master in `562a6a3`
-(2026-10-31, repo simplification). Its last version is in `562a6a3^`. Until it is restored, or
-an equivalent is in place, no change that needs this gate can satisfy this ADR. Operator decision
-pending.
+`backtest/` had been removed in `562a6a3` (2026-10-31). It is restored with live-parity exits
+(TP1 50 % → break-even → TP2), the live config's `smc_version`, NET costs from the config and an
+offline LLM guard (spec `docs/superpowers/specs/2026-11-07-operator-decisions-and-backtest-restore-design.md`).

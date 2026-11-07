@@ -46,7 +46,7 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
 - Kararlar ve gerekçeleri: `docs/adr/README.md` (ADR-0003 = risk/edge değişiklik kapısı)
 - Korunan kurallar → test kanıtı: `TESTS.md` · modül regresyonu: `REGRESSION.md` (`python scripts/regression_ledger.py run --base origin/master`)
 - Deploy sonrası: `python scripts/canary.py` · anlık durum: `collab/STATUS.md`
-- ⚠️ NET-cost backtest kapısının aracı (`backtest/`) master'da yok — `562a6a3`'te kaldırıldı; geri yükleme operatör kararı (ADR-0003 "Known gap").
+- NET-cost backtest kapısı: `python -m backtest.cli single|portfolio --config configs/config.phase2_1k.yaml` (canlı trade mantığı; çıkışlar borsa ile aynı: TP1 %50 → BE → TP2). Veri: `python -m scripts.prefetch_data --config …`.
 
 ## TradingView MCP Araçları (Desktop debug portu açık olmalı)
 - `tv_health_check` → bağlantı + aktif sembol kontrolü
