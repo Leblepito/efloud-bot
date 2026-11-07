@@ -154,6 +154,7 @@ private store). Every finding is fixed and has a test.
 |---|---|---|---|
 | TEST-SOCIAL-001 | covered | Operator approval records a digest of caption/thread/alt text/media bytes; a bundle edited after approval, or approved without a digest, is refused (`approval_stale`) | `tests/test_lane_g_publish.py::TestApprovalIsBoundToContent` |
 | TEST-SOCIAL-002 | covered | The X coin hashtag follows the post's symbol (`#SOL`, not a fixed `#BTC`); unsafe symbols produce no tag | `tests/test_social_publishing.py::TestBuildCaption` |
+| TEST-VIDEO-001 | covered | A voice-over clip lasts as long as the narration (not cut at the 8 s default), an explicit duration still wins, and the voice is normalised to about −16 LUFS | `tests/test_video_render_voiceover.py::test_voiceover_longer_than_default_is_not_cut`, `tests/test_video_render_voiceover.py::test_voiceover_is_loudness_normalised` |
 
 ## 5. Evidence run (2026-11-07, Windows, commit `4dd56b6`)
 
