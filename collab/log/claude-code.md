@@ -128,6 +128,33 @@
 - istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
 
 
+## 2026-11-06 UTC+3 — T-20261106-04: ECC skill backlog + CLAUDE.md ölü referansları
+- task: T-20261106-04 | branch/PR: collab/claude-code/T-20261106-04-ecc-skill-backlog | commit: PR'da
+- ne yapıldı: ECC `.agents/skills` (47) + `skills` (314) tarandı; ~47 ilgili skill laptop `.claude/skills/<ad>/`'a kuruldu (eski `.claude/skills/ecc/` iç içe kurulum keşfedilmiyordu). docs-governance read-only audit: proje-içi 2 gerçek kırık referans (`CLAUDE.md` → `f96b7d8`'de silinen 2 handoff) → `git show f96b7d8^:<yol>` biçimine çevrildi. mcp-dependency-review: `.mcp.json` github sunucusu sürümsüz (HIGH) → madde 2'ye. 14 maddelik iş listesi task dosyasında.
+- VPS: N/A
+- istek: operator → backlog sırası onayı + merge · abacus/hermes → bilgi (madde 7–9 sosyal/SEO/video ile kesişiyor)
+## 2026-11-06 23:55 UTC+3 — T-20261106-06: güvenlik denetimi (backlog madde 2)
+- task: T-20261106-06 | branch/PR: collab/claude-code/T-20261106-06-security-audit | commit: PR'da
+- ne yapıldı: sır taraması (ağaç + 1487 commit geçmiş), harness/CI/MCP, internete açık uygulama yüzeyi, deploy + bağımlılık denetimi. Ayrıntı yalnız private store'da (`security-audit-2026-11-06/REPORT.md`). Sızmış eski değerlerin sha256 özetleri VPS'te 7 env dosyası + 6 container env'i ile karşılaştırıldı → 0 eşleşme (değer okunmadı/basılmadı). VPS notu: yalnız okuma (ssh: env özet karşılaştırması, `ss`, `ufw status`, `sshd -T`, `docker inspect`); değişiklik yok.
+- VPS: N/A
+- istek: operator → private rapordaki eylem listesi (Railway bot servisleri, Hetzner token teyidi, sshd) · fix PR'ları sırayla
+## 2026-11-07 01:05 UTC+3 — T-20261107-02: Composio çalışma klasörü gitignore
+- task: T-20261107-02 | branch/PR: collab/claude-code/T-20261107-02-gitignore-local-data | commit: PR'da
+- ne yapıldı: `.gitignore`'a `Composio*/` (API anahtarı içeren `.env.local` + üretim çıktıları public repoya girmesin); `data/lab/` zaten ignore'lu. `git check-ignore` ile doğrulandı.
+## 2026-11-07 12:30 UTC+3 — T-20261107-07: test credential değerini sentetikle değiştir (güvenlik fix #5)
+- task: T-20261107-07 | branch/PR: collab/claude-code/T-20261107-07-test-synthetic-credential | commit: PR'da
+- ne yapıldı: `test_xurl_client.py`'deki yüksek-entropi değer (yorum + türetilmiş assert) sentetik değerle değişti; 24 test geçti; regex tarayıcı + gitleaks temiz.
+## 2026-11-07 13:00 UTC+3 — T-20261107-09: GitHub MCP paketini sabitle (güvenlik fix #6)
+- task: T-20261107-09 | branch/PR: collab/claude-code/T-20261107-09-mcp-pin | commit: PR'da
+- ne yapıldı: `@modelcontextprotocol/server-github@2025.4.8` (arşivli paketin son ve fiilen çözülen sürümü) `.mcp.json` + collab/mcp/README.md örneklerinde; halefe geçiş ayrı task.
+- VPS: N/A
+- istek: operator → merge
+## 2026-11-06 23:10 UTC+3 — T-20261106-05: ana klondaki TP_FAILED-sentinel WIP'i incelendi
+- task: T-20261106-05 | branch/PR: collab/claude-code/T-20261106-05-tp-failed-sentinel | commit: PR'da
+- ne yapıldı: ana klonda commit'lenmemiş `exchange/__init__.py` WIP'i (TP retry tükenince `TP_FAILED` sentinel + kullanılmayan `notification_mgr`) incelendi. Bulgu: iddia edilen hata master'da yok (`""` zaten repair'i tetikliyor, `_is_real_oid("")` False); WIP 6 mevcut testi kırıyor ve rollback'te sahte TP1 atfı riski taşıyor → port EDİLMEDİ. Yerine uçtan uca regresyon testi eklendi (4 test, mutasyonla doğrulandı); komşu 165 test + tam suite 2920 passed.
+- VPS: N/A
+- not: ana klondaki WIP olduğu gibi bırakıldı (operatör kararı). Ayrıca ana klonda kazara silinmiş `u2algo-site/**` + `backend/tests/test_disclaimer_wiring.py` `git restore` ile geri getirildi (28 test yeşil).
+- istek: operator → WIP'i atma kararı + PR review
 ## 2026-11-07 00:40 UTC+3 — T-20261107-01: live-write gate sertleştirme (güvenlik fix #1)
 - task: T-20261107-01 | branch/PR: collab/claude-code/T-20261107-01-live-write-gate-hardening | commit: PR'da
 - ne yapıldı: denetimde (T-20261106-06) bulunan 3 boşluk kapatıldı — şemasız bot API URL'leri (+docker servis adı:port), httpie, ssh üzerinden compose durum değişikliği (heredoc/çok satırlı dahil). TDD: RED 9+10 → GREEN; `tests/hooks`+`tests/collab` 164 passed. Yerel `docker compose up` sessiz kalır. Regex'ler doğrusal (192 KB < 0.05 sn).
