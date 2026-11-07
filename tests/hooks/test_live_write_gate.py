@@ -83,6 +83,61 @@ def test_reads_and_dev_commands_pass_silently(command):
     assert run_gate(command) is None
 
 
+@pytest.mark.parametrize("command", [
+    # scheme-less bot API URLs (curl/httpie accept them) — T-20261107-01
+    "curl -X POST localhost:8000/api/bot/start",
+    "ssh efloud-bot 'curl -s -X POST 127.0.0.1:8080/api/bot/stop'",
+    "curl -X POST 10.0.0.5:8080/api/breaker/reset",
+    "curl -X POST bot.u2algo.com/api/kill-switch",
+    # httpie
+    "http POST :8000/api/kill-switch",
+    "http POST bot.u2algo.com/api/orders/close symbol=BTCUSDT",
+    # compose state change on the remote prod host, with or without -f
+    "ssh efloud-bot 'cd /opt/efloud-bot && docker compose up -d --build'",
+    "ssh efloud-bot docker compose restart",
+    "ssh root@178.104.122.91 \"docker-compose down\"",
+    # review follow-ups: multi-line remote commands, quoted -f, docker service names
+    "ssh efloud-bot <<'EOF'\ncd /opt/efloud-bot\ndocker compose up -d\nEOF",
+    "ssh efloud-bot \"cd /opt/efloud-bot &&\n docker compose up -d\"",
+    "ssh h \"docker compose -f 'docker-compose.yml' up -d\"",
+    "curl -X POST efloud-bot:8000/api/bot/start",
+    "docker exec efloud-panel curl -X POST efloud-bot:8000/api/kill-switch",
+])
+def test_gate_gaps_found_in_2026_11_06_audit_get_ask(command):
+    assert decision(run_gate(command)) == "ask"
+
+
+@pytest.mark.parametrize("command", [
+    "curl -s localhost:8000/api/status",
+    "http :8000/api/positions",
+    "grep -rn api/bot/start backend",
+    "ssh efloud-bot 'docker compose ps'",
+    "ssh efloud-bot 'cd /opt/efloud-bot && docker compose logs --tail 50 efloud-bot'",
+    "ssh efloud-bot 'docker ps --format {{.Names}}'",
+    "ssh efloud-bot 'docker compose ps --filter status=up'",
+    "ssh efloud-bot 'docker compose exec efloud-bot /app/start.sh --help'",
+    # local compose stays silent even when an ssh-looking word precedes it
+    "cat ~/.ssh/config && docker compose up -d",
+    "ssh-keygen -t ed25519 -f /tmp/k && docker compose up -d",
+])
+def test_gate_hardening_keeps_reads_silent(command):
+    assert run_gate(command) is None
+
+
+def test_adversarial_ssh_compose_input_stays_fast():
+    """A timed-out hook gives no opinion (fails open) — the regexes must stay fast."""
+    import importlib.util
+    import time
+
+    spec = importlib.util.spec_from_file_location("gate", GATE)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    payload = "ssh h docker compose ps " * 450  # ~10 KB, no write verb
+    started = time.perf_counter()
+    assert gate.find_write_in_command(payload) is None
+    assert time.perf_counter() - started < 1.0
+
+
 def test_write_inside_named_script_is_detected(tmp_path):
     script = tmp_path / "close_all.py"
     script.write_text("import ccxt\nex = ccxt.binanceusdm()\nex.create_order('BTC/USDT','market','sell',1)\n")

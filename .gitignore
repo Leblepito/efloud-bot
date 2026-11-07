@@ -135,3 +135,6 @@ hermes_tasks/
 
 # Pine lab exports / replay outputs (local only)
 data/lab/
+
+# Composio reel production workspace (local only: tools output + .env.local with API keys) — T-20261107-02
+Composio*/

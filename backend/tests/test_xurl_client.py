@@ -82,9 +82,9 @@ def test_mask_credential_short():
 def test_mask_credential_long():
     """Uzun credential → son 4 char görünür."""
     assert xc._mask_credential("abcdef1234567890") == "***7890"
-    # 'sk-9KjVniYJzpV84RSvoGNzozHWTTpKxqYCQjp4kVxpAUKY63kQGxHLYuApekVXj3je1sEgmvgDPF6qBzC3OmK6xOnUxoz0'
-    # → son 4: 'xoz0' → '***xoz0'
-    assert xc._mask_credential("sk-9Kj...3OmK6xOnUxoz0") == "***xoz0"
+    # Sentetik, gerçek olmayan uzun credential (T-20261107-07: eski yorum yüksek-entropi bir değer içeriyordu)
+    # → son 4: 'abcd' → '***abcd'
+    assert xc._mask_credential("test-ONLY-not-a-real-credential-0000abcd") == "***abcd"
 
 
 # ────────────────────────── Binary discovery ──────────────────────────
