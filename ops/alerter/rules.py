@@ -598,6 +598,61 @@ class SlProtectionEventRule(Rule):
         return _sl_dedup_key(self.alert_key, _sl_kind(rec) or "", rec)
 
 
+# Orphan position (T-20261107-11). exchange.OrderManager.reconcile logs this
+# free-text WARNING on every cycle while the exchange holds a position the bot
+# does not track: "⚠️  ORPHAN POSITION DETECTED: SYM side qty=.. entry=.. upnl=.."
+# or "... SYM — details unavailable". No structured extras → regex.
+_RE_ORPHAN = re.compile(
+    r"ORPHAN POSITION DETECTED: (?P<sym>\S+)"
+    r"(?: (?P<side>\S+) qty=(?P<qty>\S+) entry=(?P<entry>\S+) upnl=(?P<upnl>\S+))?")
+
+
+def _orphan_match(rec: dict):
+    if rec.get("logger") != "efloud.exchange" or rec.get("level") != "WARNING":
+        return None
+    return _RE_ORPHAN.search(rec.get("message", ""))
+
+
+@dataclass
+class OrphanPositionRule(Rule):
+    """Recurring reminder while an untracked (orphan) position exists.
+
+    Backstop for the one-shot entry_rollback_failed alert: that event is
+    logged once, so a failed Telegram send would lose it; the orphan line
+    repeats every reconcile cycle, so this rule re-alerts hourly per
+    (symbol, side) until the position is closed or tracked again. Same
+    family as the SL rules ("a live position may lack bot protection") →
+    same flag (EFLOUD_ALERTER_SL_ALERTS)."""
+    alert_key: str = "order.orphan_position"
+    severity: str = "CRITICAL"
+    dedup_window_sec: int = 60 * 60
+    ai_format: bool = False
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if not _flag_on(SL_ALERTS_ENV):
+            return None
+        m = _orphan_match(rec)
+        if not m:
+            return None
+        if m["side"]:
+            detail = (f"{_esc(m['sym'])} {_esc(m['side'])} · miktar {_esc(m['qty'])} · "
+                      f"giriş {_esc(m['entry'])} · uPnL {_esc(m['upnl'])}")
+        else:
+            detail = f"{_esc(m['sym'])} · detay alınamadı"
+        return ("🚨 <b>Borsada botun takip etmediği pozisyon var (orphan)</b>\n"
+                f"{detail}\n"
+                "Bot bu pozisyonu takip etmiyor; TP'sini ve kapanışını yönetmez. Orphan "
+                "koruması açıksa yalnız eksik SL'yi koymayı dener. Bot dışında bilerek "
+                "açılmadıysa (ör. geri alınamayan giriş) Binance'te kontrol et. "
+                "Pozisyon durdukça saatte bir hatırlatılır.")
+
+    def dedup_key(self, rec: dict) -> str:
+        m = _orphan_match(rec)
+        if not m:
+            return self.alert_key
+        return f"{self.alert_key}.{m['sym']}.{m['side'] or '?'}"
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Overseer watchdog (file-mtime driven)
 # ─────────────────────────────────────────────────────────────────────
@@ -704,4 +759,5 @@ RULES: list[Rule] = [
     TpPlacementFailedRule(),
     SlUnprotectedRule(),
     SlProtectionEventRule(),
+    OrphanPositionRule(),
 ]
