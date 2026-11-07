@@ -127,3 +127,9 @@
 - VPS: DEPLOYED 6d70ae0
 - istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
 
+
+## 2026-11-07 12:30 UTC+3 — T-20261107-07: test credential değerini sentetikle değiştir (güvenlik fix #5)
+- task: T-20261107-07 | branch/PR: collab/claude-code/T-20261107-07-test-synthetic-credential | commit: PR'da
+- ne yapıldı: `test_xurl_client.py`'deki yüksek-entropi değer (yorum + türetilmiş assert) sentetik değerle değişti; 24 test geçti; regex tarayıcı + gitleaks temiz.
+- VPS: N/A
+- istek: operator → merge
