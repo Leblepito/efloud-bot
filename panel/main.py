@@ -43,6 +43,34 @@ _sessions: dict = {}          # bot_id -> "efloud_session=..." cookie
 _overview_cache: dict = {"ts": 0.0, "data": None}
 _cache_lock = asyncio.Lock()
 
+# Failed-Basic-auth limiter (T-20261107-06). Client = right-most
+# X-Forwarded-For entry (appended by Caddy; left-most is client-controlled),
+# else the socket peer. Global cap bounds spoofed-header floods, like the bot
+# backend's login limiter. Only WRONG credentials count — the browser's first
+# header-less request (normal 401 challenge) does not.
+AUTH_FAIL_WINDOW_SEC = 900
+AUTH_FAIL_PER_CLIENT = 10
+AUTH_FAIL_GLOBAL = 50
+_auth_failures: dict = {}     # client -> [ts, ...]
+
+
+def _client_key(request: Request) -> str:
+    parts = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    if parts:
+        return parts[-1]
+    return request.client.host if request.client else "unknown"
+
+
+def _auth_locked(key: str, now: float) -> bool:
+    for k in list(_auth_failures):
+        fresh = [t for t in _auth_failures[k] if now - t < AUTH_FAIL_WINDOW_SEC]
+        if fresh:
+            _auth_failures[k] = fresh
+        else:
+            del _auth_failures[k]
+    total = sum(len(v) for v in _auth_failures.values())
+    return len(_auth_failures.get(key, [])) >= AUTH_FAIL_PER_CLIENT or total >= AUTH_FAIL_GLOBAL
+
 
 def _get_password() -> str:
     """Call-time okunur: rotate-credentials.sh env'i degistirip konteyneri
@@ -63,6 +91,10 @@ def _check_basic_auth(request: Request) -> None:
         raise HTTPException(503, "DASHBOARD_PASSWORD env eksik — panel devre disi")
     expected_user = _get_username()
     hdr = request.headers.get("authorization", "")
+    key, now = _client_key(request), time.time()
+    if hdr and _auth_locked(key, now):
+        raise HTTPException(429, "too many failed logins — try again later",
+                            headers={"Retry-After": str(AUTH_FAIL_WINDOW_SEC)})
     ok = False
     if hdr.startswith("Basic "):
         try:
@@ -75,7 +107,21 @@ def _check_basic_auth(request: Request) -> None:
         except Exception:
             ok = False
     if not ok:
+        if hdr:
+            _auth_failures.setdefault(key, []).append(now)
         raise HTTPException(401, "auth", headers={"WWW-Authenticate": 'Basic realm="efloud-panel"'})
+
+
+def _check_same_origin(request: Request) -> None:
+    """CSRF guard for state-changing actions (T-20261107-06). Browsers send
+    cached Basic credentials on cross-site form POSTs too; requiring a custom
+    header forces a CORS preflight the panel never grants, and Sec-Fetch-Site
+    rejects cross-site requests outright on modern browsers."""
+    site = request.headers.get("sec-fetch-site")
+    if site and site not in ("same-origin", "none"):
+        raise HTTPException(403, "cross-site request refused")
+    if request.headers.get("x-efloud-panel") != "1":
+        raise HTTPException(403, "missing X-Efloud-Panel header")
 
 
 async def _login(client: httpx.AsyncClient, bot_id: str) -> str:
@@ -156,6 +202,7 @@ _ACTIONS = {
 @app.post("/api/bot/{bot_id}/{action}")
 async def bot_action(bot_id: str, action: str, request: Request) -> JSONResponse:
     _check_basic_auth(request)
+    _check_same_origin(request)
     if bot_id not in BOTS or action not in _ACTIONS:
         raise HTTPException(404, "bilinmeyen bot/aksiyon")
     method, path = _ACTIONS[action]
@@ -268,7 +315,7 @@ async function act(bot, action) {
   const labels = { start:"START", stop:"STOP", restart:"RESTART", "breaker-reset":"BREAKER RESET" };
   if (!confirm(bot.toUpperCase() + " için " + labels[action] + " — emin misin?")) return;
   try {
-    const r = await fetch(`/api/bot/${bot}/${action}`, { method:"POST" });
+    const r = await fetch(`/api/bot/${bot}/${action}`, { method:"POST", headers:{"X-Efloud-Panel":"1"} });
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || r.status);
     toast(bot.toUpperCase() + " " + labels[action] + " ✓ " + JSON.stringify(j.result).slice(0,120), false);

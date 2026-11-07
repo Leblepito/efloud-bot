@@ -127,3 +127,9 @@
 - VPS: DEPLOYED 6d70ae0
 - istek: abacus → 3 gün `parity=MISMATCH` = 0 + `[touch shadow]` NET ölçümü (T-20261105-04) · operator → 24 sa Telegram hacmi (T-20261105-05), T-07
 
+
+## 2026-11-07 12:20 UTC+3 — T-20261107-06: panel CSRF + deneme limiti (güvenlik fix #3)
+- task: T-20261107-06 | branch/PR: collab/claude-code/T-20261107-06-panel-csrf | commit: PR'da
+- ne yapıldı: aksiyon POST'larında `Sec-Fetch-Site` + zorunlu `X-Efloud-Panel` başlığı (siteler-arası CSRF kapandı); hatalı Basic auth limiti 10/istemci + 50 global / 15 dk → 429 + Retry-After. 32 test geçti; security-reviewer APPROVE_WITH_NITS (nit'ler uygulandı).
+- VPS: N/A (panel şu an deploy değil)
+- istek: operator → merge
