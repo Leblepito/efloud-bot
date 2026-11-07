@@ -34,11 +34,11 @@ DATE = "2026-07-26"
 
 def _write_bundle(out_dir: Path, event_id: str, platform: str, *,
                   state: str = "approved", caption: Optional[str] = None,
-                  media: Optional[list[str]] = None) -> Path:
+                  media: Optional[list[str]] = None, digest: bool = True) -> Path:
     d = out_dir / DATE / "bundles"
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{event_id}.{platform}.json"
-    p.write_text(json.dumps({
+    bundle = {
         "draft_id": f"{event_id}:{platform}",
         "event_id": event_id,
         "platform": platform,
@@ -52,7 +52,12 @@ def _write_bundle(out_dir: Path, event_id: str, platform: str, *,
             "thread": [],
             "alt_text": "chart",
         },
-    }, ensure_ascii=False), encoding="utf-8")
+    }
+    if state == "approved" and digest:
+        # what approve_bundle / --auto-approve record (approval bound to content)
+        from scripts.lane_g_social import payload_digest
+        bundle["approved_digest"] = payload_digest(bundle)
+    p.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")
     return p
 
 
@@ -249,3 +254,57 @@ class TestNotifier:
             dry_run=False, publishers=[PlatformClientPublisher("x", _FakeClient())],
             notifier=seen.append)
         assert seen and "LIVE" in seen[0]
+
+
+class TestApprovalIsBoundToContent:
+    """Approval covers the exact content the operator saw (T-20261107-19).
+
+    An `approved` bundle whose caption/media changed after approval, or that
+    carries no approval digest at all, must not be dispatched.
+    """
+
+    def _approve(self, out_dir: Path, event_id: str, platform: str = "x"):
+        from scripts.lane_g_social import approve_bundle
+        p = _write_bundle(out_dir, event_id, platform, state="pending_review")
+        approve_bundle(out_dir, DATE, event_id, platform)
+        return p
+
+    def test_operator_approval_records_a_content_digest(self, tmp_path):
+        from scripts.lane_g_social import payload_digest
+        p = self._approve(tmp_path, "evt-d1")
+        b = json.loads(p.read_text(encoding="utf-8"))
+        assert b["state"] == "approved"
+        assert b["approved_digest"] == payload_digest(b)
+
+    def test_unchanged_approved_bundle_is_dispatched(self, tmp_path):
+        self._approve(tmp_path, "evt-d2")
+        s = run(bundle_dir=tmp_path, date=DATE, state_path=tmp_path / "st.json",
+                publishers=[DryRunPublisher("x")])
+        assert s["published"] == 1
+
+    def test_caption_edited_after_approval_is_refused(self, tmp_path):
+        p = self._approve(tmp_path, "evt-d3")
+        b = json.loads(p.read_text(encoding="utf-8"))
+        b["payload"]["caption"] += "\nEdited after approval"
+        p.write_text(json.dumps(b, ensure_ascii=False), encoding="utf-8")
+        pub = DryRunPublisher("x")
+        s = run(bundle_dir=tmp_path, date=DATE, state_path=tmp_path / "st.json", publishers=[pub])
+        assert s["published"] == 0 and pub.calls == []
+        assert s["results"][0]["status"] == "approval_stale"
+
+    def test_media_file_replaced_after_approval_is_refused(self, tmp_path):
+        media = tmp_path / "chart.png"
+        media.write_bytes(b"original")
+        from scripts.lane_g_social import approve_bundle
+        _write_bundle(tmp_path, "evt-d4", "x", state="pending_review", media=[str(media)])
+        approve_bundle(tmp_path, DATE, "evt-d4", "x")
+        media.write_bytes(b"swapped")
+        pub = DryRunPublisher("x")
+        s = run(bundle_dir=tmp_path, date=DATE, state_path=tmp_path / "st.json", publishers=[pub])
+        assert s["published"] == 0 and pub.calls == []
+
+    def test_approved_bundle_without_digest_is_refused(self, tmp_path):
+        _write_bundle(tmp_path, "evt-d5", "x", state="approved", digest=False)
+        pub = DryRunPublisher("x")
+        s = run(bundle_dir=tmp_path, date=DATE, state_path=tmp_path / "st.json", publishers=[pub])
+        assert s["published"] == 0 and s["results"][0]["status"] == "approval_stale"
