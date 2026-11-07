@@ -281,6 +281,16 @@
 - VPS: N/A
 - istek: operator → yukarıdaki 6 karar
 
+## 2026-11-07 20:00 UTC+3 — T-20261107-27: CLAUDE.md yalnız anayasa
+- task: T-20261107-27 | branch/PR: collab/claude-code/T-20261107-27-claude-md-constitution | commit: PR'da
+- ne yapıldı: CLAUDE.md'deki tarihli durum blokları aynen `docs/history/claude-md-status-archive.md`'ye taşındı (102 → 76 satır); kalıcı kurallar, sözleşme, kanonik kaynaklar ve Pine kısıtları yerinde. ADR-0005 çelişkisi ("strategy") giderildi. Karar operatör adına verildi (spec 2026-11-07 §1 #4).
+- VPS: N/A
+- istek: operator → merge (itiraz varsa geri al) · abacus → review
+## 2026-11-07 20:30 UTC+3 — T-20261107-28: live.html gerçekleri + demo videosu
+- task: T-20261107-28 | branch/PR: collab/claude-code/T-20261107-28-live-page-facts | commit: PR'da
+- ne yapıldı: Karar 5 — 45 sn'lik site demo videosu yalnız public sayfalardan (Playwright, tıklama yok). Kayıtta live.html'in silinen `bot./v2./scalp.u2algo.com` adlarını ve beklemedeki Scalp/Long botlarını "Çalışıyor" gösterdiği görüldü → düzeltildi; `test_seo_meta.js` silinen alt alan adlarını yakalıyor. Video merge+deploy sonrası yeniden kaydedilecek.
+- VPS: N/A
+- istek: operator → merge (Railway otomatik deploy) · abacus → review
 ## 2026-11-07 20:10 UTC+3 — T-20261107-25: LLM yapı doğrulaması varsayılan kapalı
 - task: T-20261107-25 | branch/PR: collab/claude-code/T-20261107-25-structure-validation-off | commit: PR'da
 - ne yapıldı: `engine/signals.py` senkron yapı doğrulaması `structure_validation` bayrağı arkasında (varsayılan False), orkestratör config'ten okur, canlı config `engine.structure_validation.enabled: false`. Canlıda zaten %100 pass-through olduğundan işlem kararı değişmez. Regresyon defteri (smc-v1 → orkestratör, backend-api, alerter …) 2763 passed.
