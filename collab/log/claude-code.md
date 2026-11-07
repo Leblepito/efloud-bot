@@ -170,3 +170,8 @@
 - ne yapıldı: `npm audit fix --package-lock-only` (majör yok): next 15.5.29, sharp 0.35.5, postcss 8.5.28, postcss-selector-parser 6.1.5, source-map-js 1.2.2 → 11 açık → 8. Kalan: vitest 2→5 majör (dev-only) + next'in gömülü postcss'i (next 16) → ayrı task. typecheck 0 hata, vitest 5/5, build OK. VPS notu: N/A (frontend statik export; bot image'ı yeniden build edildiğinde girer).
 - VPS: N/A
 - istek: operator → merge
+## 2026-11-07 01:40 UTC+3 — T-20261107-04: u2algo-site sertleştirme (güvenlik fix #2)
+- task: T-20261107-04 | branch/PR: collab/claude-code/T-20261107-04-u2algo-site-hardening | commit: PR'da
+- ne yapıldı: statik servis allowlist'e alındı (server kaynağı/package/config/scripts/supabase/web/dotfile + waitlist fallback `data/` artık servis edilmiyor — yerelde kaydedilen e-postanın indirilebildiği RED testle kanıtlandı), waitlist rate-limit (5/istemci + 200 global / 10 dk), webhook gövdesi 64 KB tavanı, 500'de iç hata mesajı yok. Gerçek sunucuyu başlatan HTTP testi 45/45; consent/webhook 15/15; smoke OK. security-reviewer APPROVE_WITH_NITS (nit'ler uygulandı). VPS notu: N/A (Railway — merge sonrası otomatik deploy).
+- VPS: N/A
+- istek: operator → merge; deploy sonrası XFF davranışı + sayfaların açıldığını kontrol
