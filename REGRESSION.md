@@ -362,7 +362,7 @@ SafeOrchestrator, lifecycle, journal, ledgers, notifications
 Paths: `engine/__init__.py`, `engine/safe_orchestrator.py`, `engine/lifecycle.py`, `engine/journal.py`, `engine/memory.py`, `engine/postmortem.py`, `engine/report.py`, `engine/allocation.py`, `engine/instance_manager.py`, `engine/signal_ledger.py`, `engine/edge_costs.py`, `engine/edge_metrics.py`, `engine/notifications/`, `main.py`, `preflight.py`
 Downstream consumers: backend-api, exchange, pine, routines, scripts-misc, smc-v1, alerter (unverified), overseer (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run orchestrator`
-Mapped tests: 84
+Mapped tests: 85
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -442,6 +442,7 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `tests/test_lifecycle_none_safety_sweep.py`
 - `tests/test_lux_monitor.py`
 - `tests/test_lux_transition_logs.py`
+- `tests/test_main_import_keeps_stdout.py`
 - `tests/test_main_logging_flag.py`
 - `tests/test_max_hold_force_close.py`
 - `tests/test_orchestrator_pullback.py`

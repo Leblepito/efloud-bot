@@ -48,10 +48,13 @@ from exchange import BinanceClient, OrderManager
 from typing import Optional
 
 # ── UTF-8 stdout wrapper (Windows cp1252 fix) ──
-if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+def _force_utf8_console() -> None:
+    """Only when main.py is the entry point: doing this at import time closed
+    pytest's capture stream on Windows (see tests/test_main_import_keeps_stdout.py)."""
+    if sys.platform == "win32":
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 
 # ═══════════════════════════════════════════════
@@ -756,6 +759,7 @@ def main():
 
 
 if __name__ == "__main__":
+    _force_utf8_console()
     from utils.logging import configure_json_logging
     configure_json_logging()  # no-op unless EFLOUD_LOGGING_FORMAT=json
     main()

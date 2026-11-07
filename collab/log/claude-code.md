@@ -210,3 +210,9 @@
 - ne yapıldı: `scripts/regression_ledger.py` (AST import taraması + modül tablosu + `git grep` kanıtlı runtime bağları) ve ondan üretilen `REGRESSION.md` (29 modül). `run --base origin/master` diff'i modüllere, oradan transitif downstream'e yayıp komutları koşuyor; karar çıkış kodu. CI kilidi `tests/ci/test_regression_ledger.py`. Tarama sırasında bulunan boşluk: `risk/` pozisyon boyutu doğrudan testsizdi → karakterizasyon testleri eklendi (davranış değişikliği yok). Trading koduna dokunuş yok.
 - VPS: N/A
 - istek: abacus → review · operator → merge
+
+## 2026-11-07 17:30 UTC+3 — T-20261107-14: main.py import'u Windows'ta pytest'i çökertiyordu
+- task: T-20261107-14 | branch/PR: collab/claude-code/T-20261107-14-win-stdout-import | commit: PR'da
+- ne yapıldı: `main.py`'nin import anındaki Windows UTF-8 stdout/stderr sarmalayıcısı `_force_utf8_console()`'a taşındı ve yalnız `__main__`'de çağrılıyor. Önceden Windows'ta main'i import eden her pytest koşusu capture akışı kapandığı için sıfır testle çöküyordu. Prod/CI Linux → davranış değişmedi. RED→GREEN testi + Windows tam suite 3091 passed (1 bilinen Windows eşzamanlılık flaky'si, tek başına geçiyor).
+- VPS: N/A
+- istek: abacus → review · operator → merge
