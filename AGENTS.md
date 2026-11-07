@@ -79,3 +79,8 @@ Backtest modülü 2026-10-31'de kaldırıldı.
 ```bash
 python -m pytest --ignore=external_repos --import-mode=importlib -q
 ```
+
+Modül regresyonu: `REGRESSION.md` (üretilmiş defter). Değişiklikten sonra
+`python scripts/regression_ledger.py run --base origin/master` → değişen modül + bütün
+downstream tüketicileri koşar; karar çıkış kodudur. Modül tablosu değişince
+`python scripts/regression_ledger.py render`.

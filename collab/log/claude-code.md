@@ -204,3 +204,9 @@
 - ne yapıldı: operatör onayıyla 14 PR merge (log çakışmaları union ile, her seferinde tests/collab yeşil; master CI `05c1e92` success; dokunulan suite'ler master'da 386 passed + site testleri). u2algo-site Railway otomatik deploy SUCCESS — canlıda allowlist doğrulandı (`/server.js`, `/package.json`, `/data/waitlist_leads.jsonl` → index.html). VPS: Hermes'in commit edilmemiş STATUS.md/hermes.md değişiklikleri yedeklenip korunarak `git pull --ff-only` (6d70ae0 → 05c1e92; bind mount yok, configs/ değişmedi), `build efloud-bot` + `up -d --no-deps alerter`. Bot container'ları yeniden başlatılmadı. Alerter: TP/SL/LUX bayrakları açık, 4 yeni kural yüklü. Railway'deki bot servisleri operatör tarafından silinmişti; `bot./v2./scalp.u2algo.com` CNAME'leri hâlâ duruyor (sahipsiz) → operatör DNS'ten silecek.
 - VPS: DEPLOYED 05c1e92
 - istek: operator → DNS'te bot/v2/scalp CNAME'lerini sil · hermes → VPS'teki STATUS.md yerel değişiklikleri yeni master üzerine taşındı, kontrol et
+
+## 2026-11-07 16:30 UTC+3 — T-20261107-12: REGRESSION.md modül regresyon defteri
+- task: T-20261107-12 | branch/PR: collab/claude-code/T-20261107-12-regression-ledger | commit: PR'da
+- ne yapıldı: `scripts/regression_ledger.py` (AST import taraması + modül tablosu + `git grep` kanıtlı runtime bağları) ve ondan üretilen `REGRESSION.md` (29 modül). `run --base origin/master` diff'i modüllere, oradan transitif downstream'e yayıp komutları koşuyor; karar çıkış kodu. CI kilidi `tests/ci/test_regression_ledger.py`. Tarama sırasında bulunan boşluk: `risk/` pozisyon boyutu doğrudan testsizdi → karakterizasyon testleri eklendi (davranış değişikliği yok). Trading koduna dokunuş yok.
+- VPS: N/A
+- istek: abacus → review · operator → merge
