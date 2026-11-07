@@ -71,7 +71,7 @@ Kurallar:
 | 9 | ✅ seslendirme kesilmesi + ses seviyesi | #327 (T-20261107-21) · **demo videosu: operatör kararı (hangi veri)** |
 | 10 | ✅ canary canlıda ALL GREEN | #326 (T-20261107-20) |
 | 11 | ✅ kusur yok | #328 (T-20261107-22) |
-| 12 | ⛔ bloklu | `backtest/` master'da yok (`562a6a3`) → **geri yükleme operatör kararı** |
+| 12 | ✅ | PR (T-20261108-01): 2.1× faster, byte-identical (memo of identical HTF/daily analyses + no `iterrows`) |
 | 13 | ✅ ölçüm raporu | #328 · **L1 (yapı doğrulama) operatör + risk-ops kararı** |
 | 14 | ◐ kısım 1 | #329 (T-20261107-23) · **kısım 2 (CLAUDE.md anayasa ↔ durum ayrımı) operatör kararı** |
 

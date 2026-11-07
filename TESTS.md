@@ -166,6 +166,7 @@ private store). Every finding is fixed and has a test.
 | TEST-BT-002 | covered | A plain run uses the live config's `smc_version`; agent team and Kronos are off and the LLM factory is a null client during the run; the live config makes runs NET | `tests/backtest/test_live_parity.py::TestLiveConfigAndOffline` |
 | TEST-BT-003 | covered | Backtest trades are reconciled against live trades on simulated bar time, not wall clock | `tests/backtest/test_live_parity.py::test_reconcile_matches_backtest_trades_on_simulated_time` |
 | TEST-BT-004 | covered | The breaker runs on sim-time in backtest: closed trades are recorded at the cycle time and the v2 entry gate checks at the cycle time, so an old simulated loss never counts as "today" (repro: SOL/USDT 41d daily-loss trip on the whole run); live (`now=None`) keeps the wall clock ; a TRIPPED pause is judged at the sim-time it was checked (`BreakerStatus.as_of`), so consecutive-loss and daily-loss pauses really block in backtest | `tests/backtest/test_breaker_sim_time.py`, `backend/tests/test_breaker_sim_time_gate_gap.py::test_tripped_breaker_blocks_in_sim_time` |
+| TEST-BT-005 | covered | Backtest speed (item 12): identical HTF/daily frames are analyzed once (exact `DataFrame.equals` + equal arguments, every hit an isolated copy, patched only during a run); memo on vs off gives a byte-identical backtest on the real engine | `tests/backtest/test_memo.py` |
 
 ## 5. Evidence run (2026-11-07, Windows, commit `4dd56b6`)
 

@@ -229,7 +229,7 @@ SMC v2 port (zones, triggers, SL/TP calc) + v2 doctor
 Paths: `engine/smc_v2/`, `tools/v2_doctor.py`
 Downstream consumers: backtest, orchestrator, pine
 Regression acceptance command: `python scripts/regression_ledger.py run smc-v2`
-Mapped tests: 40
+Mapped tests: 41
 
 <details><summary>test files</summary>
 
@@ -251,6 +251,7 @@ Mapped tests: 40
 - `backend/tests/smc_v2/test_v2_entry_run_cycle_gates.py`
 - `backend/tests/smc_v2/test_zones.py`
 - `backend/tests/test_report_doctrine_engine_gap.py`
+- `tests/backtest/test_memo.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/engine/test_async_agent_review.py`
 - `tests/engine/test_luxalgo.py`
@@ -701,7 +702,7 @@ NET-cost backtest harness (drives the live SafeOrchestrator)
 Paths: `backtest/`, `scripts/evaluate_backtest_gates.py`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run backtest`
-Mapped tests: 15
+Mapped tests: 16
 Note: ADR-0003 gate. Slow full-engine tests run in the CI job `backtest (slow)`.
 
 <details><summary>test files</summary>
@@ -719,6 +720,7 @@ Note: ADR-0003 gate. Slow full-engine tests run in the CI job `backtest (slow)`.
 - `backend/tests/test_backtest_social_tags.py`
 - `backend/tests/test_evaluate_backtest_gates.py`
 - `tests/backtest/test_live_parity.py`
+- `tests/backtest/test_memo.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/test_backtest_max_hold.py`
 
@@ -869,7 +871,7 @@ Bot configs (live: configs/config.phase2_1k.yaml)
 Paths: `configs/`, `config.yaml`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run configs`
-Mapped tests: 47
+Mapped tests: 48
 
 <details><summary>test files</summary>
 
@@ -901,6 +903,7 @@ Mapped tests: 47
 - `backend/tests/test_timeframe_profiles.py`
 - `backend/tests/test_trade_journal_wiring.py`
 - `tests/backtest/test_live_parity.py`
+- `tests/backtest/test_memo.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/ci/test_workflow_hardening.py`
 - `tests/config/test_agent_team_observation.py`
