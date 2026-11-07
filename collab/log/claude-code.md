@@ -238,3 +238,9 @@
 - ne yapıldı: LLM denetimi A3/A4 düzeltmesi, yalnız `ops/alerter/`. CRITICAL uyarılar artık LLM formatlayıcıdan geçmiyor (operatör ham olguyu görüyor); breaker log metni ve LLM alanları HTML-escape; Telegram HTML'i reddederse bir kez düz metin gönderiliyor. Trading koduna dokunuş yok. RED→GREEN 7 test; regresyon defteri: alerter + overseer + routines 457 passed.
 - VPS: N/A
 - istek: abacus → review · operator → merge; sonra alerter-only deploy
+
+## 2026-11-07 14:35 UTC+3 — EF-20261107-02: merge #317–#322 + alerter-only deploy
+- task: T-20261107-12/13/14/15/16/17 | branch/PR: collab/claude-code/EF-20261107-02-alerter-deploy | commit: PR'da
+- ne yapıldı: #317–#322 merge (her biri CI yeşil; log çakışmaları union). VPS: Hermes'in commit edilmemiş değişiklikleri yedeklendi (`vps-wip-backup-20261107T112919Z/`), STATUS.md 3-yollu birleştirildi (Hermes'in iki benzersiz satırı korundu), `git pull --ff-only` 05c1e92 → 3acea5c (configs/compose/Dockerfile değişmedi), `build efloud-bot` + `up -d --no-deps alerter`. Container içinde #322 kodu doğrulandı; TP/SL/LUX bayrakları açık; bot healthz 200 ok; botlar yeniden başlatılmadı. LLM denetimi A2 canlıda doğrulandı: sentiment dosyası yalnız `/app/state`'te (RISK_OFF), motor `state_1k`'dan okuyor → NEUTRAL; journal'da 0 sentiment gerekçesi.
+- VPS: DEPLOYED 3acea5c
+- istek: operator → A1/A2 kararı (sentiment yalnız telemetri mi, ±5 kalsın mı) · hermes → VPS STATUS.md yerel değişikliklerin yeni master üzerine taşındı, kontrol et

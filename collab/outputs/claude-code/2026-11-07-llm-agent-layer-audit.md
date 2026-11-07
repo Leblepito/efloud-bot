@@ -36,9 +36,10 @@ as audit H1 (post-cap bonuses), whose fix was telemetry-only and did not remove 
 - Dashboard reader: `backend/api.py` `/api/ai/sentiment` → `./state/…` (the writer's file).
 
 Effect: the V1 engine most likely always loads the NEUTRAL fallback, so **A1 is dormant in prod**.
-Meanwhile the dashboard shows the LLM's RISK_ON/RISK_OFF as if it were in use. (Code and config
-evidence. VPS confirmation is `ls /app/state_1k/ai_sentiment_registry.json` inside the container;
-it waits for the Claude SSH setup.)
+Meanwhile the dashboard shows the LLM's RISK_ON/RISK_OFF as if it were in use. **Confirmed live 2026-11-07 11:29 UTC:**
+inside `efloud-bot`, `/app/state/ai_sentiment_registry.json` exists (`macro_sentiment: RISK_OFF`) and
+`/app/state_1k/ai_sentiment_registry.json` does not. `trade_journal.jsonl` has 0 `Macro Sentiment`
+reasons. The dashboard therefore shows RISK_OFF while the engine trades as NEUTRAL.
 
 **Do not fix the path on its own.** That would silently switch on an LLM effect on mainnet
 entries (ADR-0003). This needs an operator decision; options below.
@@ -83,6 +84,6 @@ a wrong notional %. Exceptions in this path fail closed (veto), which is correct
 
 | # | Action | Who | Status |
 |---|---|---|---|
-| 1 | A3 + A4: CRITICAL alerts bypass the LLM formatter; escape HTML; retry as plain text when Telegram rejects HTML | claude-code (alerter only, no trading code) | separate PR (T-20261107-17) |
+| 1 | A3 + A4: CRITICAL alerts bypass the LLM formatter; escape HTML; retry as plain text when Telegram rejects HTML | claude-code (alerter only, no trading code) | **done**: #322, deployed (alerter only) 2026-11-07 11:30 UTC |
 | 2 | A1 + A2: choose one: **(a) recommended** — make sentiment telemetry-only (keep it in `meta`, drop the ±5), then align the paths so the dashboard and the journal show the real value; **(b)** align the paths and keep the ±5, which needs a NET-cost backtest with and without sentiment plus sign-off (ADR-0003) | operator | decision pending |
 | 3 | A5: when gating is ever proposed, pass the real balance (skip the review when it is None) | whoever proposes gating | note in ADR-0002 |
