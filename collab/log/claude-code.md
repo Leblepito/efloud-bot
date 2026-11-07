@@ -175,3 +175,8 @@
 - ne yapıldı: statik servis allowlist'e alındı (server kaynağı/package/config/scripts/supabase/web/dotfile + waitlist fallback `data/` artık servis edilmiyor — yerelde kaydedilen e-postanın indirilebildiği RED testle kanıtlandı), waitlist rate-limit (5/istemci + 200 global / 10 dk), webhook gövdesi 64 KB tavanı, 500'de iç hata mesajı yok. Gerçek sunucuyu başlatan HTTP testi 45/45; consent/webhook 15/15; smoke OK. security-reviewer APPROVE_WITH_NITS (nit'ler uygulandı). VPS notu: N/A (Railway — merge sonrası otomatik deploy).
 - VPS: N/A
 - istek: operator → merge; deploy sonrası XFF davranışı + sayfaların açıldığını kontrol
+## 2026-11-07 12:20 UTC+3 — T-20261107-06: panel CSRF + deneme limiti (güvenlik fix #3)
+- task: T-20261107-06 | branch/PR: collab/claude-code/T-20261107-06-panel-csrf | commit: PR'da
+- ne yapıldı: aksiyon POST'larında `Sec-Fetch-Site` + zorunlu `X-Efloud-Panel` başlığı (siteler-arası CSRF kapandı); hatalı Basic auth limiti 10/istemci + 50 global / 15 dk → 429 + Retry-After. 32 test geçti; security-reviewer APPROVE_WITH_NITS (nit'ler uygulandı). VPS notu: N/A (panel şu an deploy değil).
+- VPS: N/A
+- istek: operator → merge
