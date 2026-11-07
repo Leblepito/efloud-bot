@@ -155,3 +155,8 @@
 - VPS: N/A
 - not: ana klondaki WIP olduğu gibi bırakıldı (operatör kararı). Ayrıca ana klonda kazara silinmiş `u2algo-site/**` + `backend/tests/test_disclaimer_wiring.py` `git restore` ile geri getirildi (28 test yeşil).
 - istek: operator → WIP'i atma kararı + PR review
+## 2026-11-07 00:40 UTC+3 — T-20261107-01: live-write gate sertleştirme (güvenlik fix #1)
+- task: T-20261107-01 | branch/PR: collab/claude-code/T-20261107-01-live-write-gate-hardening | commit: PR'da
+- ne yapıldı: denetimde (T-20261106-06) bulunan 3 boşluk kapatıldı — şemasız bot API URL'leri (+docker servis adı:port), httpie, ssh üzerinden compose durum değişikliği (heredoc/çok satırlı dahil). TDD: RED 9+10 → GREEN; `tests/hooks`+`tests/collab` 164 passed. Yerel `docker compose up` sessiz kalır. Regex'ler doğrusal (192 KB < 0.05 sn).
+- VPS: N/A
+- istek: operator → review/merge (yalnız gate'i güçlendirir; touches_live=false)
