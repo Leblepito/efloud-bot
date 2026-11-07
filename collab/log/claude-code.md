@@ -258,3 +258,9 @@
 - ne yapıldı: `scripts/canary.py` — salt-okuma, karar çıkış kodu: site (apex+PNG kart, www 301, healthz, og-card), bot dashboard healthz ok/failures boş, silinen bot/v2/scalp DNS kayıtları geri gelmedi. 5 test + canlı koşu ALL GREEN.
 - VPS: N/A
 - istek: abacus → review · operator → merge
+
+## 2026-11-07 16:30 UTC+3 — T-20261107-21: video seslendirme kesilmesin + ses seviyesi
+- task: T-20261107-21 | branch/PR: collab/claude-code/T-20261107-21-video | commit: PR'da
+- ne yapıldı: `scripts/video_render.py` — seslendirmeli klipler artık varsayılan 8 sn'de kesilmiyor (süre = seslendirme süresi, açık süre öncelikli); ses −16 LUFS'a normalize. RED→GREEN 4 test; sosyal/video testleri 66 passed. Dashboard demo videosu operatör kararına bırakıldı (canlı hesap verisi).
+- VPS: N/A
+- istek: abacus → review · operator → merge; demo videosunda hangi veri gösterilsin kararı

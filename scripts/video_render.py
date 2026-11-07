@@ -59,6 +59,24 @@ VIDEO_FORMATS: dict[str, tuple[int, int]] = {
 DEFAULT_DURATION = 8.0
 DEFAULT_FPS = 30
 BACKEND_ENV = "EFLOUD_VIDEO_BACKEND"
+# Voice-over loudness: EBU R128 integrated -16 LUFS / -1.5 dBTP, the level
+# Instagram, YouTube and TikTok normalise speech towards (no pumping on playback).
+VOICE_LOUDNORM = "loudnorm=I=-16:TP=-1.5:LRA=11"
+
+
+def _media_duration(path: str | Path) -> Optional[float]:
+    """Duration in seconds via ffprobe, or None when unknown."""
+    binary = os.environ.get("FFPROBE_BIN") or shutil.which("ffprobe")
+    if binary is None:
+        return None
+    try:
+        proc = subprocess.run([binary, "-v", "error", "-show_entries", "format=duration",
+                               "-of", "default=nw=1:nk=1", str(path)],
+                              capture_output=True, text=True, timeout=30)
+        value = float((proc.stdout or "").strip())
+        return value if value > 0 else None
+    except (subprocess.SubprocessError, OSError, ValueError):
+        return None
 
 
 class VideoRenderError(Exception):
@@ -109,13 +127,17 @@ def render_clip_ffmpeg(
     out_path: str | Path,
     *,
     fmt: str = "vertical",
-    duration: float = DEFAULT_DURATION,
+    duration: Optional[float] = None,
     fps: int = DEFAULT_FPS,
     zoom: float = 1.04,
     audio_path: Optional[str | Path] = None,
     timeout: int = 180,
 ) -> Path:
-    """Animate a chart still into an MP4 with ffmpeg. Returns the written path."""
+    """Animate a chart still into an MP4 with ffmpeg. Returns the written path.
+
+    ``duration=None`` means: the full voice-over length when ``audio_path`` is
+    given (a narration is never cut), else ``DEFAULT_DURATION``. A voice-over is
+    loudness-normalised to ``VOICE_LOUDNORM``."""
     binary = _ffmpeg_bin()
     if binary is None:
         raise VideoRenderError("ffmpeg not found (install it or set FFMPEG_BIN)")
@@ -124,6 +146,9 @@ def render_clip_ffmpeg(
     src = Path(image_path)
     if not src.exists():
         raise VideoRenderError(f"chart still not found: {src}")
+
+    if duration is None:
+        duration = (_media_duration(audio_path) if audio_path else None) or DEFAULT_DURATION
 
     w, h = VIDEO_FORMATS[fmt]
     out = Path(out_path)
@@ -141,7 +166,8 @@ def render_clip_ffmpeg(
         "-vf", _build_filter(w, h, duration, fps, zoom=zoom),
         "-c:v", "libx264", "-preset", "medium", "-crf", "20",
         "-pix_fmt", "yuv420p", "-r", str(fps),
-        "-c:a", "aac", "-b:a", "96k",
+        *(["-af", VOICE_LOUDNORM, "-ar", "44100"] if audio_path else []),
+        "-c:a", "aac", "-b:a", "128k" if audio_path else "96k",
         "-movflags", "+faststart",
         str(out),
     ]
@@ -249,7 +275,7 @@ def render_clip(
     backend: Optional[str] = None,
     levels: Optional[dict] = None,
     fmt: str = "vertical",
-    duration: float = DEFAULT_DURATION,
+    duration: Optional[float] = None,
     fallback: bool = True,
     **kwargs,
 ) -> tuple[Path, str]:
@@ -282,7 +308,7 @@ def render_clip(
                      if k in ("submit", "poll", "download", "max_polls", "poll_interval")}
         try:
             p = render_clip_higgsfield(image_path, out_path, levels=levels, fmt=fmt,
-                                       duration=min(duration, 10.0), **hf_kwargs)
+                                       duration=min(duration or DEFAULT_DURATION, 10.0), **hf_kwargs)
             return p, "higgsfield"
         except Exception as e:
             if not fallback:
@@ -328,7 +354,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--image", required=True, help="chart PNG from scripts.chart_render")
     ap.add_argument("--out", required=True, help="output MP4 path")
     ap.add_argument("--format", default="vertical", choices=sorted(VIDEO_FORMATS))
-    ap.add_argument("--duration", type=float, default=DEFAULT_DURATION)
+    ap.add_argument("--duration", type=float, default=None,
+                    help=f"seconds (default: voice-over length with --audio, else {DEFAULT_DURATION})")
     ap.add_argument("--fps", type=int, default=DEFAULT_FPS)
     ap.add_argument("--backend", default=None, choices=["ffmpeg", "higgsfield"])
     ap.add_argument("--audio", default=None, help="optional audio track")
