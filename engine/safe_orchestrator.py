@@ -1307,7 +1307,7 @@ class SafeOrchestrator:
             # Without this, breaker drifts (record_trade is realized-only, ignores
             # unrealized PnL and external wallet changes like manual transfers).
             if balance is not None:
-                self.breaker.sync_balance(balance)
+                self.breaker.sync_balance(balance, now=now)
             # `now` is sim-time in backtest, None in live (uses wall-clock).
             breaker_status = self.breaker.check(now=now)
             if not breaker_status.can_trade:
