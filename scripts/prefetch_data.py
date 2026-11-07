@@ -2,6 +2,7 @@
 
 Usage:
     python -m scripts.prefetch_data
+    python -m scripts.prefetch_data --config configs/config.phase2_1k.yaml         --symbols BTC/USDT,ETH/USDT --days 45   # the live chain's timeframes + 1d
 
 Fetches 21 symbols × 4 timeframes from Binance public REST (no auth needed),
 writes parquet files under cache/ohlcv/{symbol}/{tf}.parquet.
@@ -19,6 +20,7 @@ Wall time: ~15-25 min on 21 symbols. Total cache size: ~300-400 MB.
 """
 from __future__ import annotations
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -38,19 +40,45 @@ TIMEFRAMES = ["4h", "1h", "15m", "1d"]
 PERIOD_MS = 365 * 24 * 60 * 60 * 1000  # 1 year
 
 
-def main() -> int:
+def parse_args(argv=None) -> argparse.Namespace:
+    """No args = the historical 21 symbols × 4h/1h/15m/1d × 1 year.
+
+    ``--config`` replaces the timeframes with that config's resolved chain
+    (htf/mtf/entry) plus 1d, so a backtest of the live config has its data.
+    """
+    ap = argparse.ArgumentParser(description="Pre-populate cache/ohlcv from Binance public klines")
+    ap.add_argument("--config", help="bot config; its timeframe chain + 1d is fetched")
+    ap.add_argument("--symbols", help="comma-separated, e.g. BTC/USDT,ETH/USDT")
+    ap.add_argument("--days", type=int, default=365)
+    a = ap.parse_args(argv)
+    a.symbols = [x.strip() for x in a.symbols.split(",") if x.strip()] if a.symbols else list(SYMBOLS)
+    if a.config:
+        import yaml
+        from data.timeframes import resolve_timeframes
+        with open(a.config, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        resolve_timeframes(cfg)
+        tfs = cfg["timeframes"]
+        a.timeframes = list(dict.fromkeys([tfs["htf"], tfs["mtf"], tfs["entry"], "1d"]))
+    else:
+        a.timeframes = list(TIMEFRAMES)
+    return a
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
     end_ms = int(time.time() * 1000)
-    start_ms = end_ms - PERIOD_MS
+    start_ms = end_ms - args.days * 24 * 60 * 60 * 1000
     fetcher = OHLCVFetcher()
     cache = OHLCVCache(Path("cache/ohlcv"))
 
-    total_jobs = len(SYMBOLS) * len(TIMEFRAMES)
+    total_jobs = len(args.symbols) * len(args.timeframes)
     done = 0
     skipped = 0
     failed = 0
 
-    for symbol in SYMBOLS:
-        for tf in TIMEFRAMES:
+    for symbol in args.symbols:
+        for tf in args.timeframes:
             done += 1
             existing = cache.get(symbol, tf)
             if existing is not None:

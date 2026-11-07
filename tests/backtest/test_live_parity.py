@@ -188,3 +188,24 @@ def test_grid_with_one_worker_runs_in_process(tmp_path, monkeypatch):
     runner = grid.GridRunner(tmp_path)
     out = runner.run([{"h": 1}, {"h": 2}], run_one_fn=_grid_one, workers=1)
     assert sorted(r["value"] for r in out) == [2, 4]
+
+
+def test_prefetch_timeframes_follow_the_live_config():
+    from scripts.prefetch_data import parse_args
+    a = parse_args(["--config", "configs/config.phase2_1k.yaml", "--symbols", "BTC/USDT,ETH/USDT", "--days", "45"])
+    assert a.symbols == ["BTC/USDT", "ETH/USDT"] and a.days == 45
+    assert sorted(a.timeframes) == sorted(["12h", "4h", "15m", "1d"])  # mid profile + daily
+
+
+def test_prefetch_defaults_unchanged():
+    from scripts.prefetch_data import SYMBOLS, TIMEFRAMES, parse_args
+    a = parse_args([])
+    assert a.symbols == SYMBOLS and a.timeframes == TIMEFRAMES and a.days == 365
+
+
+def test_fetcher_supports_every_profile_timeframe():
+    from data.fetcher import OHLCVFetcher
+    from data.timeframes import PROFILES, tf_to_minutes
+    needed = {tf for chain in PROFILES.values() for tf in chain} | {"1d"}
+    assert needed <= set(OHLCVFetcher.tf_minutes)
+    assert all(OHLCVFetcher.tf_minutes[tf] == tf_to_minutes(tf) for tf in needed)
