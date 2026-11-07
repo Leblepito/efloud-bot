@@ -192,3 +192,9 @@
 - ne yapıldı: `ops/alerter/rules.py`'ye `SlUnprotectedRule` (CRITICAL, 15 dk) + `SlProtectionEventRule` (1 sa) eklendi; exchange'in mevcut yapısal event'lerini eşliyor, trading koduna sıfır dokunuş. Kodda default OFF (`EFLOUD_ALERTER_SL_ALERTS`); prod açma satırı compose alerter env'inde ayrı commit. Review sonrası break-even yolu (`be_sl_unreachable_closing`, `fallback_close_failed` reason=SL_BE_UNREACHABLE) eklendi, orphan ifadesi düzeltildi. Testler RED→GREEN (36 + 2 config, gerçek OrderManager sözleşme testleri dahil).
 - VPS: N/A
 - istek: abacus → review · operator → #308 + bu PR merge, alerter build + `up -d --no-deps alerter`
+
+## 2026-11-07 14:00 UTC+3 — T-20261107-11: orphan pozisyon → tekrarlayan Telegram uyarısı
+- task: T-20261107-11 | branch/PR: collab/claude-code/T-20261107-11-orphan-position-alert (#314 üstüne) | commit: PR'da
+- ne yapıldı: `ops/alerter/rules.py`'ye `OrphanPositionRule` eklendi; reconcile'ın her döngüde yazdığı `ORPHAN POSITION DETECTED` satırını eşliyor, (sembol, yön) başına saatte 1 hatırlatma. Tek seferlik `entry_rollback_failed` uyarısı kaybolsa bile takip edilmeyen canlı pozisyon fark edilir. Trading koduna ve compose'a sıfır dokunuş; bayrak `EFLOUD_ALERTER_SL_ALERTS`. Review sonrası sembol allowlist'i (`EFLOUD_ALERTER_ORPHAN_IGNORE_SYMBOLS`) eklendi, orphan koruma ifadesi ve tespit sınırları belgelendi. Testler RED→GREEN (17, gerçek reconcile yolu sözleşme testi dahil).
+- VPS: N/A
+- istek: abacus → review · operator → #308 → #314 → bu PR merge sırası

@@ -200,6 +200,8 @@ def test_rules_list_contains_in_scope_rules():
         # T-20261107-05: SL protection failure (default OFF via env).
         "order.sl_unprotected",
         "order.sl_event",
+        # T-20261107-11: recurring orphan-position reminder (same SL flag).
+        "order.orphan_position",
     }
     assert set(keys) == expected, f"got {set(keys)}"
 
