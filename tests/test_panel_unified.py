@@ -129,8 +129,8 @@ async def test_overview_cached_within_window(client, stub_overview):
 @pytest.mark.asyncio
 async def test_action_unknown_bot_or_action_404(client):
     async with client as ac:
-        r1 = await ac.post("/api/bot/nope/start", headers=_basic("x", "panel-test-pw-123456"))
-        r2 = await ac.post("/api/bot/v1/self-destruct", headers=_basic("x", "panel-test-pw-123456"))
+        r1 = await ac.post("/api/bot/nope/start", headers={**_basic("x", "panel-test-pw-123456"), **PANEL_HDR})
+        r2 = await ac.post("/api/bot/v1/self-destruct", headers={**_basic("x", "panel-test-pw-123456"), **PANEL_HDR})
     assert r1.status_code == 404 and r2.status_code == 404
 
 
@@ -144,7 +144,7 @@ async def test_restart_action_proxies(client, monkeypatch):
 
     monkeypatch.setattr(panel_main, "_bot_req", fake_req)
     async with client as ac:
-        r = await ac.post("/api/bot/v2/restart", headers=_basic("x", "panel-test-pw-123456"))
+        r = await ac.post("/api/bot/v2/restart", headers={**_basic("x", "panel-test-pw-123456"), **PANEL_HDR})
     assert r.status_code == 200
     assert seen == {"bot": "v2", "method": "POST", "path": "/api/bot/restart"}
 
@@ -183,3 +183,132 @@ def test_page_survives_missing_chartjs():
 ])
 def test_page_reads_real_bot_api_fields(needle):
     assert needle in panel_main.PAGE, f"PAGE gerçek API alanını okumuyor: {needle}"
+
+
+# ── CSRF + brute-force (T-20261107-06, security audit T-20261106-06) ─────
+# Browsers attach cached HTTP Basic credentials to cross-site form POSTs too,
+# so state-changing actions must prove same-origin (custom header → a
+# cross-site request needs a CORS preflight the panel never grants).
+
+PW = "panel-test-pw-123456"
+PANEL_HDR = {"X-Efloud-Panel": "1"}
+
+
+@pytest.fixture
+def stub_action(monkeypatch):
+    seen = []
+
+    async def fake_req(client_, bot_id, method, path):
+        seen.append((bot_id, method, path))
+        return {"ok": True}
+
+    monkeypatch.setattr(panel_main, "_bot_req", fake_req)
+    return seen
+
+
+@pytest.fixture(autouse=True)
+def reset_auth_failures():
+    panel_main._auth_failures.clear()
+    yield
+    panel_main._auth_failures.clear()
+
+
+@pytest.mark.asyncio
+async def test_action_without_panel_header_is_rejected(client, stub_action):
+    async with client as ac:
+        r = await ac.post("/api/bot/v1/breaker-reset", headers=_basic("x", PW))
+    assert r.status_code == 403
+    assert stub_action == []
+
+
+@pytest.mark.asyncio
+async def test_cross_site_action_is_rejected_even_with_header(client, stub_action):
+    async with client as ac:
+        r = await ac.post("/api/bot/v1/start",
+                          headers={**_basic("x", PW), **PANEL_HDR, "Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert stub_action == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("site", [None, "same-origin"])
+async def test_same_origin_action_with_header_proxies(client, stub_action, site):
+    hdrs = {**_basic("x", PW), **PANEL_HDR}
+    if site:
+        hdrs["Sec-Fetch-Site"] = site
+    async with client as ac:
+        r = await ac.post("/api/bot/v2/restart", headers=hdrs)
+    assert r.status_code == 200
+    assert stub_action == [("v2", "POST", "/api/bot/restart")]
+
+
+def test_page_sends_panel_header_on_actions():
+    assert '"X-Efloud-Panel"' in panel_main.PAGE
+
+
+@pytest.mark.asyncio
+async def test_repeated_wrong_passwords_get_429(client):
+    xff = {"X-Forwarded-For": "203.0.113.50"}
+    async with client as ac:
+        codes = [(await ac.get("/api/overview", headers={**_basic("x", "wrong"), **xff})).status_code
+                 for _ in range(12)]
+        # correct password from the locked client is also refused during lockout
+        locked = await ac.get("/api/overview", headers={**_basic("x", PW), **xff})
+    assert codes[:10] == [401] * 10
+    assert codes[10:] == [429, 429]
+    assert locked.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_lockout_is_per_client_and_missing_header_is_not_counted(client, stub_overview):
+    async with client as ac:
+        for _ in range(15):  # browser's first unauthenticated request → normal 401 challenge
+            assert (await ac.get("/api/overview", headers={"X-Forwarded-For": "198.51.100.1"})).status_code == 401
+        for _ in range(10):
+            await ac.get("/api/overview", headers={**_basic("x", "wrong"), "X-Forwarded-For": "203.0.113.60"})
+        ok_first = await ac.get("/api/overview", headers={**_basic("x", PW), "X-Forwarded-For": "198.51.100.1"})
+        ok_other = await ac.get("/api/overview", headers={**_basic("x", PW), "X-Forwarded-For": "192.0.2.7"})
+    assert ok_first.status_code == 200 and ok_other.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_spoofed_leftmost_forwarded_for_does_not_evade_lockout(client):
+    async with client as ac:
+        for i in range(10):
+            await ac.get("/api/overview",
+                         headers={**_basic("x", "wrong"), "X-Forwarded-For": f"10.0.0.{i}, 203.0.113.70"})
+        r = await ac.get("/api/overview",
+                         headers={**_basic("x", "wrong"), "X-Forwarded-For": "10.9.9.9, 203.0.113.70"})
+    assert r.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_global_failure_cap_locks_all_clients(client):
+    async with client as ac:
+        for n in range(5):
+            for _ in range(10):
+                await ac.get("/api/overview", headers={**_basic("x", "wrong"), "X-Forwarded-For": f"203.0.113.{100 + n}"})
+        r = await ac.get("/api/overview", headers={**_basic("x", PW), "X-Forwarded-For": "192.0.2.200"})
+    assert r.status_code == 429
+    assert r.headers.get("retry-after") == str(panel_main.AUTH_FAIL_WINDOW_SEC)
+
+
+@pytest.mark.asyncio
+async def test_lockout_expires_after_window(client, stub_overview, monkeypatch):
+    clock = {"t": 1_000_000.0}
+    monkeypatch.setattr(panel_main.time, "time", lambda: clock["t"])
+    xff = {"X-Forwarded-For": "203.0.113.80"}
+    async with client as ac:
+        for _ in range(10):
+            await ac.get("/api/overview", headers={**_basic("x", "wrong"), **xff})
+        assert (await ac.get("/api/overview", headers={**_basic("x", PW), **xff})).status_code == 429
+        clock["t"] += panel_main.AUTH_FAIL_WINDOW_SEC + 1
+        assert (await ac.get("/api/overview", headers={**_basic("x", PW), **xff})).status_code == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("site,expected", [("same-site", 403), ("none", 200)])
+async def test_sec_fetch_site_values(client, stub_action, site, expected):
+    async with client as ac:
+        r = await ac.post("/api/bot/v1/stop", headers={**_basic("x", PW), **PANEL_HDR, "Sec-Fetch-Site": site})
+    assert r.status_code == expected
