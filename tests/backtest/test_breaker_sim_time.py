@@ -8,7 +8,7 @@ Live passes now=None everywhere, so live behaviour is unchanged.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from engine.safe_orchestrator import SafeOrchestrator
@@ -140,3 +140,71 @@ def test_live_check_keeps_wall_clock_semantics():
     assert status.can_trade is False                       # resume is 120 real minutes away
     status.resume_at = datetime(2000, 1, 1)                # a pause that has elapsed in real time
     assert status.can_trade is True
+
+
+# ── Weekly peak (peak_set_at) on sim-time — follow-up of 2026-11-07 ──────────
+
+def _weekly_breaker():
+    return CircuitBreaker(daily_loss_pct_limit=90.0, weekly_drawdown_pct_limit=25.0,
+                          consecutive_loss_limit=99, starting_balance=1000.0)
+
+
+def test_weekly_peak_set_in_sim_time_rebases_after_seven_sim_days():
+    """Pre-fix sync_balance stamped the peak with the wall clock, which is always
+    after sim-time, so the 7-day rebase never happened and the weekly limit became
+    an all-time drawdown limit in backtests."""
+    br = _weekly_breaker()
+    t0 = datetime(2026, 10, 1, 12, 0)
+    br.sync_balance(1100.0, now=t0)                       # new peak at sim t0
+    assert br.peak_set_at == t0
+    br.sync_balance(820.0, now=t0 + timedelta(days=8))    # -25.5 % vs an 8-day-old peak
+    status = br.check(now=t0 + timedelta(days=8))
+    assert status.state.value != "HALTED"
+    assert br.peak_balance == 820.0                       # rebased like live after 7 days
+
+
+def test_initial_wall_clock_peak_is_clamped_to_sim_time():
+    br = _weekly_breaker()                                # peak 1000 stamped with the wall clock
+    t0 = datetime(2026, 10, 1, 12, 0)
+    br.check(now=t0)
+    assert br.peak_set_at == t0                           # a peak cannot sit in the sim future
+    br.sync_balance(740.0, now=t0 + timedelta(days=8))    # -26 % vs the 8-day-old start
+    assert br.check(now=t0 + timedelta(days=8)).state.value != "HALTED"
+
+
+def test_weekly_limit_still_halts_inside_seven_sim_days():
+    br = _weekly_breaker()
+    t0 = datetime(2026, 10, 1, 12, 0)
+    br.sync_balance(1100.0, now=t0)
+    br.sync_balance(820.0, now=t0 + timedelta(days=3))
+    assert br.check(now=t0 + timedelta(days=3)).state.value == "HALTED"
+
+
+def test_live_peak_stays_on_the_wall_clock():
+    br = _weekly_breaker()
+    before = datetime.now(timezone.utc).replace(tzinfo=None)
+    br.sync_balance(1100.0)                               # live: no now
+    assert br.peak_set_at >= before.replace(microsecond=0)
+    stamped = br.peak_set_at
+    br.check()                                            # live check must not move it
+    assert br.peak_set_at == stamped
+
+
+def test_orchestrator_syncs_balance_at_cycle_time():
+    import inspect
+
+    src = inspect.getsource(SafeOrchestrator.run_cycle)
+    assert "self.breaker.sync_balance(balance, now=now)" in src
+
+
+def test_tz_aware_now_is_normalized_for_the_weekly_peak():
+    br = _weekly_breaker()
+    t0 = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+    br.check(now=t0)
+    br.sync_balance(1100.0, now=t0 + timedelta(days=1))
+    assert br.peak_set_at.tzinfo is None and br.peak_set_at == datetime(2026, 10, 2, 12, 0)
+    assert br.check(now=t0 + timedelta(days=2)).state.value == "OPEN"
+    br.sync_balance(800.0, now=t0 + timedelta(days=9))   # -27 % vs an 8-day-old peak → rebase
+    assert br.check(now=t0 + timedelta(days=9)).state.value != "HALTED"
+    assert br.peak_set_at.tzinfo is None                  # the rebase stores naive UTC too
+    assert br.check(now=t0 + timedelta(days=10)).can_trade is True   # no naive/aware TypeError

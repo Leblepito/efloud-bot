@@ -22,6 +22,11 @@ from enum import Enum
 log = logging.getLogger("efloud.breaker")
 
 
+def _naive_utc(dt: datetime) -> datetime:
+    """Naive UTC (the breaker's internal clock form); aware values are converted."""
+    return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+
+
 def _parse_dt(value) -> Optional[datetime]:
     """Parse an ISO datetime string back to datetime; pass through None/datetime."""
     if value is None or isinstance(value, datetime):
@@ -105,7 +110,7 @@ class CircuitBreaker:
         self.peak_set_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.current_balance = starting_balance
 
-    def sync_balance(self, live_balance: float):
+    def sync_balance(self, live_balance: float, now: Optional[datetime] = None):
         """Sync current_balance from live exchange data (mark-to-market equity).
 
         Without this, current_balance only updates via record_trade(pnl), which is
@@ -117,11 +122,17 @@ class CircuitBreaker:
         Does NOT touch breaker state (HALTED stays HALTED until manual_reset). This
         is by design — HALT is a safety stop requiring human acknowledgment, not an
         automatic recovery on balance bounce.
+
+        `now`: sim-time in backtest (stamps the new peak for the 7-day rebase);
+        None in live keeps the wall clock.
         """
         self.current_balance = float(live_balance)
         if self.current_balance > self.peak_balance:
             self.peak_balance = self.current_balance
-            self.peak_set_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            if now is not None:
+                self.peak_set_at = _naive_utc(now)
+            else:
+                self.peak_set_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def record_trade(self, pnl: float, timestamp: Optional[datetime] = None,
                      trade_id: Optional[str] = None):
@@ -232,7 +243,18 @@ class CircuitBreaker:
         An explicit `now` is stamped on the returned status (`as_of`) so its
         `can_trade` judges a TRIPPED pause at that sim-time; otherwise the
         wall clock (always past a sim resume_at) released every pause at once.
+
+        With an explicit `now`, a weekly peak stamped after it (the wall-clock
+        stamp from __init__) is moved back to `now`: a peak cannot be set in the
+        sim future, and a future stamp blocked the 7-day rebase for the whole
+        backtest. Live (now=None) is untouched.
         """
+        if now is not None:
+            # Assumes sim-time only moves forward (backtest drives `now` from an
+            # ordered bar loop); a backwards `now` would pull the peak back.
+            _now_naive = _naive_utc(now)
+            if self.peak_set_at > _now_naive:
+                self.peak_set_at = _now_naive
         status = self._evaluate(now)
         status.as_of = now
         return status
@@ -285,11 +307,11 @@ class CircuitBreaker:
 
         # 2. Weekly drawdown (peak is a 7-day high-watermark: a peak older than
         # 7 days is rebased to the current balance, so the limit is truly weekly)
-        _now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+        _now_naive = _naive_utc(now)
         if (_now_naive - self.peak_set_at) > timedelta(days=7) and self.current_balance < self.peak_balance:
             log.info(f"Weekly peak {self.peak_balance:.2f} older than 7d -> rebased to {self.current_balance:.2f}")
             self.peak_balance = self.current_balance
-            self.peak_set_at = now
+            self.peak_set_at = _now_naive
         dd_pct = ((self.peak_balance - self.current_balance) / self.peak_balance) * 100
         if dd_pct >= self.weekly_limit:
             self._halt(f"Weekly drawdown {dd_pct:.2f}% reached limit {self.weekly_limit}%")
