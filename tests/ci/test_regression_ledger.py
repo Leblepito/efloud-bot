@@ -50,6 +50,7 @@ def graph(ledger):
         ("frontend/package.json", "frontend"),
         ("configs/config.phase2_1k.yaml", "configs"),
         (".github/workflows/ci.yml", "ci"),
+        ("backtest/engine.py", "backtest"),
         ("docs/OPERATOR_GUIDE.md", None),
     ],
 )
@@ -59,7 +60,7 @@ def test_path_maps_to_module(ledger, path, module):
 
 def test_every_first_party_code_file_has_a_module(ledger, graph):
     code_roots = ("engine/", "backend/", "exchange/", "ops/", "data/", "utils/",
-                  "risk/", "panel/", "hooks/", "scripts/", "tools/")
+                  "risk/", "panel/", "hooks/", "scripts/", "tools/", "backtest/")
     orphans = [
         f for f in graph.files
         if f.endswith(".py") and f.startswith(code_roots)

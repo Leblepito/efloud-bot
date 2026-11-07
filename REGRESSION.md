@@ -40,7 +40,7 @@ names in string literals, and per-module text tokens. Runtime edges below are
 Market data fetch/cache + timeframe profiles
 
 Paths: `data/`
-Downstream consumers: backend-api, orchestrator, routines, scripts-misc, smc-v2, social-pipeline
+Downstream consumers: backend-api, backtest, orchestrator, routines, scripts-misc, smc-v2, social-pipeline
 Regression acceptance command: `python scripts/regression_ledger.py run data`
 Mapped tests: 6
 
@@ -224,7 +224,7 @@ Mapped tests: 4
 SMC v2 port (zones, triggers, SL/TP calc) + v2 doctor
 
 Paths: `engine/smc_v2/`, `tools/v2_doctor.py`
-Downstream consumers: orchestrator, pine
+Downstream consumers: backtest, orchestrator, pine
 Regression acceptance command: `python scripts/regression_ledger.py run smc-v2`
 Mapped tests: 40
 
@@ -360,9 +360,9 @@ Mapped tests: 11
 SafeOrchestrator, lifecycle, journal, ledgers, notifications
 
 Paths: `engine/__init__.py`, `engine/safe_orchestrator.py`, `engine/lifecycle.py`, `engine/journal.py`, `engine/memory.py`, `engine/postmortem.py`, `engine/report.py`, `engine/allocation.py`, `engine/instance_manager.py`, `engine/signal_ledger.py`, `engine/edge_costs.py`, `engine/edge_metrics.py`, `engine/notifications/`, `main.py`, `preflight.py`
-Downstream consumers: backend-api, exchange, pine, routines, scripts-misc, smc-v1, alerter (unverified), overseer (unverified)
+Downstream consumers: backend-api, backtest, exchange, pine, routines, scripts-misc, smc-v1, alerter (unverified), overseer (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run orchestrator`
-Mapped tests: 85
+Mapped tests: 90
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -375,6 +375,11 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `backend/tests/smc_v2/test_symbol_whitelist_gate.py`
 - `backend/tests/smc_v2/test_v2_entry_run_cycle_gates.py`
 - `backend/tests/test_avg_entry_cost_basis.py`
+- `backend/tests/test_backtest_commission.py`
+- `backend/tests/test_backtest_engine_single.py`
+- `backend/tests/test_backtest_funding.py`
+- `backend/tests/test_backtest_hygiene_batch1.py`
+- `backend/tests/test_backtest_metrics_tp2_optional.py`
 - `backend/tests/test_balance_unavailable_skip.py`
 - `backend/tests/test_breaker_dedup_persistence.py`
 - `backend/tests/test_breaker_state_roundtrip.py`
@@ -462,7 +467,7 @@ FastAPI backend, auth, healthz, bot runner, websockets
 Paths: `backend/`
 Downstream consumers: frontend (unverified), overseer (unverified), panel (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run backend-api`
-Mapped tests: 38
+Mapped tests: 39
 
 <details><summary>test files</summary>
 
@@ -483,6 +488,7 @@ Mapped tests: 38
 - `backend/tests/test_candle_close_sync.py`
 - `backend/tests/test_default_config_path.py`
 - `backend/tests/test_equity_contract.py`
+- `backend/tests/test_evaluate_backtest_gates.py`
 - `backend/tests/test_events_threadsafe.py`
 - `backend/tests/test_healthz.py`
 - `backend/tests/test_kill_switch_persist.py`
@@ -542,13 +548,14 @@ Mapped tests: 16
 Backend social content queue, generators, clients
 
 Paths: `backend/social/`
-Downstream consumers: backend-api, routines, social-pipeline
+Downstream consumers: backend-api, backtest, routines, social-pipeline
 Regression acceptance command: `python scripts/regression_ledger.py run backend-social`
-Mapped tests: 16
+Mapped tests: 17
 
 <details><summary>test files</summary>
 
 - `backend/tests/test_approval_callback.py`
+- `backend/tests/test_backtest_social_tags.py`
 - `backend/tests/test_content_queue.py`
 - `backend/tests/test_manus_client.py`
 - `backend/tests/test_social_archive.py`
@@ -678,7 +685,36 @@ Note: Pine compile itself is manual (TradingView MCP `pine_smart_compile`, 0 err
 
 </details>
 
-## Module 18 — scripts-misc
+## Module 18 — backtest
+
+NET-cost backtest harness (drives the live SafeOrchestrator)
+
+Paths: `backtest/`, `scripts/evaluate_backtest_gates.py`
+Downstream consumers: none
+Regression acceptance command: `python scripts/regression_ledger.py run backtest`
+Mapped tests: 14
+Note: ADR-0003 gate. Slow full-engine tests run in the CI job `backtest (slow)`.
+
+<details><summary>test files</summary>
+
+- `backend/tests/test_backtest_cli_compare.py`
+- `backend/tests/test_backtest_commission.py`
+- `backend/tests/test_backtest_comparison.py`
+- `backend/tests/test_backtest_engine_portfolio.py`
+- `backend/tests/test_backtest_engine_single.py`
+- `backend/tests/test_backtest_engine_v2.py`
+- `backend/tests/test_backtest_funding.py`
+- `backend/tests/test_backtest_hygiene_batch1.py`
+- `backend/tests/test_backtest_metrics_tp2_optional.py`
+- `backend/tests/test_backtest_sim_time.py`
+- `backend/tests/test_backtest_social_tags.py`
+- `backend/tests/test_evaluate_backtest_gates.py`
+- `tests/ci/test_regression_ledger.py`
+- `tests/test_backtest_max_hold.py`
+
+</details>
+
+## Module 19 — scripts-misc
 
 Other operator/analysis scripts
 
@@ -704,7 +740,7 @@ Mapped tests: 12
 
 </details>
 
-## Module 19 — alerter
+## Module 20 — alerter
 
 Telegram alerter (log-line rules, dedup, heartbeat)
 
@@ -737,7 +773,7 @@ Mapped tests: 19
 
 </details>
 
-## Module 20 — overseer
+## Module 21 — overseer
 
 Overseer (log/journal tail, healthz poll, sinks)
 
@@ -761,7 +797,7 @@ Mapped tests: 10
 
 </details>
 
-## Module 21 — ops-misc
+## Module 22 — ops-misc
 
 Daily report, IG/X webhook + token tooling
 
@@ -782,7 +818,7 @@ Mapped tests: 7
 
 </details>
 
-## Module 22 — panel
+## Module 23 — panel
 
 Unified ops panel (HTTP Basic, proxies bot API)
 
@@ -798,7 +834,7 @@ Mapped tests: 2
 
 </details>
 
-## Module 23 — live-write-gate
+## Module 24 — live-write-gate
 
 PreToolUse hook blocking live-bot writes
 
@@ -815,14 +851,14 @@ Mapped tests: 3
 
 </details>
 
-## Module 24 — configs
+## Module 25 — configs
 
 Bot configs (live: configs/config.phase2_1k.yaml)
 
 Paths: `configs/`, `config.yaml`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run configs`
-Mapped tests: 36
+Mapped tests: 45
 
 <details><summary>test files</summary>
 
@@ -830,6 +866,14 @@ Mapped tests: 36
 - `backend/tests/smc_v2/test_v2_entry_run_cycle_gates.py`
 - `backend/tests/test_aggressive_config_banner.py`
 - `backend/tests/test_api_bot_control.py`
+- `backend/tests/test_backtest_cli_compare.py`
+- `backend/tests/test_backtest_comparison.py`
+- `backend/tests/test_backtest_engine_portfolio.py`
+- `backend/tests/test_backtest_engine_single.py`
+- `backend/tests/test_backtest_engine_v2.py`
+- `backend/tests/test_backtest_hygiene_batch1.py`
+- `backend/tests/test_backtest_sim_time.py`
+- `backend/tests/test_backtest_social_tags.py`
 - `backend/tests/test_balance_unavailable_skip.py`
 - `backend/tests/test_bot_runner_lifecycle.py`
 - `backend/tests/test_bot_runner_smc_v2_wiring.py`
@@ -856,6 +900,7 @@ Mapped tests: 36
 - `tests/routines/test_base.py`
 - `tests/routines/test_config_drift.py`
 - `tests/test_agent_team.py`
+- `tests/test_backtest_max_hold.py`
 - `tests/test_breaker_pnl_audit_backcorrect.py`
 - `tests/test_docs_param_parity.py`
 - `tests/test_max_hold_force_close.py`
@@ -865,7 +910,7 @@ Mapped tests: 36
 
 </details>
 
-## Module 25 — deploy
+## Module 26 — deploy
 
 Dockerfiles, compose files, deploy scripts
 
@@ -885,7 +930,7 @@ Mapped tests: 6
 
 </details>
 
-## Module 26 — ci
+## Module 27 — ci
 
 GitHub workflows, CI review scripts, this ledger tool
 
@@ -901,7 +946,7 @@ Mapped tests: 2
 
 </details>
 
-## Module 27 — collab
+## Module 28 — collab
 
 3-model collaboration hub (tasks, logs, status)
 
@@ -920,7 +965,7 @@ Mapped tests: 5
 
 </details>
 
-## Module 28 — frontend
+## Module 29 — frontend
 
 Next.js dashboard
 
@@ -937,7 +982,7 @@ Mapped tests: 3
 
 </details>
 
-## Module 29 — u2algo-site
+## Module 30 — u2algo-site
 
 Marketing site + waitlist/webhook server (Railway)
 

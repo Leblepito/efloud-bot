@@ -3,6 +3,7 @@ requires-python = ">=3.11,<3.13"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = ["slow: full-engine backtests (~1-3 min each); CI job backtest-slow runs them"]
 testpaths = ["."]
 norecursedirs = [
     ".git",
