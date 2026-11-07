@@ -159,8 +159,10 @@ jobs:
 
       # --- Auto-baseline: on first run, fingerprint all current leaks so -----
       #     they are ignored in future scans (only NEW leaks will surface). ---
+      # Manual dispatch only (T-20261107-08): on the daily schedule a NEW real
+      # leak would otherwise be auto-added to .gitleaksignore as a PR.
       - name: gitleaks auto-baseline
-        if: steps.gitleaks.outcome == 'failure'
+        if: github.event_name == 'workflow_dispatch' && steps.gitleaks.outcome == 'failure'
         id: gitleaks_baseline
         run: |
           set -o pipefail
@@ -185,7 +187,7 @@ jobs:
           fi
 
       - name: Commit gitleaks baseline
-        if: steps.gitleaks_baseline.outputs.NEW == 'true'
+        if: github.event_name == 'workflow_dispatch' && steps.gitleaks_baseline.outputs.NEW == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -200,12 +202,12 @@ jobs:
           gh pr create \
             --base master \
             --head "$BRANCH" \
-            --title 'chore: gitleaks baseline — ignore rotated secrets' \
+            --title 'chore: gitleaks baseline — ROTATE each listed secret before merging' \
             --body "Auto-generated .gitleaksignore from $(cat /tmp/fingerprints.txt | wc -l) fingerprints found in git history.
 
-          **What this does:** Prevents the daily scheduled review from re-reporting the same old (likely rotated) secrets. Only genuinely NEW leaks will trigger issues from now on.
+          **What this does:** Adds every listed fingerprint to .gitleaksignore so future scans stop reporting it. Treat each one as a LIVE, UNROTATED secret until you have rotated it — only then merge.
 
-          **Review note:** Verify these fingerprints correspond to already-rotated credentials before merging." \
+          **Review note:** Rotate (or prove already rotated) every credential listed here before merging. Manual-dispatch only (T-20261107-08)." \
             --label 'automated-review' \
             --repo "${{ github.repository }}"
 
