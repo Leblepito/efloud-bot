@@ -284,7 +284,7 @@ Circuit breaker, guards, orphan protection, risk calc
 Paths: `engine/safety/`, `engine/risk/`, `engine/permissions/`
 Downstream consumers: backend-api, orchestrator, scripts-misc, alerter (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run safety`
-Mapped tests: 43
+Mapped tests: 44
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -328,6 +328,7 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `tests/test_healthz_endpoint.py`
 - `tests/test_healthz_logic.py`
 - `tests/test_healthz_not_started.py`
+- `tests/test_max_hold_disabled.py`
 - `tests/test_persist_crash_safety.py`
 - `tests/test_rate_limiter_guard.py`
 - `tests/test_runtime_state.py`
@@ -871,7 +872,7 @@ Bot configs (live: configs/config.phase2_1k.yaml)
 Paths: `configs/`, `config.yaml`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run configs`
-Mapped tests: 48
+Mapped tests: 49
 
 <details><summary>test files</summary>
 
@@ -918,6 +919,7 @@ Mapped tests: 48
 - `tests/test_backtest_max_hold.py`
 - `tests/test_breaker_pnl_audit_backcorrect.py`
 - `tests/test_docs_param_parity.py`
+- `tests/test_max_hold_disabled.py`
 - `tests/test_max_hold_force_close.py`
 - `tests/test_pine_lab_parity.py`
 - `tests/test_setup_bar_clock.py`

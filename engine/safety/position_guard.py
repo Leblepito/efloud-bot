@@ -5,7 +5,7 @@ Position Guards — Pozisyon bazlı güvenlik kuralları
 Check'ler:
   - Size cap (tek trade max %20 notional)
   - Total exposure (tüm pozisyonlar < 5x equity)
-  - Max holding time (default 48h)
+  - Max holding time (default 48h; <= 0 or null = off)
   - Max pyramid adds (default 2)
   - Duplicate direction (same sym + same dir = reject)
   - Opposite direction (sym + opposite dir = reject; orchestrator
@@ -149,6 +149,8 @@ class PositionGuard:
         self.max_size_pct = max_notional_pct_of_balance / 100
         self.max_exposure = max_total_exposure_multiplier
         self.max_hold = max_holding_hours
+        if not self.max_hold or self.max_hold <= 0:
+            log.info("Max holding time force-close DISABLED (max_holding_hours=%r)", self.max_hold)
         self.max_adds = max_pyramid_adds
         self.min_sl_atr = min_sl_distance_atr
         self.max_sl_atr = max_sl_distance_atr
@@ -446,7 +448,13 @@ class PositionGuard:
         ('2026-05-08T10:14:12+00:00' / '...Z') opened_at formats. Mixing
         the two used to raise TypeError on subtraction, silently bypassing
         the force-close protection (2026-05-08 incident).
+
+        ``max_holding_hours <= 0`` (or null) disables the force close — the same
+        meaning the backtest engine gives it. Before 2026-11-08, 0 meant "close
+        every position immediately" here (operator removed the 36 h rule).
         """
+        if not self.max_hold or self.max_hold <= 0:
+            return PositionCheckResult(True)
         if not position.opened_at:
             return PositionCheckResult(True)
 

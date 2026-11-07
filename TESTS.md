@@ -87,7 +87,8 @@ Source: `git show f96b7d8^:docs/handoff/2026-06-20-algorithm-audit-and-next-sess
 | TEST-AUDIT-M2 | missing | — | Confluence over-counting / collinearity | Parked: needs a NET-cost backtest before any scoring change | — |
 | TEST-AUDIT-M3 | covered | unit | OB body filter uses the high-low SMA(14), not true-range ATR (lock) | `tests/engine/test_ob_body_filter_atr.py::test_ob_body_filter_uses_high_low_sma_not_true_range` | always on |
 | TEST-AUDIT-M4 | covered | integration | PnL-audit sign flip re-feeds the consecutive-loss counter | `tests/test_breaker_pnl_audit_backcorrect.py::test_audit_sign_flip_re_increments_consecutive_losses` | `breaker_backcorrect_consecutive: false` (audit itself on) |
-| TEST-AUDIT-M5 | covered | integration | A position past `max_holding_hours` is force-closed, exchange leg first | `tests/test_max_hold_force_close.py::test_position_past_max_hold_is_force_closed_exchange_leg_first` | `max_holding_hours: 36` |
+| TEST-AUDIT-M5 | covered | integration | A position past `max_holding_hours` is force-closed, exchange leg first | `tests/test_max_hold_force_close.py::test_position_past_max_hold_is_force_closed_exchange_leg_first` | `max_holding_hours > 0` (live: 0 = off since 2026-11-08) |
+| TEST-RISK-MAXHOLD-OFF | covered | unit | `max_holding_hours <= 0` or null disables the force close (no close, no aging warning, logged at startup); a positive value still closes; live config is 0 (operator 2026-11-08) | `tests/test_max_hold_disabled.py` | `max_holding_hours: 0` |
 
 ### 4.2 Trading-core bug hunt 2026-06-05
 
