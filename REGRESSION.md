@@ -165,7 +165,7 @@ SMC v1 signal engine + confluence scoring
 Paths: `engine/smc.py`, `engine/signals.py`, `engine/confluence.py`, `engine/levels.py`, `engine/scenarios.py`, `engine/universe.py`, `engine/adaptive.py`, `engine/intent.py`
 Downstream consumers: backend-api, orchestrator, smc-v2, pine (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run smc-v1`
-Mapped tests: 29
+Mapped tests: 30
 
 <details><summary>test files</summary>
 
@@ -198,6 +198,7 @@ Mapped tests: 29
 - `tests/test_signals.py`
 - `tests/test_signals_injected_levels.py`
 - `tests/test_structure_validation.py`
+- `tests/test_structure_validation_flag.py`
 
 </details>
 
@@ -822,7 +823,7 @@ Bot configs (live: configs/config.phase2_1k.yaml)
 Paths: `configs/`, `config.yaml`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run configs`
-Mapped tests: 36
+Mapped tests: 37
 
 <details><summary>test files</summary>
 
@@ -861,6 +862,7 @@ Mapped tests: 36
 - `tests/test_max_hold_force_close.py`
 - `tests/test_pine_lab_parity.py`
 - `tests/test_setup_bar_clock.py`
+- `tests/test_structure_validation_flag.py`
 - `tests/test_tp_reachability.py`
 
 </details>

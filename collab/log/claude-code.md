@@ -280,3 +280,9 @@
 - ne yapıldı: #317–#329 merge (her biri CI yeşil). Backlog task dosyasına ilerleme tablosu eklendi: 1–11 ve 13 tamam, 12 bloklu (`backtest/` master'da yok), 14 kısım 1 tamam. Açık operatör kararları: A1/A2 sentiment, L1 yapı doğrulama, backtest geri yükleme, CLAUDE.md anayasa↔durum ayrımı, demo videosu verisi, sshd PasswordAuthentication.
 - VPS: N/A
 - istek: operator → yukarıdaki 6 karar
+
+## 2026-11-07 20:10 UTC+3 — T-20261107-25: LLM yapı doğrulaması varsayılan kapalı
+- task: T-20261107-25 | branch/PR: collab/claude-code/T-20261107-25-structure-validation-off | commit: PR'da
+- ne yapıldı: `engine/signals.py` senkron yapı doğrulaması `structure_validation` bayrağı arkasında (varsayılan False), orkestratör config'ten okur, canlı config `engine.structure_validation.enabled: false`. Canlıda zaten %100 pass-through olduğundan işlem kararı değişmez. Regresyon defteri (smc-v1 → orkestratör, backend-api, alerter …) 2763 passed.
+- VPS: N/A
+- istek: operator → merge; deploy bot yeniden başlatma ister (AUTOSTART=0) · abacus → review
