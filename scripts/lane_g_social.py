@@ -32,6 +32,7 @@ Platform targets (geometry chosen to match each platform's native format):
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -64,7 +65,7 @@ DEFAULT_CLIP_SECONDS = 8.0
 # Hashtags are appended per platform where they help discovery. Deliberately
 # generic (no promise language) so they can never trip the compliance gate.
 HASHTAGS = {
-    "x": "#BTC #trading #SMC #algotrading",
+    "x": "#trading #SMC #algotrading",  # + the post's own coin tag (see _coin_tag)
     "instagram": "#trading #algotrading #smc #kripto #u2algo",
     "ig_reels": "#trading #algotrading #smc #kripto #u2algo",
     "youtube": "#trading #algotrading #smc",
@@ -131,7 +132,13 @@ def _truncate_caption(text: str, limit: int) -> str:
     return f"{trimmed}\n\n{disclaimer}"
 
 
-def build_caption(copy: dict, platform: str) -> str:
+def _coin_tag(symbol: Optional[str]) -> str:
+    """`SOL/USDT` → `#SOL`; empty unless the base is a plain alphanumeric ticker."""
+    base = (symbol or "").split("/")[0].split(":")[0].strip().upper()
+    return f"#{base}" if base.isalnum() and base.isascii() else ""
+
+
+def build_caption(copy: dict, platform: str, symbol: Optional[str] = None) -> str:
     """Platform-shaped caption from a Lane C copy draft.
 
     X gets the tight single-post caption; IG/YouTube get the caption plus the
@@ -142,6 +149,8 @@ def build_caption(copy: dict, platform: str) -> str:
     spec = PLATFORM_SPECS.get(platform) or PLATFORM_SPECS["x"]
     caption = copy.get("caption", "") or ""
     tags = HASHTAGS.get(platform, "")
+    if platform == "x" and _coin_tag(symbol):
+        tags = f"{_coin_tag(symbol)} {tags}"
 
     if platform == "x":
         text = caption
@@ -277,7 +286,7 @@ class LaneGOrchestrator:
                     clips += 1
                     media = [str(clip)]  # video platforms take the clip as primary
 
-                caption = build_caption(copy, platform)
+                caption = build_caption(copy, platform, symbol=symbol)
                 violations = find_violations(caption)
                 bundle = PostBundle(
                     event_id=event_id, platform=platform, symbol=symbol,
@@ -319,8 +328,10 @@ class LaneGOrchestrator:
         d = self.out_dir / date / "bundles"
         d.mkdir(parents=True, exist_ok=True)
         out = d / f"{bundle.event_id}.{bundle.platform}.json"
-        out.write_text(json.dumps(bundle.to_dict(), ensure_ascii=False, indent=2),
-                       encoding="utf-8")
+        data = bundle.to_dict()
+        if data["state"] == "approved":  # --auto-approve: bind approval to content
+            data["approved_digest"] = payload_digest(data)
+        out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         return out
 
     def _notify(self, s: dict) -> None:
@@ -352,8 +363,31 @@ def load_bundles(out_dir, date: str, *, state: Optional[str] = None) -> list[dic
     return out
 
 
+def payload_digest(bundle: dict) -> str:
+    """sha256 over exactly what gets published: platform + caption/thread/alt
+    text + media paths **and media bytes**. Recorded at approval and re-checked
+    by lane_g_publish, so an edit after approval invalidates the approval."""
+    payload = bundle.get("payload") or {}
+    media = []
+    for m in payload.get("media") or []:
+        try:
+            media.append([m, hashlib.sha256(Path(m).read_bytes()).hexdigest()])
+        except OSError:
+            media.append([m, "missing"])
+    canon = json.dumps({
+        "platform": bundle.get("platform"),
+        "caption": payload.get("caption", ""),
+        "thread": list(payload.get("thread") or []),
+        "alt_text": payload.get("alt_text", ""),
+        "media": media,
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
 def approve_bundle(out_dir, date: str, event_id: str, platform: str) -> Optional[Path]:
-    """Flip one bundle pending_review → approved (operator action)."""
+    """Flip one bundle pending_review → approved (operator action).
+
+    The approval covers the content as it is now (``approved_digest``)."""
     p = Path(out_dir) / date / "bundles" / f"{event_id}.{platform}.json"
     if not p.exists():
         return None
@@ -362,6 +396,7 @@ def approve_bundle(out_dir, date: str, event_id: str, platform: str) -> Optional
         return p
     b["state"] = "approved"
     b["approved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    b["approved_digest"] = payload_digest(b)
     p.write_text(json.dumps(b, ensure_ascii=False, indent=2), encoding="utf-8")
     return p
 
@@ -399,7 +434,7 @@ def main(argv: Optional[list[str]] = None) -> dict:
 
 __all__ = [
     "PLATFORM_SPECS", "DEFAULT_PLATFORMS", "PostBundle", "LaneGOrchestrator",
-    "build_caption", "load_bundles", "approve_bundle", "main",
+    "build_caption", "load_bundles", "approve_bundle", "payload_digest", "main",
 ]
 
 

@@ -287,6 +287,21 @@ class TestBuildCaption:
         cap = build_caption(_copy_draft(caption="BTC LONG", thread=[]), "x")
         assert COMPLIANCE_TR in cap
 
+    def test_x_coin_hashtag_follows_the_symbol(self):
+        # A SOL post used to be tagged #BTC (fixed tag list) — T-20261107-19.
+        cap = build_caption(_copy_draft(), "x", symbol="SOL/USDT")
+        assert "#SOL" in cap and "#BTC" not in cap
+
+    def test_x_without_symbol_has_no_coin_hashtag(self):
+        cap = build_caption(_copy_draft(), "x")
+        assert "#BTC" not in cap and "#trading" in cap
+
+    def test_unsafe_symbol_does_not_become_a_hashtag(self):
+        cap = build_caption(_copy_draft(), "x", symbol="1000PEPE/USDT")
+        assert "#1000PEPE" in cap
+        cap = build_caption(_copy_draft(), "x", symbol="BAD SYMBOL<x>/USDT")
+        assert "<x>" not in cap and "#BAD" not in cap
+
 
 class TestPostBundle:
     def test_draft_id_is_event_platform_pair(self):

@@ -9,6 +9,9 @@ Safety posture — three independent gates, all default-closed:
 
   1. bundles are ``pending_review`` unless Lane G ran with ``--auto-approve``;
      this runner only ever touches ``approved`` ones;
+     the approval is bound to the content (``approved_digest`` = sha256 of the
+     caption/thread/alt text and media bytes), so a bundle edited after approval
+     is refused as ``approval_stale``;
   2. every publisher is flag-gated OFF (``X_API_ENABLED`` / ``INSTAGRAM_ENABLED``
      / ``YOUTUBE_ENABLED``) — with the flags unset the run is a no-op that still
      exercises the whole path;
@@ -33,7 +36,7 @@ if str(_ROOT) not in sys.path:
 
 from scripts.lane_e.publisher import LaneEPublisher
 from scripts.lane_e.publishers.base import PublishResult, Publisher
-from scripts.lane_g_social import load_bundles
+from scripts.lane_g_social import load_bundles, payload_digest
 
 log = logging.getLogger("efloud.lane_g_publish")
 
@@ -164,6 +167,15 @@ def run(
     published = failed = skipped = 0
     results = []
     for b in bundles:
+        # Approval is bound to content: a bundle edited after approval (caption,
+        # thread, alt text or media bytes), or approved without a digest, is
+        # refused until the operator re-approves it.
+        if b.get("approved_digest") != payload_digest(b):
+            log.warning("lane_g_publish_approval_stale draft=%s", b.get("draft_id"))
+            results.append({"draft_id": b["draft_id"], "platform_target": b.get("platform"),
+                            "status": "approval_stale", "published": [], "failed": []})
+            skipped += 1
+            continue
         # Lane E only accepts state == "approved" and re-runs the compliance
         # check on the envelope text itself (defence in depth).
         res = lane_e.publish_draft({"draft_id": b["draft_id"], "state": "approved",
