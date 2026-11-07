@@ -684,12 +684,13 @@ Other operator/analysis scripts
 Paths: `scripts/`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run scripts-misc`
-Mapped tests: 11
+Mapped tests: 12
 
 <details><summary>test files</summary>
 
 - `backend/tests/test_bigquery_archive.py`
 - `backend/tests/test_report_doctrine_engine_gap.py`
+- `tests/ci/test_canary.py`
 - `tests/collab/test_collab_layout.py`
 - `tests/collab/test_skills_incubator.py`
 - `tests/overseer/test_phase0_runner.py`

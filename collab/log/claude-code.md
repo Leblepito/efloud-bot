@@ -249,3 +249,9 @@
 - ne yapıldı: u2algo-site — SVG og:image yerine 1200×630 PNG kart (Meta/X/LinkedIn SVG göstermez), 4 sayfaya eksik OG etiketleri, `www` → apex 301 (healthz/API hariç), geçersiz `#fragment` hreflang kaldırıldı, uzun başlık/açıklamalar kısaltıldı, `live.html` başlığı "illüstratif demo" (içerik zaten simülasyon), Organization JSON-LD, sitemap lastmod. Test: `scripts/test_seo_meta.js` + sunucu yönlendirme testleri; `npm test` ALL PASS. Merge → Railway otomatik deploy.
 - VPS: N/A
 - istek: abacus → review · operator → merge
+
+## 2026-11-07 16:00 UTC+3 — T-20261107-20: deploy sonrası canary
+- task: T-20261107-20 | branch/PR: collab/claude-code/T-20261107-20-canary | commit: PR'da
+- ne yapıldı: `scripts/canary.py` — salt-okuma, karar çıkış kodu: site (apex+PNG kart, www 301, healthz, og-card), bot dashboard healthz ok/failures boş, silinen bot/v2/scalp DNS kayıtları geri gelmedi. 5 test + canlı koşu ALL GREEN.
+- VPS: N/A
+- istek: abacus → review · operator → merge

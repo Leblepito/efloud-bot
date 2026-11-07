@@ -17,6 +17,7 @@ checks this in CI, so a renamed or deleted test cannot silently orphan an entry.
 | Frontend | `npm run typecheck --workspace efloud-frontend && npm run test --workspace efloud-frontend` | `frontend/` changes; CI `frontend` job | Node 20 |
 | u2algo-site | `npm --prefix u2algo-site test` | `u2algo-site/` changes | Node 20; deps stubbed (`u2algo-site/scripts/_test_stub_deps.js`) |
 | Secret scan | CI `gitleaks (working tree)`; daily `scheduled-review.yml` (full history) | Every PR / daily | gitleaks |
+| Post-deploy canary | `python scripts/canary.py` | After every merge/deploy (site auto-deploys on merge) | Network (public URLs only; read-only) |
 | Pine compile | TradingView MCP `pine_smart_compile` → 0 errors | `pine/` changes | TradingView Desktop (manual) |
 | Edge / backtest gate | NET-cost backtest (Edge Measurement Core, PR #227) | Signal, scoring or parameter changes | Market data cache; long-running (manual) |
 
