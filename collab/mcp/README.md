@@ -27,11 +27,15 @@ Kontrol: `tv_health_check` → `cdp_connected: true`. (2026-11-04 doğrulandı: 
 **Claude Code** — `.mcp.json` (repo, paylaşılır):
 
 ```json
-{ "mcpServers": { "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"] } } }
+{ "mcpServers": { "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github@2025.4.8"] } } }
 ```
 
 Not: `@modelcontextprotocol/server-github` paketi upstream'de arşivlendi; resmi halefi
 `github/github-mcp-server`. Geçiş ayrı bir task (davranış farkı test edilmeden değiştirme).
+Sürüm sabit (`@2025.4.8`, T-20261107-09): paket arşivli ve npm'de "no security guarantees" diye
+işaretli; sürümsüz `npx` bugüne kadar zaten bu son sürüme çözülüyordu. Sabitleme, paket adı ele
+geçirilip yeni sürüm yayınlanırsa onun sessizce çekilmesini engeller. Sürümü yalnız gözden
+geçirerek güncelle.
 
 **Hermes** — `~/.hermes/config.yaml` (doğrulanmadı — Hermes ilk oturumunda kendi şemasına göre düzeltsin):
 
@@ -39,7 +43,7 @@ Not: `@modelcontextprotocol/server-github` paketi upstream'de arşivlendi; resmi
 mcp_servers:
   github:
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-github"]
+    args: ["-y", "@modelcontextprotocol/server-github@2025.4.8"]
     env:
       GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"   # değer VPS env'inde, repo'da değil
 ```

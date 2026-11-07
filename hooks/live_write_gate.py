@@ -34,8 +34,13 @@ PRIVATE_WRITE_RE = re.compile(r"\b\w*[Pp]rivate(?:V\d)?(Post|Put|Delete)\w*\s*\(
 HTTP_WRITE_METHOD_RE = re.compile(r"(?:-X\s*|--request\s+)(POST|PUT|DELETE)\b", re.IGNORECASE)
 BINANCE_HOST_RE = re.compile(r"binance\.(?:com|us)\b", re.IGNORECASE)
 # efloud bot control API writes (all POST-only routes in backend/api.py).
+# URL prefix: scheme URL, $VAR/${VAR}/}, or a scheme-less host the way curl and
+# httpie accept it — dotted host / IPv4 with optional port, a docker service
+# name with a port (efloud-bot:8000), localhost, or httpie's bare ":port"
+# (T-20261107-01; scheme-less form was a gap).
 BOT_API_WRITE_RE = re.compile(
-    r"(?:https?://[^\s'\"]*|\$\{?\w+\}?|\})/api/"
+    r"(?:https?://[^\s'\"]*|\$\{?\w+\}?|\}"
+    r"|(?<![\w/.-])(?:[\w-]+(?:\.[\w-]+)+(?::\d+)?|[\w-]+:\d+|localhost)|(?<![\w/.-]):\d+)/api/"
     r"(bot/(?:start|stop|restart)|kill-switch|breaker/reset|orders/close)\b"
 )
 # Production deploy / state scripts, only when executed (not cat/grep/less).
@@ -46,6 +51,20 @@ DEPLOY_SCRIPT_RE = re.compile(
 PROD_COMPOSE_RE = re.compile(
     r"docker[\s-]compose\b[^;&|]*docker-compose\.(?:prod|panel)\.yml[^;&|]*"
     r"\b(up|down|restart|stop|start|rm|kill|pull|create)\b"
+)
+# Compose state change sent to a remote host over ssh. On the prod VPS the
+# default docker-compose.yml also defines `container_name: efloud-bot`, so a
+# `docker compose up` there without -f can replace the prod container
+# (T-20261107-01). Local `docker compose up` stays silent (dev).
+# Two separate searches (an `ssh` word anywhere + a compose verb on one line)
+# keep this linear-ish: a single ssh…compose…verb pattern backtracked cubically
+# and a hook timeout means "no opinion" (fails open). Heredoc / multi-line
+# remote commands are covered because the verb only has to share a line with
+# `docker compose`. `.ssh`, `ssh-keygen` and `status=up` do not count.
+SSH_WORD_RE = re.compile(r"(?<![\w.~/-])ssh\s")
+COMPOSE_VERB_RE = re.compile(
+    r"\bdocker[\s-]compose\b[^;&|\n]{0,200}?\s(up|down|restart|stop|start|rm|kill|pull|create)(?=\s|$|['\"])",
+    re.MULTILINE,
 )
 DOCKER_CONTAINER_RE = re.compile(r"\bdocker\s+(stop|restart|kill|rm)\s+(?:-\S+\s+)*\S*efloud")
 SUPABASE_APPLY_RE = re.compile(r"\bsupabase_apply\.py\b(?![^;&|]*--dry-run)")
@@ -86,6 +105,8 @@ def find_write_in_command(command):
     ):
         if regex.search(command):
             return label
+    if SSH_WORD_RE.search(command) and COMPOSE_VERB_RE.search(command):
+        return "a docker compose change on a remote host"
     return None
 
 
