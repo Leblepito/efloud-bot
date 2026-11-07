@@ -258,3 +258,9 @@
 - ne yapıldı: `scripts/canary.py` — salt-okuma, karar çıkış kodu: site (apex+PNG kart, www 301, healthz, og-card), bot dashboard healthz ok/failures boş, silinen bot/v2/scalp DNS kayıtları geri gelmedi. 5 test + canlı koşu ALL GREEN.
 - VPS: N/A
 - istek: abacus → review · operator → merge
+
+## 2026-11-07 17:20 UTC+3 — T-20261107-23: CLAUDE.md bayat bilgiler + kanonik kaynaklar
+- task: T-20261107-23 | branch/PR: collab/claude-code/T-20261107-23-claude-md-stale | commit: PR'da
+- ne yapıldı: CLAUDE.md'de canlıyla çelişen 3 bilgi düzeltildi (silinen `bot.u2algo.com` paneli; u2algo-site Next.js değil statik + server.js, canlı URL `u2algo.com`; Supabase waitlist artık `ready`) ve "Kanonik kaynaklar" bölümü eklendi (CONTEXT.md, ADR, TESTS.md, REGRESSION.md, canary, backtest aracı uyarısı). Yapısal ayrım (anayasa ↔ durum) operatör kararına bırakıldı.
+- VPS: N/A
+- istek: operator → merge + CLAUDE.md yapısal ayrım kararı · abacus → review
