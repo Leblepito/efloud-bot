@@ -86,7 +86,7 @@ class BreakerDailyRule(Rule):
         # Two-substring check: event prefix AND specific phrase (defends against
         # false positives from unrelated breaker logger output).
         if "BREAKER TRIPPED" in msg and "Daily loss" in msg:
-            return f"🚨 <b>Breaker TRIPPED — daily loss limit</b>\n{msg}"
+            return f"🚨 <b>Breaker TRIPPED — daily loss limit</b>\n{_esc(msg)}"
         return None
 
 
@@ -104,7 +104,7 @@ class BreakerWeeklyRule(Rule):
             return None
         msg = rec.get("message", "")
         if "BREAKER HALTED" in msg and "Weekly drawdown" in msg:
-            return f"🚨 <b>Breaker HALTED — weekly drawdown</b>\n{msg}"
+            return f"🚨 <b>Breaker HALTED — weekly drawdown</b>\n{_esc(msg)}"
         return None
 
 
@@ -122,7 +122,7 @@ class BreakerConsecutiveRule(Rule):
             return None
         msg = rec.get("message", "")
         if "BREAKER TRIPPED" in msg and "consecutive losses" in msg:
-            return f"⚠️ <b>Breaker TRIPPED — consecutive losses</b>\n{msg}"
+            return f"⚠️ <b>Breaker TRIPPED — consecutive losses</b>\n{_esc(msg)}"
         return None
 
 

@@ -124,6 +124,7 @@ reproduces the original failure shape named in the report.
 | TEST-ALERT-TP | covered | TP placement failure after SL → alert (default OFF, on in prod) | `tests/test_alerter_tp_failure_rules.py::test_failed_tp_leg_fires` |
 | TEST-ALERT-SL | covered | SL repair failure → CRITICAL "unprotected" alert on the real `OrderManager` path | `tests/test_alerter_sl_failure_rules.py::test_contract_sl_repair_failure_is_unprotected` |
 | TEST-ALERT-ORPHAN | covered | An untracked live position keeps alerting hourly per (symbol, side) | `tests/test_alerter_orphan_position_rule.py::test_fires_with_details` |
+| TEST-ALERT-CRITICAL-RAW | covered | CRITICAL alerts bypass the LLM formatter; breaker text and LLM fields are HTML-escaped; a Telegram HTML rejection is resent as plain text (LLM audit A3/A4) | `tests/test_alerter_critical_formatting.py::test_critical_alert_bypasses_llm_formatter`, `tests/test_alerter_critical_formatting.py::test_html_parse_rejection_is_retried_as_plain_text` |
 
 ### 4.5 Security audit 2026-11-06
 

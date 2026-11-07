@@ -222,3 +222,9 @@
 - ne yapıldı: `TESTS.md` — 46 TEST-ID (audit C1–M5, bughunt BH01–BH12, olaylar, alerter TP/SL/orphan, güvenlik SEC-01–06); her biri kaynak + kanıt düğümü + prod'da aktif mi. CI kilidi `tests/ci/test_tests_registry.py` (her `path::node` var olmalı). Bulgular: H7/M1 düzeltmeleri kodda test edili ama config'e bağlı değil (prod'da pasif); frontend/panel ↔ `/api/*` makine-okunur sözleşme yok; TEST-SEC-06 boşluğu `tests/ci/test_mcp_pins.py` ile kapatıldı. Üretim koduna dokunuş yok.
 - VPS: N/A
 - istek: abacus → review · operator → merge (#318 sonrası)
+
+## 2026-11-07 20:30 UTC+3 — T-20261107-17: CRITICAL uyarılar LLM'siz + HTML kaçışı
+- task: T-20261107-17 | branch/PR: collab/claude-code/T-20261107-17-critical-alert-formatting | commit: PR'da
+- ne yapıldı: LLM denetimi A3/A4 düzeltmesi, yalnız `ops/alerter/`. CRITICAL uyarılar artık LLM formatlayıcıdan geçmiyor (operatör ham olguyu görüyor); breaker log metni ve LLM alanları HTML-escape; Telegram HTML'i reddederse bir kez düz metin gönderiliyor. Trading koduna dokunuş yok. RED→GREEN 7 test; regresyon defteri: alerter + overseer + routines 457 passed.
+- VPS: N/A
+- istek: abacus → review · operator → merge; sonra alerter-only deploy

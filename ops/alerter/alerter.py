@@ -169,9 +169,12 @@ class Alerter:
                 f"rate limit hit ({RATE_LIMIT_MAX_PER_MIN}/min) — dropping {rule.alert_key}"
             )
             return
-        # AI-based structured formatting wrapper (with zero-friction fallback)
+        # AI-based structured formatting wrapper (with zero-friction fallback).
+        # CRITICAL safety alerts are never rewritten by the LLM: the operator
+        # must see the raw facts (LLM-layer audit 2026-11-07, A3).
+        use_ai = rule.ai_format and rule.severity != "CRITICAL"
         formatted_text = (format_alert_with_ai(text, rule.severity, rule.alert_key)
-                          if rule.ai_format else text)
+                          if use_ai else text)
         ok = send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, formatted_text)
         if ok:
             self.dedup.mark_fired(key)
