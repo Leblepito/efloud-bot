@@ -165,7 +165,7 @@ SMC v1 signal engine + confluence scoring
 Paths: `engine/smc.py`, `engine/signals.py`, `engine/confluence.py`, `engine/levels.py`, `engine/scenarios.py`, `engine/universe.py`, `engine/adaptive.py`, `engine/intent.py`
 Downstream consumers: backend-api, orchestrator, smc-v2, pine (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run smc-v1`
-Mapped tests: 29
+Mapped tests: 30
 
 <details><summary>test files</summary>
 
@@ -195,6 +195,7 @@ Mapped tests: 29
 - `tests/test_gemini_advisory_not_blocking.py`
 - `tests/test_ob_bb_entry.py`
 - `tests/test_origin_swing_anchor.py`
+- `tests/test_sentiment_telemetry_only.py`
 - `tests/test_signals.py`
 - `tests/test_signals_injected_levels.py`
 - `tests/test_structure_validation.py`
@@ -337,7 +338,7 @@ Advisory LLM layer (clients, roles, team, sentiment, Kronos)
 Paths: `engine/agents/`, `engine/ai/`
 Downstream consumers: alerter, backend-api, orchestrator, smc-v1
 Regression acceptance command: `python scripts/regression_ledger.py run llm-agents`
-Mapped tests: 11
+Mapped tests: 12
 
 <details><summary>test files</summary>
 
@@ -352,6 +353,7 @@ Mapped tests: 11
 - `tests/test_minimax_client.py`
 - `tests/test_openrouter_client.py`
 - `tests/test_parallel_sentiment.py`
+- `tests/test_sentiment_telemetry_only.py`
 
 </details>
 
@@ -462,7 +464,7 @@ FastAPI backend, auth, healthz, bot runner, websockets
 Paths: `backend/`
 Downstream consumers: frontend (unverified), overseer (unverified), panel (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run backend-api`
-Mapped tests: 38
+Mapped tests: 39
 
 <details><summary>test files</summary>
 
@@ -504,6 +506,7 @@ Mapped tests: 38
 - `tests/test_healthz_logic.py`
 - `tests/test_healthz_not_started.py`
 - `tests/test_monthly_statement.py`
+- `tests/test_sentiment_telemetry_only.py`
 
 </details>
 

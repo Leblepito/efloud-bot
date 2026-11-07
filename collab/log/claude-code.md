@@ -280,3 +280,9 @@
 - ne yapıldı: #317–#329 merge (her biri CI yeşil). Backlog task dosyasına ilerleme tablosu eklendi: 1–11 ve 13 tamam, 12 bloklu (`backtest/` master'da yok), 14 kısım 1 tamam. Açık operatör kararları: A1/A2 sentiment, L1 yapı doğrulama, backtest geri yükleme, CLAUDE.md anayasa↔durum ayrımı, demo videosu verisi, sshd PasswordAuthentication.
 - VPS: N/A
 - istek: operator → yukarıdaki 6 karar
+
+## 2026-11-07 20:40 UTC+3 — T-20261107-26: sentiment yalnız telemetri + state_dir hizalama
+- task: T-20261107-26 | branch/PR: collab/claude-code/T-20261107-26-sentiment-telemetry | commit: PR'da
+- ne yapıldı: Karar 1 (a). `engine/signals.py` ±5 sentiment bonusu kaldırıldı → `sig.meta["macro_sentiment"]`; sentiment yazıcısı botun `state_dir`'ine yazar, dashboard aynı yerden okur. Canlıda işlem değişikliği yok (motor zaten NEUTRAL). ADR-0002 sapma notu "çözüldü". RED→GREEN 6 test; regresyon defteri 2760 passed.
+- VPS: N/A
+- istek: operator → merge; deploy bot yeniden başlatma ister (AUTOSTART=0) · abacus → review

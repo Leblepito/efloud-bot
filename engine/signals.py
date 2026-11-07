@@ -681,23 +681,10 @@ def generate_signals(
         # structure vs. bolted-on bonuses, without touching the live gate.
         structural_score = score
 
-        # Gemini AI Macro Sentiment confluence bonus/penalty
-        if ai_sentiment and "macro_sentiment" in ai_sentiment:
-            macro = ai_sentiment["macro_sentiment"]
-            if macro == "RISK_ON":
-                if is_long:
-                    score = min(100, score + 5)
-                    reasons.append("Gemini AI Macro Sentiment is RISK_ON (+5)")
-                else:
-                    score = max(0, score - 5)
-                    reasons.append("Gemini AI Macro Sentiment is RISK_ON (-5)")
-            elif macro == "RISK_OFF":
-                if not is_long:
-                    score = min(100, score + 5)
-                    reasons.append("Gemini AI Macro Sentiment is RISK_OFF (+5)")
-                else:
-                    score = max(0, score - 5)
-                    reasons.append("Gemini AI Macro Sentiment is RISK_OFF (-5)")
+        # LLM macro sentiment: TELEMETRY ONLY (spec 2026-11-07 decision 1, audit A1).
+        # It used to add ±5 before the min_confluence gate, letting an LLM open or
+        # block a marginal entry (ADR-0002). Recorded on the signal, never scored.
+        macro_sentiment = (ai_sentiment or {}).get("macro_sentiment")
 
         # Daily filter bonus — 1d ile aynı yönde ise +5 confluence
         if daily_bias != "UNDEF":
@@ -1047,6 +1034,8 @@ def generate_signals(
         # rode a slope/range fallback instead of real structure (H5);
         # tp1_is_synthetic flags the H7/M1 discovery-clamp case.
         sig.meta["structural_score"] = structural_score
+        if macro_sentiment:
+            sig.meta["macro_sentiment"] = macro_sentiment
         sig.meta["htf_bias_source"] = htf_bias_source
         sig.meta["tp1_is_synthetic"] = tp1_is_synthetic
 

@@ -282,6 +282,12 @@ def _journal_path() -> str:
     env = _os.environ.get("EFLOUD_TRADE_JOURNAL")
     if env:
         return env
+    return str(Path(_state_dir()) / "trade_journal.jsonl")
+
+
+def _state_dir() -> str:
+    """The running bot's operation.state_dir (prod ./state_1k), else ./state."""
+    import os as _os
     cfg = runner.cfg
     if not cfg:
         try:
@@ -292,8 +298,7 @@ def _journal_path() -> str:
                 cfg = _yaml.safe_load(fh) or {}
         except Exception:
             cfg = {}
-    state_dir = (cfg.get("operation") or {}).get("state_dir") or "./state"
-    return str(Path(state_dir) / "trade_journal.jsonl")
+    return (cfg.get("operation") or {}).get("state_dir") or "./state"
 
 
 @router.get("/history", dependencies=[Depends(require_auth)])
@@ -359,7 +364,8 @@ async def ai_sentiment() -> dict:
     import json
     from pathlib import Path
     try:
-        registry_path = Path("./state/ai_sentiment_registry.json")
+        # Same file the engine reads (state_dir), not the legacy ./state (audit A2).
+        registry_path = Path(_state_dir()) / "ai_sentiment_registry.json"
         if registry_path.exists():
             with open(registry_path, encoding="utf-8") as f:
                 return json.load(f)
