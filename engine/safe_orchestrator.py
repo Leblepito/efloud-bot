@@ -1087,6 +1087,8 @@ class SafeOrchestrator:
         now: Optional[datetime] = None,
     ) -> SafeCycleResult:
         """Safety check'li tam analiz cycle'ı."""
+        # Sim-time for the v2 entry gate's breaker check (None in live = wall clock).
+        self._cycle_now = now
         # Multi-instance lease acquisition (fail-closed, must succeed before any work)
         lease_acquired = False
         if self.instance_mgr:
@@ -1403,12 +1405,7 @@ class SafeOrchestrator:
             new_open_count = len(self.lifecycle.open_positions())
             
             # Kapanan trade'ler varsa breaker'a bildir
-            for p in self.lifecycle.positions:
-                if not p.is_open and p.closed_at and \
-                   not getattr(p, "_reported_to_breaker", False):
-                    self.breaker.record_trade(p.realized_pnl)
-                    p._reported_to_breaker = True
-                    actions.append(f"Recorded PnL ${p.realized_pnl:.2f} to breaker")
+            self._report_closed_to_breaker(actions, now=now)
             
             # M4: re-apply exchange-truth PnL corrections to the breaker's consecutive
             # -loss counter. A sign-flipped local estimate can wrongly RESET the
@@ -2738,6 +2735,20 @@ class SafeOrchestrator:
                     f"sl_anchor={cand.htf_swing_anchor:.8g} | {cand.reasons[0]}"
                 )
 
+    def _report_closed_to_breaker(self, actions: list, now: Optional[datetime] = None) -> None:
+        """Record newly closed positions to the breaker once, at cycle time.
+
+        ``now`` is sim-time in backtest; None in live keeps the wall clock.
+        A wall-clock timestamp in backtest made every simulated trade count as
+        "today", so the daily-loss limit tripped on the whole run's losses.
+        """
+        for p in self.lifecycle.positions:
+            if not p.is_open and p.closed_at and \
+               not getattr(p, "_reported_to_breaker", False):
+                self.breaker.record_trade(p.realized_pnl, timestamp=now)
+                p._reported_to_breaker = True
+                actions.append(f"Recorded PnL ${p.realized_pnl:.2f} to breaker")
+
     def _place_v2_entry_order(
         self,
         cand,
@@ -2812,7 +2823,8 @@ class SafeOrchestrator:
 
         # Breaker gate (MUST match v1 — breaker.HALTED must block v2 too)
         try:
-            breaker_status = self.breaker.check(now=None)
+            # sim-time in backtest (set by run_cycle); None = wall clock in live
+            breaker_status = self.breaker.check(now=getattr(self, "_cycle_now", None))
             if not breaker_status.can_trade:
                 log.info(f"[v2 reject] {cand.symbol}: breaker {breaker_status.state.value}")
                 return None

@@ -283,7 +283,7 @@ Circuit breaker, guards, orphan protection, risk calc
 Paths: `engine/safety/`, `engine/risk/`, `engine/permissions/`
 Downstream consumers: backend-api, orchestrator, scripts-misc, alerter (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run safety`
-Mapped tests: 42
+Mapped tests: 43
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -314,6 +314,7 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `backend/tests/test_position_guard_wide_sl.py`
 - `backend/tests/test_processed_signals_persistence.py`
 - `backend/tests/test_reverse_guard.py`
+- `tests/backtest/test_breaker_sim_time.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/risk/test_custom_calculator.py`
 - `tests/test_breaker_correction_window.py`
@@ -367,7 +368,7 @@ SafeOrchestrator, lifecycle, journal, ledgers, notifications
 Paths: `engine/__init__.py`, `engine/safe_orchestrator.py`, `engine/lifecycle.py`, `engine/journal.py`, `engine/memory.py`, `engine/postmortem.py`, `engine/report.py`, `engine/allocation.py`, `engine/instance_manager.py`, `engine/signal_ledger.py`, `engine/edge_costs.py`, `engine/edge_metrics.py`, `engine/notifications/`, `main.py`, `preflight.py`
 Downstream consumers: backend-api, backtest, exchange, pine, routines, scripts-misc, smc-v1, alerter (unverified), overseer (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run orchestrator`
-Mapped tests: 91
+Mapped tests: 92
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -428,6 +429,7 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `backend/tests/test_telegram_digest.py`
 - `backend/tests/test_timeout_panel_seam.py`
 - `backend/tests/test_trade_journal_wiring.py`
+- `tests/backtest/test_breaker_sim_time.py`
 - `tests/backtest/test_live_parity.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/engine/test_async_agent_review.py`

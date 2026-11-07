@@ -165,6 +165,7 @@ private store). Every finding is fixed and has a test.
 | TEST-BT-001 | covered | Exits match the exchange: TP1 50 % then the stop moves to break-even, then TP2; single-target closes 100 % at TP1; SL wins a bar that also touches TP1; TP2 is never filled in the TP1 bar | `tests/backtest/test_live_parity.py::TestResolveExit`, `tests/backtest/test_live_parity.py::TestEngineExits` |
 | TEST-BT-002 | covered | A plain run uses the live config's `smc_version`; agent team and Kronos are off and the LLM factory is a null client during the run; the live config makes runs NET | `tests/backtest/test_live_parity.py::TestLiveConfigAndOffline` |
 | TEST-BT-003 | covered | Backtest trades are reconciled against live trades on simulated bar time, not wall clock | `tests/backtest/test_live_parity.py::test_reconcile_matches_backtest_trades_on_simulated_time` |
+| TEST-BT-004 | covered | The breaker runs on sim-time in backtest: closed trades are recorded at the cycle time and the v2 entry gate checks at the cycle time, so an old simulated loss never counts as "today" (repro: SOL/USDT 41d daily-loss trip on the whole run); live (`now=None`) keeps the wall clock | `tests/backtest/test_breaker_sim_time.py` |
 
 ## 5. Evidence run (2026-11-07, Windows, commit `4dd56b6`)
 
