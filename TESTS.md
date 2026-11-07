@@ -140,6 +140,13 @@ private store). Every finding is fixed and has a test.
 | TEST-SEC-05 | covered | Test fixtures carry no real-looking credentials | CI `gitleaks (working tree)` job; `backend/tests/test_xurl_client.py` uses a synthetic value |
 | TEST-SEC-06 | covered | `.mcp.json` npx/uvx servers stay pinned to an exact version (no range, no `latest`) | `tests/ci/test_mcp_pins.py::test_every_mcp_package_is_pinned_exactly` |
 
+### 4.6 Marketing site SEO / share cards (T-20261107-18)
+
+| TEST-ID | State | Observable expectation | Evidence |
+|---|---|---|---|
+| TEST-SEO-001 | covered | Every sitemap page has a title of 10–65 chars, a description of 50–170 chars, a canonical equal to its sitemap `loc`, one `<h1>`, a 1200×630 PNG `og:image` + `twitter:image`, and no `#fragment` hreflang | `u2algo-site/scripts/test_seo_meta.js` (`npm --prefix u2algo-site test`) |
+| TEST-SEO-002 | covered | `www.u2algo.com` page requests get a 301 to the apex with path and query kept; `/healthz` and `/api/*` are never redirected | `u2algo-site/scripts/test_server_http.js` (`npm --prefix u2algo-site test`) |
+
 ## 5. Evidence run (2026-11-07, Windows, commit `4dd56b6`)
 
 - Every Python file cited in §4: 388 passed, exit 0 (before the 2 new `tests/ci/` registry/MCP files, 6 more passing).

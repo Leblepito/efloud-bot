@@ -45,7 +45,7 @@ function request(port, method, urlPath, { body, headers = {} } = {}) {
     const req = http.request({ host: '127.0.0.1', port, method, path: urlPath, headers }, res => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'] || '', body: Buffer.concat(chunks).toString('utf8') }));
+      res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'] || '', location: res.headers.location || '', body: Buffer.concat(chunks).toString('utf8') }));
     });
     req.on('error', reject);
     if (body !== undefined) req.write(body);
@@ -85,6 +85,7 @@ async function main() {
       ['/robots.txt', 'text/plain'], ['/sitemap.xml', ''], ['/brand/logo-horizontal.svg', 'image/svg+xml'],
       ['/brand-kit/css/tokens-generated.css', 'text/css'], ['/updates.json', 'application/json'],
       ['/premium_proof.json', 'application/json'], ['/assets/premium/wave1_btc_short_15m.png', 'image/png'],
+      ['/brand/og-card.png', 'image/png'],
     ]) {
       const r = await request(port, 'GET', p);
       check(`serves ${p}`, r.status === 200 && r.type.startsWith(type), `${r.status} ${r.type}`);
@@ -137,6 +138,18 @@ async function main() {
     const small = await request(port, 'POST', '/api/purchase-webhook', { body: '{}', headers: { 'content-type': 'application/json', 'x-signature': 'nope' } });
     check('purchase webhook still checks signature', small.status === 401, `${small.status}`);
   } finally {
+    // 6) one canonical host: www → apex (301), path + query kept; health checks untouched
+    const www = await request(port, 'GET', '/premium.html?ref=x', { headers: { host: 'www.u2algo.com' } });
+    check('www redirects to the apex host', www.status === 301 && www.location === 'https://u2algo.com/premium.html?ref=x', `${www.status} ${www.location}`);
+    const wwwRoot = await request(port, 'GET', '/', { headers: { host: 'WWW.u2algo.com:443' } });
+    check('www root redirects to the apex root', wwwRoot.status === 301 && wwwRoot.location === 'https://u2algo.com/', `${wwwRoot.status} ${wwwRoot.location}`);
+    const apex = await request(port, 'GET', '/', { headers: { host: 'u2algo.com' } });
+    check('apex host is served directly', apex.status === 200, `${apex.status}`);
+    const wwwHealth = await request(port, 'GET', '/healthz', { headers: { host: 'www.u2algo.com' } });
+    check('healthz is never redirected', wwwHealth.status === 200, `${wwwHealth.status}`);
+    const wwwPost = await postJson(port, '/api/waitlist', { email: 'www-host@example.com', consent: true }, { host: 'www.u2algo.com' });
+    check('API calls on www are not redirected', wwwPost.status !== 301, `${wwwPost.status}`);
+
     child.kill();
     if (!hadFallback && fs.existsSync(FALLBACK)) fs.rmSync(FALLBACK);
     if (stderr.trim()) console.log(`[server stderr]\n${stderr.trim().slice(0, 1500)}`);
