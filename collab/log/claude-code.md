@@ -247,6 +247,9 @@
 ## 2026-11-07 15:10 UTC+3 — T-20261107-18: SEO — Google + Meta paylaşım kartları
 - task: T-20261107-18 | branch/PR: collab/claude-code/T-20261107-18-seo-og | commit: PR'da
 - ne yapıldı: u2algo-site — SVG og:image yerine 1200×630 PNG kart (Meta/X/LinkedIn SVG göstermez), 4 sayfaya eksik OG etiketleri, `www` → apex 301 (healthz/API hariç), geçersiz `#fragment` hreflang kaldırıldı, uzun başlık/açıklamalar kısaltıldı, `live.html` başlığı "illüstratif demo" (içerik zaten simülasyon), Organization JSON-LD, sitemap lastmod. Test: `scripts/test_seo_meta.js` + sunucu yönlendirme testleri; `npm test` ALL PASS. Merge → Railway otomatik deploy.
+## 2026-11-07 15:40 UTC+3 — T-20261107-19: sosyal onay içeriğe bağlı + marka sesi
+- task: T-20261107-19 | branch/PR: collab/claude-code/T-20261107-19-approval-digest | commit: PR'da
+- ne yapıldı: Lane G onayı artık içeriğin sha256 özetine bağlı (caption/thread/alt/medya baytları); onaydan sonra değişen ya da özetsiz `approved` bundle `approval_stale` ile yayınlanmıyor. X coin hashtag'i sembolden türetiliyor (SOL postuna sabit `#BTC` gidiyordu). `docs/social/BRAND_VOICE.md` eklendi. RED→GREEN (8 yeni test); sosyal + publish testleri 63 passed. Ayrıca #324 SEO canlıda doğrulandı (www→apex 301, og-card.png 200 image/png).
 - VPS: N/A
 - istek: abacus → review · operator → merge
 

@@ -148,6 +148,13 @@ private store). Every finding is fixed and has a test.
 | TEST-SEO-001 | covered | Every sitemap page has a title of 10–65 chars, a description of 50–170 chars, a canonical equal to its sitemap `loc`, one `<h1>`, a 1200×630 PNG `og:image` + `twitter:image`, and no `#fragment` hreflang | `u2algo-site/scripts/test_seo_meta.js` (`npm --prefix u2algo-site test`) |
 | TEST-SEO-002 | covered | `www.u2algo.com` page requests get a 301 to the apex with path and query kept; `/healthz` and `/api/*` are never redirected | `u2algo-site/scripts/test_server_http.js` (`npm --prefix u2algo-site test`) |
 
+### 4.7 Social publishing (T-20261107-19)
+
+| TEST-ID | State | Observable expectation | Evidence |
+|---|---|---|---|
+| TEST-SOCIAL-001 | covered | Operator approval records a digest of caption/thread/alt text/media bytes; a bundle edited after approval, or approved without a digest, is refused (`approval_stale`) | `tests/test_lane_g_publish.py::TestApprovalIsBoundToContent` |
+| TEST-SOCIAL-002 | covered | The X coin hashtag follows the post's symbol (`#SOL`, not a fixed `#BTC`); unsafe symbols produce no tag | `tests/test_social_publishing.py::TestBuildCaption` |
+
 ## 5. Evidence run (2026-11-07, Windows, commit `4dd56b6`)
 
 - Every Python file cited in §4: 388 passed, exit 0 (before the 2 new `tests/ci/` registry/MCP files, 6 more passing).
