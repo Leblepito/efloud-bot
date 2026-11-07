@@ -197,6 +197,9 @@ def test_rules_list_contains_in_scope_rules():
         "lux.reject",
         # T-20261107-03: TP placement failure (default OFF via env).
         "order.tp_failed",
+        # T-20261107-05: SL protection failure (default OFF via env).
+        "order.sl_unprotected",
+        "order.sl_event",
     }
     assert set(keys) == expected, f"got {set(keys)}"
 
