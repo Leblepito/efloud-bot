@@ -141,5 +141,8 @@
 ## 2026-11-07 01:05 UTC+3 — T-20261107-02: Composio çalışma klasörü gitignore
 - task: T-20261107-02 | branch/PR: collab/claude-code/T-20261107-02-gitignore-local-data | commit: PR'da
 - ne yapıldı: `.gitignore`'a `Composio*/` (API anahtarı içeren `.env.local` + üretim çıktıları public repoya girmesin); `data/lab/` zaten ignore'lu. `git check-ignore` ile doğrulandı.
+## 2026-11-07 12:30 UTC+3 — T-20261107-07: test credential değerini sentetikle değiştir (güvenlik fix #5)
+- task: T-20261107-07 | branch/PR: collab/claude-code/T-20261107-07-test-synthetic-credential | commit: PR'da
+- ne yapıldı: `test_xurl_client.py`'deki yüksek-entropi değer (yorum + türetilmiş assert) sentetik değerle değişti; 24 test geçti; regex tarayıcı + gitleaks temiz.
 - VPS: N/A
 - istek: operator → merge
