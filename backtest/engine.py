@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 import pandas as pd
 
-from backtest.intrabar import resolve_fill, Bar
+from backtest.intrabar import resolve_exit, Bar
 from backtest.metrics import (
     aggregate_metrics, apply_commission_costs, apply_funding_costs, serialize_trade,
 )
@@ -39,11 +39,13 @@ def _closed_higher_tf_bars(df: pd.DataFrame, tf_minutes: int,
 
 @dataclass
 class _PosView:
-    """Adapter so resolve_fill (which expects .entry attribute) works with Position objects."""
+    """Adapter so resolve_exit works with Position objects."""
     direction: str
     entry: float
     sl: float
     tp1: float
+    tp2: float | None = None
+    tp1_hit: bool = False
 
 
 def compute_mtm_drawdown(positions, balance, current_prices, peak):
@@ -288,8 +290,11 @@ def run_backtest(
                         entry=pos.avg_entry_price,
                         sl=pos.sl,
                         tp1=pos.tp1,
+                        tp2=pos.tp2,
+                        tp1_hit=bool(pos.tp1_hit),
                     )
-                    level, raw_price = resolve_fill(view, bar)
+                    # Exchange parity (spec 2026-11-07): TP1 50 % → SL to BE → TP2.
+                    level, raw_price = resolve_exit(view, bar)
                     if level is None:
                         # BT-16: SL/TP dolmadi -> max holding suresi doldu mu?
                         # SL/TP ONCELIKLI: gercekte de borsadaki SL/TP emri
@@ -319,18 +324,22 @@ def run_backtest(
                         sim_close_ts[pos.id] = symbol_df.index[j]
                         max_hold_exits += 1
                         continue
-                    # resolve_fill returns "SL" or "TP1"; slippage expects leg in {"entry","SL","TP"}.
+                    # slippage expects leg in {"entry","SL","TP"}.
                     slip_leg = "SL" if level == "SL" else "TP"
                     slipped = adverse_fill(raw_price, pos.direction, slip_leg, slippage_cfg)
                     pnl_before = pos.realized_pnl
-                    orch.lifecycle.close_position(pos, slipped, level)
-                    pnl_after = pos.realized_pnl
-                    balance += (pnl_after - pnl_before)
+                    if level == "TP1":
+                        # Live: 50 % + SL→BE (single-target: 100 %) — lifecycle.partial_close.
+                        orch.lifecycle.partial_close(pos, slipped, 0.5, "TP1")
+                    else:
+                        orch.lifecycle.close_position(pos, slipped, level)
+                    balance += (pos.realized_pnl - pnl_before)
                     peak_balance = max(peak_balance, balance)
                     # BT-12: sim_close_ts fill BARININ timestamp'i olmali — onceden
                     # karar bari i'nin damgasi vuruluyordu (holding suresi step
                     # kadar kisaliyor, funding hesabi carpitiliyordu).
-                    sim_close_ts[pos.id] = symbol_df.index[j]
+                    if not pos.is_open:
+                        sim_close_ts[pos.id] = symbol_df.index[j]
 
             # MTM uses bar-i's close (current cycle); balance was just updated by bar-(i+1) slipped fills.
             # Intentional 1-bar lag — MTM equity drifts forward on the next iteration.

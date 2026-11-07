@@ -176,7 +176,10 @@ def _open(tp2):
 
 class TestEngineExits:
     def test_dual_target_takes_half_at_tp1_then_rest_at_tp2(self, monkeypatch, live_cfg):
-        df = _flat(highs={300: 111.0, 330: 121.0})
+        # after TP1 (bar 300) price holds at 112: above the break-even stop, below TP2
+        df = _flat(highs={300: 111.0})
+        df.iloc[301:, :4] = 112.0
+        df.iloc[330, df.columns.get_loc("high")] = 121.0
         res = _run(monkeypatch, live_cfg, df, [(df.index[210], _open(120.0))])
         t = res["trades"][0]
         assert t["exit_reason"] == "TP2" and t["sl_moved_to_be"] is True
@@ -187,7 +190,9 @@ class TestEngineExits:
         assert t["pnl"] == pytest.approx(0.5 * (tp1 - entry) + 0.5 * (tp2 - entry), rel=1e-6)
 
     def test_dual_target_stops_at_break_even_after_tp1(self, monkeypatch, live_cfg):
-        df = _flat(highs={300: 111.0}, lows={330: 95.0})
+        df = _flat(highs={300: 111.0})
+        df.iloc[301:, :4] = 105.0  # above the break-even stop until bar 330
+        df.iloc[330, df.columns.get_loc("low")] = 95.0
         res = _run(monkeypatch, live_cfg, df, [(df.index[210], _open(120.0))])
         t = res["trades"][0]
         assert t["exit_reason"] == "SL" and t["sl_moved_to_be"] is True

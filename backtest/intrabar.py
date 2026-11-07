@@ -95,3 +95,24 @@ def _adverse_fill(bar_open: float, trigger: float, direction: str, kind: str) ->
         return min(bar_open, trigger) if direction == "LONG" else max(bar_open, trigger)
     # TP
     return max(bar_open, trigger) if direction == "LONG" else min(bar_open, trigger)
+
+
+def resolve_exit(pos, bar: Bar) -> Tuple[Optional[str], Optional[float]]:
+    """Exchange-parity exit for one bar (spec 2026-11-07 §3.2), pessimistic.
+
+    Live (``exchange.OrderManager``): TP1 closes 50 % (100 % when ``tp2`` is None)
+    and moves the stop to break-even; TP2 closes the rest. ``pos`` exposes
+    ``.direction .sl .tp1 .tp2 .tp1_hit``. Order inside one bar: SL first, then
+    TP1; TP2 is only considered once TP1 was hit on an earlier bar. Fills gap to
+    the open.
+    """
+    long = pos.direction == "LONG"
+    if (bar.low <= pos.sl) if long else (bar.high >= pos.sl):
+        return "SL", (min(bar.open, pos.sl) if long else max(bar.open, pos.sl))
+    if not pos.tp1_hit:
+        if (bar.high >= pos.tp1) if long else (bar.low <= pos.tp1):
+            return "TP1", (max(bar.open, pos.tp1) if long else min(bar.open, pos.tp1))
+        return None, None
+    if pos.tp2 is not None and ((bar.high >= pos.tp2) if long else (bar.low <= pos.tp2)):
+        return "TP2", (max(bar.open, pos.tp2) if long else min(bar.open, pos.tp2))
+    return None, None
