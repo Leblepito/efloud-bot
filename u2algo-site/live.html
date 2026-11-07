@@ -311,7 +311,7 @@
     </ul>
     <div class="nav-status">
       <div class="status-dot"></div>
-      3 Bot Üretimde
+      1 Bot Canlı · 2 Hazır
     </div>
   </div>
 </nav>
@@ -321,9 +321,9 @@
     <div class="badge-pill">◆ Binance USDT-M Futures · 3 Ayrı Bot</div>
     <h1 class="hero-h1">Canlı Bot İzleme Paneli</h1>
     <p class="hero-subtitle">Scalp · Mid · Long — aynı motor, üç farklı zaman ufku</p>
-    <p class="hero-desc">u2algo, Binance USDT-M Futures üzerinde <strong>3 bağımsız bot</strong> çalıştırır — her biri kendi zaman dilimi zincirine, kendi confluence eşiğine ve kendi izole cüzdanına sahiptir. Ortak nokta: aynı 7 katmanlı deterministik güvenlik motoru ve aynı Smart Money Concepts + Fibonacci confluence mantığı.</p>
+    <p class="hero-desc">u2algo, Binance USDT-M Futures için <strong>3 bağımsız bot profili</strong> barındırır (şu an Mid canlı; Scalp ve Long hazır bekliyor) — her biri kendi zaman dilimi zincirine, kendi confluence eşiğine ve kendi izole cüzdanına sahiptir. Ortak nokta: aynı 7 katmanlı deterministik güvenlik motoru ve aynı Smart Money Concepts + Fibonacci confluence mantığı.</p>
     <div class="metrics-row">
-      <div class="metric-item"><span class="metric-value mono">3</span><span class="metric-label">Aktif Bot</span></div>
+      <div class="metric-item"><span class="metric-value mono">1+2</span><span class="metric-label">Canlı + Hazır Bot</span></div>
       <div class="metric-item"><span class="metric-value mono">7+1</span><span class="metric-label">Güvenlik Katmanı</span></div>
       <div class="metric-item"><span class="metric-value mono">Pine v6</span><span class="metric-label">TradingView</span></div>
       <div class="metric-item"><span class="metric-value mono">Python 3.11</span><span class="metric-label">Backend</span></div>
@@ -369,24 +369,24 @@
               <td>5m / 1h / 4h</td>
               <td>≥ 55</td>
               <td>1 : 1.0</td>
-              <td>scalp.u2algo.com</td>
-              <td class="status-val green">● Çalışıyor</td>
+              <td>VPS</td>
+              <td class="status-val amber">● Hazır (beklemede)</td>
             </tr>
             <tr>
               <td><span class="bot-tag mid">MID</span> efloud-bot</td>
               <td>15m / 4h / 12h</td>
               <td>≥ 50</td>
               <td>1 : 1.8</td>
-              <td>bot.u2algo.com</td>
-              <td class="status-val green">● Çalışıyor</td>
+              <td>VPS</td>
+              <td class="status-val green">● Canlı</td>
             </tr>
             <tr>
               <td><span class="bot-tag long">LONG</span> efloud-bot-long</td>
               <td>1h / 8h / 1d</td>
               <td>≥ 60</td>
               <td>1 : 2.2</td>
-              <td>v2.u2algo.com</td>
-              <td class="status-val green">● Çalışıyor</td>
+              <td>VPS</td>
+              <td class="status-val amber">● Hazır (beklemede)</td>
             </tr>
           </tbody>
         </table>
@@ -698,13 +698,13 @@
       <table class="deploy-table">
         <thead><tr><th>Servis</th><th>Açıklama</th><th>Domain</th><th>Durum</th></tr></thead>
         <tbody>
-          <tr><td>efloud-bot-scalp</td><td style="color:var(--text-secondary)">Scalp profili — 5m/1h/4h, yüksek frekans</td><td>scalp.u2algo.com</td><td><span class="badge-active">Çalışıyor</span></td></tr>
-          <tr><td>efloud-bot</td><td style="color:var(--text-secondary)">Mid profili (varsayılan) — 15m/4h/12h</td><td>bot.u2algo.com</td><td><span class="badge-active">Çalışıyor</span></td></tr>
-          <tr><td>efloud-bot-long</td><td style="color:var(--text-secondary)">Long profili — 1h/8h/1d, uzun vadeli yapısal işlemler</td><td>v2.u2algo.com</td><td><span class="badge-active">Çalışıyor</span></td></tr>
+          <tr><td>efloud-bot-scalp</td><td style="color:var(--text-secondary)">Scalp profili — 5m/1h/4h, yüksek frekans</td><td>—</td><td><span class="badge-neutral">Hazır (beklemede)</span></td></tr>
+          <tr><td>efloud-bot</td><td style="color:var(--text-secondary)">Mid profili (varsayılan) — 15m/4h/12h</td><td>—</td><td><span class="badge-active">Canlı</span></td></tr>
+          <tr><td>efloud-bot-long</td><td style="color:var(--text-secondary)">Long profili — 1h/8h/1d, uzun vadeli yapısal işlemler</td><td>—</td><td><span class="badge-neutral">Hazır (beklemede)</span></td></tr>
           <tr><td>routines-watcher</td><td style="color:var(--text-secondary)">Periyodik görevler — reconciliation, yetim pozisyon taraması, marjin izleme</td><td>—</td><td><span class="badge-active">Çalışıyor</span></td></tr>
           <tr><td>alerter / overseer</td><td style="color:var(--text-secondary)">Telegram bildirimleri, LLM danışma katmanı gözlemi</td><td>—</td><td><span class="badge-active">Çalışıyor</span></td></tr>
           <tr><td>daily-report</td><td style="color:var(--text-secondary)">Günlük raporlama — sürekli çalışmaz, cron ile tetiklenir</td><td>—</td><td><span class="badge-neutral">Zamanlanmış</span></td></tr>
-          <tr><td>caddy</td><td style="color:var(--text-secondary)">Reverse proxy — otomatik TLS (Let's Encrypt), HTTP/2, 3 bot domain'ini ayrı ayrı proxy'ler</td><td>—</td><td><span class="badge-active">Çalışıyor</span></td></tr>
+          <tr><td>caddy</td><td style="color:var(--text-secondary)">Reverse proxy — otomatik TLS (Let's Encrypt), HTTP/2, dashboard ve paneli proxy'ler</td><td>—</td><td><span class="badge-active">Çalışıyor</span></td></tr>
         </tbody>
       </table>
       </div>

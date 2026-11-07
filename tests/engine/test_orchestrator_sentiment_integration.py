@@ -52,9 +52,11 @@ class TestSentimentConfluenceScoring:
             ai_sentiment={"macro_sentiment": "RISK_ON"}
         )
 
+        # spec 2026-11-07 decision 1: telemetry only — no +5 (was 30)
         assert len(sigs) == 1
-        assert sigs[0].confluence == 30  # 25 + 5
-        assert "Gemini AI Macro Sentiment is RISK_ON (+5)" in sigs[0].reasons
+        assert sigs[0].confluence == 25
+        assert sigs[0].meta["macro_sentiment"] == "RISK_ON"
+        assert not any("Sentiment" in r for r in sigs[0].reasons)
 
     def test_risk_on_penalty_for_short_signal(self) -> None:
         # A CHoCH aligned with BEAR HTF bias (base score = 25) under RISK_ON should get -5 penalty.
@@ -78,9 +80,10 @@ class TestSentimentConfluenceScoring:
             ai_sentiment={"macro_sentiment": "RISK_ON"}
         )
 
+        # spec 2026-11-07 decision 1: telemetry only — no -5 (was 20)
         assert len(sigs) == 1
-        assert sigs[0].confluence == 20  # 25 - 5
-        assert "Gemini AI Macro Sentiment is RISK_ON (-5)" in sigs[0].reasons
+        assert sigs[0].confluence == 25
+        assert sigs[0].meta["macro_sentiment"] == "RISK_ON"
 
     def test_risk_off_bonus_for_short_signal(self) -> None:
         # A BEAR signal under RISK_OFF gets +5 bonus -> 30
@@ -104,8 +107,9 @@ class TestSentimentConfluenceScoring:
         )
 
         assert len(sigs) == 1
-        assert sigs[0].confluence == 30  # 25 + 5
-        assert "Gemini AI Macro Sentiment is RISK_OFF (+5)" in sigs[0].reasons
+        # spec 2026-11-07 decision 1: telemetry only — no +5 (was 30)
+        assert sigs[0].confluence == 25
+        assert sigs[0].meta["macro_sentiment"] == "RISK_OFF"
 
     def test_neutral_sentiment_no_modification(self) -> None:
         # NEUTRAL macro sentiment applies no change -> 25

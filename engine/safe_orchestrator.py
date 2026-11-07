@@ -1369,6 +1369,8 @@ class SafeOrchestrator:
                 # ── BT-18: TP2 reachability (both default 0.0 = OFF) ──
                 max_tp_gap_r=risk_cfg.get("max_tp_gap_r", 0.0),
                 min_rr_tp1_hard=risk_cfg.get("min_rr_tp1_hard", 0.0),
+                structure_validation=bool(
+                    (self.config.get("engine", {}).get("structure_validation") or {}).get("enabled", False)),
             )
             
             # ═══ STEP 4: Scenario Planning (per-symbol) ═══

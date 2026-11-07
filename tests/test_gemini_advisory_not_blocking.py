@@ -50,6 +50,7 @@ def test_gemini_reject_does_not_drop_signal():
             engine, df, df, df,
             min_confluence=20, min_rr=1.0, fib_ext=1.618,
             recency_bars=40, symbol="ETH/USDT",
+            structure_validation=True,  # default OFF since 2026-11-07 — test the enabled path
         )
 
     assert len(sigs) == 1, "C8: a Gemini reject must NOT drop the signal (advisory only)"

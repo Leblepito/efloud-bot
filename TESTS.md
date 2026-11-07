@@ -126,6 +126,8 @@ reproduces the original failure shape named in the report.
 | TEST-ALERT-SL | covered | SL repair failure → CRITICAL "unprotected" alert on the real `OrderManager` path | `tests/test_alerter_sl_failure_rules.py::test_contract_sl_repair_failure_is_unprotected` |
 | TEST-ALERT-ORPHAN | covered | An untracked live position keeps alerting hourly per (symbol, side) | `tests/test_alerter_orphan_position_rule.py::test_fires_with_details` |
 | TEST-ALERT-CRITICAL-RAW | covered | CRITICAL alerts bypass the LLM formatter; breaker text and LLM fields are HTML-escaped; a Telegram HTML rejection is resent as plain text (LLM audit A3/A4) | `tests/test_alerter_critical_formatting.py::test_critical_alert_bypasses_llm_formatter`, `tests/test_alerter_critical_formatting.py::test_html_parse_rejection_is_retried_as_plain_text` |
+| TEST-LLM-002 | covered | The synchronous LLM structure validation is OFF unless `engine.structure_validation.enabled: true`; when off it is not called at all (live: 23,085/23,085 fallbacks) | `tests/test_structure_validation_flag.py::test_default_does_not_call_the_llm` |
+| TEST-LLM-001 | covered | LLM macro sentiment never moves the confluence score (telemetry in `sig.meta["macro_sentiment"]`); writer, engine and dashboard use the same `state_dir` | `tests/test_sentiment_telemetry_only.py::test_sentiment_does_not_move_the_confluence_score`, `tests/test_sentiment_telemetry_only.py::test_runner_writes_into_its_own_state_dir` |
 
 ### 4.5 Security audit 2026-11-06
 

@@ -1079,7 +1079,10 @@ class BotRunner:
             else:
                 try:
                     log.info("♻️ Triggering macro sentiment analysis (LLM)...")
-                    res = await fetch_and_save_sentiment(llm_config=llm_cfg)
+                    res = await fetch_and_save_sentiment(
+                        llm_config=llm_cfg,
+                        state_dir=(self.cfg.get("operation") or {}).get("state_dir", "./state"),
+                    )
                     log.info(f"✅ AI Sentiment updated: {res.get('macro_sentiment', 'NEUTRAL')} (FGI: {res.get('fear_and_greed', 50)})")
                     # reload orchestrator's sentiment state in real time!
                     if self.orch:
