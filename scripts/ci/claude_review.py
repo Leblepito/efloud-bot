@@ -31,14 +31,12 @@ def load_agent_prompt(agent_name: str) -> str:
         return fh.read()
 
 
-def get_pr_diff(base_ref: str) -> str:
-    subprocess.run(["git", "fetch", "origin", base_ref], check=True)
-    merge_base = subprocess.run(
-        ["git", "merge-base", f"origin/{base_ref}", "HEAD"],
-        check=True, capture_output=True, text=True,
-    ).stdout.strip()
+def get_pr_diff(pr_number: str) -> str:
+    # Read the PR diff as data through the API — the workflow runs on
+    # pull_request_target with the base branch checked out, and PR code must
+    # never be checked out or executed next to ANTHROPIC_API_KEY (T-20261107-08).
     diff = subprocess.run(
-        ["git", "diff", merge_base, "HEAD"],
+        ["gh", "pr", "diff", pr_number],
         check=True, capture_output=True, text=True,
     ).stdout
     if len(diff) > MAX_DIFF_CHARS:
@@ -78,9 +76,16 @@ def main() -> int:
         print("usage: claude_review.py <agent-name> <pr-number>", file=sys.stderr)
         return 2
     agent_name, pr_number = sys.argv[1], sys.argv[2]
-    base_ref = os.environ.get("GITHUB_BASE_REF", "master")
 
-    diff = get_pr_diff(base_ref)
+    try:
+        diff = get_pr_diff(pr_number)
+    except subprocess.CalledProcessError as exc:
+        # The API refuses very large diffs (HTTP 406) — say so instead of failing.
+        reason = (exc.stderr or "").strip()[:200] or f"exit {exc.returncode}"
+        post_pr_comment(pr_number, agent_name,
+                        f"⚠️ Could not fetch the PR diff (`gh pr diff`: {reason}). "
+                        "The diff is likely too large for automated review — manual review required.")
+        return 0
     if not diff.strip():
         print("No diff to review — skipping.")
         return 0
