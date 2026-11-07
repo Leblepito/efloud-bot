@@ -1223,11 +1223,13 @@ class SafeOrchestrator:
                 # W2/C1: ts_ms eklendi — anchor_time_axis toggle'ı LTF kırılım
                 # zamanını HTF eksenine haritalayabilsin (toggle OFF iken
                 # ts_ms taşımak zararsızdır; legacy yol kullanmaz).
+                # Column arrays, not iterrows(): iterrows boxed every row into a
+                # Series (~17 % of backtest time); the values are the same.
                 htf_bars = [
-                    HtfBar(ordinal=i, high=float(row["high"]),
-                           low=float(row["low"]),
+                    HtfBar(ordinal=i, high=float(hi), low=float(lo),
                            ts_ms=_bar_ts_to_ms(idx_ts))
-                    for i, (idx_ts, row) in enumerate(df_htf.iterrows())
+                    for i, (idx_ts, hi, lo) in enumerate(zip(
+                        df_htf.index, df_htf["high"].to_numpy(), df_htf["low"].to_numpy()))
                 ]
             
                 # Recency cutoff: only consider LTF breaks in last N bars

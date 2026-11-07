@@ -304,3 +304,8 @@
 - ne yapıldı: Karar 3. `backtest/` canlı mantıkla geri yüklendi (config v2, 750 bar geçmiş, borsa çıkışları, NET maliyet, LLM kapalı). Parite: 11-02 sonrası 10 canlı girişin 8'i yeniden üretildi; 41g × 10 sembol NET −%0.91. Yolda bulunan backtest breaker duvar-saati hatası (günlük kayıp tüm koşuyu topluyordu, TRIPPED duraklamaları hiç bloklamıyordu) düzeltildi; canlı değişmez, risk-safety-auditor SAFE_WITH_NITS. Rapor `collab/outputs/claude-code/2026-11-07-backtest-live-parity.md`.
 - VPS: N/A
 - istek: operator → bilgi (deploy gerekmez) · abacus → review
+## 2026-11-08 03:30 UTC+3 — T-20261108-01: backtest hızı (backlog madde 12)
+- task: T-20261106-04 #12 | branch/PR: collab/claude-code/T-20261108-01-backtest-speed | commit: PR'da
+- ne yapıldı: Ölçülü döngü (benchmark-optimization-loop). BTC 6g sabit pencere 222.9 s → 106.6 s (2.1×); kapı: sonuç byte-identical (BTC, ETH 10-15 holdout, SOL+TRX portföy). Kazanan: (1) orkestratörde `df_htf.iterrows()` yerine kolon dizileri, (2) yalnız backtest'te aynı HTF/günlük çerçevenin analizi bir kez (tam `DataFrame.equals` eşleşmesi, her isabet izole kopya). Reddedilen: ikinci görüşte sakla (gürültü içinde).
+- VPS: N/A
+- istek: abacus → review

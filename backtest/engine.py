@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 import logging
 import tempfile
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -12,6 +12,7 @@ from typing import Any, Literal
 import pandas as pd
 
 from backtest.intrabar import resolve_exit, Bar
+from backtest.memo import memoized_analysis
 from backtest.metrics import (
     aggregate_metrics, apply_commission_costs, apply_funding_costs, serialize_trade,
 )
@@ -169,7 +170,7 @@ def run_backtest(
     symbols = sorted(symbols)
 
     # Use a temp state_dir — persist=False means no disk writes but orch __init__ needs a dir
-    with _offline_llm(), tempfile.TemporaryDirectory(prefix="bt_") as state_dir:
+    with _offline_llm(), tempfile.TemporaryDirectory(prefix="bt_") as state_dir, ExitStack() as stack:
         setup_state_store = None
         if smc_version == "v2":
             # Lazy import: v1 path must not import engine.smc_v2 (preserves the
@@ -190,6 +191,8 @@ def run_backtest(
             persist=False,
             setup_state_store=setup_state_store,
         )
+        # Item 12: identical HTF/daily frames are analyzed once (exact-match memo).
+        stack.enter_context(memoized_analysis(orch))
         balance = float(initial_balance)
         peak_balance = balance
         skipped_cycles = 0  # cycles where run_cycle raised — see "skipped_cycles" in return dict
