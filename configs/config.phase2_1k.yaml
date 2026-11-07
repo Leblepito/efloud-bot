@@ -93,6 +93,11 @@ engine:
   smc_v2_symbols: ["BTC/USDT", "ETH/USDT", "XRP/USDT", "DOGE/USDT", "SOL/USDT",
                    "BNB/USDT", "TRX/USDT", "LINK/USDT", "BCH/USDT", "ADA/USDT"]
   smc_v2_shadow: false          # LIVE (operatör onayı 2026-07-07): gerçek emir
+  # Senkron LLM yapı doğrulaması (yalnız danışma, işlemi asla engellemez). KAPALI:
+  # canlıda 19 günde 23.085/23.085 çağrı fallback'e düştü; açılırsa her emirden
+  # önce 5 sn'ye kadar gecikme ekler. Açmak = ADR-0002 shadow→ölçüm→onay.
+  structure_validation:
+    enabled: false
 
   # BT-22 (operatör onayı 2026-07-26): SL/TP geometrisi artık %1-of-price
   # proxy'si yerine GERÇEK Wilder ATR(14) kullanıyor. Bu satır olmadan

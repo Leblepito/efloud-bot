@@ -481,6 +481,7 @@ def generate_signals(
     blended_rr_target: float = 1.5,  # Blended R:R target (0.5×TP1_R + 0.5×TP2_R >= this)
     strict_target_reject: bool = False,   # H7 (2026-06-20 audit): default OFF — see below
     fix_discovery_classification: bool = False,  # M1 (2026-06-20 audit): default OFF — see below
+    structure_validation: bool = False,  # advisory LLM call per signal; default OFF (spec 2026-11-07 §1 #2)
 ) -> List[Signal]:
     """
     4-Timeframe Efloud akışı:
@@ -1050,8 +1051,10 @@ def generate_signals(
         sig.meta["htf_bias_source"] = htf_bias_source
         sig.meta["tp1_is_synthetic"] = tp1_is_synthetic
 
-        # SMC Structure Validation Layer (Phase 2.2)
-        if symbol:
+        # SMC Structure Validation Layer (Phase 2.2). Advisory only (C8) and OFF by
+        # default: live fell back on 23,085/23,085 calls (2026-10-19..11-07), and a
+        # working backend would add up to 5 s synchronously before every order.
+        if symbol and structure_validation:
             val_res = validate_signal_with_gemini(
                 symbol=symbol,
                 direction=sig.direction,

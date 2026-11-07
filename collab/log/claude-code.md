@@ -291,3 +291,8 @@
 - ne yapıldı: Karar 5 — 45 sn'lik site demo videosu yalnız public sayfalardan (Playwright, tıklama yok). Kayıtta live.html'in silinen `bot./v2./scalp.u2algo.com` adlarını ve beklemedeki Scalp/Long botlarını "Çalışıyor" gösterdiği görüldü → düzeltildi; `test_seo_meta.js` silinen alt alan adlarını yakalıyor. Video merge+deploy sonrası yeniden kaydedilecek.
 - VPS: N/A
 - istek: operator → merge (Railway otomatik deploy) · abacus → review
+## 2026-11-07 20:10 UTC+3 — T-20261107-25: LLM yapı doğrulaması varsayılan kapalı
+- task: T-20261107-25 | branch/PR: collab/claude-code/T-20261107-25-structure-validation-off | commit: PR'da
+- ne yapıldı: `engine/signals.py` senkron yapı doğrulaması `structure_validation` bayrağı arkasında (varsayılan False), orkestratör config'ten okur, canlı config `engine.structure_validation.enabled: false`. Canlıda zaten %100 pass-through olduğundan işlem kararı değişmez. Regresyon defteri (smc-v1 → orkestratör, backend-api, alerter …) 2763 passed.
+- VPS: N/A
+- istek: operator → merge; deploy bot yeniden başlatma ister (AUTOSTART=0) · abacus → review
