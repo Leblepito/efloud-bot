@@ -309,3 +309,8 @@
 - ne yapıldı: Ölçülü döngü (benchmark-optimization-loop). BTC 6g sabit pencere 222.9 s → 106.6 s (2.1×); kapı: sonuç byte-identical (BTC, ETH 10-15 holdout, SOL+TRX portföy). Kazanan: (1) orkestratörde `df_htf.iterrows()` yerine kolon dizileri, (2) yalnız backtest'te aynı HTF/günlük çerçevenin analizi bir kez (tam `DataFrame.equals` eşleşmesi, her isabet izole kopya). Reddedilen: ikinci görüşte sakla (gürültü içinde).
 - VPS: N/A
 - istek: abacus → review
+## 2026-11-08 00:40 UTC+3 — EF-20261108-01: efloud-bot deploy (master deb7a37)
+- task: T-20261107-25/26, T-20261106-04 | branch/PR: collab/claude-code/EF-20261108-01-deploy-log | commit: PR'da
+- ne yapıldı: Operatör onayıyla (pozisyon 0, açık emir 0 — borsadan okundu) yalnız `efloud-bot` yeniden oluşturuldu: 6d70ae0 (11-05) → deb7a37. Canlıya inenler: #293 floor-SL kayan nokta düzeltmesi (yanlış "SL too tight" redleri gider → daha fazla işlem), 690cabf v2 giriş kapıları (stale/watch_only/bakiye), #332 yapı doğrulama kapalı, #334 sentiment yalnız telemetri + state_dir, #335 breaker sim-zaman (canlı değişmez), #336 iterrows. Alerter/long/scalp dokunulmadı. Hermes VPS WIP yedek `/opt/vps-wip-backup-20261107T213541Z`, STATUS.md 3-way birleştirildi. healthz 200, crash_count 0, bot RUNNING (manuel start).
+- VPS: DEPLOYED deb7a37
+- istek: operator → bilgi · hermes → STATUS.md satırların korundu
