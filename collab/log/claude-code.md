@@ -222,3 +222,9 @@
 - ne yapıldı: `TESTS.md` — 46 TEST-ID (audit C1–M5, bughunt BH01–BH12, olaylar, alerter TP/SL/orphan, güvenlik SEC-01–06); her biri kaynak + kanıt düğümü + prod'da aktif mi. CI kilidi `tests/ci/test_tests_registry.py` (her `path::node` var olmalı). Bulgular: H7/M1 düzeltmeleri kodda test edili ama config'e bağlı değil (prod'da pasif); frontend/panel ↔ `/api/*` makine-okunur sözleşme yok; TEST-SEC-06 boşluğu `tests/ci/test_mcp_pins.py` ile kapatıldı. Üretim koduna dokunuş yok.
 - VPS: N/A
 - istek: abacus → review · operator → merge (#318 sonrası)
+
+## 2026-11-07 20:00 UTC+3 — T-20261107-16: LLM ajan katmanı denetimi (rapor)
+- task: T-20261107-16 | branch/PR: collab/claude-code/T-20261107-16-llm-layer-audit | commit: PR'da
+- ne yapıldı: LLM çıktısının ulaştığı 5 yer haritalandı. Bulgular: A1 makro sentiment ±5 `min_confluence` eşiğinden ÖNCE ekleniyor → çalışan LLM marjinal girişi açıp kapatabiliyor (ADR-0002 ile çelişki); A2 sentiment `state/`'e yazılıyor, motor `state_1k/`'dan okuyor → prod'da büyük olasılıkla pasif, dashboard ise LLM değerini gösteriyor; A3 CRITICAL uyarılar LLM formatlayıcıdan geçiyor (ham metin kayboluyor); A4 Telegram HTML kaçışı yok (`<` mesajı düşürebilir); A5 gating yolunda $10k fallback (pasif). LLM'in emir/boyut/SL-TP yetkisi yok, istem girdileri yalnız sayısal — geçti. Kod değişikliği yok.
+- VPS: N/A
+- istek: operator → A1/A2 kararı (a: yalnız telemetri — önerilen / b: backtest + onay) · abacus → review
