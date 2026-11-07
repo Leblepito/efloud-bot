@@ -259,6 +259,11 @@
 - VPS: N/A
 - istek: abacus → review · operator → merge
 
+## 2026-11-07 16:30 UTC+3 — T-20261107-21: video seslendirme kesilmesin + ses seviyesi
+- task: T-20261107-21 | branch/PR: collab/claude-code/T-20261107-21-video | commit: PR'da
+- ne yapıldı: `scripts/video_render.py` — seslendirmeli klipler artık varsayılan 8 sn'de kesilmiyor (süre = seslendirme süresi, açık süre öncelikli); ses −16 LUFS'a normalize. RED→GREEN 4 test; sosyal/video testleri 66 passed. Dashboard demo videosu operatör kararına bırakıldı (canlı hesap verisi).
+- VPS: N/A
+- istek: abacus → review · operator → merge; demo videosunda hangi veri gösterilsin kararı
 ## 2026-11-07 17:00 UTC+3 — T-20261107-22: backend/DB + LLM maliyet/gecikme (rapor)
 - task: T-20261107-22 | branch/PR: collab/claude-code/T-20261107-22-backend-llm-cost | commit: PR'da
 - ne yapıldı: Backend auth/CORS/cookie/migration kontrolü — kusur yok; Supabase waitlist canlıda `ready` (CLAUDE.md bayat). Canlı log (19 gün) ölçümü: yapı doğrulama LLM çağrısı 23.085 kez çağrıldı, %100 fallback — `make_llm_client({})` config almıyor, `LLM_PROVIDER` yok → claude → anahtar yok. Alerter formatlayıcı aynı sebeple hep ham. `LLM_PROVIDER` set edilmemeli (23k gerçek çağrı + emir öncesi 5 sn'ye kadar gecikme); karar operatörde. Kod değişikliği yok.

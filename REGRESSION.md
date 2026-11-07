@@ -574,7 +574,7 @@ Chart/video render, lane A-G social bundles + publish
 Paths: `scripts/chart_render.py`, `scripts/video_render.py`, `scripts/lane_*`, `scripts/lane_e/`, `scripts/lane_c/`, `scripts/daily_social_run.py`, `scripts/higgsfield_adapter.py`, `scripts/content_compliance.py`, `scripts/content_templates/`, `scripts/social_from_telegram.py`, `scripts/pipeline_orchestrator.py`, `scripts/collect_social_doctrine.py`, `scripts/telegram_channel_collector.py`, `engine/content_jobs.py`
 Downstream consumers: backend-api, backend-social, orchestrator, routines
 Regression acceptance command: `python scripts/regression_ledger.py run social-pipeline`
-Mapped tests: 22
+Mapped tests: 23
 
 <details><summary>test files</summary>
 
@@ -600,6 +600,7 @@ Mapped tests: 22
 - `tests/test_lane_g_publish.py`
 - `tests/test_social_from_telegram.py`
 - `tests/test_social_publishing.py`
+- `tests/test_video_render_voiceover.py`
 
 </details>
 
