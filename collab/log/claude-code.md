@@ -280,3 +280,9 @@
 - ne yapıldı: #317–#329 merge (her biri CI yeşil). Backlog task dosyasına ilerleme tablosu eklendi: 1–11 ve 13 tamam, 12 bloklu (`backtest/` master'da yok), 14 kısım 1 tamam. Açık operatör kararları: A1/A2 sentiment, L1 yapı doğrulama, backtest geri yükleme, CLAUDE.md anayasa↔durum ayrımı, demo videosu verisi, sshd PasswordAuthentication.
 - VPS: N/A
 - istek: operator → yukarıdaki 6 karar
+
+## 2026-11-07 20:00 UTC+3 — T-20261107-27: CLAUDE.md yalnız anayasa
+- task: T-20261107-27 | branch/PR: collab/claude-code/T-20261107-27-claude-md-constitution | commit: PR'da
+- ne yapıldı: CLAUDE.md'deki tarihli durum blokları aynen `docs/history/claude-md-status-archive.md`'ye taşındı (102 → 76 satır); kalıcı kurallar, sözleşme, kanonik kaynaklar ve Pine kısıtları yerinde. ADR-0005 çelişkisi ("strategy") giderildi. Karar operatör adına verildi (spec 2026-11-07 §1 #4).
+- VPS: N/A
+- istek: operator → merge (itiraz varsa geri al) · abacus → review
