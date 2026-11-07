@@ -19,7 +19,7 @@ checks this in CI, so a renamed or deleted test cannot silently orphan an entry.
 | Secret scan | CI `gitleaks (working tree)`; daily `scheduled-review.yml` (full history) | Every PR / daily | gitleaks |
 | Post-deploy canary | `python scripts/canary.py` | After every merge/deploy (site auto-deploys on merge) | Network (public URLs only; read-only) |
 | Pine compile | TradingView MCP `pine_smart_compile` → 0 errors | `pine/` changes | TradingView Desktop (manual) |
-| Edge / backtest gate | NET-cost backtest (Edge Measurement Core, PR #227) | Signal, scoring or parameter changes | Market data cache; long-running (manual) |
+| Edge / backtest gate | NET-cost backtest (Edge Measurement Core, PR #227). **Not runnable from master:** `backtest/` was removed in `562a6a3` (2026-10-31); restore from `562a6a3^` before any edge change | Signal, scoring or parameter changes | Market data cache; long-running (manual) |
 
 Windows note: before T-20261107-14, importing `main.py` closed pytest's capture stream, so the
 local Windows suite crashed before running any test. With the fix the local suite runs
