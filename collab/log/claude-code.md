@@ -258,3 +258,9 @@
 - ne yapıldı: `scripts/canary.py` — salt-okuma, karar çıkış kodu: site (apex+PNG kart, www 301, healthz, og-card), bot dashboard healthz ok/failures boş, silinen bot/v2/scalp DNS kayıtları geri gelmedi. 5 test + canlı koşu ALL GREEN.
 - VPS: N/A
 - istek: abacus → review · operator → merge
+
+## 2026-11-07 17:00 UTC+3 — T-20261107-22: backend/DB + LLM maliyet/gecikme (rapor)
+- task: T-20261107-22 | branch/PR: collab/claude-code/T-20261107-22-backend-llm-cost | commit: PR'da
+- ne yapıldı: Backend auth/CORS/cookie/migration kontrolü — kusur yok; Supabase waitlist canlıda `ready` (CLAUDE.md bayat). Canlı log (19 gün) ölçümü: yapı doğrulama LLM çağrısı 23.085 kez çağrıldı, %100 fallback — `make_llm_client({})` config almıyor, `LLM_PROVIDER` yok → claude → anahtar yok. Alerter formatlayıcı aynı sebeple hep ham. `LLM_PROVIDER` set edilmemeli (23k gerçek çağrı + emir öncesi 5 sn'ye kadar gecikme); karar operatörde. Kod değişikliği yok.
+- VPS: N/A
+- istek: operator → L1 kararı (yapı doğrulama kaldır/kapat vs asenkron) · abacus → review
