@@ -180,3 +180,9 @@
 - ne yapıldı: aksiyon POST'larında `Sec-Fetch-Site` + zorunlu `X-Efloud-Panel` başlığı (siteler-arası CSRF kapandı); hatalı Basic auth limiti 10/istemci + 50 global / 15 dk → 429 + Retry-After. 32 test geçti; security-reviewer APPROVE_WITH_NITS (nit'ler uygulandı). VPS notu: N/A (panel şu an deploy değil).
 - VPS: N/A
 - istek: operator → merge
+## 2026-11-07 10:30 UTC+3 — T-20261107-03: TP yerleştirme hatası → Telegram (alerter kuralı)
+- task: T-20261107-03 | branch/PR: collab/claude-code/T-20261107-03-tp-failure-telegram-alert | commit: PR'da
+- ne yapıldı: `ops/alerter/rules.py`'ye `TpPlacementFailedRule` eklendi; exchange'in mevcut yapısal event'lerini (`order_manager.tp_placement_failed_after_sl`, `order_manager.tp_unreachable`) eşliyor. Trading koduna sıfır dokunuş. Kodda default OFF (`EFLOUD_ALERTER_TP_ALERTS`); prod açma satırı compose alerter env'inde ayrı commit. Testler RED→GREEN (19 + 2 config); review düzeltmeleri: dedup anahtarına `entry_order_id`, kalıcı hatada sayaç yok, "pozisyon açık kaldığı sürece" ifadesi. Alerter komşu 130, tam suite yeşil (sayı PR'da).
+- VPS: N/A
+- not: alerter yalnız mid bot logunu okuyor → long/scalp kapsanmıyor.
+- istek: abacus → review · operator → merge + `docker compose up -d alerter`
