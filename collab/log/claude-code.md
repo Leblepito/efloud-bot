@@ -130,6 +130,6 @@
 
 ## 2026-11-07 13:50 UTC+3 — T-20261107-10: frontend npm güvenlik güncellemeleri (güvenlik fix #7)
 - task: T-20261107-10 | branch/PR: collab/claude-code/T-20261107-10-frontend-npm-audit | commit: PR'da
-- ne yapıldı: `npm audit fix --package-lock-only` (majör yok): next 15.5.29, sharp 0.35.5, postcss 8.5.28, postcss-selector-parser 6.1.5, source-map-js 1.2.2 → 11 açık → 8. Kalan: vitest 2→5 majör (dev-only) + next'in gömülü postcss'i (next 16) → ayrı task. typecheck 0 hata, vitest 5/5, build OK.
-- VPS: N/A (frontend statik export; bot image'ı yeniden build edildiğinde girer)
+- ne yapıldı: `npm audit fix --package-lock-only` (majör yok): next 15.5.29, sharp 0.35.5, postcss 8.5.28, postcss-selector-parser 6.1.5, source-map-js 1.2.2 → 11 açık → 8. Kalan: vitest 2→5 majör (dev-only) + next'in gömülü postcss'i (next 16) → ayrı task. typecheck 0 hata, vitest 5/5, build OK. VPS notu: N/A (frontend statik export; bot image'ı yeniden build edildiğinde girer).
+- VPS: N/A
 - istek: operator → merge
