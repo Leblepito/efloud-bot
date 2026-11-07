@@ -607,6 +607,21 @@ _RE_ORPHAN = re.compile(
     r"(?: (?P<side>\S+) qty=(?P<qty>\S+) entry=(?P<entry>\S+) upnl=(?P<upnl>\S+))?")
 
 
+ORPHAN_IGNORE_ENV = "EFLOUD_ALERTER_ORPHAN_IGNORE_SYMBOLS"
+
+
+def _norm_symbol(sym: str) -> str:
+    """'BTC/USDT:USDT' / 'btc/usdt' / 'BTCUSDT' → 'BTCUSDT'."""
+    return sym.split(":")[0].replace("/", "").strip().upper()
+
+
+def _orphan_ignored(sym: str) -> bool:
+    """Operator allowlist for deliberate manual positions (comma-separated,
+    default empty → nothing muted)."""
+    raw = os.environ.get(ORPHAN_IGNORE_ENV, "")
+    return _norm_symbol(sym) in {_norm_symbol(s) for s in raw.split(",") if s.strip()}
+
+
 def _orphan_match(rec: dict):
     if rec.get("logger") != "efloud.exchange" or rec.get("level") != "WARNING":
         return None
@@ -622,7 +637,18 @@ class OrphanPositionRule(Rule):
     repeats every reconcile cycle, so this rule re-alerts hourly per
     (symbol, side) until the position is closed or tracked again. Same
     family as the SL rules ("a live position may lack bot protection") →
-    same flag (EFLOUD_ALERTER_SL_ALERTS)."""
+    same flag (EFLOUD_ALERTER_SL_ALERTS); deliberate manual positions are
+    muted per symbol via EFLOUD_ALERTER_ORPHAN_IGNORE_SYMBOLS.
+
+    Limits of the underlying detection (exchange code, unchanged here):
+    - reconcile compares by SYMBOL only, so in hedge mode an orphan side next
+      to a tracked opposite side on the same symbol is never logged (prod is
+      one-way mode; fix = compare (symbol, side), separate trading-code task);
+    - dry_run and a failed positions fetch return before orphan detection →
+      no line, no alert for that cycle;
+    - the detailed and the "details unavailable" line have different dedup
+      keys (side vs '?'), so a symbol alternating between them may alert
+      twice in an hour (rare)."""
     alert_key: str = "order.orphan_position"
     severity: str = "CRITICAL"
     dedup_window_sec: int = 60 * 60
@@ -632,7 +658,7 @@ class OrphanPositionRule(Rule):
         if not _flag_on(SL_ALERTS_ENV):
             return None
         m = _orphan_match(rec)
-        if not m:
+        if not m or _orphan_ignored(m["sym"]):
             return None
         if m["side"]:
             detail = (f"{_esc(m['sym'])} {_esc(m['side'])} · miktar {_esc(m['qty'])} · "
@@ -642,9 +668,12 @@ class OrphanPositionRule(Rule):
         return ("🚨 <b>Borsada botun takip etmediği pozisyon var (orphan)</b>\n"
                 f"{detail}\n"
                 "Bot bu pozisyonu takip etmiyor; TP'sini ve kapanışını yönetmez. Orphan "
-                "koruması açıksa yalnız eksik SL'yi koymayı dener. Bot dışında bilerek "
-                "açılmadıysa (ör. geri alınamayan giriş) Binance'te kontrol et. "
-                "Pozisyon durdukça saatte bir hatırlatılır.")
+                "koruması `place_missing_sl` modundaysa (mid prod) SL yoksa varsayılan bir "
+                "SL koymayı dener — döngü başına en fazla 1 pozisyon; emir okuması "
+                "başarısızsa ya da SL fiyata çok yakınsa atlanır. `warn_only` modunda hiçbir "
+                "emir koymaz. Bot dışında bilerek açılmadıysa (ör. geri alınamayan giriş) "
+                "Binance'te kontrol et. Pozisyon durdukça saatte bir hatırlatılır "
+                "(bilerek açılan sembol: EFLOUD_ALERTER_ORPHAN_IGNORE_SYMBOLS).")
 
     def dedup_key(self, rec: dict) -> str:
         m = _orphan_match(rec)

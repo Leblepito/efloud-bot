@@ -23,6 +23,8 @@ için, alerter bu satırdan pozisyon durdukça tekrarlayan bir uyarı üretir.
 
 ## Beklenen çıktı (Definition of Done)
 - [x] `OrphanPositionRule`: (sembol, yön) başına saatte 1 mesaj; detaysız satır da eşlenir; HTML-escape; `ai_format=False`.
+- [x] Bilerek açılan manuel pozisyonlar için sembol allowlist'i: `EFLOUD_ALERTER_ORPHAN_IGNORE_SYMBOLS` (virgülle ayrılmış, büyük/küçük harf duyarsız, varsayılan boş).
+- [ ] Follow-up (trading kodu, ayrı task): reconcile orphan tespiti yalnız sembolle karşılaştırıyor → hedge modda takip edilen karşı yönün yanındaki orphan loglanmıyor; (sembol, yön) karşılaştırması gerekli. Prod one-way modda, etki düşük.
 - [x] Bayrak: `EFLOUD_ALERTER_SL_ALERTS` (aynı aile: "canlı pozisyon bot koruması dışında olabilir"); yeni compose satırı yok.
 - [x] Testler: birim + gerçek yol sözleşme testi (open → SL hatası → rollback hatası → 2 reconcile döngüsünde orphan satırı kurala eşleniyor).
 - [ ] Operatör: #308 → #314 → bu PR merge sırası.

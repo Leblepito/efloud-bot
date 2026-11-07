@@ -70,6 +70,31 @@ def test_html_escaped(on):
     assert "<X>" not in out and "&lt;X&gt;&amp;Y" in out
 
 
+IGNORE = "EFLOUD_ALERTER_ORPHAN_IGNORE_SYMBOLS"
+
+
+@pytest.mark.parametrize("ignore", ["BTC/USDT", "btcusdt", " eth/usdt , BTCUSDT ", "BTC/USDT:USDT"])
+def test_ignore_list_mutes_deliberate_manual_position(on, monkeypatch, ignore):
+    monkeypatch.setenv(IGNORE, ignore)
+    assert OrphanPositionRule().match_log(_rec()) is None
+
+
+def test_ignore_list_only_mutes_listed_symbols(on, monkeypatch):
+    monkeypatch.setenv(IGNORE, "ETH/USDT")
+    assert OrphanPositionRule().match_log(_rec()) is not None
+    assert OrphanPositionRule().match_log(_rec(NO_DETAILS)) is None
+
+
+def test_ignore_list_empty_by_default(on, monkeypatch):
+    monkeypatch.setenv(IGNORE, "")
+    assert OrphanPositionRule().match_log(_rec()) is not None
+
+
+def test_text_names_protection_mode(on):
+    out = OrphanPositionRule().match_log(_rec())
+    assert "place_missing_sl" in out and "warn_only" in out
+
+
 def test_dedup_per_symbol_and_side_hourly():
     r = OrphanPositionRule()
     k = r.dedup_key(_rec())
