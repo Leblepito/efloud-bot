@@ -22,4 +22,6 @@ Spec `docs/superpowers/specs/2026-11-07-operator-decisions-and-backtest-restore-
 - [x] Kök neden düzeltmesi: her TF canlıdaki gibi `kline_limit` (750) bar geçmişle → 12h LuxAlgo trendi oluşuyor (önce 0 v2 işlem; şimdi BTC 41g'de 14).
 - [x] Yan düzeltmeler: fetcher 12h/8h, prefetch --config, reconcile sim-zaman, daily 100 bar, seri grid, >%1 atlanan döngüde çıkış 3.
 - [x] Yavaş 6 test `backtest (slow)` CI işinde.
-- [ ] Canlı parite raporu: `collab/outputs/claude-code/2026-11-07-backtest-live-parity.md` (portföy koşusu sürüyor).
+- [x] Canlı parite raporu: `collab/outputs/claude-code/2026-11-07-backtest-live-parity.md` — 11-02 sonrası 10 canlı girişin 8'i aynı yön/sonuçla üretildi; 41g × 10 sembol NET −%0.91 (PF 0.69).
+- [x] Parite koşusunda bulunan backtest breaker duvar-saati hatası düzeltildi (`da675dc`, `435df23`; 2026-08-12 audit defect 1). Canlı değişmez (`now=None`), risk-safety-auditor SAFE_WITH_NITS.
+- [ ] Takip (ayrı PR, risk-ops): breaker `peak_set_at` backtest'te duvar saati → haftalık peak rebase olmuyor (muhafazakâr yönde).

@@ -299,3 +299,8 @@
 - ne yapıldı: Karar 1 (a). `engine/signals.py` ±5 sentiment bonusu kaldırıldı → `sig.meta["macro_sentiment"]`; sentiment yazıcısı botun `state_dir`'ine yazar, dashboard aynı yerden okur. Canlıda işlem değişikliği yok (motor zaten NEUTRAL). ADR-0002 sapma notu "çözüldü". RED→GREEN 6 test; regresyon defteri 2760 passed.
 - VPS: N/A
 - istek: operator → merge; deploy bot yeniden başlatma ister (AUTOSTART=0) · abacus → review
+## 2026-11-08 01:45 UTC+3 — T-20261107-24: backtest geri yükleme + canlı parite
+- task: T-20261107-24 | branch/PR: collab/claude-code/T-20261107-24-operator-decisions-backtest (#335) | commit: PR'da
+- ne yapıldı: Karar 3. `backtest/` canlı mantıkla geri yüklendi (config v2, 750 bar geçmiş, borsa çıkışları, NET maliyet, LLM kapalı). Parite: 11-02 sonrası 10 canlı girişin 8'i yeniden üretildi; 41g × 10 sembol NET −%0.91. Yolda bulunan backtest breaker duvar-saati hatası (günlük kayıp tüm koşuyu topluyordu, TRIPPED duraklamaları hiç bloklamıyordu) düzeltildi; canlı değişmez, risk-safety-auditor SAFE_WITH_NITS. Rapor `collab/outputs/claude-code/2026-11-07-backtest-live-parity.md`.
+- VPS: N/A
+- istek: operator → bilgi (deploy gerekmez) · abacus → review
