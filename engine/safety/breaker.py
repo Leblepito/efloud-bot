@@ -45,6 +45,7 @@ class BreakerStatus:
     tripped_at: Optional[datetime] = None
     resume_at: Optional[datetime] = None
     metrics: dict = field(default_factory=dict)
+    as_of: Optional[datetime] = None
 
     @property
     def can_trade(self) -> bool:
@@ -52,8 +53,10 @@ class BreakerStatus:
             return True
         if self.state == BreakerState.HALTED:
             return False
-        # TRIPPED — zamanı geldiyse resume et
-        if self.resume_at and datetime.now(timezone.utc).replace(tzinfo=None) >= self.resume_at:
+        # TRIPPED — zamanı geldiyse resume et. `as_of` is the sim-time the status
+        # was evaluated at (backtest); None in live keeps the wall clock.
+        ref = self.as_of or datetime.now(timezone.utc).replace(tzinfo=None)
+        if self.resume_at and ref >= self.resume_at:
             return True
         return False
 
@@ -225,7 +228,16 @@ class CircuitBreaker:
         engine passes the current bar timestamp so cooldowns resolve in sim-time
         rather than wall-clock (otherwise a 120-min cooldown wastes 120 REAL
         minutes of backtest while sim-time advances unbounded).
+
+        An explicit `now` is stamped on the returned status (`as_of`) so its
+        `can_trade` judges a TRIPPED pause at that sim-time; otherwise the
+        wall clock (always past a sim resume_at) released every pause at once.
         """
+        status = self._evaluate(now)
+        status.as_of = now
+        return status
+
+    def _evaluate(self, now: Optional[datetime]) -> BreakerStatus:
         if now is None:
             now = datetime.now(timezone.utc).replace(tzinfo=None)
         self._cleanup_old_trades(now)

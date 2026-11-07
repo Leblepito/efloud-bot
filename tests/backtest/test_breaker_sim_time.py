@@ -92,3 +92,51 @@ def test_v2_entry_gate_defaults_to_wall_clock_without_a_cycle():
     orch.order_manager = SimpleNamespace()
     orch._place_v2_entry_order(SimpleNamespace(symbol="ETH/USDT", direction="LONG"), 100.0, 100.0)
     assert seen == [None]
+
+
+def test_v2_gate_honours_a_sim_time_consecutive_loss_pause():
+    """Pre-fix the gate checked at wall clock, which is past any sim resume_at,
+    so every consecutive-loss pause was released at once for v2 entries."""
+    br = CircuitBreaker(daily_loss_pct_limit=90.0, weekly_drawdown_pct_limit=90.0,
+                        consecutive_loss_limit=3, consecutive_loss_pause_minutes=120,
+                        starting_balance=1000.0)
+    t0 = datetime(2026, 10, 1, 12, 0)
+    for _ in range(3):
+        br.record_trade(-1.0, timestamp=t0)
+    assert br.check(now=t0).can_trade is False
+
+    orch = SafeOrchestrator.__new__(SafeOrchestrator)
+    orch.config = {"engine": {"smc_v2_symbols": ["ETH/USDT"], "smc_v2_shadow": False}}
+    orch.breaker = br
+    orch.order_manager = SimpleNamespace()
+    orch._cycle_now = datetime(2026, 10, 1, 13, 0)  # inside the 120-minute pause
+    assert orch._place_v2_entry_order(SimpleNamespace(symbol="ETH/USDT", direction="LONG"),
+                                      100.0, 100.0) is None
+    assert br.status.state.value != "OPEN", "the pause must not be released by the v2 gate"
+
+
+def test_tripped_status_is_judged_at_the_sim_time_it_was_checked():
+    br = CircuitBreaker(daily_loss_pct_limit=90.0, weekly_drawdown_pct_limit=90.0,
+                        consecutive_loss_limit=3, consecutive_loss_pause_minutes=120,
+                        starting_balance=1000.0)
+    t0 = datetime(2026, 10, 1, 12, 0)
+    for _ in range(3):
+        br.record_trade(-1.0, timestamp=t0)
+    tripped = br.check(now=t0)
+    assert tripped.state.value == "TRIPPED" and tripped.as_of == t0
+    assert tripped.can_trade is False                      # pause runs to 14:00 sim-time
+    assert br.check(now=datetime(2026, 10, 1, 13, 59)).can_trade is False
+    assert br.check(now=datetime(2026, 10, 1, 14, 0)).can_trade is True
+
+
+def test_live_check_keeps_wall_clock_semantics():
+    br = CircuitBreaker(daily_loss_pct_limit=90.0, weekly_drawdown_pct_limit=90.0,
+                        consecutive_loss_limit=3, consecutive_loss_pause_minutes=120,
+                        starting_balance=1000.0)
+    for _ in range(3):
+        br.record_trade(-1.0)
+    status = br.check()                                    # live: now=None
+    assert status.state.value == "TRIPPED" and status.as_of is None
+    assert status.can_trade is False                       # resume is 120 real minutes away
+    status.resume_at = datetime(2000, 1, 1)                # a pause that has elapsed in real time
+    assert status.can_trade is True
