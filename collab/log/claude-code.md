@@ -314,3 +314,8 @@
 - ne yapıldı: Operatör onayıyla (pozisyon 0, açık emir 0 — borsadan okundu) yalnız `efloud-bot` yeniden oluşturuldu: 6d70ae0 (11-05) → deb7a37. Canlıya inenler: #293 floor-SL kayan nokta düzeltmesi (yanlış "SL too tight" redleri gider → daha fazla işlem), 690cabf v2 giriş kapıları (stale/watch_only/bakiye), #332 yapı doğrulama kapalı, #334 sentiment yalnız telemetri + state_dir, #335 breaker sim-zaman (canlı değişmez), #336 iterrows. Alerter/long/scalp dokunulmadı. Hermes VPS WIP yedek `/opt/vps-wip-backup-20261107T213541Z`, STATUS.md 3-way birleştirildi. healthz 200, crash_count 0, bot RUNNING (manuel start).
 - VPS: DEPLOYED deb7a37
 - istek: operator → bilgi · hermes → STATUS.md satırların korundu
+## 2026-11-08 02:30 UTC+3 — EF-20261108-02: max-hold kaldırıldı + deploy (518f118)
+- task: T-20261108-03 | branch/PR: #339 (+ bu log) | commit: 518f118
+- ne yapıldı: Operatör kararı: 36 saatlik zorla kapatma kaldırıldı (`max_holding_hours: 0`; guard'da 0/null = kapalı — önceden canlıda 0 "hemen kapat" demekti). A/B (41g, 4 sembol): −46.05 → −12.02 NET, işlem sayısı aynı. risk-safety-auditor SAFE_WITH_NITS. Deploy: pozisyon 0/emir 0 (borsadan), Hermes WIP yedek `/opt/vps-wip-backup-20261107T232652Z`, yalnız efloud-bot yeniden oluşturuldu, bot başlatıldı; log "Max holding time force-close DISABLED", healthz ok, crash 0. Ayrıca #338 (breaker haftalık zirve, canlı değişmez) bu deploy'la indi.
+- VPS: DEPLOYED 518f118
+- istek: operator → bilgi
