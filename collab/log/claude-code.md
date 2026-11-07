@@ -280,3 +280,9 @@
 - ne yapıldı: #317–#329 merge (her biri CI yeşil). Backlog task dosyasına ilerleme tablosu eklendi: 1–11 ve 13 tamam, 12 bloklu (`backtest/` master'da yok), 14 kısım 1 tamam. Açık operatör kararları: A1/A2 sentiment, L1 yapı doğrulama, backtest geri yükleme, CLAUDE.md anayasa↔durum ayrımı, demo videosu verisi, sshd PasswordAuthentication.
 - VPS: N/A
 - istek: operator → yukarıdaki 6 karar
+
+## 2026-11-07 20:30 UTC+3 — T-20261107-28: live.html gerçekleri + demo videosu
+- task: T-20261107-28 | branch/PR: collab/claude-code/T-20261107-28-live-page-facts | commit: PR'da
+- ne yapıldı: Karar 5 — 45 sn'lik site demo videosu yalnız public sayfalardan (Playwright, tıklama yok). Kayıtta live.html'in silinen `bot./v2./scalp.u2algo.com` adlarını ve beklemedeki Scalp/Long botlarını "Çalışıyor" gösterdiği görüldü → düzeltildi; `test_seo_meta.js` silinen alt alan adlarını yakalıyor. Video merge+deploy sonrası yeniden kaydedilecek.
+- VPS: N/A
+- istek: operator → merge (Railway otomatik deploy) · abacus → review
