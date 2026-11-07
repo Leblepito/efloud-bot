@@ -19,7 +19,7 @@ checks this in CI, so a renamed or deleted test cannot silently orphan an entry.
 | Secret scan | CI `gitleaks (working tree)`; daily `scheduled-review.yml` (full history) | Every PR / daily | gitleaks |
 | Post-deploy canary | `python scripts/canary.py` | After every merge/deploy (site auto-deploys on merge) | Network (public URLs only; read-only) |
 | Pine compile | TradingView MCP `pine_smart_compile` → 0 errors | `pine/` changes | TradingView Desktop (manual) |
-| Edge / backtest gate | NET-cost backtest (Edge Measurement Core, PR #227). **Not runnable from master:** `backtest/` was removed in `562a6a3` (2026-10-31); restore from `562a6a3^` before any edge change | Signal, scoring or parameter changes | Market data cache; long-running (manual) |
+| Edge / backtest gate | `python -m scripts.prefetch_data --config configs/config.phase2_1k.yaml --symbols <S> --days 365` then `python -m backtest.cli single\|portfolio --config configs/config.phase2_1k.yaml --period-days ≥60` (NET: the config's `backtest:` block; exit 3 when >1 % cycles raise). Gate verdict: `scripts/evaluate_backtest_gates.py` | Signal, scoring or parameter changes | Public Binance klines (cache); long-running (manual); slow tests in CI job `backtest (slow)` |
 
 Windows note: before T-20261107-14, importing `main.py` closed pytest's capture stream, so the
 local Windows suite crashed before running any test. With the fix the local suite runs
@@ -157,6 +157,15 @@ private store). Every finding is fixed and has a test.
 | TEST-SOCIAL-001 | covered | Operator approval records a digest of caption/thread/alt text/media bytes; a bundle edited after approval, or approved without a digest, is refused (`approval_stale`) | `tests/test_lane_g_publish.py::TestApprovalIsBoundToContent` |
 | TEST-SOCIAL-002 | covered | The X coin hashtag follows the post's symbol (`#SOL`, not a fixed `#BTC`); unsafe symbols produce no tag | `tests/test_social_publishing.py::TestBuildCaption` |
 | TEST-VIDEO-001 | covered | A voice-over clip lasts as long as the narration (not cut at the 8 s default), an explicit duration still wins, and the voice is normalised to about −16 LUFS | `tests/test_video_render_voiceover.py::test_voiceover_longer_than_default_is_not_cut`, `tests/test_video_render_voiceover.py::test_voiceover_is_loudness_normalised` |
+
+### 4.8 Backtest live parity (spec 2026-11-07)
+
+| TEST-ID | State | Observable expectation | Evidence |
+|---|---|---|---|
+| TEST-BT-001 | covered | Exits match the exchange: TP1 50 % then the stop moves to break-even, then TP2; single-target closes 100 % at TP1; SL wins a bar that also touches TP1; TP2 is never filled in the TP1 bar | `tests/backtest/test_live_parity.py::TestResolveExit`, `tests/backtest/test_live_parity.py::TestEngineExits` |
+| TEST-BT-002 | covered | A plain run uses the live config's `smc_version`; agent team and Kronos are off and the LLM factory is a null client during the run; the live config makes runs NET | `tests/backtest/test_live_parity.py::TestLiveConfigAndOffline` |
+| TEST-BT-003 | covered | Backtest trades are reconciled against live trades on simulated bar time, not wall clock | `tests/backtest/test_live_parity.py::test_reconcile_matches_backtest_trades_on_simulated_time` |
+| TEST-BT-004 | covered | The breaker runs on sim-time in backtest: closed trades are recorded at the cycle time and the v2 entry gate checks at the cycle time, so an old simulated loss never counts as "today" (repro: SOL/USDT 41d daily-loss trip on the whole run); live (`now=None`) keeps the wall clock ; a TRIPPED pause is judged at the sim-time it was checked (`BreakerStatus.as_of`), so consecutive-loss and daily-loss pauses really block in backtest | `tests/backtest/test_breaker_sim_time.py`, `backend/tests/test_breaker_sim_time_gate_gap.py::test_tripped_breaker_blocks_in_sim_time` |
 
 ## 5. Evidence run (2026-11-07, Windows, commit `4dd56b6`)
 

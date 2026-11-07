@@ -21,7 +21,8 @@ class FetchResult:
 class OHLCVFetcher:
     """Public Binance OHLCV via CCXT (no auth)."""
 
-    tf_minutes = {"1m": 1, "5m": 5, "15m": 15, "1h": 60, "4h": 240, "1d": 1440}
+    # Every TF the profiles use (data/timeframes.PROFILES) + 1d; 8h/12h are the long/mid HTF/MTF.
+    tf_minutes = {"1m": 1, "5m": 5, "15m": 15, "1h": 60, "4h": 240, "8h": 480, "12h": 720, "1d": 1440}
 
     def __init__(self):
         # Public klines need no auth. CCXT only validates creds on private endpoints.

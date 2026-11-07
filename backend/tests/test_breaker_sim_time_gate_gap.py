@@ -1,26 +1,18 @@
-"""XFAIL regresyon pini — backtest'te breaker sim-time tutarsızlığı (2026-08-12 audit).
+"""Backtest breaker sim-time pins (2026-08-12 audit; defect 1 fixed 2026-11-07).
 
-⚠️ Bu dosya engine/safety davranışını DEĞİŞTİRMEZ. İki gerçek defect'i
-belgeler ve düzeltme operatör + risk-ops onayı beklediği için xfail(strict)
-olarak pinler. Onay sonrası fix landing yaptığında xfail KIRILIR (strict),
-böylece testin güncellenmesi zorunlu olur — sessizce yeşile kaymaz.
+LIVE IS UNAFFECTED: live calls check(now=None) and record_trade(timestamp=None),
+so the wall clock is used exactly as before; these gaps were backtest-only.
 
-CANLI MOD ETKİLENMEZ: live'da check(now=None) ve record_trade(timestamp=None)
-duvar-saatini kullanır; bu gap sadece backtest (sim-time) yolundadır.
+Defect 1 — FIXED 2026-11-07: BreakerStatus.can_trade judged a TRIPPED pause
+against the wall clock, which is always past a sim resume_at, so every
+daily/consecutive TRIP was ignored in backtest. check(now=sim) now stamps the
+status `as_of`; can_trade uses it (None in live = wall clock).
 
-Defect 1 — can_trade duvar-saatinden çözer:
-  CircuitBreaker.check(now=sim) cooldown'u sim-time'da çözer AMA TRIPPED durum
-  nesnesini döndürür; orchestrator .can_trade üstünden gate'ler (safe_orchestrator
-  1206/1368) ve BreakerStatus.can_trade resume'u datetime.now() DUVAR-SAATİ ile
-  karşılaştırır (breaker.py:54). Tarihsel backtest'te sim resume_at < duvar-saati
-  now olduğundan can_trade daima True → daily/consecutive TRIP hiçbir şeyi
-  bloklamaz (yalnız HALTED bloklar).
-
-Defect 2 — record_trade timestamp'siz:
-  safe_orchestrator.py:1304 record_trade(pnl) timestamp'siz çağırır; breaker
-  duvar-saati damgalar; check(now=sim) günlük pencereyi sim gece-yarısına göre
-  filtreler → duvar-saati damgalı trade'ler her zaman sim penceresinde kalır,
-  daily_pnl tüm koşu boyunca birikir (günlük limit kümülatife dejenere olur).
+Defect 2 — breaker-level default kept: record_trade() without a timestamp
+still stamps the wall clock, because live needs that. The orchestrator now
+passes the cycle's sim-time (tests/backtest/test_breaker_sim_time.py), so the
+backtest daily window is per sim-day. The strict xfail below stays as a
+tripwire if the breaker default ever changes.
 """
 from __future__ import annotations
 
@@ -31,14 +23,11 @@ import pytest
 from engine.safety.breaker import CircuitBreaker, BreakerState
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="engine/safety fix operatör + risk-ops onayı bekliyor (2026-08-12 audit). "
-           "Onay sonrası can_trade sim-time tutarlı olunca bu xfail kırılır.",
-)
 def test_tripped_breaker_blocks_in_sim_time():
+    # Defect 1 FIXED 2026-11-07: check(now=sim) stamps the status `as_of`, so
+    # can_trade judges the pause at sim-time (live now=None keeps wall clock).
     """Sim-time'da TRIP edilen breaker, cooldown dolmadan sim-now ile
-    can_trade=False dönmeli. Bugün duvar-saati resume'u geçtiği için True."""
+    can_trade=False dönmeli (pre-fix: duvar-saati resume'u geçtiği için True idi)."""
     sim_now = datetime(2020, 1, 1, 12, 0, 0)  # geçmiş → duvar-saati bunu çoktan geçti
     br = CircuitBreaker(daily_loss_pct_limit=3.0, starting_balance=1000.0)
 
@@ -51,14 +40,13 @@ def test_tripped_breaker_blocks_in_sim_time():
     later = sim_now + timedelta(minutes=5)
     status2 = br.check(now=later)
     # DOĞRU davranış: sim-time'da hâlâ TRIPPED, trade bloklanmalı.
-    # Bugünkü hata: can_trade duvar-saatinden çözüp True döndürüyor.
     assert status2.can_trade is False
 
 
 @pytest.mark.xfail(
     strict=True,
-    reason="engine/safe_orchestrator:1304 record_trade timestamp'siz — fix "
-           "operatör + risk-ops onayı bekliyor (2026-08-12 audit).",
+    reason="Breaker-level default stays wall clock (live needs it). The orchestrator "
+           "now passes sim-time (2026-11-07), pinned in tests/backtest/test_breaker_sim_time.py.",
 )
 def test_daily_window_uses_trade_sim_timestamp():
     """record_trade sim-timestamp taşımazsa günlük pencere yanlış çalışır:
