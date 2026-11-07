@@ -69,6 +69,13 @@ for (const loc of locs) {
   }
 }
 
+// The bot./v2./scalp.u2algo.com records were deleted on 2026-11-07; no public page may link or name them.
+for (const f of fs.readdirSync(SITE).filter((x) => x.endsWith('.html'))) {
+  const html = fs.readFileSync(path.join(SITE, f), 'utf8');
+  const dead = html.match(/\b(?:bot|v2|scalp)\.u2algo\.com\b/g) || [];
+  check(`${f}: no deleted bot subdomains`, dead.length === 0, [...new Set(dead)].join(', '));
+}
+
 const png = fs.readFileSync(path.join(SITE, 'brand', 'og-card.png'));
 check('og-card.png is a 1200x630 PNG', png.readUInt32BE(16) === 1200 && png.readUInt32BE(20) === 630);
 
