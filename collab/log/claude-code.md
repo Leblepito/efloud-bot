@@ -223,6 +223,16 @@
 - VPS: N/A
 - istek: abacus → review · operator → merge (#318 sonrası)
 
+## 2026-11-07 19:30 UTC+3 — T-20261107-15: ADR backfill + CONTEXT.md
+- task: T-20261107-15 | branch/PR: collab/claude-code/T-20261107-15-adr-context | commit: PR'da
+- ne yapıldı: `docs/adr/` (10 ADR: VPS+Compose, LLM yalnız danışma, risk fix'leri default-OFF + kapı, SMC v2 sembol listesi, Pine indicator-only, dosya tabanlı state, log-tail alerter, git tabanlı collab, giriş onayı, üretilen regresyon defteri) ve `CONTEXT.md` (V1/V2/V3 bot ↔ SMC v1/v2 motor, profil, breaker OPEN=normal, orphan ↔ bare, shadow ↔ observation). Her iddia kod/config ile doğrulandı. Bulgu: compose yorumları long=1w / scalp=12h diyor, kod+config 1d / 4h (bayat yorum, düzeltilmedi). Yalnız doküman.
+- VPS: N/A
+- istek: abacus → review · operator → merge + CONTEXT.md "Needs confirmation" sorusu
+## 2026-11-07 20:00 UTC+3 — T-20261107-16: LLM ajan katmanı denetimi (rapor)
+- task: T-20261107-16 | branch/PR: collab/claude-code/T-20261107-16-llm-layer-audit | commit: PR'da
+- ne yapıldı: LLM çıktısının ulaştığı 5 yer haritalandı. Bulgular: A1 makro sentiment ±5 `min_confluence` eşiğinden ÖNCE ekleniyor → çalışan LLM marjinal girişi açıp kapatabiliyor (ADR-0002 ile çelişki); A2 sentiment `state/`'e yazılıyor, motor `state_1k/`'dan okuyor → prod'da büyük olasılıkla pasif, dashboard ise LLM değerini gösteriyor; A3 CRITICAL uyarılar LLM formatlayıcıdan geçiyor (ham metin kayboluyor); A4 Telegram HTML kaçışı yok (`<` mesajı düşürebilir); A5 gating yolunda $10k fallback (pasif). LLM'in emir/boyut/SL-TP yetkisi yok, istem girdileri yalnız sayısal — geçti. Kod değişikliği yok.
+- VPS: N/A
+- istek: operator → A1/A2 kararı (a: yalnız telemetri — önerilen / b: backtest + onay) · abacus → review
 ## 2026-11-07 20:30 UTC+3 — T-20261107-17: CRITICAL uyarılar LLM'siz + HTML kaçışı
 - task: T-20261107-17 | branch/PR: collab/claude-code/T-20261107-17-critical-alert-formatting | commit: PR'da
 - ne yapıldı: LLM denetimi A3/A4 düzeltmesi, yalnız `ops/alerter/`. CRITICAL uyarılar artık LLM formatlayıcıdan geçmiyor (operatör ham olguyu görüyor); breaker log metni ve LLM alanları HTML-escape; Telegram HTML'i reddederse bir kez düz metin gönderiliyor. Trading koduna dokunuş yok. RED→GREEN 7 test; regresyon defteri: alerter + overseer + routines 457 passed.
