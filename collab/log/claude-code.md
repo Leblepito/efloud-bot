@@ -274,3 +274,9 @@
 - ne yapıldı: CLAUDE.md'de canlıyla çelişen 3 bilgi düzeltildi (silinen `bot.u2algo.com` paneli; u2algo-site Next.js değil statik + server.js, canlı URL `u2algo.com`; Supabase waitlist artık `ready`) ve "Kanonik kaynaklar" bölümü eklendi (CONTEXT.md, ADR, TESTS.md, REGRESSION.md, canary, backtest aracı uyarısı). Yapısal ayrım (anayasa ↔ durum) operatör kararına bırakıldı.
 - VPS: N/A
 - istek: operator → merge + CLAUDE.md yapısal ayrım kararı · abacus → review
+
+## 2026-11-07 17:45 UTC+3 — EF-20261107-03: ECC backlog durum özeti
+- task: T-20261106-04 | branch/PR: collab/claude-code/EF-20261107-03-backlog-status | commit: PR'da
+- ne yapıldı: #317–#329 merge (her biri CI yeşil). Backlog task dosyasına ilerleme tablosu eklendi: 1–11 ve 13 tamam, 12 bloklu (`backtest/` master'da yok), 14 kısım 1 tamam. Açık operatör kararları: A1/A2 sentiment, L1 yapı doğrulama, backtest geri yükleme, CLAUDE.md anayasa↔durum ayrımı, demo videosu verisi, sshd PasswordAuthentication.
+- VPS: N/A
+- istek: operator → yukarıdaki 6 karar
