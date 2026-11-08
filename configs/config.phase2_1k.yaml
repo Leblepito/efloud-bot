@@ -400,6 +400,9 @@ safety:
   # SL/TP/BE ile kapanır. Önceki: 36 (2026-07-26 BT-sweep5: 24h->36h, 48h daha kötü).
   # Geri almak: 36 yaz + bot deploy.
   max_holding_hours: 0
+  # 2026-11-08: süre sınırı yok, ama pozisyon her 24 saatte bir açık kaldıkça
+  # Telegram'a BİLGİ uyarısı gider (HOLD_AGE). Hiçbir şey kapatmaz. 0 = uyarı kapalı.
+  hold_alert_hours: 24
   max_pyramid_adds: 0                  # Pyramid kapalı (basit tut)
   min_sl_atr: 2.0                 # 2026-07-26 BT-sweep5: 0.5->2.0. v2 R/trade -0.363->-0.257 (floor 2.5 daha kotu). fixed sizing: min risk 0.86 USD -> 3.45 USD. v1 yolunda <2.0 ATR yapisal stoplu setuplar REDDEDILIR (~%16).
   max_sl_atr: 5.0                 # 2026-07-26 DOGRULANDI (degistirme): gercek journal TP seviyeleriyle cap5 > cap6 > cap99, her iki yolda da. REJECT semantigi (clamp degil).

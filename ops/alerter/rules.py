@@ -772,6 +772,41 @@ class OverseerHeartbeatStaleRule(Rule):
 # Exported list — alerter main loop iterates this
 # ─────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────
+# Long-hold reminder (T-20261108-04) — information only, nothing closes
+# ─────────────────────────────────────────────────────────────────────
+
+_HOLD_ID_RE = re.compile(r"\bid=(\S+)")
+_HOLD_BUCKET_RE = re.compile(r"\bbucket=(\d+)")
+
+
+@dataclass
+class PositionHoldAgeRule(Rule):
+    """Forwards the bot's '⏳ HOLD_AGE {sym} {dir} open {h}h bucket={n} | ... |
+    id={pos_id}' warning (safety.hold_alert_hours). Dedup per position and bucket
+    so a bot or alerter restart does not repeat a bucket. Raw text (no AI
+    rewrite) so prices and the 'nothing closes' note stay exact."""
+    alert_key: str = "position.hold_age"
+    severity: str = "INFO"
+    dedup_window_sec: int = 30 * 24 * 3600
+    ai_format: bool = False
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if rec.get("logger") != "efloud.safe_orch" or rec.get("level") != "WARNING":
+            return None
+        msg = rec.get("message", "")
+        if "HOLD_AGE" not in msg:
+            return None
+        body = msg.split("HOLD_AGE", 1)[1].strip()
+        return f"⏳ <b>Uzun süredir açık pozisyon</b>\n{_esc(body)}"
+
+    def dedup_key(self, rec: dict) -> str:
+        msg = rec.get("message", "")
+        pid = _HOLD_ID_RE.search(msg)
+        bucket = _HOLD_BUCKET_RE.search(msg)
+        return f"{self.alert_key}:{pid.group(1) if pid else '?'}:{bucket.group(1) if bucket else '?'}"
+
+
 RULES: list[Rule] = [
     BreakerDailyRule(),
     BreakerWeeklyRule(),
@@ -779,9 +814,10 @@ RULES: list[Rule] = [
     HealthCrashLoopRule(),
     HealthBreakerHaltedRule(),
     HealthUnhealthy15MinRule(),
-    TradeOpenedRule(),
-    TP1HitRule(),
-    TradeClosedRule(),
+    # Trade open / TP1 / close are sent directly by the bot (backend/notifications
+    # TelegramNotifier on exchange events — every path, exchange-truth PnL) since
+    # the real chat id was set 2026-11-08. These rules stay defined but inactive,
+    # otherwise every event arrived twice.
     OverseerHeartbeatStaleRule(),
     LuxZoneAlertRule(),
     V2RejectAlertRule(),
@@ -789,4 +825,5 @@ RULES: list[Rule] = [
     SlUnprotectedRule(),
     SlProtectionEventRule(),
     OrphanPositionRule(),
+    PositionHoldAgeRule(),
 ]

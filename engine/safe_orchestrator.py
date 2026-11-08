@@ -1441,6 +1441,7 @@ class SafeOrchestrator:
             
             # Max holding time check
             for pos in self.lifecycle.open_positions(symbol):
+                self._maybe_alert_hold_age(pos)
                 hold_check = self.pos_guard.check_holding_time(pos)
                 if not hold_check.allowed:
                     log.warning(f"⏰ Force-closing {pos.id}: {hold_check.reason}")
@@ -2751,6 +2752,31 @@ class SafeOrchestrator:
                 p._reported_to_breaker = True
                 actions.append(f"Recorded PnL ${p.realized_pnl:.2f} to breaker")
 
+    def _maybe_alert_hold_age(self, pos) -> None:
+        """Log one HOLD_AGE warning per `safety.hold_alert_hours` a position stays
+        open (operator 2026-11-08, after the 36 h force close was removed).
+        Information only — the alerter forwards it to Telegram; nothing closes.
+        """
+        try:
+            every = float((self.config.get("safety") or {}).get("hold_alert_hours") or 0)
+            if every <= 0:
+                return
+            age = self.pos_guard.position_age_hours(pos)
+            if age is None or age < every:
+                return
+            bucket = int(age // every)
+            if bucket <= getattr(pos, "_hold_alert_bucket", 0):
+                return
+            pos._hold_alert_bucket = bucket
+            entry = float(getattr(pos, "avg_entry_price", 0.0) or 0.0)
+            log.warning(
+                f"⏳ HOLD_AGE {pos.symbol} {pos.direction} open {age:.1f}h bucket={bucket} | "
+                f"entry={entry:.4f} sl={float(pos.sl):.4f} | id={pos.id} "
+                f"(bilgi; otomatik kapatma yok)"
+            )
+        except Exception as e:  # visibility must never break a cycle
+            log.debug(f"hold-age alert skipped: {e}")
+
     def _place_v2_entry_order(
         self,
         cand,
@@ -3188,6 +3214,7 @@ class SafeOrchestrator:
             act_fill = getattr(pos, "avg_entry_price", None)
             if act_fill is None:
                 act_fill = getattr(pos, "entry", entry_price)
+
 
             self._journal_record_entry(
                 pos,

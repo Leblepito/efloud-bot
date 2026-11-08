@@ -284,7 +284,7 @@ Circuit breaker, guards, orphan protection, risk calc
 Paths: `engine/safety/`, `engine/risk/`, `engine/permissions/`
 Downstream consumers: backend-api, orchestrator, scripts-misc, alerter (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run safety`
-Mapped tests: 44
+Mapped tests: 45
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -328,6 +328,7 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `tests/test_healthz_endpoint.py`
 - `tests/test_healthz_logic.py`
 - `tests/test_healthz_not_started.py`
+- `tests/test_hold_age_alert.py`
 - `tests/test_max_hold_disabled.py`
 - `tests/test_persist_crash_safety.py`
 - `tests/test_rate_limiter_guard.py`
@@ -370,7 +371,7 @@ SafeOrchestrator, lifecycle, journal, ledgers, notifications
 Paths: `engine/__init__.py`, `engine/safe_orchestrator.py`, `engine/lifecycle.py`, `engine/journal.py`, `engine/memory.py`, `engine/postmortem.py`, `engine/report.py`, `engine/allocation.py`, `engine/instance_manager.py`, `engine/signal_ledger.py`, `engine/edge_costs.py`, `engine/edge_metrics.py`, `engine/notifications/`, `main.py`, `preflight.py`
 Downstream consumers: backend-api, backtest, exchange, pine, routines, scripts-misc, smc-v1, alerter (unverified), overseer (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run orchestrator`
-Mapped tests: 92
+Mapped tests: 93
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -451,6 +452,7 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `tests/test_bugfix_batch_misc.py`
 - `tests/test_content_jobs.py`
 - `tests/test_customer_trade_posts.py`
+- `tests/test_hold_age_alert.py`
 - `tests/test_instance_manager.py`
 - `tests/test_journal_adaptation_persist.py`
 - `tests/test_lifecycle_none_pnl.py`
@@ -872,7 +874,7 @@ Bot configs (live: configs/config.phase2_1k.yaml)
 Paths: `configs/`, `config.yaml`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run configs`
-Mapped tests: 49
+Mapped tests: 50
 
 <details><summary>test files</summary>
 
@@ -919,6 +921,7 @@ Mapped tests: 49
 - `tests/test_backtest_max_hold.py`
 - `tests/test_breaker_pnl_audit_backcorrect.py`
 - `tests/test_docs_param_parity.py`
+- `tests/test_hold_age_alert.py`
 - `tests/test_max_hold_disabled.py`
 - `tests/test_max_hold_force_close.py`
 - `tests/test_pine_lab_parity.py`
