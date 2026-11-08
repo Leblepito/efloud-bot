@@ -319,3 +319,8 @@
 - ne yapıldı: Operatör kararı: 36 saatlik zorla kapatma kaldırıldı (`max_holding_hours: 0`; guard'da 0/null = kapalı — önceden canlıda 0 "hemen kapat" demekti). A/B (41g, 4 sembol): −46.05 → −12.02 NET, işlem sayısı aynı. risk-safety-auditor SAFE_WITH_NITS. Deploy: pozisyon 0/emir 0 (borsadan), Hermes WIP yedek `/opt/vps-wip-backup-20261107T232652Z`, yalnız efloud-bot yeniden oluşturuldu, bot başlatıldı; log "Max holding time force-close DISABLED", healthz ok, crash 0. Ayrıca #338 (breaker haftalık zirve, canlı değişmez) bu deploy'la indi.
 - VPS: DEPLOYED 518f118
 - istek: operator → bilgi
+## 2026-11-08 03:25 UTC+3 — EF-20261108-03: Telegram bildirimleri + deploy (1b3c337)
+- task: T-20261108-04 | branch/PR: #341 (+ bu log) | commit: 1b3c337
+- ne yapıldı: Kök neden: VPS `EFLOUD_TELEGRAM_CHAT_ID` yer tutucu `<CHAT_ID>` idi (alerter "chat not found") → hiçbir Telegram mesajı gitmiyordu. Operatör `.env.production`'da gerçek sohbet id'sini kendi çalıştırdığı scriptle yazdı (yedek `.env.production.bak-20261108T002117Z`, izin 600, test mesajı ok). #341: açılış/TP1/kapanış botun doğrudan bildiricisinden (alerter kopya kuralları pasif → çift mesaj yok); 24 saatlik bekleme uyarısı (HOLD_AGE, hiçbir şey kapatmaz). Pozisyon 0/emir 0 doğrulandı, Hermes WIP yedek `/opt/vps-wip-backup-20261108T001342Z`; efloud-bot + alerter yeniden oluşturuldu, bot başlatıldı; healthz ok, bot ve alerter gerçek chat id görüyor.
+- VPS: DEPLOYED 1b3c337
+- istek: operator → bilgi
