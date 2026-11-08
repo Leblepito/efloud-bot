@@ -89,6 +89,7 @@ Source: `git show f96b7d8^:docs/handoff/2026-06-20-algorithm-audit-and-next-sess
 | TEST-AUDIT-M4 | covered | integration | PnL-audit sign flip re-feeds the consecutive-loss counter | `tests/test_breaker_pnl_audit_backcorrect.py::test_audit_sign_flip_re_increments_consecutive_losses` | `breaker_backcorrect_consecutive: false` (audit itself on) |
 | TEST-AUDIT-M5 | covered | integration | A position past `max_holding_hours` is force-closed, exchange leg first | `tests/test_max_hold_force_close.py::test_position_past_max_hold_is_force_closed_exchange_leg_first` | `max_holding_hours > 0` (live: 0 = off since 2026-11-08) |
 | TEST-RISK-MAXHOLD-OFF | covered | unit | `max_holding_hours <= 0` or null disables the force close (no close, no aging warning, logged at startup); a positive value still closes; live config is 0 (operator 2026-11-08) | `tests/test_max_hold_disabled.py` | `max_holding_hours: 0` |
+| TEST-OPS-TG-TRADES | covered | unit | Telegram trade visibility: open/TP1/close come only from the bot's direct notifier (alerter trade rules inactive → no duplicates); `safety.hold_alert_hours` logs one `HOLD_AGE` per position+bucket, never closes, forwarded raw (no AI rewrite) | `tests/test_hold_age_alert.py`, `tests/test_alerter_rules.py` | `hold_alert_hours: 24` |
 
 ### 4.2 Trading-core bug hunt 2026-06-05
 

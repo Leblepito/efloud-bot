@@ -441,6 +441,32 @@ class PositionGuard:
 
         return PositionCheckResult(True, warnings=warnings)
 
+    @staticmethod
+    def position_age_hours(position) -> Optional[float]:
+        """Hours since ``position.opened_at``; None when missing or unparsable.
+
+        Tolerates both TZ-naive ('2026-05-08T10:14:12') and TZ-aware
+        ('2026-05-08T10:14:12+00:00' / '...Z') formats (2026-05-08 incident).
+        """
+        raw = getattr(position, "opened_at", "") or ""
+        if not raw:
+            return None
+        # Strip trailing Z; fromisoformat handles it natively on 3.11+, but
+        # the slice keeps us safe on older interpreters and is a no-op otherwise.
+        if raw.endswith("Z"):
+            raw = raw[:-1]
+        try:
+            opened = datetime.fromisoformat(raw)
+        except Exception:
+            return None
+        # Convert any TZ-aware value to UTC before dropping tzinfo, so a hand-
+        # edited non-UTC offset (e.g. "+03:00") is normalized rather than
+        # silently distorted by hours.
+        if opened.tzinfo is not None:
+            opened = opened.astimezone(timezone.utc).replace(tzinfo=None)
+        age = datetime.now(timezone.utc).replace(tzinfo=None) - opened
+        return age.total_seconds() / 3600
+
     def check_holding_time(self, position) -> PositionCheckResult:
         """Pozisyon çok uzun süredir açık mı?
 
@@ -455,29 +481,9 @@ class PositionGuard:
         """
         if not self.max_hold or self.max_hold <= 0:
             return PositionCheckResult(True)
-        if not position.opened_at:
+        hours = self.position_age_hours(position)
+        if hours is None:
             return PositionCheckResult(True)
-
-        raw = position.opened_at
-        # Strip trailing Z; fromisoformat handles it natively on 3.11+, but
-        # the slice keeps us safe on older interpreters and is a no-op otherwise.
-        if raw.endswith("Z"):
-            raw = raw[:-1]
-
-        try:
-            opened = datetime.fromisoformat(raw)
-        except Exception:
-            return PositionCheckResult(True)
-
-        # Convert any TZ-aware value to UTC before dropping tzinfo, so a hand-
-        # edited non-UTC offset (e.g. "+03:00") is normalized rather than
-        # silently distorted by hours. Subtracting against datetime.utcnow()
-        # below requires a naive datetime.
-        if opened.tzinfo is not None:
-            opened = opened.astimezone(timezone.utc).replace(tzinfo=None)
-
-        age = datetime.now(timezone.utc).replace(tzinfo=None) - opened
-        hours = age.total_seconds() / 3600
 
         if hours > self.max_hold:
             return PositionCheckResult(

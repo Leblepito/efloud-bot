@@ -188,9 +188,6 @@ def test_rules_list_contains_in_scope_rules():
         # hiçbir kural bu imzayı eşlemiyordu — yeni kural sete eklendi.
         "health.breaker_halted",
         "health.unhealthy_15min",
-        "trade.opened",
-        "trade.tp1",
-        "trade.closed",
         "overseer.heartbeat_stale",
         # T-20261104-08: LuxAlgo zone early warning (default OFF via env).
         "lux.zone",
@@ -202,6 +199,8 @@ def test_rules_list_contains_in_scope_rules():
         "order.sl_event",
         # T-20261107-11: recurring orphan-position reminder (same SL flag).
         "order.orphan_position",
+        # T-20261108-04: informational long-hold reminder (no auto-close).
+        "position.hold_age",
     }
     assert set(keys) == expected, f"got {set(keys)}"
 
@@ -228,3 +227,27 @@ def test_breaker_halted_rule_ignores_healthy_and_crash_loop():
 def test_breaker_halted_rule_registered():
     from ops.alerter.rules import RULES, HealthBreakerHaltedRule
     assert any(isinstance(r, HealthBreakerHaltedRule) for r in RULES)
+
+
+# ── T-20261108-04: Telegram trade visibility ────────────────────────────────
+
+def test_trade_rules_are_inactive_so_events_do_not_arrive_twice():
+    """The bot sends open/TP1/close directly (backend/notifications TelegramNotifier
+    on exchange events); an active alerter copy doubled every message."""
+    keys = {r.alert_key for r in RULES}
+    assert not keys & {"trade.opened", "trade.tp1", "trade.closed"}
+
+
+def test_hold_age_rule_forwards_once_per_position_and_bucket():
+    from ops.alerter.rules import PositionHoldAgeRule
+    rec = {"level": "WARNING", "logger": "efloud.safe_orch",
+           "message": "⏳ HOLD_AGE SOL/USDT LONG open 24.3h bucket=1 | entry=89.4100 sl=88.5515 | id=abc123 (bilgi; otomatik kapatma yok)"}
+    rule = PositionHoldAgeRule()
+    out = rule.match_log(rec)
+    assert out is not None and "SOL/USDT LONG" in out and "24.3h" in out
+    assert rule.ai_format is False                      # numbers are never rewritten
+    assert rule.dedup_key(rec) == "position.hold_age:abc123:1"
+    later = dict(rec, message=rec["message"].replace("24.3h bucket=1", "48.1h bucket=2"))
+    assert rule.dedup_key(later) == "position.hold_age:abc123:2"
+    assert rule.match_log({"level": "INFO", "logger": "efloud.safe_orch", "message": "HOLD_AGE x"}) is None
+
