@@ -127,6 +127,10 @@ def _offline_run_config(config: dict) -> dict:
     for key in ("agent_team", "kronos"):
         block = cfg.get(key) if isinstance(cfg.get(key), dict) else {}
         cfg[key] = {**block, "enabled": False}
+    # T-20261114-01: the FVG entry shadow only logs; in a replay it costs a
+    # second LuxAlgo pass per bar and adds nothing to the backtest result.
+    if isinstance(cfg.get("smc_v2"), dict):
+        cfg["smc_v2"] = {**cfg["smc_v2"], "fvg_entry": "off"}
     return cfg
 
 

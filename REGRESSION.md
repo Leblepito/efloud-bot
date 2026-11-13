@@ -226,10 +226,10 @@ Mapped tests: 4
 
 SMC v2 port (zones, triggers, SL/TP calc) + v2 doctor
 
-Paths: `engine/smc_v2/`, `tools/v2_doctor.py`
+Paths: `engine/smc_v2/`, `tools/v2_doctor.py`, `tools/fvg_shadow_report.py`
 Downstream consumers: backtest, orchestrator, pine
 Regression acceptance command: `python scripts/regression_ledger.py run smc-v2`
-Mapped tests: 41
+Mapped tests: 44
 
 <details><summary>test files</summary>
 
@@ -254,6 +254,9 @@ Mapped tests: 41
 - `tests/backtest/test_memo.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/engine/test_async_agent_review.py`
+- `tests/engine/test_fvg_entry.py`
+- `tests/engine/test_fvg_shadow_hook.py`
+- `tests/engine/test_fvg_shadow_report.py`
 - `tests/engine/test_luxalgo.py`
 - `tests/engine/test_mpa_filters.py`
 - `tests/engine/test_orchestrator_fixes.py`
@@ -371,7 +374,7 @@ SafeOrchestrator, lifecycle, journal, ledgers, notifications
 Paths: `engine/__init__.py`, `engine/safe_orchestrator.py`, `engine/lifecycle.py`, `engine/journal.py`, `engine/memory.py`, `engine/postmortem.py`, `engine/report.py`, `engine/allocation.py`, `engine/instance_manager.py`, `engine/signal_ledger.py`, `engine/edge_costs.py`, `engine/edge_metrics.py`, `engine/notifications/`, `main.py`, `preflight.py`
 Downstream consumers: backend-api, backtest, exchange, pine, routines, scripts-misc, smc-v1, alerter (unverified), overseer (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run orchestrator`
-Mapped tests: 93
+Mapped tests: 94
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -436,6 +439,7 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `tests/backtest/test_live_parity.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/engine/test_async_agent_review.py`
+- `tests/engine/test_fvg_shadow_hook.py`
 - `tests/engine/test_htf_slope.py`
 - `tests/engine/test_luxalgo.py`
 - `tests/engine/test_orchestrator_ai_sentiment.py`

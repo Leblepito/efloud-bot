@@ -209,6 +209,11 @@ smc_v2:
   # T-20261105-04: fitil/temas GÖLGE gözlemi — yalnız `[touch shadow] would-enter` log satırı,
   # emir YOK (live modu kodda yok). Kapatmak için satırı sil ya da off yap.
   touch_entry: shadow
+  # T-20261114-01 (operatör 2026-11-14): FVG geri çekilme girişi GÖLGESİ — 4h bias,
+  # kırılımın bıraktığı FVG'ye limit, SL kırılımı yapan OB'nin ötesi, TP1 karşı OB/BB,
+  # TP2 yön likiditesi. YALNIZ `[fvg shadow]` log satırı, emir YOK; `live` değeri kodda yok.
+  # Rapor: tools/fvg_shadow_report.py. Kapatmak: off ya da satırı sil.
+  fvg_entry: shadow
 
 # T-20261105-04: Binance kline WS (#283/#280). enabled → gölge parite sayaçları + (touch_entry
 # shadow için) intrabar fiyat; event_scan kapalı: tarama davranışı değişmez. Emir yolu yok.
