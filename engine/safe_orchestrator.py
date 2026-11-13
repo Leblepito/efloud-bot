@@ -1269,6 +1269,8 @@ class SafeOrchestrator:
                         min_confluence=int(_lux_cfg.get("min_confluence", 0)),
                     )
                     self._lux_log_scan(symbol, _htf_bias, _lux_ltf, _lux_cands)
+                    # T-20261114-01: FVG giriş GÖLGESİ (4h bias) — emir yok, default off.
+                    self._fvg_shadow_step(symbol, df_entry, df_mtf, _lux_ltf, _lux_cfg)
 
                 self._emit_setup_candidates(
                     symbol=symbol,
@@ -2327,6 +2329,54 @@ class SafeOrchestrator:
         """
         raw = (self.config.get("smc_v2") or {}).get("touch_entry", "off")
         return "shadow" if str(raw or "off").strip().lower() == "shadow" else "off"
+
+    def fvg_entry_mode(self) -> str:
+        """smc_v2.fvg_entry: off (varsayılan) | shadow (yalnız log, T-20261114-01).
+
+        `live` bilinçli olarak YOK: gölge n>=30 kapanmış işlem, NET ort R > 0 ve
+        canlı v2'den iyi olana kadar emir yolu yazılmaz. Bilinmeyen değer = off.
+        """
+        raw = (self.config.get("smc_v2") or {}).get("fvg_entry", "off")
+        return "shadow" if str(raw or "off").strip().lower() == "shadow" else "off"
+
+    def _fvg_shadow_step(self, symbol, df_entry, df_mtf, lux_ltf, lux_cfg) -> None:
+        """FVG geri çekilme girişi GÖLGESİ: 4h bias, FVG limit, OB SL, OB/BB TP1, likidite TP2.
+
+        Emir yok, canlı durum değişmez; hata canlı akışa asla sızmaz (yalnız WARNING).
+        """
+        if self.fvg_entry_mode() != "shadow":
+            return
+        try:
+            from types import SimpleNamespace
+
+            from engine.smc_v2 import fvg_entry as _fe
+            from engine.smc_v2 import luxalgo as _lx
+            from engine.smc_v2.atr import wilder_atr
+
+            safety_cfg = self.config.get("safety", {}) or {}
+            risk_cfg = self.config.get("risk", {}) or {}
+            safety = SimpleNamespace(
+                sl_atr_buffer=safety_cfg.get("sl_atr_buffer", risk_cfg.get("sl_atr_buffer", 0.5)),
+                min_sl_atr=safety_cfg.get("min_sl_atr", 0.5),
+                max_sl_atr=safety_cfg.get("max_sl_atr", 5.0),
+            )
+            bias = _lx.analyze(df_mtf, _lx.LuxConfig.from_dict(lux_cfg)).swing_trend
+            ts = [int(t.timestamp() * 1000) for t in df_entry.index]
+            atr = wilder_atr(df_entry, period=14)
+            plans = _fe.build_plans(
+                symbol, lux_ltf, bias, ts, atr, safety,
+                float(risk_cfg.get("min_rr", 1.8)),
+                wick_buffer_r=float(lux_cfg.get("tp_wick_buffer_r", 0.0)),
+            ) if atr else []
+            book = self.__dict__.get("_fvg_shadow_book")
+            if book is None:
+                book = self.__dict__.setdefault("_fvg_shadow_book", _fe.FvgShadowBook(
+                    timeout_bars=int(lux_cfg.get("pullback_timeout_bars", 48))))
+            bars = list(zip(ts, df_entry["open"].astype(float), df_entry["high"].astype(float),
+                            df_entry["low"].astype(float), df_entry["close"].astype(float)))
+            book.step(symbol, plans, bars[-(book.timeout_bars + 200):])
+        except Exception as e:  # noqa: BLE001 — shadow must never break the live cycle
+            log.warning(f"[fvg shadow] error {symbol}: {e!r}")
 
     def touch_watch_symbols(self) -> list:
         """Dokunuş beklenen (bekleyen v2 adayı olan) semboller."""
