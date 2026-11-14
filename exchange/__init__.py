@@ -1825,7 +1825,7 @@ class OrderManager:
         reconcile() (fetch_open_orders() -> [{id}], fapiPrivateGetOpenAlgoOrders({})
         -> [{algoId}]) so a symbol-form mismatch can't read a live leg as
         missing. Membership is tested by order-id, so account-wide is fine.
-        ok=False on the regular-orders fetch failure so the caller does not
+        ok=False on a regular- OR algo-orders fetch failure so the caller does not
         misread a transient error as 'all orders gone' (and never force-closes
         a healthy position on a read failure).
         """
@@ -1845,8 +1845,11 @@ class OrderManager:
                 if oid is not None:
                     ids.add(str(oid))
         except Exception as e:
-            # Algo fetch is best-effort; regular open orders already retrieved.
-            log.debug(f"verify: algo-order fetch failed for {symbol}: {e}")
+            # SL/TP live as algo orders: without this read a live leg looks
+            # missing → duplicate re-place / false market-close. Fail closed,
+            # same rule as reconcile's algo_fetch_ok gate.
+            log.warning(f"verify: algo-order fetch failed for {symbol}: {e}")
+            return set(), False
         return ids, True
 
     def _verify_and_repair_protection(self, pos: "Position") -> dict:
