@@ -226,7 +226,7 @@ Mapped tests: 4
 
 SMC v2 port (zones, triggers, SL/TP calc) + v2 doctor
 
-Paths: `engine/smc_v2/`, `tools/v2_doctor.py`, `tools/fvg_shadow_report.py`
+Paths: `engine/smc_v2/`, `tools/v2_doctor.py`, `tools/fvg_shadow_report.py`, `tools/fvg_offline_replay.py`
 Downstream consumers: backtest, orchestrator, pine
 Regression acceptance command: `python scripts/regression_ledger.py run smc-v2`
 Mapped tests: 45
