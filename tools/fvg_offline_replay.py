@@ -42,6 +42,8 @@ from engine.smc_v2 import luxalgo as lx  # noqa: E402
 MIN_TRADES = 100
 MIN_OOS_PF = 1.30
 MIN_SYMBOL_SHARE = 0.60
+MIN_WINDOW_DAYS = 180
+PASS_VERDICT = "PASS (absolute criteria; baseline comparison not run)"
 DEFAULT_IS_FRAC = 0.67
 MS_DAY = 86_400_000
 
@@ -53,6 +55,10 @@ _EXIT_RE = re.compile(
 
 class HistoryError(RuntimeError):
     """Not enough cached history for a faithful replay."""
+
+
+class MergeError(ValueError):
+    """Inputs to `merge` are not parts of the same run."""
 
 
 @dataclass
@@ -106,19 +112,32 @@ def split_is_oos(trades: Sequence[dict], start_ms: int, end_ms: int,
     return ([t for t in trades if t["exit_ts"] < cut], [t for t in trades if t["exit_ts"] >= cut])
 
 
-def symbol_positive_share(trades: Sequence[dict]) -> float:
+def symbol_positive_share(trades: Sequence[dict], symbols: Optional[Sequence[str]] = None) -> float:
+    """Share of evaluated symbols with NET R > 0; zero-trade symbols count as not positive."""
     per: Dict[str, float] = defaultdict(float)
     for t in trades:
         per[t["symbol"]] += t["net_r"]
-    return sum(1 for v in per.values() if v > 0) / len(per) if per else 0.0
+    universe = set(symbols) if symbols is not None else set(per)
+    return sum(1 for s in universe if per.get(s, 0.0) > 0) / len(universe) if universe else 0.0
 
 
-def evaluate(trades: Sequence[dict], start_ms: int, end_ms: int, is_frac: float) -> dict:
-    """Metrics + ADR-0011 offline verdict for ONE variant's trades."""
+def evaluate(trades: Sequence[dict], start_ms: int, end_ms: int, is_frac: float,
+             symbols: Optional[Sequence[str]] = None,
+             live_symbols: Optional[Sequence[str]] = None) -> dict:
+    """Metrics + ADR-0011 offline verdict for ONE variant's trades.
+
+    `symbols` = every evaluated symbol (zero-trade ones included); `live_symbols` = config
+    `engine.smc_v2_symbols`. An unknown live set fails closed. No baseline arm is run, so a
+    passing verdict is only ever the absolute-criteria one."""
     is_t, oos_t = split_is_oos(trades, start_ms, end_ms, is_frac)
     m_all, m_is, m_oos = compute_metrics(trades), compute_metrics(is_t), compute_metrics(oos_t)
-    share = symbol_positive_share(trades)
+    syms = sorted({t["symbol"] for t in trades}) if symbols is None else sorted(set(symbols))
+    share = symbol_positive_share(trades, syms)
     reasons = []
+    if end_ms - start_ms < MIN_WINDOW_DAYS * MS_DAY:
+        reasons.append(f"window<{MIN_WINDOW_DAYS}d")
+    if live_symbols is None or set(syms) != set(live_symbols):
+        reasons.append("symbols != live set")
     if m_all["n"] < MIN_TRADES:
         reasons.append(f"n={m_all['n']} < {MIN_TRADES}")
     if not m_is["avg_net_r"] > 0:
@@ -130,14 +149,17 @@ def evaluate(trades: Sequence[dict], start_ms: int, end_ms: int, is_frac: float)
     if share < MIN_SYMBOL_SHARE:
         reasons.append(f"symbols NET-positive {share:.0%} < {MIN_SYMBOL_SHARE:.0%}")
     return {"all": m_all, "is": m_is, "oos": m_oos, "symbol_positive_share": share,
-            "verdict": "FAIL" if reasons else "PASS", "reasons": reasons}
+            "verdict": "FAIL" if reasons else PASS_VERDICT, "reasons": reasons}
 
 
-def evaluate_all(trades: Sequence[dict], start_ms: int, end_ms: int, is_frac: float) -> Dict[str, dict]:
+def evaluate_all(trades: Sequence[dict], start_ms: int, end_ms: int, is_frac: float,
+                 symbols: Optional[Sequence[str]] = None,
+                 live_symbols: Optional[Sequence[str]] = None) -> Dict[str, dict]:
     by_v: Dict[str, List[dict]] = defaultdict(list)
     for t in trades:
         by_v[t["variant"]].append(t)
-    return {v: evaluate(ts, start_ms, end_ms, is_frac) for v, ts in sorted(by_v.items())}
+    return {v: evaluate(ts, start_ms, end_ms, is_frac, symbols, live_symbols)
+            for v, ts in sorted(by_v.items())}
 
 
 # ---- walk-forward ----------------------------------------------------------
@@ -157,7 +179,8 @@ def replay_symbol(symbol: str, df_entry: pd.DataFrame, df_mtf: pd.DataFrame, con
                   start_ms: int, end_ms: int) -> ReplayResult:
     """Replay every entry bar that opens in [start_ms, end_ms) and closes by end_ms."""
     tf = resolve_timeframes(json.loads(json.dumps(config)))
-    k, e_tf, m_tf = tf["kline_limit"], tf["entry"], tf["mtf"]
+    # live fetch_ohlcv(limit=kline_limit) drops the forming bar -> live sees kline_limit-1 closed bars
+    k, e_tf, m_tf = tf["kline_limit"] - 1, tf["entry"], tf["mtf"]
     e_ms, m_ms = tf_to_minutes(e_tf) * 60_000, tf_to_minutes(m_tf) * 60_000
     df_entry, df_mtf = _utc_index(df_entry), _utc_index(df_mtf)
     e_open, m_open = _ms(df_entry.index), _ms(df_mtf.index)
@@ -165,11 +188,15 @@ def replay_symbol(symbol: str, df_entry: pd.DataFrame, df_mtf: pd.DataFrame, con
     first = int(np.searchsorted(e_open, start_ms, side="left"))
     if first + 1 < k:
         raise HistoryError(f"{symbol} {e_tf}: {first} bars before window start, need {k} "
-                           f"(kline_limit); prefetch more history")
+                           f"(kline_limit-1); prefetch more history")
     n_mtf_before = usable_mtf_count(m_open, m_ms, start_ms)
     if n_mtf_before < k:
         raise HistoryError(f"{symbol} {m_tf}: {n_mtf_before} closed bars before window "
-                           f"start, need {k} (kline_limit); prefetch more history")
+                           f"start, need {k} (kline_limit-1); prefetch more history")
+    last_close = int(e_open[-1]) + e_ms
+    if last_close < end_ms:
+        raise HistoryError(f"{symbol} {e_tf}: cache ends at {_iso(last_close)} UTC, before the "
+                           f"window end {_iso(end_ms)}; prefetch newer data")
 
     lux_cfg = (config.get("smc_v2", {}) or {}).get("luxalgo", {}) or {}
     lux_conf = lx.LuxConfig.from_dict(lux_cfg)
@@ -180,6 +207,10 @@ def replay_symbol(symbol: str, df_entry: pd.DataFrame, df_mtf: pd.DataFrame, con
         if close_ms > end_ms:
             break
         n_m = usable_mtf_count(m_open, m_ms, close_ms)
+        if n_m == 0 or close_ms - (int(m_open[n_m - 1]) + m_ms) > m_ms:
+            raise HistoryError(f"{symbol} {m_tf}: MTF data lag at entry bar closing "
+                               f"{_iso(close_ms)} UTC (last usable close lags by more than one "
+                               f"{m_tf} bar); prefetch newer data")
         de = df_entry.iloc[i + 1 - k: i + 1]
         dm = df_mtf.iloc[n_m - k: n_m]
         lux_ltf = lx.analyze(de, lux_conf)
@@ -212,7 +243,8 @@ def _cost_line(config: dict) -> str:
 
 
 def build_report(meta: dict, trades: List[dict]) -> dict:
-    res = evaluate_all(trades, meta["start_ms"], meta["end_ms"], meta["is_frac"])
+    res = evaluate_all(trades, meta["start_ms"], meta["end_ms"], meta["is_frac"],
+                       meta["symbols"], meta.get("live_symbols"))
     return {"meta": meta, "trades": trades, "results": res}
 
 
@@ -261,12 +293,26 @@ def summary_lines(rep: dict) -> List[str]:
     return out or ["no closed shadow trades"]
 
 
+_MERGE_SAME = ("start_ms", "end_ms", "is_frac", "cost", "config", "profile", "variants_tried",
+               "live_symbols")
+
+
 def merge_reports(paths: Sequence[Path]) -> dict:
     reps = [json.loads(Path(p).read_text()) for p in paths]
     metas = [r["meta"] for r in reps]
+    for f in _MERGE_SAME:
+        vals = {json.dumps(m.get(f), sort_keys=True) for m in metas}
+        if len(vals) > 1:
+            raise MergeError(f"inputs differ in {f}: {sorted(vals)}")
+    seen: Dict[str, int] = defaultdict(int)
+    for m in metas:
+        for s_ in m["symbols"]:
+            seen[s_] += 1
+    dups = sorted(s_ for s_, c in seen.items() if c > 1)
+    if dups:
+        raise MergeError(f"symbol(s) appear in more than one input: {', '.join(dups)}")
     meta = dict(metas[0])
-    meta.update(start_ms=min(m["start_ms"] for m in metas), end_ms=max(m["end_ms"] for m in metas),
-                symbols=sorted({s for m in metas for s in m["symbols"]}),
+    meta.update(symbols=sorted(seen),
                 git_sha=metas[0]["git_sha"] if len({m["git_sha"] for m in metas}) == 1
                 else "mixed: " + ",".join(sorted({m["git_sha"] for m in metas})))
     return build_report(meta, [t for r in reps for t in r["trades"]])
@@ -274,9 +320,7 @@ def merge_reports(paths: Sequence[Path]) -> dict:
 
 # ---- CLI -------------------------------------------------------------------
 
-def _end_ms(end: Optional[str], fallback: int) -> int:
-    if not end:
-        return fallback
+def _end_ms(end: str) -> int:
     ts = pd.Timestamp(end)
     ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
     if len(end) <= 10:                 # date-only -> end of that day
@@ -303,8 +347,7 @@ def cmd_run(args) -> int:
                 raise HistoryError(f"{sym} {tf[role]}: no cached data in {args.cache_dir}; run "
                                    f"scripts.prefetch_data first")
             frames[role] = df
-        e_close = int(_ms(_utc_index(frames["entry"]).index)[-1]) + tf_to_minutes(tf["entry"]) * 60_000
-        end_ms = _end_ms(args.end, e_close)
+        end_ms = _end_ms(args.end)
         start_ms = end_ms - args.days * MS_DAY
         r = replay_symbol(sym, frames["entry"], frames["mtf"], config, start_ms, end_ms)
         trades += r.trades
@@ -312,7 +355,9 @@ def cmd_run(args) -> int:
               f"({sum(1 for _, ln in r.lines if ' setup+ ' in ln)} setups)", flush=True)
     meta = {"git_sha": git_sha(), "config": args.config, "cost": _cost_line(config),
             "start_ms": start_ms, "end_ms": end_ms, "days": args.days, "is_frac": args.is_frac,
-            "symbols": sorted(symbols), "profile": tf["profile"],
+            "symbols": sorted(symbols),
+            "live_symbols": sorted((config.get("engine", {}) or {}).get("smc_v2_symbols", [])),
+            "profile": tf["profile"],
             "variants_tried": len(fe.sl_modes_from_config(config))}
     rep = build_report(meta, trades)
     write_report(rep, Path(args.out))
@@ -321,7 +366,11 @@ def cmd_run(args) -> int:
 
 
 def cmd_merge(args) -> int:
-    rep = merge_reports([Path(p) for p in args.inputs])
+    try:
+        rep = merge_reports([Path(p) for p in args.inputs])
+    except MergeError as e:
+        print(f"merge refused: {e}", file=sys.stderr)
+        return 2
     write_report(rep, Path(args.out))
     print("\n".join(summary_lines(rep)))
     return 0
@@ -334,8 +383,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     r.add_argument("--config", default="configs/config.phase2_1k.yaml")
     r.add_argument("--symbols", nargs="*", help="default: engine.smc_v2_symbols")
     r.add_argument("--days", type=int, default=180)
-    r.add_argument("--end", help="ISO date/time (UTC); required for gate reports; default = cache end")
-    r.add_argument("--cache-dir", default="cache/ohlcv")
+    r.add_argument("--end", required=True,
+                   help="ISO date/time (UTC); date-only = end of that day; required (fixed gate window)")
+    r.add_argument("--cache-dir", default="cache/ohlcv", help="OHLCVCache root")
     r.add_argument("--out", required=True, help="output prefix (writes .json and .md)")
     r.add_argument("--is-frac", type=float, default=DEFAULT_IS_FRAC)
     r.set_defaults(fn=cmd_run)

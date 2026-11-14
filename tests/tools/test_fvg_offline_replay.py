@@ -29,7 +29,7 @@ def test_parse_exit_line_with_variant():
         "gross_r": 1.23, "net_r": 1.10, "cost_r": 0.13, "exit_ts": 42}
 
 
-def test_parse_exit_line_legacy_without_variant_is_a():
+def test_parse_exit_line_without_variant_defaults_to_a():
     ln = "[fvg shadow] exit BTC/USDT LONG reason=SL gross_r=-1.00 net_r=-1.20 cost_r=0.20 entry=1"
     t = rp.parse_exit_line(ln, exit_ts=1)
     assert t["variant"] == "A" and t["net_r"] == -1.20
@@ -88,25 +88,67 @@ def _good_trades():
     return out
 
 
+DAY = 86_400_000
+LIVE = ["A", "B"]
+PASS_V = "PASS (absolute criteria; baseline comparison not run)"
+
+
+def _ev(trades, symbols=None, live=None, end=None):
+    """evaluate() over a 200-day window by default (trade ts are scaled to it)."""
+    end = 200 * DAY if end is None else end
+    sc = end // 100
+    trades = [dict(t, exit_ts=t["exit_ts"] * sc) for t in trades]
+    return rp.evaluate(trades, 0, end, 0.67, symbols=LIVE if symbols is None else symbols,
+                       live_symbols=LIVE if live is None else live)
+
+
 def test_verdict_pass():
-    r = rp.evaluate(_good_trades(), 0, 100, 0.67)
-    assert r["verdict"] == "PASS" and r["reasons"] == []
+    r = _ev(_good_trades())
+    assert r["verdict"] == PASS_V and r["reasons"] == []
+
+
+def test_verdict_never_bare_pass():
+    assert _ev(_good_trades())["verdict"] != "PASS"
+
+
+def test_verdict_fails_on_short_window():
+    r = _ev(_good_trades(), end=100 * DAY)
+    assert r["verdict"] == "FAIL" and "window<180d" in r["reasons"]
+
+
+def test_verdict_fails_on_symbol_set_mismatch():
+    r = _ev(_good_trades(), symbols=["A"])
+    assert r["verdict"] == "FAIL" and "symbols != live set" in r["reasons"]
+    r = _ev(_good_trades(), live=["A", "B", "C"])
+    assert "symbols != live set" in r["reasons"]
+
+
+def test_verdict_unknown_live_set_fails_closed():
+    r = rp.evaluate(_good_trades(), 0, 200 * DAY, 0.67, symbols=LIVE, live_symbols=None)
+    assert "symbols != live set" in r["reasons"]
+
+
+def test_zero_trade_symbol_counts_as_not_positive():
+    assert rp.symbol_positive_share([T(1, sym="A")], symbols=["A", "B"]) == 0.5
+    assert rp.symbol_positive_share([], symbols=["A"]) == 0.0
+    r = _ev(_good_trades(), symbols=LIVE + ["Z1", "Z2"], live=LIVE + ["Z1", "Z2"])
+    assert any("symbols NET-positive" in x for x in r["reasons"])
 
 
 def test_verdict_fails_on_n():
-    r = rp.evaluate(_good_trades()[:60], 0, 100, 0.67)
+    r = _ev(_good_trades()[:60])
     assert r["verdict"] == "FAIL" and any("n=" in x for x in r["reasons"])
 
 
 def test_verdict_fails_on_is_negative():
     tr = [dict(t, net_r=-0.2 if t["exit_ts"] < 60 else t["net_r"]) for t in _good_trades()]
-    r = rp.evaluate(tr, 0, 100, 0.67)
+    r = _ev(tr)
     assert r["verdict"] == "FAIL" and any(x.startswith("IS avg") for x in r["reasons"])
 
 
 def test_verdict_fails_on_oos_negative_and_pf():
     tr = [dict(t, net_r=-0.2 if t["exit_ts"] >= 67 else t["net_r"]) for t in _good_trades()]
-    r = rp.evaluate(tr, 0, 100, 0.67)
+    r = _ev(tr)
     assert any(x.startswith("OOS avg") for x in r["reasons"])
     assert any(x.startswith("OOS PF") for x in r["reasons"])
 
@@ -115,7 +157,7 @@ def test_verdict_fails_on_oos_pf_only():
     # alternating +1.0 / -0.9: avg > 0 everywhere but PF ~1.11 < 1.30; both symbols positive
     tr = [T(1.0 if i % 2 else -0.9, sym="A" if i % 4 < 2 else "B", ts=i * 100 // 120)
           for i in range(120)]
-    r = rp.evaluate(tr, 0, 100, 0.67)
+    r = _ev(tr)
     assert any(x.startswith("OOS PF") for x in r["reasons"])
     assert not any(x.startswith("OOS avg") or x.startswith("IS avg") for x in r["reasons"])
 
@@ -129,14 +171,14 @@ def test_verdict_fails_on_symbol_share():
     for t in tr:
         if t["symbol"] in ("S3", "S4"):
             t["net_r"] = 20.0
-    r = rp.evaluate(tr, 0, 100, 0.67)
+    r = _ev(tr)
     assert r["verdict"] == "FAIL" and any("symbols" in x for x in r["reasons"])
     assert not any(x.startswith("OOS avg") or x.startswith("IS avg") for x in r["reasons"])
 
 
 def test_evaluate_all_groups_variants():
     tr = [T(1, variant="A", ts=1), T(1, variant="B", ts=2)]
-    res = rp.evaluate_all(tr, 0, 100, 0.67)
+    res = rp.evaluate_all(tr, 0, 100, 0.67, symbols=LIVE, live_symbols=LIVE)
     assert set(res) == {"A", "B"} and res["A"]["all"]["n"] == 1
 
 
@@ -181,6 +223,25 @@ def test_missing_entry_history_raises_named_error():
     start = int(ent.index[10].timestamp() * 1000)
     with pytest.raises(rp.HistoryError, match=r"BTC/USDT.*15m"):
         rp.replay_symbol("BTC/USDT", ent, mtf, CFG, start, int(ent.index[-1].timestamp() * 1000) + 900_000)
+
+
+def test_short_cache_end_raises_instead_of_silent_short_run():
+    ent, mtf = _walk_frames()
+    s, e = _window(ent)
+    with pytest.raises(rp.HistoryError, match=r"BTC/USDT.*15m.*window end"):
+        rp.replay_symbol("BTC/USDT", ent, mtf, CFG, s, e + 15 * 60_000)
+
+
+def test_lagging_mtf_raises():
+    ent, mtf = _walk_frames()
+    s, e = _window(ent)
+    with pytest.raises(rp.HistoryError, match=r"BTC/USDT.*1h.*lag"):
+        rp.replay_symbol("BTC/USDT", ent, mtf.iloc[:-5], CFG, s, e)
+
+
+def test_run_requires_end():
+    with pytest.raises(SystemExit):
+        rp.main(["run", "--out", "x"])
 
 
 # ---- synthetic end-to-end ---------------------------------------------------
@@ -234,7 +295,7 @@ def test_replay_matches_orchestrator_shadow_step_line_for_line():
     old = lg.level
     lg.setLevel(logging.INFO)
     try:
-        k = CFG["timeframes"]["kline_limit"]
+        k = CFG["timeframes"]["kline_limit"] - 1   # live drops the forming bar
         for i in range(len(ent)):
             t_open = int(ent.index[i].timestamp() * 1000)
             if t_open < s or t_open + 900_000 > e:
@@ -264,3 +325,40 @@ def test_merge_recomputes_from_trades(tmp_path):
     assert rep["meta"]["symbols"] == ["A", "B"]
     assert rep["results"]["A"]["all"]["n"] == 2
     assert "n=2" in " ".join(rep["results"]["A"]["reasons"])
+
+
+def _rep(sym, **over):
+    meta = {"git_sha": "x", "start_ms": 0, "end_ms": 100, "symbols": [sym], "is_frac": 0.67,
+            "variants_tried": 2, "cost": "c", "config": "cfg", "profile": "p"}
+    meta.update(over)
+    return {"meta": meta, "trades": [T(1, sym=sym, ts=10)]}
+
+
+def _write(tmp_path, *reps):
+    paths = []
+    for i, r in enumerate(reps):
+        p = tmp_path / f"r{i}.json"
+        p.write_text(json.dumps(r))
+        paths.append(p)
+    return paths
+
+
+@pytest.mark.parametrize("field,val", [("start_ms", 1), ("end_ms", 99), ("is_frac", 0.5),
+                                       ("cost", "d"), ("config", "other"), ("profile", "q"),
+                                       ("variants_tried", 3)])
+def test_merge_rejects_inconsistent_inputs(tmp_path, field, val):
+    paths = _write(tmp_path, _rep("A"), _rep("B", **{field: val}))
+    with pytest.raises(rp.MergeError, match=field):
+        rp.merge_reports(paths)
+
+
+def test_merge_rejects_duplicate_symbol(tmp_path):
+    paths = _write(tmp_path, _rep("A"), _rep("A"))
+    with pytest.raises(rp.MergeError, match="A"):
+        rp.merge_reports(paths)
+
+
+def test_merge_cli_exits_nonzero_with_message(tmp_path, capsys):
+    paths = _write(tmp_path, _rep("A"), _rep("A"))
+    rc = rp.main(["merge", "--inputs", *map(str, paths), "--out", str(tmp_path / "o")])
+    assert rc != 0 and "A" in capsys.readouterr().err

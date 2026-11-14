@@ -2339,11 +2339,6 @@ class SafeOrchestrator:
         raw = (self.config.get("smc_v2") or {}).get("fvg_entry", "off")
         return "shadow" if str(raw or "off").strip().lower() == "shadow" else "off"
 
-    def _fvg_sl_modes(self) -> list:
-        """`smc_v2.fvg_entry_sl_variants` -> build_plans sl_modes; absent -> ["atr"]; unknown ignored."""
-        from engine.smc_v2.fvg_entry import sl_modes_from_config
-        return sl_modes_from_config(self.config)
-
     def _fvg_shadow_step(self, symbol, df_entry, df_mtf, lux_ltf, lux_cfg) -> None:
         """FVG geri çekilme girişi GÖLGESİ: 4h bias, FVG limit, OB SL, OB/BB TP1, likidite TP2.
 
