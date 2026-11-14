@@ -137,3 +137,33 @@ def test_alert_text_is_html_escaped(on):
     """Telegram parse_mode=HTML refuses a raw '<=' — the alert would be lost."""
     out = V2RejectAlertRule().match_log(_rec("[v2 reject] ETH/USDT: size <= 0 (0.0)"))
     assert "&lt;=" in out and "<=" not in out
+
+
+# ── K1 (ADR-0012): new entries paused → zone alerts must not claim the bot is
+# waiting to enter. The alerter shares the bot's env_file (.env.production), so
+# EFLOUD_PAUSE_NEW_ENTRIES is the same switch the bot reads (position_guard).
+PAUSE = "EFLOUD_PAUSE_NEW_ENTRIES"
+
+
+@pytest.mark.parametrize("msg", [NEAR, TOUCH, CONFIRMED])
+def test_zone_alerts_say_paused_when_entries_paused(on, monkeypatch, msg):
+    monkeypatch.setenv(PAUSE, "true")
+    out = LuxZoneAlertRule().match_log(_rec(msg))
+    assert out is not None and "ETH/USDT LONG" in out
+    assert "DURDURULDU" in out and "işlem açmaz" in out
+    assert "teyit mumu bekliyor" not in out
+    assert "emir kontrollerine gidiyor" not in out
+
+
+@pytest.mark.parametrize("val", ["false", "0", "", "maybe"])
+def test_zone_alerts_unchanged_when_not_paused(on, monkeypatch, val):
+    monkeypatch.setenv(PAUSE, val)
+    out = LuxZoneAlertRule().match_log(_rec(TOUCH))
+    assert "teyit mumu bekliyor" in out and "DURDURULDU" not in out
+
+
+def test_pause_truthy_set_matches_position_guard():
+    from engine.safety import position_guard
+    from ops.alerter import rules
+    assert rules.PAUSE_ENV == position_guard._ENV_VAR_NAME
+    assert set(rules.PAUSE_TRUE) == set(position_guard._ENV_TRUE)
