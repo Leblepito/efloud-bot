@@ -137,7 +137,7 @@ python -m pytest --ignore=external_repos --ignore=graphify-out --import-mode=imp
 
 ## Related project docs
 
-- `HERMES.md` — operator guide (deploy, config, incident response)
+- `docs/runbooks/operator-runbook.md` — operator runbook (deploy, config, incident response); history of the old HERMES.md social section: `docs/history/hermes-2026.md`
 - `CLAUDE.md` — project memory, architecture, rules
 - `docs/indicator/tradingview-publish.md` — current Pine publish steps (`pine/publish/PUBLISH_efloud_signals.md` is SUPERSEDED / archive)
 - `docs/schemas/content_job-1.0.0.json` — Lane A event schema
