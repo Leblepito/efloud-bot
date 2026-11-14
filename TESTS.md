@@ -170,6 +170,21 @@ private store). Every finding is fixed and has a test.
 | TEST-BT-004 | covered | The breaker runs on sim-time in backtest: closed trades are recorded at the cycle time and the v2 entry gate checks at the cycle time, so an old simulated loss never counts as "today" (repro: SOL/USDT 41d daily-loss trip on the whole run); live (`now=None`) keeps the wall clock ; a TRIPPED pause is judged at the sim-time it was checked (`BreakerStatus.as_of`), so consecutive-loss and daily-loss pauses really block in backtest; the weekly peak is stamped and rebased on sim-time (7 sim-days, as live), not held forever | `tests/backtest/test_breaker_sim_time.py`, `backend/tests/test_breaker_sim_time_gate_gap.py::test_tripped_breaker_blocks_in_sim_time` |
 | TEST-BT-005 | covered | Backtest speed (item 12): identical HTF/daily frames are analyzed once (exact `DataFrame.equals` + equal arguments, every hit an isolated copy, patched only during a run); memo on vs off gives a byte-identical backtest on the real engine | `tests/backtest/test_memo.py` |
 
+### 4.9 ECC audit 2026-11-14 gaps (Fable B8)
+
+Source: `docs/audit/2026-11-14-ecc/00-FABLE-sentez.md` §6.1 B8 and §6.2 (Ö1, Ö2, Ö3, Ö13, Ö15).
+These rows record protections that have no test yet. The code fixes are GATED (failing test →
+surgical diff → risk-ops → operator); a row moves to `covered` only with its reproduction test.
+
+| TEST-ID | State | Observable expectation | Evidence |
+|---|---|---|---|
+| TEST-GAP-VERIFY-ALGO | missing | When the algo-order fetch raises, `_fetch_protection_order_ids` reports `ok=False`, so protection verify never treats "fetch failed" as "algo SL/TP absent" (no duplicate SL, no wrong close). Today the exception is logged at debug and `(ids, True)` is returned (`exchange/__init__.py:1842-1850`) | — (reproduction test first; Ö1) |
+| TEST-GAP-REEMIT | missing | A CONFIRMED (or rejected) v2 setup is not re-added and re-emitted for the same `(symbol, direction, trigger_bar_ts)`. Dedup only compares candidates in `PERSISTED_STATES` (`engine/smc_v2/setup_state.py:121-126`, `:35`), which excludes CONFIRMED; the bug is not yet reproduced | — (reproduction test first, then NET A/B; Ö2) |
+| TEST-GAP-V1ONLY-KEYS | missing | A contract test pins which live-config keys act only on the v1 path and are inert on v2 symbols (Fable X6 list, e.g. `risk.min_confluence`, `allow_volatile_entries`, `smc_tp_targeting`, `smc_v2.pullback_timeout_bars`), so docs cannot present them as live gates | — (doc table: `CONTEXT.md`) |
+| TEST-GAP-BREAKER-3CFG | missing | The breaker calibration check (starting balance / emergency / daily %) covers all three mainnet bot configs; today it is scoped to the production config only | partial: `tests/config/test_phase_configs.py::test_prod_config_breaker_calibration_consistent` (prod only; `config.phase2_long_1k.yaml` and `config.phase2_scalp_1k.yaml` unchecked; Ö13) |
+| TEST-GAP-DOCS-DRIFT | missing | Docs ↔ config/code drift fails CI: CLAUDE.md line cap, STATUS "VPS HEAD" equals the last `DEPLOYED <sha>` in the log, cited repo paths exist, no dated "şu an" heading in constitution/map files (Fable §7 proposal `test_docs_roles.py`) | partial: `tests/test_docs_param_parity.py::test_v1_reference_swing_lookback_matches_engine_default` (one value), `tests/ci/test_tests_registry.py::test_every_evidence_ref_resolves` (this file only; Ö15) |
+| TEST-GAP-LEDGER-V2 | missing | With `signal_ledger.enabled`, a v2 entry is recorded in the signal ledger. Today the record hook is reached only from the v1 signal branch (`engine/safe_orchestrator.py:1497→1567`), so v2 symbols produce no ledger rows | — (TDD + byte-identical trade output; Ö3) |
+
 ## 5. Evidence run (2026-11-07, Windows, commit `4dd56b6`)
 
 - Every Python file cited in §4: 388 passed, exit 0 (before the 2 new `tests/ci/` registry/MCP files, 6 more passing).

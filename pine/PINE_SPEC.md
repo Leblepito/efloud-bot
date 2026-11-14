@@ -23,6 +23,7 @@ Tüm satır referansları doğrulanmıştır (`engine/smc_v2/*.py`, `engine/smc.
 > | §19 | — | SUPERSEDED — canlı TP yolu `tp_mode: luxalgo` (`configs/config.phase2_1k.yaml:204`) |
 > | §20–§21 | `pine/lab/*.pine` → `pine/efloud_lab.pine`, `pine/efloud_lab_strategy.pine` | GÜNCEL — ürün kaynağı (ADR-0005); baseline parity **GATE FAIL ×3** (§20) |
 > | Ek V1 (dosya sonu) | — (CLAUDE.md'den taşınan v1 parametre referansı) | ARŞİV/referans — v1 canlıda susturulmuş; Swing Lookback satırı `tests/test_docs_param_parity.py` ile korunur |
+> | Ek K (dosya sonu) | — (CLAUDE.md'den taşınan Pine kısıtları) | GÜNCEL — çeviri kısıtları (harici API, I/O, repaint) |
 
 ---
 
@@ -727,3 +728,11 @@ Not: breaker-kopya denetimi O(P) ve T2 kapalıyken atlanır (9dad0ca). `f_collec
 - **Take Profit (TP)**: 
   - TP1: Yakın HTF likidite swing'leri / Equal Highs-Lows. Range deviation varsa Range EQ. Price discovery durumunda (yapı yoksa) 1.272 Fibo. Min R:R: 1.5.
   - TP2: Karşı Range Extreme (deviation'da) veya 1.618 / 2.618 Fibo uzantısı.
+
+## Ek K — Pine Script kısıtları (Python'da olup Pine'a tam çevrilemeyecekler)
+
+> CLAUDE.md'den taşındı (metin aynen). Ayrıntılı sapma listeleri: §12 (v2) ve §A.7 (v1).
+
+- Harici API çağrıları (Gemini AI Structure Validation, sentiment, REST/websocket) → Pine'da atlanmalı, kural tabanlı statik karşılıklar veya input parametreleri eklenmeli. **Not:** `engine/agents/` Python tarafında bu çağrıları ortak bir LLM istemcisi üzerinden toplar (sağlayıcı fabrikası `engine/agents/llm.py`; `GeminiClient` adı tarihsel); Pine'a çevirirken bu katman **atlanır** (Pine LLM çağrısı yapamaz), kural tabanlı karşılıklar yazılır.
+- CCXT, DB erişimi, dosya I/O → Pine'da sadece grafikte çizim ve strateji emri olur.
+- pandas tabanlı look-ahead hesaplar → Pine'da repaint riskine dikkat (sadece kapanmış bar `[1]` veya barstate.isconfirmed kullanılmalı).
