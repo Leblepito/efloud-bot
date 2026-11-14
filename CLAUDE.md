@@ -16,7 +16,7 @@ Bot **MAINNET**'te gerçek parayla işlem yapar; her değişiklik bu varsayımla
 - Secret yok: key/token repo'ya, commit'e, log'a, dokümana girmez; yalnız sunucudaki env dosyasında yaşar.
 - `master`'a doğrudan push yok; her değişiklik branch + PR.
 - Mevcut safety guard'ı (breaker, position guard, orphan koruması) ASLA zayıflatma.
-- Mainnet trade mantığı değişikliği = ADR-0003 kapısı + risk-ops review + operatör onayı.
+- Her kod değişikliği TDD (önce failing test / reprodüksiyon); mainnet trade mantığı + ADR-0003 kapısı + risk-ops review + operatör onayı; edge/scoring + NET-cost backtest-gate (ADR-0011).
 - Canlı davranış iddiası yalnız `config:satır` + kod yolu ile yazılır; bu dosyaya tarih, SHA ya da "şu an" cümlesi girmez.
 - Pine-çeviri görevinde Python kaynak mantığını DEĞİŞTİRME. Sadece oku ve referans al.
   Canlı trade mantığı değişiklikleri bu kuralın değil ADR-0003 kapısının (+ aşağıdaki
@@ -44,9 +44,9 @@ ECC kurallarıyla çatışmada geçerli olan: `docs/engineering-rules.md` (Karpa
 
 ## Pine kuralları
 - Pine Script v6 ZORUNLU: `indicator()`/`strategy()`, `ta.ema()`/`ta.rsi()`/`ta.atr()`, doğru `var`/`series` tiplemesi. Asla legacy (`study()`, `ema()`) kullanma.
-- Ürün indikatördür (ADR-0005); strategy yalnız Python↔Pine parity artefaktıdır.
+- Ürün indikatördür (ADR-0005); strategy yalnız Python↔Pine parity artefaktıdır. İndikatör ve parity strateji dosyaları aynı input isimlerini kullanır (senkron).
 - Kaynak `pine/lab/*` (`head_*` + `core.pine` + `tail_*`); `pine/efloud_lab.pine` ve `pine/efloud_lab_strategy.pine` `python scripts/build_pine_lab.py` ile üretilir — üretilen dosyaya elle dokunma. Eski çiftler (`pine/efloud_signals*.pine`, `pine/efloud_strategy*.pine`) ARŞİV'dir.
-- Çeviri kararları, teknik haritalar ve Pine kısıtları (harici API, I/O, repaint): `pine/PINE_SPEC.md` (Ek K).
+- Çeviri kararları `pine/PINE_SPEC.md`'ye yazılır (teknik haritalar ve Pine kısıtları — harici API, I/O, repaint — da orada, Ek K).
 - Compile PASS ≠ runtime PASS: RE10045 tuzakları ve TradingView MCP araç döngüsü → `skills/tradingview-mcp/SKILL.md`.
 
 ## Commit / PR biçimi

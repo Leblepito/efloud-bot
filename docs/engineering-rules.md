@@ -3,7 +3,7 @@
 > **Rol:** constitution. Yalnız farkları listeler; ECC'nin tamamını kopyalamaz. ECC common kuralları
 > (`.claude/rules/ecc/common/*`) yerel kurulumdur: `.claude/` gitignore'dadır (`.gitignore:122`), bu yüzden
 > repoyu paylaşan modeller için bağlayıcı metin bu dosyadır. Çatışmada sıra: operatör talimatı >
-> Karpathy 4 ilke (`CLAUDE.md`, "Geliştirme Sözleşmesi") > ADR'ler (`docs/adr/README.md`) > bu tablo > ECC common.
+> Karpathy 4 ilke (`CLAUDE.md`, "Geliştirme sözleşmesi (Karpathy 4 ilke)") > ADR'ler (`docs/adr/README.md`) > bu tablo > ECC common.
 
 | Konu | ECC common | efloud kuralı (geçerli olan) | Kaynak |
 |---|---|---|---|

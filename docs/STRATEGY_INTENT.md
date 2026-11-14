@@ -10,8 +10,9 @@
 > risk-ops review ve operatör onayı ister (ADR-0003).
 
 `config` = `configs/config.phase2_1k.yaml` (canlı mid profil). Kanıt etiketleri: **KANITLI** = NET-cost ölçümü
-pozitif / göreli koruyucu olduğu ölçülmüş · **KANITSIZ** = ölçüm yok, n yetersiz veya başa baş ·
-**ÇÜRÜTÜLMÜŞ** = NET-cost ölçümü negatif veya kapıyı geçemedi. "Göreli" = bazdan daha az zararlı, mutlak edge değil.
+pozitif · **KANITSIZ** = ölçüm yok, n yetersiz veya başa baş (bir kapının "gevşetilmesi NET negatif" olması, kapının
+koruyucu olduğunu kanıtlamaz) · **TARTIŞMALI** = ölçümler farklı yönleri gösteriyor · **ÇÜRÜTÜLMÜŞ** = NET-cost
+ölçümü negatif veya kapıyı geçemedi. "Göreli KANITLI" = aynı ölçümde bazdan daha az zararlı olduğu ölçülmüş, mutlak edge değil.
 
 ## 1. Tez
 
@@ -21,17 +22,18 @@ OB/BB, TP2 işlem yönündeki likiditedir; işlem yalnız R:R ≥ `risk.min_rr` 
 Operatörün kendi sözüyle (2026-11-13): "FVG boşluğundan işleme girecek, SL likidasyon noktasının biraz uzağına
 atılacak, bütün mesele bu." Ölçümün eklediği şart: bugüne dek ölçülen her varyantta brüt sonuç sıfır civarında,
 zararı maliyet üretiyor (`collab/outputs/claude-code/2026-11-04-lux-gate-counterfactual.md:15-17`). Model ancak
-maker giriş + maliyete göre yeterli SL mesafesi + koruyucu kapılarla NET pozitif olabilir; bu kanıtlanmadı.
+maker giriş + maliyete göre yeterli SL mesafesi + mevcut kapılarla (gevşetmeleri NET negatif ölçüldü; koruyucu
+etkileri ölçülmedi, `collab/outputs/claude-code/2026-11-04-lux-gate-counterfactual.md:8-24,42-54`) NET pozitif olabilir; bu kanıtlanmadı.
 
 ## 2. Pipeline
 
 | Adım | Kural | Parametre (hedef) | Kaynak: operatör ifadesi · kod | Etiket |
 |---|---|---|---|---|
-| 1 Bias | 4h LuxAlgo swing trend; UNDEF → işlem yok | `swing_length` = `config:189` | "15m işleme girecekse 4h bias" (11-13 21:02) · gölge bias `engine/safe_orchestrator.py:2363` (mid MTF = 4h, `data/timeframes.py:26`); UNDEF → plan yok `engine/smc_v2/fvg_entry.py:106-107`; canlı 12h `engine/safe_orchestrator.py:1256-1258` | Bias kapısı KANITLI (göreli, 12h'te); 4h KANITSIZ |
-| 2 Tetik | 15m, bias yönünde CHoCH veya BOS, son 168 bar | `kinds` = `config:200`; recency = `config:293` | "choch-bos kırılımı sonrasında" (11-13 21:02) · `engine/smc_v2/fvg_entry.py:110-112`; canlı recency `engine/safe_orchestrator.py:1236-1237`, `engine/smc_v2/luxalgo.py:527-535` | Recency KANITLI (göreli); BOS KANITSIZ |
+| 1 Bias | 4h LuxAlgo swing trend; UNDEF → işlem yok | `swing_length` = `config:189` | "15m işleme girecekse 4h bias" (11-13 21:02) · gölge bias `engine/safe_orchestrator.py:2363` (mid MTF = 4h, `data/timeframes.py:26`); UNDEF → plan yok `engine/smc_v2/fvg_entry.py:106-107`; canlı 12h `engine/safe_orchestrator.py:1256-1258` | Bias kapısı (12h): KANITSIZ — gevşetme NET negatif (−0.17…−0.32 R); koruyucu etkisi ölçülmedi (elenen ≈ baz); 4h KANITSIZ |
+| 2 Tetik | 15m, bias yönünde CHoCH veya BOS, son 168 bar | `kinds` = `config:200`; recency = `config:293` | "choch-bos kırılımı sonrasında" (11-13 21:02) · `engine/smc_v2/fvg_entry.py:110-112`; canlı recency `engine/safe_orchestrator.py:1236-1237`, `engine/smc_v2/luxalgo.py:527-535` | Recency: KANITSIZ — gevşetme NET negatif (−0.17…−0.32 R); koruyucu etkisi ölçülmedi (elenen −0.17 R, bazdan iyi); BOS KANITSIZ |
 | 3 Bölge | Kırılımın OB'sinden sonra, kırılım+2 bar içinde oluşan, mitige olmamış FVG | `FVG_AFTER_BREAK_BARS = 2` | "FVG boşluğu veren bir mum yapısı oluşmuş olsun" (11-08 03:11) · `engine/smc_v2/fvg_entry.py:28-29,59-64` | KANITSIZ |
 | 4 Giriş | FVG yakın kenarına LIMIT (LONG üst, SHORT alt); fiyat kaçarsa iptal; timeout 48 bar | timeout `engine/smc_v2/fvg_entry.py:158` | "Fvg boşluğuna geri çekilme[de] işleme girmeli" (11-13 21:02); seçim "Geri çekilmede FVG limit" (11-14) · `engine/smc_v2/fvg_entry.py:121`, `:228-231` | KANITSIZ (gölge offline ≈ 0.00 R, n=85) |
-| 5 Filtre | (a) premium/discount; (b) maliyet bütçesi: tahmini RT maliyet / SL mesafesi ≤ 0.15 R; (c) R:R ≥ `risk.min_rr` | (a) `config:199`; (b) kodda yok (GATED Ö8); (c) `config:273` | Niyette yok, ölçümden (K3) · (a) `engine/smc_v2/luxalgo.py:541-547`; (c) `engine/smc_v2/fvg_entry.py:67-79` | (a) KANITLI (göreli, lux akışında); (b) gerekçe KANITLI, eşik KANITSIZ; (c) KANITSIZ |
+| 5 Filtre | (a) premium/discount; (b) maliyet bütçesi: tahmini RT maliyet / SL mesafesi ≤ 0.15 R; (c) R:R ≥ `risk.min_rr` | (a) `config:199`; (b) kodda yok (GATED Ö8); (c) `config:273` | Niyette yok, ölçümden (K3) · (a) `engine/smc_v2/luxalgo.py:541-547`; (c) `engine/smc_v2/fvg_entry.py:67-79` | (a) KANITSIZ — gevşetme NET negatif (−0.17…−0.32 R); koruyucu etkisi ölçülmedi (elenen ≈ baz); (b) gerekçe KANITLI, eşik KANITSIZ; (c) KANITSIZ |
 | 6 SL | Kırılımı yapan OB mumunun dış fitili ∓ fiyatın %0.2'si; sweep varsa süpürülen uç. ATR kuralı yok | %0.2 (K3) | "kırılımı gerçekleştiren Order block mumunun biraz uzağına SL" (11-13 21:02); "SL ATR'ye göre konulmamalı" (11-07 21:28); "%0,2 uzağına… entry noktasının değil" (11-08 01:50) · kodda yok; gölge bugün `calc_sl` kullanır (§4) | KANITSIZ (benzeri all-15m sweep varyantı ÇÜRÜTÜLMÜŞ) |
 | 7 TP1 | Yoldaki ilk karşı OB veya BB, R ≥ `risk.min_rr` | `config:273` | "bir sonraki TP1 OB-BB olabilir" (11-13 21:02) · `engine/smc_v2/fvg_entry.py:67-79` | KANITSIZ |
 | 8 TP2 | TP1'in ≥ 0.5 R ötesindeki, işlem yönündeki EQH/EQL / swing likiditesi | `TP2_MIN_GAP_R = 0.5`; içeri pay `config:206` | "pozisyona girilen yöndeki likidite noktası" (11-13 21:02) · `engine/smc_v2/fvg_entry.py:30-31,82-95` | KANITSIZ |
@@ -60,7 +62,7 @@ değişmedi. `pin_fvg_touch` repo dışıdır (`u2Algo-Trade:recipes/pin_fvg_tou
 | Bias | 4h swing trend | **12h** (`engine/safe_orchestrator.py:1256-1258`) — sapma | 4h (`engine/safe_orchestrator.py:2363`) — uyumlu | **Yok**; 1h pin + 15m sweep — sapma |
 | Tetik | 15m CHoCH/BOS, son 168 bar | Uyumlu (`config:200,293`) | CHoCH/BOS, yalnız en yeni kapanmış barda bilinen planlar (`engine/smc_v2/fvg_entry.py:116-118`) | 5m CHoCH (`structure.kind: choch`) + zorunlu sweep — sapma |
 | Bölge | Kırılım FVG'si | **Kırılımın OB'si** (`engine/smc_v2/luxalgo.py:536-548`) — sapma | Uyumlu (`engine/smc_v2/fvg_entry.py:59-64`) | CHoCH öncesi FVG (`entry.zone: pre_choch_fvg`) — kısmi |
-| Giriş | FVG kenarına LIMIT, teyitsiz | **15m engulfing kapanışı → MARKET** (`engine/smc_v2/confirmation.py:1-8`, `exchange/__init__.py:1151-1153`) — sapma | Limit simülasyonu, emir yok (`engine/smc_v2/fvg_entry.py:121`) — uyumlu (yalnız log) | Temas (`entry.price: touch`) — uyumlu yönde |
+| Giriş | FVG kenarına LIMIT, teyitsiz | **15m engulfing kapanışı → MARKET** (`engine/smc_v2/confirmation.py:1-8`, `exchange/__init__.py:1151-1153`) — sapma; teyit TARTIŞMALI — baz P1 −0.30 vs P2 −0.75 lehine; ancak teyit almayan dokunuşlarda limit P2 −0.04 R, PF 0.95 (n=407); kaynak: 'değer kattığına dair kanıt da yok' (`collab/outputs/claude-code/2026-11-04-lux-gate-counterfactual.md:22,43,54`) | Limit simülasyonu, emir yok (`engine/smc_v2/fvg_entry.py:121`) — uyumlu (yalnız log) | Temas (`entry.price: touch`) — uyumlu yönde |
 | Filtre (P/D) | Açık, ölçülecek | Zorunlu (`config:199`) | **Yok** — sapma (ölçülmedi) | Yok (`filters: {}`) |
 | Filtre (maliyet bütçesi) | ≤ 0.15 R | Yok | Yok | Yok |
 | SL | OB dış fitili ∓ %0.2 | OB ucu ∓ 0.5 ATR, 2 ATR taban, 5 ATR tavan (`engine/smc_v2/sl_calc.py:56-78`; `config:294,412-413`) — sapma | **Aynı `calc_sl`**, çapa OB ucu (`engine/smc_v2/fvg_entry.py:122-127`) — sapma | Süpürülen uç ∓ %0.20 (`sl.anchor: ext`, `buffer_pct: 0.20`) — çapa farklı, mesafe uyumlu |

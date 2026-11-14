@@ -18,8 +18,8 @@ n ≥ 30 with IS and OOS NET > 0, and the FVG shadow uses "≥ 30 closes, NET > 
 the `backtest:` config block, `engine/edge_costs.py`, `engine/smc_v2/fvg_entry.py:25-27`, the T-09 harness), so
 NET R values are not comparable. The live LuxAlgo flow went live without a NET measurement and was later
 measured negative: −0.30 R/trade, PF 0.65, n=217 over 60 days
-(`collab/outputs/claude-code/2026-11-04-lux-gate-counterfactual.md:42`), and PF 0.69 over 137 trades / 41 days
-(`collab/outputs/claude-code/2026-11-07-backtest-live-parity.md:21-24`). With a negative baseline, "better than
+(`collab/outputs/claude-code/2026-11-04-lux-gate-counterfactual.md:42`), and gross PF 0.69, NET −$181.9
+(−0.91 %, n=137) over 41 days (`collab/outputs/claude-code/2026-11-07-backtest-live-parity.md:21-24`). With a negative baseline, "better than
 live" is a weak test, and 30 forward trades are too noisy to judge PF.
 
 ## Decision
@@ -71,7 +71,7 @@ A setup or edge change may place live orders only after it passes, in order:
 
 ### Negative
 - Slower path to live: 180-day multi-symbol runs are long on the laptop, and few variants will pass.
-- The CLI has no window-end argument yet (`backtest/cli.py:35-36` uses the wall clock); until it does, reports
+- The CLI has no window-end argument yet (`backtest/cli.py:34-35` uses the wall clock); until it does, reports
   must record the run date and cache state (GATED item: CLI `--end` and a gate script).
 
 ### Risks

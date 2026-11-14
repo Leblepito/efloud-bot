@@ -15,7 +15,7 @@ command), claude-code (proposal and execution)
 
 The live V1 flow (SMC v2 LuxAlgo mode, `configs/config.phase2_1k.yaml:187-188`) was measured NET negative:
 −0.30 R/trade, PF 0.65, n=217 over 60 days (`collab/outputs/claude-code/2026-11-04-lux-gate-counterfactual.md:42`)
-and PF 0.69, NET −$181.9, n=137 over 41 days (`collab/outputs/claude-code/2026-11-07-backtest-live-parity.md:21-24`).
+and gross PF 0.69, NET −$181.9 (−0.91 %, n=137) over 41 days (`collab/outputs/claude-code/2026-11-07-backtest-live-parity.md:21-24`).
 The operator's own checkpoint of 2026-11-07 ("if it is still negative after 20-30 trades, we change it") had
 passed with no owner. The emergency balance halt is off (`configs/config.phase2_1k.yaml:424`) and max-hold is off
 (`:407`). The effective position cap is lower than the documented one: the exposure check
@@ -41,13 +41,16 @@ lifecycle, exchange-side SL/TP, breaker updates, notifications and shadow logs c
 
 **K7 — exposure and sizing.** While paused, exposure and sizing do not change. At the go-live of a model that
 passed ADR-0011: `risk.max_open_positions` is set to ⌊`max_total_exposure` × balance / notional⌋ (the cap is
-not raised to reach 10); `safety.starting_balance` is updated to the balance on that day; an absolute floor
-"TRIP + Telegram", default OFF (GATED item Ö12, `safety.balance_floor_trip_usdt: null`, not in code), is turned
-on at 75 % of that day's balance. A permanent HALT is not reintroduced (operator decision `b2154c5`).
+not raised to reach 10), subject to a separate operator approval at go-live (not authorised by this ADR);
+`safety.starting_balance` is updated to the balance on that day, subject to a separate operator approval at
+go-live (not authorised by this ADR); an absolute floor "TRIP + Telegram", default OFF (GATED item Ö12,
+`safety.balance_floor_trip_usdt: null`, not in code), is turned on at 75 % of that day's balance, subject to a
+separate operator approval at go-live (not authorised by this ADR). A permanent HALT is not reintroduced (operator decision `b2154c5`).
 
 **K8 — V2/V3.** The long and scalp bots must not trade with their current configs. When K1 was applied their
 state was read: containers up, no order log lines in the previous 7 days, pause env not set (snapshot
-2026-11-14 12:12 UTC, `collab/STATUS.md`). If they are seen trading, the same env pause is applied to them.
+2026-11-14 12:12 UTC, `collab/STATUS.md`). If they are seen trading, the operator applies the same env pause
+to them after confirming that they are trading (no agent applies it on its own).
 Restarting them for trading needs the per-profile backtest and fixes listed as GATED item Ö14.
 
 ## Alternatives Considered

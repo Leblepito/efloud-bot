@@ -29,7 +29,7 @@ SL = OB ucu + `calc_sl` ATR bandı. Ayrıntı: `CONTEXT.md`.
 - **v1 sinyal yolu susturulur:** v2'nin sahiplendiği sembollerde (`smc_v2_symbols`,
   `configs/config.phase2_1k.yaml:93`) v1 girişleri `_v2_entry_active()` ile kesilir
   (`engine/safe_orchestrator.py:1486-1493`, log: `v1 signal suppressed`).
-- **K1 (2026-11-14):** V1 yeni girişleri `EFLOUD_PAUSE_NEW_ENTRIES=true` ile durduruldu → §6.
+- **K1 (yeni giriş pause):** prosedür §6; güncel durum: `collab/STATUS.md` K1 satırı.
 
 **Hedef:** Forex (MT5/OANDA) pluggable exchange adapter.
 
@@ -99,9 +99,9 @@ komutu, manuel pozisyon kapama.
 
 | Şey | Yer |
 |---|---|
-| Dashboard (V1) | `https://2-28-139-82.nip.io` (canary: `scripts/canary.py:25`) |
+| Dashboard (V1) | `https://2-28-139-82.nip.io` (canary: `scripts/canary.py:25`) — status, breaker, pozisyonlar, PnL, equity, start/stop, breaker reset (`backend/api.py`) |
 | Dashboard şifre | password manager'da (`DASHBOARD_PASSWORD`, VPS `.env.production`) |
-| VPS SSH | `ssh efloud-bot` (alias) veya `ssh root@<VPS_IP>`; key password manager / `~/.ssh/` |
+| VPS SSH | `ssh efloud-bot` (alias, `~/.ssh/config`) veya `ssh root@<VPS_IP>`; anahtar dosyası `~/.ssh/id_ed25519` (içeriği paylaşılmaz) |
 | Prod repo | `/opt/efloud-bot` (ajanlar için salt-okunur; çalışma klonu `~/work/efloud-bot`) |
 | State (V1) | container `/app/state_1k/` (named volume `efloud_state_1k`, host dizini değil) |
 | Log | container `/app/logs/` (volume `efloud_logs`) |
@@ -121,8 +121,10 @@ ssh efloud-bot
 cd /opt/efloud-bot
 git status --short                      # boş olmalı (yerel değişikliği ezme)
 git fetch -q origin && git log --oneline -1 HEAD && git log --oneline -1 origin/master
-docker exec efloud-bot cat /app/state_1k/positions.json | head -c 2000   # açık pozisyon? (closed_at yok = açık)
+docker exec efloud-bot cat /app/state_1k/positions.json | head -c 2000   # açık pozisyon? ("closed_at": null = açık)
 ```
+`"closed_at": null` = açık pozisyon (`engine/lifecycle.py:255`). `head -c 2000` çıktıyı keser: dosya daha uzunsa
+kesik kısımdaki pozisyonlar görünmez → `head`'siz oku veya Binance UI ile doğrula.
 Doğrulama: hedef fast-forward; açık pozisyon yok veya operatör ayrıca onayladı; Binance UI'da
 pozisyon + koruyucu emirler bağımsız kontrol edildi. (Deploy sırasında bot durur, pozisyon
 yönetimi birkaç cycle aksar.)
@@ -188,13 +190,14 @@ Alternatif: dashboard UI Start butonu (aynı endpoint, `backend/api.py:383`).
 Karar ve gerekçe: `docs/adr/0012-live-flow-pause-and-ramp.md`; uygulama kaydı: `collab/STATUS.md` (K1 satırı).
 Öncelik: env `EFLOUD_PAUSE_NEW_ENTRIES` → `safety.pause_new_entries` (`configs/config.phase2_1k.yaml:458`)
 → `false` (`engine/safety/position_guard.py:62-117`); v2 emir yolunda da kontrol edilir. Mevcut pozisyon
-yönetimi / SL-TP / reconcile etkilenmez. V2/V3 (long/scalp) trade ederken görülürse aynı env pause
-kendi `.env.production.long` / `.env.production.scalp` dosyalarına uygulanır (ADR-0012 K8).
+yönetimi / SL-TP / reconcile etkilenmez. V2/V3 (long/scalp) trade ederken görülürse, operatör bunu doğruladıktan
+sonra aynı env pause'u kendi `.env.production.long` / `.env.production.scalp` dosyalarına uygular; ajan kendi
+başına uygulamaz (ADR-0012 K8).
 
 **Uygula:**
 ```bash
 cd /opt/efloud-bot
-cp .env.production .env.production.bak-$(date -u +%Y%m%d)
+cp -p .env.production .env.production.bak-$(date -u +%Y%m%dT%H%M%S)   # -p: izinleri (600) korur
 # .env.production içine: EFLOUD_PAUSE_NEW_ENTRIES=true  (editörle; değeri ekrana basma)
 docker compose -f docker-compose.prod.yml up -d --no-deps efloud-bot   # env için recreate şart
 ```
@@ -205,8 +208,10 @@ docker logs efloud-bot --since 10m 2>&1 | grep "pause_new_entries config loaded"
 ```
 + açık pozisyon sayısı, breaker `OPEN`, healthz `ok`.
 
-**Geri al:** yedeği geri kopyala (`cp .env.production.bak-<tarih> .env.production`) → aynı
-`up -d --no-deps efloud-bot` → §5 start. Doğrulama: aynı grep → `effective=False`.
+**Geri al:** (a) yedeği geri kopyala (`cp -p .env.production.bak-<zaman-damgası> .env.production`) **veya**
+(b) `.env.production`'da `EFLOUD_PAUSE_NEW_ENTRIES` satırını sil / değeri `false` yap → aynı
+`up -d --no-deps efloud-bot` (recreate) → §5 ile `/api/bot/start`. Doğrulama: aynı grep → `effective=False`
+(ADR-0012 Rollback ile aynı).
 Ramp (yeniden açma) kriterleri ADR-0012'dedir; kararı operatör verir.
 
 ---
@@ -253,7 +258,8 @@ Doğrulama: `docker inspect -f '{{.State.StartedAt}}' <container>` yeni; healthz
 ```bash
 docker compose -f docker-compose.prod.yml stop efloud-bot      # yalnız V1; long/scalp ayrı servis adıyla
 ```
-Doğrulama: `docker ps -a --filter name=efloud-bot --format '{{.Names}} {{.Status}}'` → `Exited`.
+Doğrulama: `docker ps -a --filter name=^efloud-bot$ --format '{{.Names}} {{.Status}}'` → `Exited`
+(anchor'sız `name=efloud-bot` long/scalp container'larını da eşler).
 Açık pozisyonların SL/TP'si borsada kalır; Binance UI'da kontrol et.
 
 **Shadow log** (yalnız shadow modunda — v2 canlıyken boş olabilir)
@@ -324,7 +330,7 @@ docker cp efloud-bot:/app/state_1k ./state_backup_$TS
 docker logs efloud-bot --since 4h > emergency_$TS.log 2>&1
 # 5. Claude'a ilet: log + state + durum özeti (sır içeren satırları ayıkla)
 ```
-Doğrulama: `docker ps -a` → `efloud-bot Exited`; `ls state_backup_$TS/` içinde `positions.json`,
+Doğrulama: `docker ps -a --filter name=^efloud-bot$` → `efloud-bot Exited`; `ls state_backup_$TS/` içinde `positions.json`,
 `breaker.json`; Binance'te her açık pozisyonun SL'si var.
 Ayrıntı: `docs/runbooks/on-call-playbook.md`, `docs/runbooks/disaster-recovery.md`,
 `docs/runbooks/backup-restore.md`.
@@ -338,9 +344,12 @@ Ayrıntı: `docs/runbooks/on-call-playbook.md`, `docs/runbooks/disaster-recovery
 > `docs/adr/0011-edge-go-criteria.md`, koşum prosedürü (sabit pencere, sembol başı koşu,
 > NET maliyet) `docs/runbooks/backtest-gate.md`. Orijinal metin: `git show d137eb6^:HERMES.md`.
 
+**Veri penceresi:** CLI her TF için periyottan önce `timeframes.kline_limit` bar geçmişi yükler
+(`backtest/cli.py:29-31`); mid profilde bu `--days` ≥ 180 + 750 × 12h ≈ **555 gün** (HTF ısınması) demektir.
+Prefetch mevcut cache'i **uzatmaz** — cache'te olan sembol/TF çiftini atlar (`scripts/prefetch_data.py:83-87`).
+Prefetch komutu ve `--days` kuralı: `docs/runbooks/backtest-gate.md` §1 adım 4 (oradaki komutu kullan).
+
 ```bash
-python -m scripts.prefetch_data --config configs/config.phase2_1k.yaml \
-  --symbols ETH/USDT,BTC/USDT,SOL/USDT,BNB/USDT,ADA/USDT,LINK/USDT,AVAX/USDT --days 180
 python -m backtest.cli compare \
   --symbols ETH/USDT,BTC/USDT,SOL/USDT,BNB/USDT,ADA/USDT,LINK/USDT,AVAX/USDT \
   --period-days 180 --config configs/config.phase2_1k.yaml
@@ -373,8 +382,11 @@ Windows'ta uzun koşularda standby kapalı olmalı; grid'de çok-süreç takıla
 
 ```bash
 git clone https://github.com/Leblepito/efloud-bot.git && cd efloud-bot
-cp .env.example .env.production && chmod 600 .env.production   # asla commit etme
+cp -p deploy/.env.production.example .env.production && chmod 600 .env.production   # asla commit etme
+# Şablon: deploy/.env.production.example (README.md:118, deploy/deploy.sh:10).
 # Doldur (değerler password manager'da): BINANCE_API_KEY, BINANCE_API_SECRET, DASHBOARD_PASSWORD,
+#   SESSION_SECRET (ENV=dev değilse yoksa auth RuntimeError verir; ENV=dev'de güvensiz dev fallback —
+#   backend/auth.py:49-60), EFLOUD_CONFIG_PATH (V1: configs/config.phase2_1k.yaml),
 #   EFLOUD_ALLOW_MAINNET (1 = canlı, 0 = dry-run), EFLOUD_AUTOSTART (V1'de 0),
 #   EFLOUD_TELEGRAM_TOKEN / EFLOUD_TELEGRAM_CHAT_ID (opsiyonel)
 bash deploy/setup-server.sh                                      # sunucuda: Docker + bağımlılıklar
@@ -423,7 +435,9 @@ Değerler burada kopyalanmaz — satıra bak (etkili/inert ayrımı: `CONTEXT.md
 | Reconcile | Binance ile state tutarlılığı |
 | Kill switch | §7 |
 
-**Sırlar:** tümü `.env.production*` içinde, repo'da asla (`.gitignore`: `.env*`, `*.key`, `*.pem`).
+**Sırlar:** tümü `.env.production*` içinde, repo'da asla. `.gitignore` tek tek desen kullanır (`.env`, `.env.local`,
+`.env.production`, `.env.production.*`, `.env.*.local`, `.env.testnet`, `.env.research` vb., `*.key`, `*.pem`);
+`.env*` joker deseni YOK — `.env.example`, `.env.testnet.example`, `deploy/.env.production*.example` izleniyor.
 Döndürme: `bash deploy/rotate-credentials.sh` — ⚠️ V1 + V2 + V3 (+ panel) container'larını
 `--force-recreate` eder (`deploy/rotate-credentials.sh:108-116`); önce üç botun pozisyon kontrolü.
 `EFLOUD_ALLOW_MAINNET=1` yalnız prod VPS'te, bilinçli insan kararıyla.
