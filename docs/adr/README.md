@@ -15,3 +15,5 @@ backfilled on 2026-11-07, and each one records its original decision date.
 | [0008](0008-git-based-multi-model-collaboration.md) | Multi-model collaboration through git, PR-only | accepted | 2026-11-07 (backfill) |
 | [0009](0009-entry-confirmation-required.md) | Entries require confirmation | accepted | 2026-11-07 (backfill) |
 | [0010](0010-generated-regression-ledger.md) | Generated, CI-checked regression ledger | accepted | 2026-11-07 |
+| [0011](0011-edge-go-criteria.md) | Edge GO criterion: offline NET-cost gate, forward shadow sanity check, staged go-live | accepted | 2026-11-14 |
+| [0012](0012-live-flow-pause-and-ramp.md) | Pause new V1 mainnet entries; resize to the real exposure cap at go-live; V2/V3 out of trading | accepted | 2026-11-14 |
