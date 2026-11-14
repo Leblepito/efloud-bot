@@ -33,7 +33,7 @@ döner: önce `/api/bot/start` (o da auth'lu, aynı mekanik).
 
 ```bash
 # VPS'te — login + reset tek akışta (cookie secure=True → header'la taşınır):
-docker exec efloud-bot python - <<'EOF'
+docker exec -i efloud-bot python - <<'EOF'   # -i şart: yoksa heredoc stdin'e geçmez, komut sessizce boş çalışır
 import httpx, os
 base = "http://localhost:8080"
 pw = os.environ["DASHBOARD_PASSWORD"]
