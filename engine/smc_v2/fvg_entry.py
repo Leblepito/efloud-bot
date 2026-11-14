@@ -218,12 +218,14 @@ class FvgShadowBook:
         return f"[fvg shadow] {event} {p.symbol} {p.direction} v={p.variant} {rest}"
 
     def _cost_pct(self, tr: _Track, reason: str, exit_ts: int) -> float:
-        """Canonical round-trip cost in percent of entry notional (ADR-0011)."""
+        """Canonical round-trip cost in percent of entry notional (ADR-0011): commission both legs
+        (entry counted as taker), per-exit slippage (TP1→stop split 0.5/0.5), whole 8h funding periods."""
         stop_slip = self.sl_slip_pct if reason in ("SL", "BE") else self.exit_slip_pct
         # after TP1 half the position left at a TP; only the other half takes `reason`
         slip = (0.5 * self.exit_slip_pct + 0.5 * stop_slip) if tr.state == "tp1" else stop_slip
-        hours = max(0, exit_ts - tr.fill_ts) / 3_600_000
-        return 2 * self.commission_pct + slip + self.funding_pct_per_8h * hours / 8
+        # whole 8h funding periods, like backtest/metrics.py (floor) — one cost model for shadow + offline
+        periods = max(0, exit_ts - tr.fill_ts) // (8 * 3_600_000)
+        return 2 * self.commission_pct + slip + self.funding_pct_per_8h * periods
 
     def _exit(self, tr: _Track, reason: str, gross_r: float, exit_ts: int, lines: List[str]) -> bool:
         p = tr.plan

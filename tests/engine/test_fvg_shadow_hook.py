@@ -1,4 +1,5 @@
 """T-20261114-01: orchestrator hook for the FVG entry shadow (never touches the live path)."""
+import pytest
 import numpy as np
 import pandas as pd
 
@@ -119,3 +120,12 @@ def test_book_cost_defaults_without_backtest_block(monkeypatch):
     _step(orch)
     book = orch._fvg_shadow_book
     assert (book.commission_pct, book.funding_pct_per_8h) == (0.04, 0.01)
+
+
+@pytest.mark.parametrize("raw,expected", [("atr", ["atr"]), ("ob_pct", ["ob_pct"]), (" ob_pct ", ["ob_pct"])])
+def test_scalar_string_variant_is_one_variant(monkeypatch, raw, expected):
+    calls = _capture_builds(monkeypatch)
+    orch = _orch("shadow")
+    orch.config["smc_v2"]["fvg_entry_sl_variants"] = raw
+    _step(orch)
+    assert calls == expected

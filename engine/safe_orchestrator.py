@@ -2345,6 +2345,8 @@ class SafeOrchestrator:
         raw = (self.config.get("smc_v2", {}) or {}).get("fvg_entry_sl_variants")
         if raw is None:
             return ["atr"]
+        if isinstance(raw, str):  # YAML scalar typo (`atr` instead of `[atr]`) = one variant
+            raw = [raw.strip()]
         modes = []
         for m in raw:
             if m in SL_VARIANTS:
@@ -2382,7 +2384,7 @@ class SafeOrchestrator:
             plans = []
             if atr:
                 for mode in self._fvg_sl_modes():
-                    extra = {} if mode == "atr" else {"sl_mode": mode}
+                    extra = {} if mode == "atr" else {"sl_mode": mode}  # A: call identical to pre-#348
                     plans += _fe.build_plans(symbol, lux_ltf, bias, ts, atr, safety, min_rr,
                                              wick_buffer_r=wick, **extra)
             book = self.__dict__.get("_fvg_shadow_book")

@@ -388,3 +388,27 @@ def test_every_line_carries_variant_tag():
     book = FvgShadowBook(timeout_bars=2)
     lines = _run(book, [_plan()], [_bar(i, 100, 101, 99.5, 100) for i in (1, 2, 3)])
     assert lines and all(" v=A " in ln for ln in lines)
+
+
+# Review #348: pin the TP1→BE slippage split exactly, and funding in whole 8h periods
+# like backtest/metrics.py (floor), so shadow and offline gate share one cost model.
+def _tr(state, fill_ts=0):
+    from types import SimpleNamespace
+    return SimpleNamespace(state=state, fill_ts=fill_ts)
+
+
+def test_cost_pct_tp1_then_be_split_exact():
+    book = FvgShadowBook(timeout_bars=48, funding_pct_per_8h=0.0)
+    assert book._cost_pct(_tr("tp1"), "BE", 0) == pytest.approx(2 * 0.04 + 0.5 * 0.05 + 0.5 * 0.10)
+    assert book._cost_pct(_tr("tp1"), "TP2", 0) == pytest.approx(2 * 0.04 + 0.05)
+    assert book._cost_pct(_tr("filled"), "SL", 0) == pytest.approx(2 * 0.04 + 0.10)
+    assert book._cost_pct(_tr("filled"), "TP1", 0) == pytest.approx(2 * 0.04 + 0.05)
+
+
+def test_cost_pct_funding_whole_8h_periods():
+    book = FvgShadowBook(timeout_bars=48, commission_pct=0.0, sl_slip_pct=0.0, exit_slip_pct=0.0,
+                         funding_pct_per_8h=0.01)
+    h = 3_600_000
+    assert book._cost_pct(_tr("filled"), "SL", 7 * h) == pytest.approx(0.0)
+    assert book._cost_pct(_tr("filled"), "SL", 8 * h) == pytest.approx(0.01)
+    assert book._cost_pct(_tr("filled"), "SL", 17 * h) == pytest.approx(0.02)

@@ -1,4 +1,5 @@
-"""Summarise `[fvg shadow]` log lines (T-20261114-01).
+"""Note: exit lines without `v=` predate PR #348 and carry net_r under the old flat 0.07 % cost;
+they are counted as variant A. Summarise `[fvg shadow]` log lines (T-20261114-01).
 
 Usage on the VPS:
     docker logs --since 168h efloud-bot 2>&1 | python tools/fvg_shadow_report.py
