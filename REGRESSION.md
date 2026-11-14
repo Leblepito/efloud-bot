@@ -287,7 +287,7 @@ Circuit breaker, guards, orphan protection, risk calc
 Paths: `engine/safety/`, `engine/risk/`, `engine/permissions/`
 Downstream consumers: backend-api, orchestrator, scripts-misc, alerter (unverified)
 Regression acceptance command: `python scripts/regression_ledger.py run safety`
-Mapped tests: 45
+Mapped tests: 46
 Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 
 <details><summary>test files</summary>
@@ -321,6 +321,7 @@ Note: Mainnet-critical: risk-ops review + operator sign-off (CLAUDE.md).
 - `tests/backtest/test_breaker_sim_time.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/risk/test_custom_calculator.py`
+- `tests/test_alerter_lux_rules.py`
 - `tests/test_breaker_correction_window.py`
 - `tests/test_breaker_none_pnl.py`
 - `tests/test_breaker_pnl_audit_backcorrect.py`

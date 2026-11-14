@@ -320,6 +320,24 @@ def _lux_alerts_on() -> bool:
     return os.environ.get(LUX_ALERTS_ENV, "").strip().lower() in ("1", "true", "yes", "on")
 
 
+# K1 / ADR-0012: the alerter shares the bot's env_file, so this is the same
+# switch the bot reads. Truthy set mirrors engine/safety/position_guard.py
+# `_ENV_TRUE` (pinned by tests/test_alerter_lux_rules.py); importing the engine
+# package here would drag the whole orchestrator into the alerter.
+PAUSE_ENV = "EFLOUD_PAUSE_NEW_ENTRIES"
+PAUSE_TRUE = frozenset({"1", "true", "yes", "on"})
+_LUX_PAUSED_TITLES = {
+    "near": "⏸ <b>Bölgeye yaklaşıyor — yeni girişler DURDURULDU</b>",
+    "touch": "⏸ <b>Fiyat bölgede — yeni girişler DURDURULDU</b>",
+    "confirmed": "⏸ <b>Bölgede teyit geldi — yeni girişler DURDURULDU</b>",
+}
+_LUX_PAUSED_NOTE = "⏸ Pause aktif (EFLOUD_PAUSE_NEW_ENTRIES): bot bu bölgeden işlem açmaz."
+
+
+def _entries_paused() -> bool:
+    return os.environ.get(PAUSE_ENV, "").strip().lower() in PAUSE_TRUE
+
+
 def _safe_orch_msg(rec: dict, levels=("INFO",)) -> Optional[str]:
     if rec.get("logger") != "efloud.safe_orch" or rec.get("level") not in levels:
         return None
@@ -351,9 +369,12 @@ class LuxZoneAlertRule(Rule):
         if not m:
             return None
         extra = f" · {_esc(m['extra'])}" if m["extra"] else ""
-        return (f"{_LUX_TITLES[m['event']]}\n"
+        paused = _entries_paused()
+        title = (_LUX_PAUSED_TITLES if paused else _LUX_TITLES)[m["event"]]
+        note = f"{_LUX_PAUSED_NOTE}\n{_LUX_NOTE}" if paused else _LUX_NOTE
+        return (f"{title}\n"
                 f"{_esc(m['sym'])} {m['dir']} · bölge [{_esc(m['zone'])}] · fiyat {_esc(m['price'])}{extra}\n"
-                f"{_LUX_NOTE}")
+                f"{note}")
 
     def dedup_key(self, rec: dict) -> str:
         m = _RE_LUX.match(rec.get("message", ""))
