@@ -2,8 +2,9 @@
 
 > Operatör/insan onay zinciri (Hermes) için. Yönetim kılavuzu.
 > **Çok-model ortak çalışma (2026-11-04):** önce `collab/README.md` + `collab/prompts/hermes-onboarding.md`. Çalışma klonu `~/work/efloud-bot` (PROD `/opt/efloud-bot` değil).
-> Tarih: 2026-10-02 | Master HEAD: `c8dc5c8` | Bot durumu: **CANLI**
-> Son güncelleme: v2 AKTİF + BOS girişleri + acil bakiye HALTI kaldırıldı
+> **Güncel durum (master / VPS HEAD / konteynerler / açık sorular): `collab/STATUS.md`.**
+> Bu dosyadaki tarihli bloklar (§2, §5b, §5c; 2026-10-02 anlık görüntüsü, `c8dc5c8`) TARİHSEL'dir.
+> Canlı giriş akışı ve etkili/inert config anahtarları: `CONTEXT.md`.
 
 ---
 
@@ -11,9 +12,10 @@
 
 **Efloud-bot**: Binance USDT-M futures üzerinde SMC doktriniyle otonom trade botu. Hetzner VPS 7/24, FastAPI dashboard + Telegram alert.
 
-**Algoritma**: SMC v2 pullback+confirmation algoritması **CANLI ve AKTİF**.
-- **v2 (RUNNING)**: CHoCH **ve BOS** kırılımları → kırılımı yapan OB/BB bölgesine
-  geri çekilme bekle → engulfing teyidi → limit emir (SL likidite çizgisinde).
+**Algoritma**: SMC v2 pullback+confirmation algoritması, **LuxAlgo modu** (`configs/config.phase2_1k.yaml:180-188`).
+- **v2 (RUNNING)**: HTF lux swing bias → CHoCH **ve BOS** kırılımları → kırılımın OB'sine
+  geri çekilme bekle → entry-TF engulfing kapanışı → **MARKET** emir (`exchange/__init__.py:1151-1153`);
+  SL = OB ucu + `calc_sl` ATR bandı.
 - **v1 (MUTED)**: v2'nin sahiplendiği sembollerde v1 sinyal girişleri susturulur
   (çift giriş / kırılım anında market emri önlenir).
 
@@ -22,6 +24,9 @@
 ---
 
 ## 2. Şu An Ne Durumda?
+
+> **TARİHSEL (2026-10-02 anlık görüntüsü).** Güncel değerler için `collab/STATUS.md`'ye bak;
+> SHA satırları bayattır.
 
 | Şey | Durum |
 |---|---|
@@ -103,6 +108,9 @@ backtest harness, config flag + shadow mode.
 
 ### 5b. Bugün canlıda (2026-10-02)
 
+> **TARİHSEL.** Aşağıdaki akış LuxAlgo modu öncesi efloud triggers yoludur; LuxAlgo modu açıkken
+> bypass edilir (`configs/config.phase2_1k.yaml:180-188`). Canlı akış: §1 ve `CONTEXT.md`.
+
 v2 **AKTİF ve CANLI EMİR veriyor**:
 1. `configs/config.phase2_1k.yaml` → `engine.smc_version=v2` → SetupStateStore aktif.
 2. `engine.smc_v2_symbols=[BTC/USDT, ETH/USDT, XRP/USDT, DOGE/USDT, SOL/USDT, ...]` → whitelist dolu.
@@ -124,6 +132,9 @@ LTF (15m) CHoCH/BOS kırılımı
 `_v2_entry_active()` ile susturulur — kırılım anında market emri girilmez.
 
 ### 5c. Son operatör revizyonları (2026-10-01/02)
+
+> **TARİHSEL.** Sonraki değişiklikler: `collab/log/*.md`; bazı değerler sonradan değişti
+> (ör. `max_zone_overshoot_atr` → `configs/config.phase2_1k.yaml:168`).
 
 | Tarih | Değişiklik | Commit |
 |---|---|---|
@@ -234,7 +245,14 @@ asyncio.run(main())
 ## 8. Tehlike Sinyalleri (Olursa Hemen Bildir)
 
 1. **`healthz` 503** → Bot internal hata, autoheal restart loop riski.
-2. **Circuit breaker HALTED** → Haftalık DD veya ardışık kayıp limiti aşıldı, trade durdu. (Acil bakiye HALTI kaldırıldı — `emergency_balance_threshold=0`.)
+2. **Circuit breaker HALTED** → Haftalık DD limiti aşıldı (veya kill switch), trade durdu, manuel reset gerekir. Günlük kayıp ve ardışık kayıp HALTED değil **TRIPPED** yapar (süre dolunca kendiliğinden OPEN). Acil bakiye HALTI `emergency_balance_threshold: 0` ile fiilen kapalı. Durum tablosu aşağıda.
+
+   | Koşul (config `safety:`) | Durum | Geri dönüş | Kaynak |
+   |---|---|---|---|
+   | Günlük kayıp ≥ `daily_loss_limit_pct` | TRIPPED | ertesi gün 00:00 UTC otomatik OPEN | `engine/safety/breaker.py:290-306` |
+   | Ardışık kayıp ≥ `consecutive_loss_limit` | TRIPPED | `consecutive_pause_min` sonra otomatik OPEN | `engine/safety/breaker.py:320-327` |
+   | Haftalık DD ≥ `weekly_drawdown_limit_pct` (tepe 7 günde yeniden tabanlanır) | HALTED | manuel reset | `engine/safety/breaker.py:308-318` |
+   | Bakiye < `emergency_balance_threshold` | HALTED | manuel reset | `engine/safety/breaker.py:283-288` — eşik 0 → fiilen kapalı (`configs/config.phase2_1k.yaml:424`) |
 3. **`record_trade_open failed`** → Migration eksik, db table uyuşmazlığı.
 4. **Orphan SL/TP** → `reduceOnly` order Binance'te kalmış, poz kapalı.
 5. **`v1 signal suppressed` logu hiç gelmiyor** → v2 sembol sahipliği bozuldu, çift giriş riski.
@@ -376,6 +394,6 @@ ama fiyat etiketlerini bozduğu için sinyal chart'larında KULLANILMAZ.
 - **Kilo Code:** orchestrator; görevleri `agents/tasks/` altına yazar ve `agents/TASKBOARD.md` üzerinden takip eder.
 - **Claude:** kod, test, hata düzeltmesi ve inceleme. Hermes kod kusurlarını bulgularla Claude'a devreder; bot kaynak mantığını değiştirmez.
 - **Hermes Agent:** terminal ve operasyon; görevleri okuyup yürütür, doğrular ve sonuçlarını görev dosyasına işler. `hermes_tasks/` yereldir, commit edilmez. `agents/` protokolü varsa `agents/README.md` ve taskboard önceliklidir; yoksa eksikliği bildir, protokol varmış gibi davranma.
-- **Güvenlik:** sır değerleri ve secret içeren çıktı asla raporlanmaz veya commit edilmez. Canlıya dokunan işlemlerde Telegram üzerinden açık kullanıcı onayı, deploy/restart/config/breaker reset öncesi güncel açık pozisyon kontrolü gerekir. Açık pozisyon varsa görev açıkça izin vermedikçe dur ve ayrıca onay iste. `emergency_balance_threshold=0` değişmez.
+- **Güvenlik:** sır değerleri ve secret içeren çıktı asla raporlanmaz veya commit edilmez. Canlıya dokunan işlemlerde Telegram üzerinden açık kullanıcı onayı, deploy/restart/config/breaker reset öncesi güncel açık pozisyon kontrolü gerekir. Açık pozisyon varsa görev açıkça izin vermedikçe dur ve ayrıca onay iste. `emergency_balance_threshold` operatör onayı olmadan değiştirilmez.
 - **Sonuç:** secret'sız komutlar, kısaltılmış çıktılar, commit hash ve healthz yanıtı görevde bulunur; doğrulanamayanlar işaretlenir. Aynı komut iki kez başarısız olursa üçüncü kez denenmez, görev blocked yapılır.
 - Repo `skills/` altındaki operasyon rehberleri Hermes skill biçimindedir. Hermes'in bunları otomatik görmesi için ilgili dış skill dizini yapılandırılmalı veya ayrı kurulmalıdır; repo dosyalarının varlığı otomatik yüklemeyi garanti etmez. Bkz. https://hermes-agent.nousresearch.com/docs/user-guide/features/skills.

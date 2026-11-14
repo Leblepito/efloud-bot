@@ -26,8 +26,10 @@ TradingView indicator, so the same zones and signals can be followed on any char
 ## What it does
 
 - **Trading bot** — SMC v2 signal engine (`engine/smc_v2/`, LuxAlgo-based structure):
-  HTF bias → CHoCH/BOS break → OB/breaker zone + OTE (0.618–0.786) → pullback with
-  engulfing confirmation → limit entry; SL beyond the impulse swing, TP at liquidity / R:R targets.
+  HTF LuxAlgo swing bias → CHoCH/BOS break → pullback (retest) into the break's order block →
+  engulfing close on the entry timeframe → **market** entry (`exchange/__init__.py:1151-1153`);
+  SL beyond the OB edge with an ATR-banded buffer (`calc_sl`), TP1 = nearest LuxAlgo candidate
+  at ≥ `risk.min_rr`. Live switches: `configs/config.phase2_1k.yaml:180-188`; details in `CONTEXT.md`.
 - **Safety layer** — circuit breaker (daily / weekly loss limits), position guard,
   orphan protection, mainnet guard, reconcile and SL/TP repair (`engine/safety/`).
 - **Dashboard** — FastAPI backend serving a Next.js static dashboard: status, breaker,
@@ -133,7 +135,10 @@ The environment template is [`deploy/.env.production.example`](deploy/.env.produ
   in the config **and** `EFLOUD_ALLOW_MAINNET=1` in the environment; otherwise the
   mainnet guard (`engine/safety/guard.py`) blocks startup.
 - **Safety defaults (live config):** daily loss limit 10 % trips the breaker, weekly
-  drawdown 25 % halts it, at most 10 open positions, orphan protection on.
+  drawdown 25 % halts it, orphan protection on. Effective concurrent positions =
+  ⌊`max_total_exposure` × balance / per-position notional⌋ (`engine/safety/position_guard.py:271-282`);
+  `max_open_positions` is only an upper bound — at the configured `starting_balance`
+  (`configs/config.phase2_1k.yaml:375,403`) the exposure cap binds first.
   `EFLOUD_AUTOSTART=0` keeps the bot idle after a restart until an operator starts it.
 - **Timeframe profiles:** `scalp`, `mid`, `long` entry/structure/trend chains are
   defined in `data/timeframes.py`.

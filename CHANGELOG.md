@@ -15,7 +15,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · tarihler UTC
 - **v2 SL çapası:** impulsun başlangıç swing'i; impulse OTE bölgesi girişi.
 
 ### Kaldırıldı
-- Backtest modülü ve araştırma scriptleri, mobile, deneysel config'ler, eski deploy belgeleri.
+- Araştırma scriptleri, mobile, deneysel config'ler, eski deploy belgeleri. Backtest modülü de
+  kaldırılmıştı (`562a6a3`); canlı mantık üzerinde geri yüklendi (#335).
 
 ### Eklendi (önceki)
 - **BOS (Break of Structure) kırılımları da giriş üretiyor:** bot artık yalnız

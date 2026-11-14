@@ -8,18 +8,13 @@
 Binance USDT-M futures üzerinde SMC doktriniyle otonom trade botu.
 Python (CCXT, FastAPI) + TradingView Pine Script v6.
 
-## Güncel Algoritma Durumu (2026-10-02)
+## Güncel Algoritma Durumu
 
-- **v2 AKTİF (canlı emir):** `smc_version=v2`, `smc_v2_symbols` dolu, `smc_v2_shadow=false`.
-- **Giriş akışı:** LTF (15m) **CHoCH veya BOS** kırılımı → HTF bias uyumu →
-  kırılımı yapan OB/BB bölgesi → geri çekilmede retest → engulfing teyidi →
-  limit emir (SL likidite çizgisinde). Kırılım anında market emri YOK.
-- **v1 susturma:** v2'nin sahiplendiği sembollerde v1 sinyal girişleri
-  `_v2_entry_active()` ile susturulur (`engine/safe_orchestrator.py`).
-- **Acil bakiye HALTI kaldırıldı:** `emergency_balance_threshold=0` — koruma
-  günlük %10 / haftalık %25 kayıp limitleriyle.
-- **Volatil rejim:** `allow_volatile_entries=true` — volatil piyasada girişler açık.
-- **Bölge aşım toleransı:** `max_zone_overshoot_atr=2.0`.
+Bu dosya algoritma durumunu kopyalamaz (elle kopyalanan sayılar bayatlıyordu).
+Canlı giriş akışı, terimler ve canlıda etkili/inert config anahtarları: `CONTEXT.md`.
+Anlık canlı durum (deploy, bot konteynerleri, açık sorular): `collab/STATUS.md`.
+Kısa özet: canlı motor SMC v2 LuxAlgo modudur (`configs/config.phase2_1k.yaml:180-188`),
+giriş entry-TF engulfing kapanışında **MARKET** emirdir (`exchange/__init__.py:1151-1153`).
 
 ## Kritik Dosyalar
 
@@ -72,7 +67,8 @@ Detay: `skills/social-publishing/SKILL.md`
 ## Kurulum
 
 Yeni kullanıcı: `cp .env.example .env && docker compose up -d --build` (README.md). VPS: `deploy/deploy.sh` + `docker-compose.prod.yml`.
-Backtest modülü 2026-10-31'de kaldırıldı.
+Backtest modülü `backtest/` mevcut (2026-10-31'de `562a6a3` ile kaldırılmış, #335 ile geri
+yüklendi): `python -m backtest.cli single|portfolio --config configs/config.phase2_1k.yaml`.
 
 ## Test
 
