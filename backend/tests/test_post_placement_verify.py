@@ -232,3 +232,35 @@ def test_open_position_invokes_verify(monkeypatch):
     m._verify_and_repair_protection(pos)
     assert called["n"] == 1
 
+
+
+# ── Ö1 (ECC audit 2026-11-14, TESTS.md TEST-GAP-VERIFY-ALGO) ──
+# SL/TP live as Binance algo orders. If the algo read fails, the merged id set
+# silently lacks them; returning ok=True made verify treat a live SL as missing
+# → duplicate SL re-place, and (re-place failing) market-close of a protected
+# position. Must fail closed exactly like reconcile's algo_fetch_ok gate.
+class _AlgoDownExchange(_OrdersExchange):
+    def fapiPrivateGetOpenAlgoOrders(self, params=None):
+        raise RuntimeError("algo endpoint 503")
+
+
+def test_fetch_protection_order_ids_algo_failure_is_not_ok():
+    ex = _AlgoDownExchange(open_orders=[{"id": "111"}], algo_orders=[])
+    m = _bare_mgr()
+    m.client = _OrdersClient(ex)
+    ids, ok = m._fetch_protection_order_ids("BTC/USDT")
+    assert ok is False
+
+
+def test_verify_does_not_replace_or_close_when_algo_reads_fail():
+    # SL/TP are live algo orders; regular open orders hold none of them.
+    m = _verify_mgr([])
+    m.client = _OrdersClient(_AlgoDownExchange(open_orders=[], algo_orders=[]))
+    m._fetch_protection_order_ids = OrderManager._fetch_protection_order_ids.__get__(m)
+    pos = _vpos()
+    m.positions = [pos]
+    result = m._verify_and_repair_protection(pos)
+    assert m._state["retries"] == []           # no duplicate SL/TP
+    assert m._state["rollback"] == 0           # protected position not closed
+    assert pos in m.positions
+    assert result.get("tolerated_no_read") is True
