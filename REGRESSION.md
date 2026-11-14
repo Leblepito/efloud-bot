@@ -771,7 +771,7 @@ Telegram alerter (log-line rules, dedup, heartbeat)
 Paths: `ops/alerter/`
 Downstream consumers: overseer, routines
 Regression acceptance command: `python scripts/regression_ledger.py run alerter`
-Mapped tests: 19
+Mapped tests: 20
 
 <details><summary>test files</summary>
 
@@ -780,6 +780,7 @@ Mapped tests: 19
 - `tests/alerter/test_alerter_formatter_ai.py`
 - `tests/ci/test_regression_ledger.py`
 - `tests/test_agent_team.py`
+- `tests/test_alerter_algo_blind_rules.py`
 - `tests/test_alerter_critical_formatting.py`
 - `tests/test_alerter_dedup.py`
 - `tests/test_alerter_e2e.py`
