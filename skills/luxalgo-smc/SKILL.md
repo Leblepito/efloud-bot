@@ -95,6 +95,8 @@ internal breaks. Further live gates on the emit path: BT-23 entry distance
 Line refs: `config:N` = `configs/config.phase2_1k.yaml`, `long:N` = `configs/config.phase2_long_1k.yaml`,
 `scalp:N` = `configs/config.phase2_scalp_1k.yaml`.
 
+> Değerler 2026-11-14 anlık görüntüsüdür — alıntılamadan önce referans verilen config satırını yeniden oku.
+
 | | mid | long | scalp |
 |---|---|---|---|
 | ATR for SL | real ATR (`v2_use_real_atr: true`, `config:108`) | proxy `max(1 % price, zone width)` | proxy |

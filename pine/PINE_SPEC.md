@@ -350,7 +350,7 @@ Değişmez kural: TP2 > TP1 (LONG) / TP2 < TP1 (SHORT) kesin, veya TP2 = na → 
 - **RE10045 — derleme PASS ≠ runtime PASS.** Dokümante edilmemiş TradingView runtime
   hatası; script 0 hatayla derlenir ama grafikte kırmızı "!" verir, hiçbir şey çizilmez.
   İki örnek: Wave-1'de UDF'ler + koleksiyonlar tam-script bağlamında birlikteyken
-  (`pine/u2algo/WAVE1_SPEC.md:215`, by-pass: inline, UDF yok); lab T2 kopya denetiminde
+  (`pine/u2algo/WAVE1_SPEC.md` §9b (`:220`), by-pass: inline, UDF yok); lab T2 kopya denetiminde
   fonksiyon-lokal iki paralel `array<int>` + `indexof/get` (`dcdaf4a`, çözüm: tek
   `map<int,int>`; bkz. §21 sonu). Kural: paralel lokal dizilerden kaçın, tek map/koleksiyon.
 - **Koşullu çağrılan UDF içinde `x[off]`** bar geçmişini değil fonksiyonun kendi çağrı

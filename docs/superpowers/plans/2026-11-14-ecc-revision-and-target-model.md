@@ -38,10 +38,12 @@ ssh efloud-bot 'docker exec efloud-bot python -c "import json,urllib.request;fro
 Beklenen: pozisyon listesi (sayı + her birinde sl/tp). Kaydet.
 - [ ] **Step 3: Env yedeği + bayrak**
 ```bash
-ssh efloud-bot 'cd <compose_dir> && cp .env.production .env.production.bak-20261114 && grep -q "^EFLOUD_PAUSE_NEW_ENTRIES=" .env.production && sed -i "s/^EFLOUD_PAUSE_NEW_ENTRIES=.*/EFLOUD_PAUSE_NEW_ENTRIES=true/" .env.production || echo "EFLOUD_PAUSE_NEW_ENTRIES=true" >> .env.production; grep -c "^EFLOUD_PAUSE_NEW_ENTRIES=true" .env.production'
+ssh efloud-bot 'cd <compose_dir> && cp -p .env.production .env.production.bak-20261114 && (grep -q "^EFLOUD_PAUSE_NEW_ENTRIES=" .env.production && sed -i "s/^EFLOUD_PAUSE_NEW_ENTRIES=.*/EFLOUD_PAUSE_NEW_ENTRIES=true/" .env.production || printf "
+EFLOUD_PAUSE_NEW_ENTRIES=true
+" >> .env.production) && grep -c "^EFLOUD_PAUSE_NEW_ENTRIES=true" .env.production'
 ```
 Beklenen: `1`.
-- [ ] **Step 4: Yalnız V1'i yeniden oluştur (build yok)**
+- [ ] **Step 4: Yalnız V1'i yeniden oluştur (build yok)** — önce `docker inspect efloud-bot --format '{{.Image}}'` == `docker image inspect efloud-bot:latest --format '{{.Id}}'` olduğunu doğrula (aksi halde recreate yeni kodu yükler).
 ```bash
 ssh efloud-bot 'cd <compose_dir> && docker compose -f docker-compose.prod.yml up -d --no-deps efloud-bot'
 ```
@@ -49,7 +51,7 @@ ssh efloud-bot 'cd <compose_dir> && docker compose -f docker-compose.prod.yml up
 ```bash
 ssh efloud-bot 'sleep 60; docker logs --since 3m efloud-bot 2>&1 | grep -E "pause_config_loaded|pause_new_entries" | tail -3; docker ps --format "{{.Names}} {{.Status}}" | grep "^efloud-bot "'
 ```
-Beklenen: `effective=True source=env`; konteyner `Up (healthy)` (veya starting→healthy). Step 2'yi tekrarla: pozisyon sayısı ve SL/TP aynı.
+Beklenen: konteyner `Up (healthy)`. **Not (2026-11-14 uygulamada bulundu):** V1 `EFLOUD_AUTOSTART=0` ile çalışır; recreate sonrası trading döngüsü kapalı kalır ve pause log satırı orchestrator kurulunca yazılır. Döngüyü pause aktifken başlat: `ssh efloud-bot 'bash -s' < C:/tmp/k1_start.sh` (env `true` değilse başlatmayı iptal eder, `/api/bot/start` çağırır). Ardından log dosyasında (`/app/logs/efloud_bot.log`) `pause_new_entries config loaded: effective=True source=env`. Step 2'yi tekrarla: pozisyon sayısı ve SL/TP aynı.
 - [ ] **Step 6: Geri alma (yalnız sorun olursa)**: `.env.production.bak-20261114`'ü geri kopyala + Step 4.
 - [ ] **Step 7:** Erişim reddedilirse komutları operatöre `! ssh efloud-bot '…'` biçiminde ver, çıktıyı doğrula.
 

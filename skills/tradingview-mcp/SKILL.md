@@ -73,7 +73,7 @@ These bit the project three times; check them before calling a Pine change done.
 - **RE10045 (undocumented TradingView runtime error):** a script can compile with
   zero errors and still fail at runtime (red "!" on the chart, nothing drawn).
   Seen with user-defined functions + collections: Wave-1's UDFs together in the
-  full script (`pine/u2algo/WAVE1_SPEC.md:215`, bypass = inline, no UDFs) and the
+  full script (`pine/u2algo/WAVE1_SPEC.md` §9b (`:220`), bypass = inline, no UDFs) and the
   lab T2 copy guard as two lock-step function-local `array<int>` with
   `indexof`/`get` (`dcdaf4a`, fix = one `map<int,int>`; `pine/PINE_SPEC.md` §21).
   Avoid parallel local arrays; prefer one map / one collection.

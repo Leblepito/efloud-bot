@@ -1,7 +1,7 @@
 # ECC Doküman Revizyonu + Hedef Setup Modeli + Operatör Kararları — Tasarım (2026-11-14)
 
 > Girdi: `docs/audit/2026-11-14-ecc/00-FABLE-sentez.md` (Fable 5.2 sentezi) + `01`–`07` kategori raporları.
-> Onay: operatör 2026-11-14 — (1) canlıya bu turda yalnız doküman PR'ı; trade mantığı öneri listesi; (2) sentez ölçütü "niyet çerçeve, NET edge filtre"; (3) önce PR-A sonra PR-B; (4) açık operatör kararları ikinci-beyin modunda asistan tarafından karara bağlandı ve operatör "evet" ile onayladı (K1 mainnet adımı dahil).
+> Onay: operatör 2026-11-14 — (1) canlıya bu turda yalnız doküman PR'ı; trade mantığı öneri listesi; (2) sentez ölçütü "niyet çerçeve, NET edge filtre"; (3) önce PR-A sonra PR-B; (4) açık operatör kararları ikinci-beyin modunda asistan tarafından karara bağlandı ve operatör "evet" ile onayladı (K1 mainnet adımı dahil). K1 operatörün kendi komutuyla uygulandı (2026-11-14 12:30 UTC). K6/K7'deki ileri tarihli runtime maddeleri (go-live sizing, %75 taban) ADR-0011/0012 yazılırken ve uygulanmadan önce **ayrıca** operatör onayı alır.
 > Not: denetim, geçmişteki ~30 AskUserQuestion'ın tamamında "(Önerilen)" seçeneğinin seçildiğini buldu (07 §5.2). Bu yüzden her kararın gerekçesi aşağıda açık yazılır; ileride geri dönülebilir olması için kararlar ADR olarak kaydedilir.
 
 ## 1. Amaç ve başarı ölçütü
@@ -78,7 +78,7 @@ Yazım kuralı: constitution dosyalarına tarih/SHA/"şu an" yok; canlı iddia =
 1. Salt okuma: `docker ps` (3 bot konteyneri durumu), V1 açık pozisyonlar/bakiye (bot API, `reference_live_bot_control`), compose çalışma dizini.
 2. VPS `.env.production`'a `EFLOUD_PAUSE_NEW_ENTRIES=true` (yedek kopya alınır: `.env.production.bak-20261114`).
 3. `docker compose -f docker-compose.prod.yml up -d --no-deps efloud-bot` (build yok).
-4. Doğrulama: log'da `position_guard.pause_config_loaded effective=True source=env`; `/healthz` ok; açık pozisyon sayısı ve borsadaki SL/TP emirleri önce/sonra aynı; sonraki teyitli sinyalde `gate blocked: pause_new_entries active`; FVG gölge log satırları sürüyor.
+4. Doğrulama: log dosyasında `pause_new_entries config loaded: effective=True source=env` (event `position_guard.pause_config_loaded`; V1 `EFLOUD_AUTOSTART=0` olduğundan döngü `/api/bot/start` ile pause aktifken başlatılır); `/healthz` ok; açık pozisyon sayısı ve borsadaki SL/TP emirleri önce/sonra aynı; sonraki teyitli sinyalde `gate blocked: pause_new_entries active`; FVG gölge log satırları sürüyor.
 5. K8: V2/V3 işlem yapıyorsa aynı adım onlar için; yapmıyorsa yalnız STATUS'a not.
 6. Geri alma: env satırını kaldır/false + aynı `up -d --no-deps`.
 7. Erişim izin katmanında reddedilirse: operatöre `! ssh efloud-bot …` komutları verilir; asistan çıktıları doğrular.
