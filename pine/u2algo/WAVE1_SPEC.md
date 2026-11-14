@@ -1,5 +1,10 @@
 # WAVE1_SPEC — u2algo Wave-1 Python → Pine v6 Çeviri Haritası (P-001)
 
+> **SUPERSEDED 2026-11-06 — ARŞİV.** Wave-1/Wave-2 ürün yolu bırakıldı (Wave-2 OOS PF 1.165 < 1.30,
+> `docs/adr/0005-pine-indicator-only-product.md:11`); güncel ürün kaynağı Pine Lab'dir
+> (`pine/lab/*` → `pine/efloud_lab.pine`, `pine/PINE_SPEC.md` §20). §9b'deki RE10045 bulgusu hâlâ
+> geçerli bir Pine tuzağıdır (`pine/PINE_SPEC.md` §12.1). Aşağısı tarihsel kayıttır.
+
 > u2algo Wave-1 indikatörünün (`pine/u2algo/wave1_signals.pine`) çeviri kararları.
 > Son güncelleme: 2026-06-10 — T-001 (+ Claude review düzeltmeleri)
 >

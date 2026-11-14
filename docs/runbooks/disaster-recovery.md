@@ -45,8 +45,11 @@ senaryoyu kapatmak için var.)
    (password manager — repo'da YOK, olmamalı).
 4. Backup anahtarını **ESCROW'dan** `/root/.efloud_backup.key`'e koy (chmod 600).
 5. Storage Box'tan backup çek + Senaryo 1 adım 3-5 ile volume'ları restore et.
-6. DNS/Caddy: `bot.ualgotrade.com` A kaydı yeni IP'ye; Caddy sertifikayı otomatik alır
-   (nip.io fallback: `<yeni-ip>.nip.io`).
+6. DNS/Caddy: `deploy/Caddyfile` host'larını yeni IP'ye göre güncelle (IP-tabanlı `<yeni-ip>.nip.io`
+   host'ları); Caddy sertifikayı otomatik alır. Güncel healthz host'u `scripts/canary.py:25`
+   (`BOT_HEALTHZ`, bugün `2-28-139-82.nip.io`) — yeni IP'de onu da güncelle. `bot.ualgotrade.com`
+   2026-11-14 itibarıyla yanıt vermiyor; healthz için ona güvenme. Host'tan bağımsız kontrol: container
+   içinden `http://127.0.0.1:8080/healthz`.
 7. `docker compose -f docker-compose.prod.yml up -d --build` → `.env.production`'da
    **`EFLOUD_AUTOSTART=0` olduğunu DOĞRULA** (kod varsayılanı 1'dir — satır env
    dosyasından gelmek zorunda; eksikse bot otomatik trade'e başlar!) → bot idle başlar

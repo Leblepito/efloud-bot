@@ -70,6 +70,44 @@ or publish such a file as u2Algo's own.
    10 for swing scope + number of tags. Pullback timeout `pullback_timeout_bars`
    (prod: 48); entry distance capped by `smc_v2.max_entry_dist_atr` (prod: 12.0).
 
+Notes on the filter (mid; `config:N` = `configs/config.phase2_1k.yaml` line N): a swing-scope break
+gets `SWING_OB` automatically (`engine/smc_v2/luxalgo.py:477-478`), so `min_confluence: 1` effectively filters only
+internal breaks. Further live gates on the emit path: BT-23 entry distance
+(`max_entry_dist_atr`, `config:141`) and BT-25 overshoot (`max_zone_overshoot_atr: 6.0`,
+`config:168`) in `engine/safe_orchestrator.py:2685-2730`; Po3 (`po3_gate: true`, `config:131`;
+`engine/safe_orchestrator.py:2483`); per-symbol cap `max_pending_per_symbol: 6` (`config:158`).
+
+## Confirmation, order, SL (live path)
+
+- **Confirmation:** the candidate waits for an entry-TF (mid: 15m) **engulfing
+  close inside the zone** (`engine/smc_v2/confirmation.py:1-9`); `require_confirmation`
+  stays on (ADR-0009). No touch / limit entry live (`touch_entry` and `fvg_entry`
+  are log-only shadows).
+- **Order:** **MARKET** (taker) at the confirmation (`exchange/__init__.py:1150-1153`),
+  guarded by `max_entry_drift_pct: 1.0` (`config:433`). Not a limit order.
+- **SL:** anchored at the OB extreme (`engine/smc_v2/luxalgo.py:548`), then
+  `calc_sl` (`engine/smc_v2/sl_calc.py`): ∓ `sl_atr_buffer` 0.5 ATR (`config:294`); closer
+  than `safety.min_sl_atr` → widened; wider than `max_sl_atr` → **setup rejected**
+  (`config:412-413`, 2.0 / 5.0 on mid).
+
+## Profile differences (same lux path, different parameters)
+
+Line refs: `config:N` = `configs/config.phase2_1k.yaml`, `long:N` = `configs/config.phase2_long_1k.yaml`,
+`scalp:N` = `configs/config.phase2_scalp_1k.yaml`.
+
+| | mid | long | scalp |
+|---|---|---|---|
+| ATR for SL | real ATR (`v2_use_real_atr: true`, `config:108`) | proxy `max(1 % price, zone width)` | proxy |
+| min / max SL ATR | 2.0 / 5.0 (`config:412-413`) | 0.5 / 5.0 (`long:209-210`) | 0.3 / 3.0 (`scalp:218-219`) |
+| `risk.min_rr` | 1.8 (`config:273`) | 2.2 (`long:127`) | 1.0 (`scalp:133`) |
+| Po3 / BT-23 / BT-25 | on | keys absent → off | keys absent → off |
+| `recency_bars` | 168 (`config:293`) | 40 (`long:129`) | 40 (`scalp:135`) |
+
+Proxy ATR: `engine/safe_orchestrator.py:2932-2936`; real-ATR switch
+`engine/safe_orchestrator.py:3009`; absent Po3 / BT-23 / BT-25 keys fall through at
+`engine/safe_orchestrator.py:2483`, `:2699`, `:2728`. Re-read the
+configs before quoting; long and scalp instances may be stopped.
+
 ## TP targets (`tp_targets`, `tp_mode: luxalgo`)
 
 Candidates beyond entry: opposite OB near edge, opposite FVG, EQH/EQL and swing

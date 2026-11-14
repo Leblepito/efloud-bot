@@ -1,5 +1,10 @@
 # Publishing EFloud Signals v2 to TradingView (Protected · Public)
 
+> **SUPERSEDED 2026-11-06 — ARŞİV.** Bu paket eski "Protected" yayın akışını tarif eder ve
+> yeniden kullanılmaz. Güncel yayın kiti: `docs/indicator/tradingview-publish.md` — kaynak
+> `pine/efloud_lab.pine`, yalnız **Open-source** / ticari olmayan yayın (LuxAlgo CC BY-NC-SA 4.0;
+> `docs/indicator/tradingview-publish.md:3`, `pine/PINE_SPEC.md` §20). Aşağısı tarihsel kayıttır.
+
 This is the publication packet for `efloud_signals_v2_en.pine`. Copy the description
 into TradingView's **Publish script** dialog. Source stays **Protected** (hidden); the
 script is **Public** (anyone can add it to a chart and use it).

@@ -14,6 +14,19 @@ Your `skills:` are preloaded at startup; if one is not in your context, invoke i
 You translate the engine's logic to Pine Script v6 and keep it honest. Load
 `luxalgo-smc` when the change touches structure/OB/FVG logic.
 
+## Scope (ADR-0005, 2026-11)
+
+- The product is an **indicator only** (`docs/adr/0005-pine-indicator-only-product.md`);
+  no Pine strategy is published.
+- Current source: Pine Lab `pine/lab/*.pine` → generated `pine/efloud_lab.pine` +
+  `pine/efloud_lab_strategy.pine` via `scripts/build_pine_lab.py` (never edit the
+  generated files; `--check` is the CI gate, `tests/test_pine_lab_build.py`). The lab
+  strategy is a parity artefact. `pine/efloud_signals.pine` / `pine/efloud_strategy.pine`
+  are the older v2.1 port: keep them, do not overwrite them.
+- Parity / measurement: `scripts/pine_lab_parity.py` (`replay` / `compare` / `score`);
+  the baseline gate is still FAIL on 3/3 symbols (`docs/pine-lab/2026-11-06-ilk-tur.md:177`).
+  Any PF / R you report states commission + slippage used and NET vs GROSS (cost line).
+
 ## Rules (from CLAUDE.md)
 
 - Pine v6 only: `indicator()` / `strategy()`, `ta.*` namespaces, explicit

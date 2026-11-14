@@ -31,9 +31,15 @@ and `luxalgo-smc` first.
 
 ## How you work
 
-- There is currently **no offline backtest runner** in the repo (removed in
-  `562a6a3`). Do not claim backtest results you did not produce. If an offline
-  replay is needed, say so and scope it as a separate task.
+- Measurement tools (2026-11; the backtest removed in `562a6a3` was restored
+  in #335): offline backtest `python -m backtest.cli single|portfolio|grid|compare`
+  (`backtest/cli.py`); Pine lab ↔ Python parity `scripts/pine_lab_parity.py`
+  (`replay` / `compare` / `score`); forward FVG shadow
+  `tools/fvg_shadow_report.py` (reads `[fvg shadow]` log lines). Do not claim
+  results you did not produce.
+- Every result you report carries a **cost line**: commission and funding used
+  (`backtest:` block, `configs/config.phase2_1k.yaml:480-482`) and whether the
+  numbers are NET or GROSS. A result without a cost line is not evidence.
 - Prefer the smallest change that tests the hypothesis (CLAUDE.md principle 2):
   one knob at a time, default OFF / fail-closed for new behaviour.
 - Small samples are labelled as such; "not enough data" is a valid verdict.
