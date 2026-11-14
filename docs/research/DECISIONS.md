@@ -45,6 +45,8 @@
 | 2026-11-14 | Operatör FVG pullback setup'ı gölgesi | #343 (`c05260c`, `bf464d0`) | Offline replay 45g / 10 sembol: 85 kapanış, WR %30.6, NET ort ≈ +0.00 R (RT %0.07; harness git dışında) | SHADOW; KANITSIZ | `collab/log/claude-code.md:329`; `config:216`; `engine/smc_v2/fvg_entry.py` |
 | 2026-11-14 | ECC revizyon kararları K1–K9 (operatör onaylı) | bu PR | — | K1 uygulandı 12:30 UTC; K6 → ADR-0011; K1/K7/K8 → ADR-0012; K2–K5 → `docs/STRATEGY_INTENT.md` | `docs/superpowers/specs/2026-11-14-ecc-revision-and-target-model-design.md` §2 |
 | 2026-06-05 → 2026-11-14 | Kronos danışmanlığı (efloud-bot) | — | Trade'e hiç girdi olmadı; edge ölçümü yok | KAPALI | `config:352-353` |
+| 2026-11-14 | FVG hedef modeli — ADR-0011 offline kapısı (15m/4h, A ve B SL) | #348, #349 (`08b0469`) | A n=595 NET −0.26 R OOS PF 0.71; B n=588 NET −0.20 R OOS PF 0.74; brüt ≈ 0 | FAIL — canlı FVG yolu (Ö9) açılmaz | `docs/research/2026-11-14-fvg-offline-gate.md` §1 |
+| 2026-11-14 | Araştırma R1: aynı model 1h/8h (maliyet/R düşük) | #349 | A n=142 brüt −0.15 R NET −0.30 R; B n=153 brüt −0.20 R NET −0.35 R | Brüt ön kapı (≥ +0.25 R) geçilmedi | `docs/research/2026-11-14-fvg-offline-gate.md` §2 |
 
 **Okuma:** her düğüm bir öncekinin şikâyetine yanıt; BT-23 = 6.0 ve `min_sl_atr` 2.0 dışında hiçbiri NET-cost
 kapısını geçerek canlıya girmedi. Negatiflik motor değiştikçe sürdü → ortak etken maliyet/R oranı ve giriş
