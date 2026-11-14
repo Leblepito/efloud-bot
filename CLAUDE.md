@@ -63,17 +63,6 @@ Bu repo'daki HER kod değişikliği (Claude/Gemini/Hermes) aşağıdaki 4 prensi
 - Akış: HTF lux swing bias → entry-TF CHoCH/BOS → kırılımın OB'sine retest → entry-TF engulfing kapanışı → **MARKET** emir (`exchange/__init__.py:1151-1153`). SL = OB ucu + `calc_sl` ATR bandı; TP1 = ≥ `risk.min_rr` lux adayı.
 - Ayrıntı + canlıda etkili/inert anahtarlar: `CONTEXT.md` · anlık durum: `collab/STATUS.md` · ölçülmüş NET edge: `docs/audit/2026-11-14-ecc/00-FABLE-sentez.md` §0.
 
-## v1 referansı (canlıda susturulmuş — Pine port tarihçesi)
-- **Timeframe Chain (profil bazlı — tek kaynak `data/timeframes.py` `PROFILES`, chain redesign 2026-07-06 / commit 3c96029)**: her profil bir Entry/MTF/HTF üçlüsü seçer + Daily (1d) makro filter ortaktır. Merdiven: **scalp** = 5m entry / 1h SMC-yapı (MTF) / 4h trend (HTF) · **mid** = 15m / 4h / 12h · **long** = 1h / 8h / 1d. Roller: HTF Trend/Bias, MTF swing breaks, Entry trigger + SL/TP. Aşağıdaki TF örnekleri tarihsel mid chain'ine (4h/1h/15m) göredir — mantık profil-görelidir (htf/mtf/entry).
-- **HTF Bias Fallback (HTF UNDEF)**: 4h `analyze().trend` UNDEF ise sırayla: (1) son 40 4h-bar slope; |Δ| > %2 → BULL/BEAR (signals.py:308-317). (2) slope nötr (|Δ| ≤ %2) ise **Entry-TF (15m) range** discount/premium'undan türetilir: discount→BULL, premium→BEAR (signals.py:318-322 `range_info(df_entry)`). Bu, 15m bir "range play" senaryosudur ve dokümante edilen HTF(4h)→Entry(15m) yetki zincirini bu özel durumda kasıtlı olarak tersine çevirir. (3) Ne slope ne aktif range varsa → sinyal yok (skip, signals.py:323-325). df_htf < 40 bar → skip (signals.py:326-328).
-- **Swing Lookback**: 5 (Sol ve sağda 5 daha düşük high / daha yüksek low).
-- **Order Blocks (OB)**: 5 ardışık mum (`ob_sequential: 5`). Breakout mumunun gövdesi (body) > 1.5 * SMA(high-low, 14) olmalı (true-range ATR DEĞİL; bkz. PINE_SPEC §A.3 / smc.py:195).
-- **Confluence Threshold**: Minimum 55 (kök config; CANLI prod config `configs/config.phase2_1k.yaml` = 50, operatör kararı 2026-06).
-- **Stop Loss (SL)**: Breakout öncesi son 20 mumun en düşük/en yüksek seviyesi + ATR(14, true-range) * 0.5 (veya yüksek volatilitede * 0.75) buffer (true-range; bkz. PINE_SPEC §A.4 / signals.py:518-522). Minimum 0.1% mesafe clamp'i.
-- **Take Profit (TP)**: 
-  - TP1: Yakın HTF likidite swing'leri / Equal Highs-Lows. Range deviation varsa Range EQ. Price discovery durumunda (yapı yoksa) 1.272 Fibo. Min R:R: 1.5.
-  - TP2: Karşı Range Extreme (deviation'da) veya 1.618 / 2.618 Fibo uzantısı.
-
 ## Pine Script Kısıtları (Python'da olup Pine'a tam çevrilemeyecekler)
 - Harici API çağrıları (Gemini AI Structure Validation, sentiment, REST/websocket) → Pine'da atlanmalı, kural tabanlı statik karşılıklar veya input parametreleri eklenmeli. **Not:** `engine/agents/` Python tarafında bu çağrıları ortak bir LLM istemcisi üzerinden toplar (sağlayıcı fabrikası `engine/agents/llm.py`; `GeminiClient` adı tarihsel); Pine'a çevirirken bu katman **atlanır** (Pine LLM çağrısı yapamaz), kural tabanlı karşılıklar yazılır.
 - CCXT, DB erişimi, dosya I/O → Pine'da sadece grafikte çizim ve strateji emri olur.
