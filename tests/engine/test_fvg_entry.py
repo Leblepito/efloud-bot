@@ -5,7 +5,6 @@ import pytest
 
 from engine.smc_v2 import luxalgo as lx
 from engine.smc_v2.fvg_entry import (
-    ROUNDTRIP_COST_PCT,
     FvgPlan,
     FvgShadowBook,
     build_plans,
@@ -195,11 +194,60 @@ def test_single_target_exits_full_at_tp1():
     assert "reason=TP1" in lines[-1] and "gross_r=+2.00" in lines[-1]
 
 
-def test_net_r_subtracts_costs():
+def _f(line, name):
+    return float(line.split(f"{name}=")[1].split()[0])
+
+
+def _cost_r(cost_pct, entry=99.0, risk=4.5):
+    return cost_pct / 100.0 * entry / risk
+
+
+def test_net_r_sl_canonical_cost():
+    # fill bar 1, SL bar 2 -> 0.25 h held; 2 x 0.04 commission + 0.10 SL slip + funding
     book = FvgShadowBook(timeout_bars=48)
     lines = _run(book, [_plan()], [_bar(1, 100, 100, 98.9, 99), _bar(2, 99, 99, 94, 95)])
-    net = float(lines[-1].split("net_r=")[1].split()[0])
-    assert net == pytest.approx(-1.0 - ROUNDTRIP_COST_PCT * 99.0 / 4.5, abs=0.01)
+    pct = 2 * 0.04 + 0.10 + 0.01 * 0.25 / 8
+    assert _f(lines[-1], "cost_r") == pytest.approx(_cost_r(pct), abs=0.006)
+    assert _f(lines[-1], "net_r") == pytest.approx(-1.0 - _cost_r(pct), abs=0.011)
+    assert " v=A " in lines[-1]
+
+
+def test_cost_tp_slip_lower_than_sl_slip():
+    book = FvgShadowBook(timeout_bars=48)
+    lines = _run(book, [_plan(tp2=None)], [_bar(1, 100, 100, 98.9, 99), _bar(2, 99, 108.5, 99.5, 108)])
+    pct = 2 * 0.04 + 0.05 + 0.01 * 0.25 / 8
+    assert _f(lines[-1], "cost_r") == pytest.approx(_cost_r(pct), abs=0.006)
+
+
+def test_cost_tp1_then_be_weights_slippage():
+    book = FvgShadowBook(timeout_bars=48)
+    lines = _run(book, [_plan()], [_bar(1, 100, 100, 98.9, 99), _bar(2, 99, 108.5, 99.5, 108),
+                                   _bar(3, 108, 108, 98.5, 99)])
+    pct = 2 * 0.04 + 0.5 * 0.05 + 0.5 * 0.10 + 0.01 * 0.5 / 8
+    assert _f(lines[-1], "cost_r") == pytest.approx(_cost_r(pct), abs=0.006)
+
+
+def test_cost_funding_grows_with_hold_time():
+    short = FvgShadowBook(timeout_bars=500, funding_pct_per_8h=1.0)
+    long_ = FvgShadowBook(timeout_bars=500, funding_pct_per_8h=1.0)
+    a = _run(short, [_plan()], [_bar(1, 100, 100, 98.9, 99), _bar(2, 99, 99, 94, 95)])
+    bars = [_bar(1, 100, 100, 98.9, 99)] + [_bar(i, 99, 99.5, 98.95, 99) for i in range(2, 33)]
+    b = _run(long_, [_plan()], bars + [_bar(33, 99, 99, 94, 95)])
+    assert _f(b[-1], "cost_r") > _f(a[-1], "cost_r")
+
+
+def test_cost_params_configurable():
+    book = FvgShadowBook(timeout_bars=48, commission_pct=0.0, funding_pct_per_8h=0.0,
+                         sl_slip_pct=0.0, exit_slip_pct=0.0)
+    lines = _run(book, [_plan()], [_bar(1, 100, 100, 98.9, 99), _bar(2, 99, 99, 94, 95)])
+    assert _f(lines[-1], "cost_r") == 0.0 and _f(lines[-1], "net_r") == -1.0
+
+
+def test_slippage_defaults_match_backtest():
+    from backtest.slippage import SlippageConfig
+    cfg = SlippageConfig()
+    book = FvgShadowBook()
+    assert (book.sl_slip_pct, book.exit_slip_pct) == (cfg.sl_slip_pct, cfg.exit_slip_pct)
 
 
 def test_ran_away_cancel_and_expiry():
@@ -266,3 +314,77 @@ def test_plan_skipped_while_busy_is_not_retried():
     # first plan closes on bar 3; the skipped plan must not open afterwards
     _run(book, [], [_bar(3, 100, 108.5, 99.5, 108)])
     assert _run(book, [other], [_bar(4, 100, 101, 99.5, 100)]) == []
+
+
+# -- SL variant B (operator SL: OB far wick -/+ 0.2 %) ------------------------
+
+def _plans_b(lux, bias="BULL", min_rr=1.8):
+    return build_plans("BTC/USDT", lux, bias, TS, atr=1.0, safety=SAFETY, min_rr=min_rr,
+                       sl_mode="ob_pct")
+
+
+def test_atr_mode_is_variant_a_and_default():
+    [p] = _plans(_lux(extra_obs=[LONG_TP1_OB]))
+    assert p.variant == "A" and p.key[-1] == "A"
+
+
+def test_ob_pct_long_sl_math_no_atr_caps():
+    [p] = _plans_b(_lux(extra_obs=[LONG_TP1_OB]))
+    assert p.variant == "B" and p.key[-1] == "B"
+    assert p.entry == 99.0
+    assert p.sl == pytest.approx(95.0 * (1 - 0.002))      # OB bottom, not ATR-based
+    # far OB that the ATR path rejects (SLTooFar) is still a valid B plan
+    far_ob = _ob(lx.BULL, 90.0, 97.0)
+    assert _plans(_lux(extra_obs=[LONG_TP1_OB], ob=far_ob)) == []
+    [pb] = _plans_b(_lux(extra_obs=[_ob(lx.BEAR, 120.0, 121.0)], ob=far_ob))
+    assert pb.sl == pytest.approx(90.0 * 0.998)
+
+
+def test_ob_pct_short_sl_math():
+    tp1_ob = _ob(lx.BULL, 91.0, 92.0)
+    [p] = _plans_b(_lux("SHORT", extra_obs=[tp1_ob]), bias="BEAR")
+    assert p.sl == pytest.approx(105.0 * 1.002)
+
+
+def test_ob_pct_custom_pct_and_nonpositive_risk_skipped():
+    [p] = build_plans("BTC/USDT", _lux(extra_obs=[LONG_TP1_OB]), "BULL", TS, atr=1.0,
+                      safety=SAFETY, min_rr=1.8, sl_mode="ob_pct", sl_pct=0.01)
+    assert p.sl == pytest.approx(95.0 * 0.99)
+    # OB sitting above the entry -> stop above entry -> no valid long plan
+    high_ob = _ob(lx.BULL, 99.5, 101.0)
+    assert _plans_b(_lux(extra_obs=[LONG_TP1_OB], ob=high_ob)) == []
+
+
+def test_ob_pct_tp1_uses_variant_risk():
+    # B risk = 99 - 94.81 = 4.19 -> min 1.8R = 106.54; OB at 106.6 qualifies for B ...
+    ob = _ob(lx.BEAR, 106.6, 107.5)
+    [pb] = _plans_b(_lux(extra_obs=[ob]))
+    assert pb.tp1 == 106.6
+    # ... but not for A (risk 4.5 -> 107.1)
+    assert _plans(_lux(extra_obs=[ob])) == []
+
+
+def test_unknown_sl_mode_rejected():
+    with pytest.raises(ValueError):
+        build_plans("BTC/USDT", _lux(), "BULL", TS, atr=1.0, safety=SAFETY, min_rr=1.8,
+                    sl_mode="nope")
+
+
+def test_two_variants_two_independent_tracks():
+    a = _plan()
+    b = FvgPlan(**{**a.__dict__, "sl": 94.0, "variant": "B"})
+    book = FvgShadowBook(timeout_bars=48)
+    lines = _run(book, [a, b], [_bar(1, 100, 100, 98.9, 99)])
+    assert _events(lines) == ["setup+", "setup+", "filled", "filled"]
+    assert any(" v=A " in ln for ln in lines) and any(" v=B " in ln for ln in lines)
+    # low 94.4: A stopped (94.5), B (94.0) still alive
+    lines = _run(book, [], [_bar(2, 99, 99, 94.4, 95)])
+    assert _events(lines) == ["exit"] and " v=A " in lines[0]
+    lines = _run(book, [], [_bar(3, 95, 95, 93.9, 94)])
+    assert _events(lines) == ["exit"] and " v=B " in lines[0]
+
+
+def test_every_line_carries_variant_tag():
+    book = FvgShadowBook(timeout_bars=2)
+    lines = _run(book, [_plan()], [_bar(i, 100, 101, 99.5, 100) for i in (1, 2, 3)])
+    assert lines and all(" v=A " in ln for ln in lines)

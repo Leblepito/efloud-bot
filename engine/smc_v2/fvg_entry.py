@@ -22,9 +22,16 @@ from engine.smc_v2.zones import ZoneSpec
 
 log = logging.getLogger("efloud.safe_orch")
 
-# Round trip cost as a fraction of notional: maker limit entry (0.02 %) + taker
-# stop exit (0.05 %). Conservative for TP exits, which are maker.
-ROUNDTRIP_COST_PCT = 0.0007
+# Canonical NET cost (ADR-0011), percent units like config `backtest:`. Slippage
+# defaults are copied from backtest/slippage.py SlippageConfig (importing the
+# backtest package from engine is heavy); tests/engine/test_fvg_entry.py pins parity.
+DEFAULT_COMMISSION_PCT = 0.04      # per leg, entry counted as taker (conservative)
+DEFAULT_FUNDING_PCT_PER_8H = 0.01
+DEFAULT_SL_SLIP_PCT = 0.10         # SL and BE fills
+DEFAULT_EXIT_SLIP_PCT = 0.05       # TP1 / TP2 fills; limit entry has no slippage
+# SL modes -> variant tag: A = calc_sl (OB anchor +- ATR band), B = operator SL
+# (breaking OB far wick +- sl_pct, STRATEGY_INTENT step 6).
+SL_VARIANTS = {"atr": "A", "ob_pct": "B"}
 # The FVG must come from the displacement that made the break.
 FVG_AFTER_BREAK_BARS = 2
 # TP2 must sit at least this many R beyond TP1, else it is a second TP1.
@@ -50,10 +57,11 @@ class FvgPlan:
     ob: Tuple[float, float]
     bias: str
     trigger: str              # e.g. "internal-BOS"
+    variant: str = "A"        # A = atr SL, B = ob_pct SL
 
     @property
     def key(self) -> tuple:
-        return (self.symbol, self.direction, self.break_ts, self.fvg_ts)
+        return (self.symbol, self.direction, self.break_ts, self.fvg_ts, self.variant)
 
 
 def _pick_fvg(lux: lx.LuxResult, brk: lx.LuxBreak) -> Optional[lx.LuxFVG]:
@@ -97,12 +105,16 @@ def _tp2(direction: str, tp1: float, risk: float, lux: lx.LuxResult,
 
 def build_plans(symbol: str, lux: lx.LuxResult, bias: str, bar_ts: Sequence[int],
                 atr: float, safety, min_rr: float, wick_buffer_r: float = 0.0,
-                slack_bars: int = 1) -> List[FvgPlan]:
+                slack_bars: int = 1, sl_mode: str = "atr",
+                sl_pct: float = 0.002) -> List[FvgPlan]:
     """Plans that became known on the newest closed bar(s) of ``bar_ts``.
 
     Only fresh plans are returned, so a later FVG mitigation cannot filter the
     history (no survivorship) and a restart does not backfill old setups.
+    ``sl_mode`` "atr" = calc_sl (variant A); "ob_pct" = OB far wick -/+ ``sl_pct`` (variant B).
     """
+    if sl_mode not in SL_VARIANTS:
+        raise ValueError(f"unknown sl_mode {sl_mode!r}")
     if bias not in (lx.BULL, lx.BEAR) or not bar_ts:
         return []
     newest = len(bar_ts) - 1
@@ -120,12 +132,16 @@ def build_plans(symbol: str, lux: lx.LuxResult, bias: str, bar_ts: Sequence[int]
         direction = "LONG" if bias == lx.BULL else "SHORT"
         entry = fvg.top if direction == "LONG" else fvg.bot
         anchor = ob.bot if direction == "LONG" else ob.top
-        try:
-            sl = calc_sl(direction, entry, ZoneSpec(low=fvg.bot, high=fvg.top, source="HTF_FVG"),
-                         anchor, atr, safety)
-        except SLTooFarError:
-            continue
-        risk = abs(entry - sl)
+        if sl_mode == "ob_pct":
+            sl = anchor * (1 - sl_pct) if direction == "LONG" else anchor * (1 + sl_pct)
+            risk = (entry - sl) if direction == "LONG" else (sl - entry)
+        else:
+            try:
+                sl = calc_sl(direction, entry, ZoneSpec(low=fvg.bot, high=fvg.top, source="HTF_FVG"),
+                             anchor, atr, safety)
+            except SLTooFarError:
+                continue
+            risk = abs(entry - sl)
         if risk <= 0:
             continue
         t1 = _tp1(direction, entry, risk, lux, min_rr)
@@ -139,6 +155,7 @@ def build_plans(symbol: str, lux: lx.LuxResult, bias: str, bar_ts: Sequence[int]
             tp2=None if tp2 is None else float(tp2), tp1_src=t1[1], tp2_src=tp2_src,
             fvg=(float(fvg.bot), float(fvg.top)), ob=(float(ob.bot), float(ob.top)),
             bias=bias, trigger=f"{'internal' if brk.internal else 'swing'}-{brk.kind}",
+            variant=SL_VARIANTS[sl_mode],
         ))
     return out
 
@@ -150,13 +167,17 @@ class _Track:
     state: str = "pending"    # pending | filled | tp1
     bars_waited: int = 0
     realized_r: float = 0.0   # R already booked by the TP1 half
+    fill_ts: int = 0          # open ts of the fill bar (funding clock start)
 
 
 @dataclass
 class FvgShadowBook:
-    """Simulates the plans on closed bars. In memory; one open plan per (symbol, direction)."""
+    """Simulates the plans on closed bars. In memory; one open plan per (symbol, direction, variant)."""
     timeout_bars: int = 48
-    cost_pct: float = ROUNDTRIP_COST_PCT
+    commission_pct: float = DEFAULT_COMMISSION_PCT
+    funding_pct_per_8h: float = DEFAULT_FUNDING_PCT_PER_8H
+    sl_slip_pct: float = DEFAULT_SL_SLIP_PCT
+    exit_slip_pct: float = DEFAULT_EXIT_SLIP_PCT
     _open: Dict[tuple, _Track] = field(default_factory=dict)
     _seen: set = field(default_factory=set)
 
@@ -170,9 +191,9 @@ class FvgShadowBook:
                 # older than this one can never come back
                 self._seen = {k for k in self._seen if k[2] >= p.break_ts - 86_400_000}
             self._seen.add(p.key)        # a plan skipped for a busy key stays skipped
-            if (p.symbol, p.direction) in self._open:
+            if (p.symbol, p.direction, p.variant) in self._open:
                 continue
-            self._open[(p.symbol, p.direction)] = _Track(plan=p, last_ts=p.known_ts)
+            self._open[(p.symbol, p.direction, p.variant)] = _Track(plan=p, last_ts=p.known_ts)
             lines.append(self._fmt("setup+", p,
                                    f"entry={p.entry:.8g} sl={p.sl:.8g} tp1={p.tp1:.8g}({p.tp1_src}) "
                                    f"tp2={p.tp2 if p.tp2 is None else f'{p.tp2:.8g}'}({p.tp2_src}) "
@@ -194,13 +215,22 @@ class FvgShadowBook:
 
     @staticmethod
     def _fmt(event: str, p: FvgPlan, rest: str) -> str:
-        return f"[fvg shadow] {event} {p.symbol} {p.direction} {rest}"
+        return f"[fvg shadow] {event} {p.symbol} {p.direction} v={p.variant} {rest}"
 
-    def _exit(self, tr: _Track, reason: str, gross_r: float, lines: List[str]) -> bool:
+    def _cost_pct(self, tr: _Track, reason: str, exit_ts: int) -> float:
+        """Canonical round-trip cost in percent of entry notional (ADR-0011)."""
+        stop_slip = self.sl_slip_pct if reason in ("SL", "BE") else self.exit_slip_pct
+        # after TP1 half the position left at a TP; only the other half takes `reason`
+        slip = (0.5 * self.exit_slip_pct + 0.5 * stop_slip) if tr.state == "tp1" else stop_slip
+        hours = max(0, exit_ts - tr.fill_ts) / 3_600_000
+        return 2 * self.commission_pct + slip + self.funding_pct_per_8h * hours / 8
+
+    def _exit(self, tr: _Track, reason: str, gross_r: float, exit_ts: int, lines: List[str]) -> bool:
         p = tr.plan
-        net_r = gross_r - self.cost_pct * p.entry / abs(p.entry - p.sl)
+        cost_r = self._cost_pct(tr, reason, exit_ts) / 100.0 * p.entry / abs(p.entry - p.sl)
         lines.append(self._fmt("exit", p, f"reason={reason} gross_r={gross_r:+.2f} "
-                                          f"net_r={net_r:+.2f} entry={p.entry:.8g}"))
+                                          f"net_r={gross_r - cost_r:+.2f} cost_r={cost_r:.2f} "
+                                          f"entry={p.entry:.8g}"))
         return True
 
     def _walk(self, tr: _Track, bar: Bar, lines: List[str]) -> bool:
@@ -219,10 +249,11 @@ class FvgShadowBook:
         if tr.state == "pending":
             if reached(p.entry, favourable=False):
                 tr.state = "filled"
+                tr.fill_ts = bar[0]
                 lines.append(self._fmt("filled", p, f"entry={p.entry:.8g} bar_ts={bar[0]}"))
                 # fill bar: intrabar order unknown -> only the stop counts
                 if reached(p.sl, favourable=False):
-                    return self._exit(tr, "SL", -1.0, lines)
+                    return self._exit(tr, "SL", -1.0, bar[0], lines)
                 return False
             if reached(p.tp1, favourable=True):
                 lines.append(self._fmt("cancelled", p, f"entry={p.entry:.8g} reason=ran_away"))
@@ -235,23 +266,23 @@ class FvgShadowBook:
 
         if tr.state == "filled":
             if reached(p.sl, favourable=False):
-                return self._exit(tr, "SL", -1.0, lines)
+                return self._exit(tr, "SL", -1.0, bar[0], lines)
             if not reached(p.tp1, favourable=True):
                 return False
             if p.tp2 is None:
-                return self._exit(tr, "TP1", r_at(p.tp1), lines)
+                return self._exit(tr, "TP1", r_at(p.tp1), bar[0], lines)
             tr.state = "tp1"
             tr.realized_r = 0.5 * r_at(p.tp1)
             # same bar: intrabar order unknown -> the break-even stop counts first
             if reached(p.entry, favourable=False):
-                return self._exit(tr, "BE", tr.realized_r, lines)
+                return self._exit(tr, "BE", tr.realized_r, bar[0], lines)
             if reached(p.tp2, favourable=True):
-                return self._exit(tr, "TP2", tr.realized_r + 0.5 * r_at(p.tp2), lines)
+                return self._exit(tr, "TP2", tr.realized_r + 0.5 * r_at(p.tp2), bar[0], lines)
             return False
 
         # tp1: half closed, stop at break-even (mirrors lifecycle.py partial close)
         if reached(p.entry, favourable=False):
-            return self._exit(tr, "BE", tr.realized_r, lines)
+            return self._exit(tr, "BE", tr.realized_r, bar[0], lines)
         if reached(p.tp2, favourable=True):
-            return self._exit(tr, "TP2", tr.realized_r + 0.5 * r_at(p.tp2), lines)
+            return self._exit(tr, "TP2", tr.realized_r + 0.5 * r_at(p.tp2), bar[0], lines)
         return False

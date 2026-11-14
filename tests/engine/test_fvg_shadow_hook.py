@@ -62,3 +62,60 @@ def test_errors_never_propagate(monkeypatch, caplog):
     with caplog.at_level("WARNING", logger="efloud.safe_orch"):
         _orch("shadow")._fvg_shadow_step("BTC/USDT", _df(), _df(), None, {})
     assert any("[fvg shadow] error" in r.message for r in caplog.records)
+
+
+def _capture_builds(monkeypatch):
+    calls = []
+
+    def fake_build(symbol, lux, bias, bar_ts, atr, safety, min_rr, wick_buffer_r=0.0, **kw):
+        calls.append(kw.get("sl_mode", "atr"))
+        return []
+
+    monkeypatch.setattr(fe, "build_plans", fake_build)
+    return calls
+
+
+def _step(orch):
+    from engine.smc_v2 import luxalgo as lx
+    orch._fvg_shadow_step("BTC/USDT", _df(), _df(40), lx.analyze(_df()), {})
+
+
+def test_absent_variants_means_only_a(monkeypatch):
+    calls = _capture_builds(monkeypatch)
+    _step(_orch("shadow"))
+    assert calls == ["atr"]
+
+
+def test_variants_list_builds_both(monkeypatch):
+    calls = _capture_builds(monkeypatch)
+    orch = _orch("shadow")
+    orch.config["smc_v2"]["fvg_entry_sl_variants"] = ["atr", "ob_pct"]
+    _step(orch)
+    assert calls == ["atr", "ob_pct"]
+
+
+def test_unknown_variant_ignored_with_warning(monkeypatch, caplog):
+    calls = _capture_builds(monkeypatch)
+    orch = _orch("shadow")
+    orch.config["smc_v2"]["fvg_entry_sl_variants"] = ["atr", "bogus"]
+    with caplog.at_level("WARNING", logger="efloud.safe_orch"):
+        _step(orch)
+    assert calls == ["atr"]
+    assert any("bogus" in r.message for r in caplog.records)
+
+
+def test_book_gets_backtest_cost_config(monkeypatch):
+    _capture_builds(monkeypatch)
+    orch = _orch("shadow")
+    orch.config["backtest"] = {"commission_pct": 0.05, "funding_pct_per_8h": 0.02}
+    _step(orch)
+    assert orch._fvg_shadow_book.commission_pct == 0.05
+    assert orch._fvg_shadow_book.funding_pct_per_8h == 0.02
+
+
+def test_book_cost_defaults_without_backtest_block(monkeypatch):
+    _capture_builds(monkeypatch)
+    orch = _orch("shadow")
+    _step(orch)
+    book = orch._fvg_shadow_book
+    assert (book.commission_pct, book.funding_pct_per_8h) == (0.04, 0.01)
