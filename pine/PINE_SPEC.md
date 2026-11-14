@@ -9,6 +9,20 @@
 Tüm satır referansları doğrulanmıştır (`engine/smc_v2/*.py`, `engine/smc.py`,
 `configs/config.phase2_1k.yaml` — üretimde çalışan config).
 
+> **Durum tablosu (2026-11-14, ECC denetimi).** Bu dosya katmanlı büyüdü; hangi
+> bölümün bugün geçerli olduğu aşağıda. **§0–§14 TARİHSEL**: v2.1 port spec'idir ve
+> 2026-11-01'den beri canlı olan v2 LuxAlgo modunu (`configs/config.phase2_1k.yaml:187-188`)
+> yansıtmaz.
+>
+> | Bölüm | Dosya(lar) | Durum |
+> |---|---|---|
+> | §0–§13 | `pine/efloud_signals.pine`, `pine/efloud_strategy.pine` (v2.1 port) | TARİHSEL — korunur, ezilmez; canlı motoru temsil etmez |
+> | §14 | — | SUPERSEDED (Faz B/C tamamlandı) |
+> | Ek A (A.0–A.9) | `pine/efloud_signals_v1.pine`, `pine/efloud_strategy_v1.pine` | ARŞİV — v1 girişi v2 sembollerinde susturulmuş (`engine/safe_orchestrator.py:1486`) |
+> | §15–§18 | değişiklik kayıtları (v2.1 port) | TARİHSEL |
+> | §19 | — | SUPERSEDED — canlı TP yolu `tp_mode: luxalgo` (`configs/config.phase2_1k.yaml:204`) |
+> | §20–§21 | `pine/lab/*.pine` → `pine/efloud_lab.pine`, `pine/efloud_lab_strategy.pine` | GÜNCEL — ürün kaynağı (ADR-0005); baseline parity **GATE FAIL ×3** (§20) |
+
 ---
 
 ## 0. V1 vs V2 — neden bu spec V1'den farklı
@@ -331,6 +345,20 @@ Değişmez kural: TP2 > TP1 (LONG) / TP2 < TP1 (SHORT) kesin, veya TP2 = na → 
    (runner) pozisyonun stop'u entry'e çekilir. V1 spec'inde yoktu; risk yönetimi iyileştirmesi.
    Sadece strateji versiyonunda (indikatör pozisyon yaşam döngüsü tutmaz).
 
+### 12.1 Tuzaklar (TradingView runtime)
+
+- **RE10045 — derleme PASS ≠ runtime PASS.** Dokümante edilmemiş TradingView runtime
+  hatası; script 0 hatayla derlenir ama grafikte kırmızı "!" verir, hiçbir şey çizilmez.
+  İki örnek: Wave-1'de UDF'ler + koleksiyonlar tam-script bağlamında birlikteyken
+  (`pine/u2algo/WAVE1_SPEC.md` §9b (`:220`), by-pass: inline, UDF yok); lab T2 kopya denetiminde
+  fonksiyon-lokal iki paralel `array<int>` + `indexof/get` (`dcdaf4a`, çözüm: tek
+  `map<int,int>`; bkz. §21 sonu). Kural: paralel lokal dizilerden kaçın, tek map/koleksiyon.
+- **Koşullu çağrılan UDF içinde `x[off]`** bar geçmişini değil fonksiyonun kendi çağrı
+  geçmişini okur → lab OB taraması yanlış barlara düşüyordu; çözüm global halka tamponlar
+  `bufHi/bufLo/bufOpen/bufClose/bufTime` (`e5589bd`; §20 son madde, §21).
+- Derleme temizse bile script'i grafiğe ekleyip runtime hatası olmadığını ve
+  çizim/tabloların geldiğini doğrula (bkz. `skills/tradingview-mcp/SKILL.md`).
+
 ---
 
 ## 13. İndikatör ↔ Strateji senkronu (ZORUNLU)
@@ -345,6 +373,9 @@ Değişmez kural: TP2 > TP1 (LONG) / TP2 < TP1 (SHORT) kesin, veya TP2 = na → 
 ---
 
 ## 14. Onay sonrası sıradaki adım
+
+> **SUPERSEDED (2026-11-14):** Faz B/C tamamlandı; güncel Pine işi Pine Lab'dir (§20).
+> Aşağıdaki metin tarihsel kayıt olarak bırakıldı.
 
 Bu spec onaylandıktan sonra **Faz B**: `pine/efloud_signals.pine` (indikatör)
 üretilir → TradingView MCP ile enjekte/derle/sıfır-hata → `pine_save`.
@@ -603,6 +634,11 @@ Referans: `engine/smc_v2/sl_calc.py`, `engine/safe_orchestrator.py:1900-1903/196
 
 ## §19 — 2026-07-11 Python Değişiklikleri (Pine'a PORT BEKLİYOR)
 
+> **SUPERSEDED (2026-11-14):** madde 1'deki `smc_tp_targeting` portu artık gerekli değil —
+> canlı TP yolu `smc_v2.luxalgo.tp_mode: luxalgo` (`configs/config.phase2_1k.yaml:204`) ve
+> Pine karşılığı Pine Lab'dedir (§20). Madde 2 (F10) eski strategy backtest'lerinin geçersizliği
+> notu olarak geçerli kalır.
+
 1. **v3.2 Entry-anchored SMC TP targeting** (`engine/signals.py`,
    spec `docs/superpowers/specs/2026-07-11-tp-entry-anchored-targeting-and-bugfix-batch-design.md`):
    `smc_tp_targeting` blok havuzuna iki kaynak eklendi — (a) `RANGE_EQ`:
@@ -631,6 +667,14 @@ Tasarım: `docs/superpowers/specs/2026-11-05-pine-lab-design.md`. Plan: `docs/su
 - Bilinçli sapmalar: (1) Pine bar kapanışında 3 geçiş koşar (orchestrator'ın bar içi çoklu tick'i); (2) `liveWindowBars=750` havuzları ve FVG eşiğini canlı pencereye kırpar, pivotlar tam geçmişten gelir; (3) canlı B1 (kapı atlaması) ve B2 (float red) kopyalanmaz — ikisi de canlıda düzeltildi (B1: PR #292, B2: PR #293); harness `python_guard_rejected` sütunu B2 regresyon bekçisi olarak kalır (beklenen 0); (4) breaker'lar, entry drift, funding, çoklu sembol margin modellenmez.
 - Toggle'lar (default KAPALI): T1 `biasTf/biasMode/macroTf`, T2 `obInvalidate`, T3 `oteEntry` (0.705 limit; Python'da limit yolu yok, parity dışı), T4 `sweepSl`, T5 `freshConfirm`, T6 `obDisplacement`, T7 `tpSweptFilter`, T8 `emitOnce`. Kazanma kriteri spec §6.3; sonuçlar `docs/pine-lab/`.
 - Lisans: core LuxAlgo SMC (CnB3fSph) mantığını taşır — CC BY-NC-SA 4.0. Indicator TradingView'de **açık kaynak, ticari olmayan** biçimde "u2algo Price Action" adıyla yayımlanır (LuxAlgo atfı; ücretli/davetli/korumalı sürüm yok; bkz. `docs/indicator/tradingview-publish.md`); strategy kayıtlı ama yayımlanmaz. (2026-11-06'ya kadar "private/invite-only" idi.)
+
+- **Sonuç (2026-11-06 ilk tur): baseline parity GATE FAIL ×3** — BTC eşleşme %91.3 (< %95),
+  ETH seviye farkı %12.1, SOL %8.2 (> %5) (`docs/pine-lab/2026-11-06-ilk-tur.md:169-177`).
+  Formal `GATE: PASS` alınmadı; kural gereği toggle turu (T1–T8 skorları) koşulmadı.
+- **Max-hold sapması (lab ↔ canlı):** lab strategy `maxHoldHours = 36` ile `MAX_HOLD`
+  kapanışı uygular (`pine/lab/tail_strategy.pine:5,112`); canlıda süre sınırı 2026-11-08'de
+  kaldırıldı (`max_holding_hours: 0`, `configs/config.phase2_1k.yaml:407`; `59c32f3`). Lab
+  strategy sonuçları canlıda olmayan bir çıkış yolu içerir; PF/WR bu farkla okunmalı.
 
 **Review notları (2026-11-05 uygulama turu)**
 

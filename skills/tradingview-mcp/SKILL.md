@@ -66,6 +66,25 @@ Add to `~/.claude/settings.json` (or the project's `.claude/settings.local.json`
 `tv_health_check` → `pine_set_source` → `pine_smart_compile` → `pine_get_errors`
 → fix → recompile until zero errors → `pine_save` (asks). Rules in `pine-engineer`.
 
+## Pine runtime pitfalls (compile PASS is not runtime PASS)
+
+These bit the project three times; check them before calling a Pine change done.
+
+- **RE10045 (undocumented TradingView runtime error):** a script can compile with
+  zero errors and still fail at runtime (red "!" on the chart, nothing drawn).
+  Seen with user-defined functions + collections: Wave-1's UDFs together in the
+  full script (`pine/u2algo/WAVE1_SPEC.md` §9b (`:220`), bypass = inline, no UDFs) and the
+  lab T2 copy guard as two lock-step function-local `array<int>` with
+  `indexof`/`get` (`dcdaf4a`, fix = one `map<int,int>`; `pine/PINE_SPEC.md` §21).
+  Avoid parallel local arrays; prefer one map / one collection.
+- **`x[off]` inside a conditionally called UDF** reads that function's own call
+  history, not the bar history: the lab OB scan landed on wrong bars until it
+  moved to global ring buffers `bufHi/bufLo/bufOpen/bufClose/bufTime` (`e5589bd`;
+  `pine/PINE_SPEC.md` §20-§21).
+- After `pine_smart_compile` is clean, add the script to a chart and confirm it
+  renders (no runtime error, tables/drawings present, e.g. `data_get_pine_tables`)
+  before `pine_save`.
+
 ## LuxAlgo parity check
 
 Goal: show that `engine/smc_v2/luxalgo.py` reproduces the indicator on the same bars.

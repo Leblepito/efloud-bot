@@ -109,6 +109,14 @@ Rules (from `scripts/content_compliance.py`):
 
 ## Common cron patterns
 
+> Note (2026-11): the repo defines no scheduler for this pipeline (no
+> `daily_social_run` service or cron in compose). The default jobs path is a
+> container path (`/app/data/content_jobs`, `scripts/daily_social_run.py:192-193`)
+> and the `efloud_content_jobs` volume is mounted only into `efloud-bot`
+> (`docker-compose.prod.yml:26`); `/app/...` does not exist on the host. The
+> examples below do not work as-is on the host: run them inside a container, or
+> pass `--jobs` / `EFLOUD_CONTENT_JOBS_PATH` and a host log path.
+
 ```bash
 # Generate charts + clips + bundles (safe — nothing published):
 0 * * * * cd /opt/efloud-bot && python -m scripts.daily_social_run --date "$(date -u +%F)" >> /app/logs/social.log 2>&1
@@ -120,7 +128,7 @@ Rules (from `scripts/content_compliance.py`):
 ## Testing
 
 ```bash
-# All social pipeline tests (229 tests):
+# All social pipeline tests (count: run with --collect-only; no fixed number is maintained here):
 python -m pytest tests/test_social_publishing.py tests/test_lane_g_publish.py tests/test_higgsfield_adapter.py --import-mode=importlib -q
 
 # Full project (exclude vendored repos):
@@ -131,5 +139,5 @@ python -m pytest --ignore=external_repos --ignore=graphify-out --import-mode=imp
 
 - `HERMES.md` — operator guide (deploy, config, incident response)
 - `CLAUDE.md` — project memory, architecture, rules
-- `pine/publish/PUBLISH_efloud_signals.md` — Pine Script publish steps
+- `docs/indicator/tradingview-publish.md` — current Pine publish steps (`pine/publish/PUBLISH_efloud_signals.md` is SUPERSEDED / archive)
 - `docs/schemas/content_job-1.0.0.json` — Lane A event schema

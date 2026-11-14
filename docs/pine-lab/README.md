@@ -2,6 +2,21 @@
 
 Spec: `../superpowers/specs/2026-11-05-pine-lab-design.md` · Plan: `../superpowers/plans/2026-11-05-pine-lab.md`
 
+## SON DURUM (2026-11-14)
+
+- **Ürün = `pine/lab/*`** → `pine/efloud_lab.pine` (indicator, açık kaynak yayın) +
+  `pine/efloud_lab_strategy.pine` (parity artefaktı, yayımlanmaz). Eski çiftler
+  (`pine/efloud_signals*.pine`, `pine/efloud_strategy*.pine`, `pine/u2algo/`) arşivdir.
+- **Baseline parity: GATE FAIL ×3** — BTC eşleşme %91.3 (< %95), ETH seviye farkı %12.1,
+  SOL %8.2 (> %5) (`docs/pine-lab/2026-11-06-ilk-tur.md:169-177`). `GATE: PASS` hiç alınmadı;
+  aşağıdaki kural gereği §3 toggle turu (T1–T8 skorları) koşulmadı.
+- Baseline lab strategy bu 128 günde üç sembolde de zararda (BTC PF 0.73, 91 işlem;
+  `docs/pine-lab/2026-11-06-ilk-tur.md:156,166`).
+- Lab strategy `maxHoldHours = 36` uygular; canlıda süre sınırı 2026-11-08'de kaldırıldı
+  (`configs/config.phase2_1k.yaml:407`) — bkz. `pine/PINE_SPEC.md` §20.
+- 2026-11-07'den bu yana Pine kaynaklarına (`pine/` altındaki `.pine` dosyaları) commit yok; Python tarafındaki sonraki
+  değişiklikler (max-hold kaldırma, FVG gölgesi) lab'a yansımadı.
+
 ## 1. Build ve TradingView'a yükleme
 
 ```bash

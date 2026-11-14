@@ -38,3 +38,12 @@ the SMC v2 port and must not be overwritten; product-wave scripts live under `pi
 ### Risks
 - The Pine indicator can drift from the Python engine. Mitigation: `pine/PINE_SPEC.md` and the
   `pine` runtime edges in `REGRESSION.md`.
+
+## 2026-11 notu
+
+The decision text is unchanged. The Wave-2 PF in Context (OOS 1.165) and the T-003 gate runs belong
+to the engine before the LuxAlgo mode (live since 2026-11-01, `configs/config.phase2_1k.yaml:187-188`);
+they do not describe today's engine. Today's product source is the Pine Lab (`pine/lab/*` →
+`pine/efloud_lab.pine`; `pine/PINE_SPEC.md` §20); the lab strategy is a parity artefact only and is
+not published. The lab baseline parity gate failed on 3/3 symbols
+(`docs/pine-lab/2026-11-06-ilk-tur.md:177`).

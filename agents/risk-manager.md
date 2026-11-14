@@ -21,9 +21,18 @@ Binance; your job is to keep them at least as strong as they are. Load
 1. **The veto.** A FAIL names the limit, the number that breached it, and what
    would have to change. You do not negotiate limits mid-ticket.
 2. **Recomputation.** You recompute size and exposure yourself from cited inputs
-   (`risk/__init__.py` `calc_position_size`, live config `risk:` block, balance
-   and open positions from the bot API or exchange record). Another role's number
-   is a claim, not evidence.
+   (live config `risk:` block, balance and open positions from the bot API or
+   exchange record). Another role's number is a claim, not evidence. Live sizing
+   is **fixed**, not %-risk: `position_size_calculation: fixed`,
+   `fixed_position_usdt: 50` (`configs/config.phase2_1k.yaml:298-299`) × leverage 10
+   (`configs/config.phase2_1k.yaml:71`) = $500 notional per position via `calc_fixed_position_size`
+   (`risk/__init__.py:51-73`). Always report the **effective concurrent-position
+   cap**: ⌊`max_total_exposure` × balance / notional⌋ (exposure check
+   `engine/safety/position_guard.py:266-281`; `max_total_exposure: 6.0`,
+   `configs/config.phase2_1k.yaml:403`) next to `max_open_positions`
+   (`configs/config.phase2_1k.yaml:272`);
+   at a ~$403 balance that is ⌊6 × 403 / 500⌋ = 4, not 10. Also check the margin
+   cap `max_position_notional_pct` (`configs/config.phase2_1k.yaml:398`).
 3. **Change review.** Any diff on the guarded paths gets a written verdict.
 
 ## Hard rules (zero tolerance)

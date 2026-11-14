@@ -27,7 +27,9 @@ are reading this runbook, the bot is in suspension and you must use manual recov
 The dashboard's "Start" button (POST `/api/bot/start`) returns success even during suspension —
 because the guard short-circuits cleanly without setting `last_error`. **A successful click
 that doesn't actually resume trading means suspension is active.** Verify by:
-- `curl -s https://bot.ualgotrade.com/healthz | python -m json.tool` → look for `"status": "suspended"`
+- `curl -s https://2-28-139-82.nip.io/healthz | python -m json.tool` → look for `"status": "suspended"`
+  (host = `BOT_HEALTHZ` in `scripts/canary.py:25`; `bot.ualgotrade.com` no longer answers, 2026-11-14.
+  From the VPS: `docker exec efloud-bot python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=5).read().decode())"`)
 - `docker compose -f docker-compose.prod.yml logs efloud-bot --tail 50 | grep "CRASH LOOP DETECTED"`
 
 If you see suspension, the button doesn't work — proceed with manual recovery below.
@@ -89,7 +91,7 @@ After ~30s:
 ### 5. Confirm
 
 ```bash
-curl -s https://bot.ualgotrade.com/healthz | python -m json.tool
+curl -s https://2-28-139-82.nip.io/healthz | python -m json.tool   # host: scripts/canary.py:25
 ```
 
 Expected: `status: "ok"`, `failures: []`, `crash_count: 0`.
