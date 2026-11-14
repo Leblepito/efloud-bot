@@ -375,3 +375,106 @@ def test_tp_wick_buffer_and_fib_ext_tp2():
                         swing_high_pivots=[(1, 106.0)])
     tp1, tp2, tags = lx.tp_targets("LONG", entry=100, sl=98, lux=res2, min_rr=2.0)
     assert tp1 == 106.0 and tags["tp2_source"] in ("LUX_TRAIL_TOP", "FIB_EXT")
+
+
+# ── R2: research-only OB mitigation filter (default = live behaviour) ────
+
+def _mitigation_fixture():
+    res = lx.analyze(_down_then_up(), CFG)
+    mit = [b for b in res.breaks if b.order_block is not None and b.order_block.mitigated]
+    unm = [b for b in res.breaks if b.order_block is not None and not b.order_block.mitigated]
+    return res, mit, unm
+
+
+def _zones_of(cands):
+    return sorted((c.trigger_bar_ts, c.target_zone.low, c.target_zone.high) for c in cands)
+
+
+def _expected_zones(breaks, direction_bias):
+    return sorted((int(pd.Timestamp(b.ts).timestamp() * 1000),
+                   b.order_block.bot, b.order_block.top)
+                  for b in breaks if b.direction == direction_bias)
+
+
+def test_ob_mitigation_filter_default_excludes_mitigated_and_is_unchanged():
+    res, mit, unm = _mitigation_fixture()
+    assert mit and unm, "fixture needs both mitigated and unmitigated OBs"
+    kw = dict(require_premium_discount=False)
+    base = lx.generate_candidates("X", res, "BULL", 0, **kw)
+    explicit = lx.generate_candidates("X", res, "BULL", 0,
+                                      ob_mitigation_filter="unmitigated", **kw)
+    assert _zones_of(base) == _expected_zones(unm, "BULL")
+    assert [c.reasons for c in base] == [c.reasons for c in explicit]
+    assert _zones_of(base) == _zones_of(explicit)
+    assert not any("mitigat" in r.lower() for c in base for r in c.reasons)
+    # live drops the mitigated-OB (BEAR) breaks entirely
+    assert lx.generate_candidates("X", res, "BEAR", 0, **kw) == []
+
+
+def test_ob_mitigation_filter_only_mitigated_keeps_just_mitigated():
+    res, mit, _ = _mitigation_fixture()
+    kw = dict(require_premium_discount=False)
+    got = lx.generate_candidates("X", res, "BEAR", 0,
+                                 ob_mitigation_filter="only_mitigated", **kw)
+    assert got
+    assert _zones_of(got) == _expected_zones(mit, "BEAR")
+    assert all(any("only_mitigated" in r for r in c.reasons) for c in got)
+    assert all(c.direction == "SHORT" for c in got)
+    # BULL breaks have unmitigated OBs -> nothing under only_mitigated
+    assert lx.generate_candidates("X", res, "BULL", 0,
+                                  ob_mitigation_filter="only_mitigated", **kw) == []
+
+
+def test_ob_mitigation_filter_only_mitigated_still_applies_other_rules():
+    res, mit, _ = _mitigation_fixture()
+    eq = res.zones.equilibrium
+    kw = dict(require_premium_discount=False, ob_mitigation_filter="only_mitigated")
+    assert lx.generate_candidates("X", res, "BEAR", 0, **kw)
+    # SHORT only from the premium half: the fixture's mitigated OBs sit below eq
+    assert all(c.target_zone.high < eq for c in lx.generate_candidates("X", res, "BEAR", 0, **kw))
+    assert lx.generate_candidates("X", res, "BEAR", 0, require_premium_discount=True,
+                                  ob_mitigation_filter="only_mitigated") == []
+    assert lx.generate_candidates("X", res, "UNDEF", 0, **kw) == []
+    assert lx.generate_candidates("X", res, "BEAR", 0, allowed_kinds=("CHoCH",), **kw) == []
+    assert lx.generate_candidates("X", res, "BEAR", 0, min_confluence=999, **kw) == []
+    assert lx.generate_candidates("X", res, "BEAR", 0, use_swing=False, **kw) == []
+    assert lx.generate_candidates("X", res, "BEAR", 10 ** 6, **kw) == []
+
+
+def test_ob_mitigation_filter_skips_breaks_without_ob():
+    brk = lx.LuxBreak(kind="BOS", direction="BULL", level=100.0, pivot_idx=2, idx=5,
+                      ts="2026-01-01T00:00:00Z", internal=False, order_block=None)
+    res = lx.LuxResult("BULL", "BULL", [brk], [], [], [], [], None, None, None)
+    assert lx.generate_candidates("X", res, "BULL", 0,
+                                  ob_mitigation_filter="only_mitigated") == []
+
+
+@pytest.mark.parametrize("bad", ["", "mitigated", "ONLY_MITIGATED", None, 1])
+def test_ob_mitigation_filter_invalid_value_raises(bad):
+    res = lx.analyze(_down_then_up(), CFG)
+    with pytest.raises(ValueError):
+        lx.generate_candidates("X", res, "BULL", 0, ob_mitigation_filter=bad)
+
+
+def test_orchestrator_ob_mitigation_filter_config_resolution(caplog):
+    import logging
+    from engine.safe_orchestrator import SafeOrchestrator
+    f = SafeOrchestrator._lux_ob_mitigation_filter
+    with caplog.at_level(logging.WARNING, logger="efloud.safe_orch"):
+        assert f({}) == "unmitigated"
+        assert f({"ob_mitigation_filter": "unmitigated"}) == "unmitigated"
+        assert f({"ob_mitigation_filter": "only_mitigated"}) == "only_mitigated"
+        assert not caplog.records
+        assert f({"ob_mitigation_filter": "bogus"}) == "unmitigated"
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelno == logging.WARNING
+    assert "bogus" in caplog.records[0].getMessage()
+
+
+def test_orchestrator_call_site_passes_filter_to_generate_candidates():
+    import inspect
+    from engine.safe_orchestrator import SafeOrchestrator
+    src = inspect.getsource(SafeOrchestrator)
+    i = src.index("_lx.generate_candidates(")
+    call = src[i:src.index("self._lux_log_scan(symbol", i)]
+    assert "ob_mitigation_filter=self._lux_ob_mitigation_filter(_lux_cfg)" in call

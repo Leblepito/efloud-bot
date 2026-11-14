@@ -1267,6 +1267,7 @@ class SafeOrchestrator:
                             _lux_cfg.get("require_premium_discount", True)),
                         allowed_kinds=tuple(_lux_cfg.get("kinds", ["CHoCH", "BOS"])),
                         min_confluence=int(_lux_cfg.get("min_confluence", 0)),
+                        ob_mitigation_filter=self._lux_ob_mitigation_filter(_lux_cfg),
                     )
                     self._lux_log_scan(symbol, _htf_bias, _lux_ltf, _lux_cands)
                     # T-20261114-01: FVG giriş GÖLGESİ (4h bias) — emir yok, default off.
@@ -2577,6 +2578,16 @@ class SafeOrchestrator:
         """v2 entry held by a run_cycle no-new-entry gate (stale/watch_only/balance)."""
         log.info(f"[v2 hold] {cand.symbol} {cand.direction}: entry held "
                  f"({', '.join(reasons)}) — no order, setup kept in {cand.state}")
+
+    @staticmethod
+    def _lux_ob_mitigation_filter(lux_cfg) -> str:
+        """Research-only knob (smc_v2.luxalgo.ob_mitigation_filter); absent or
+        unknown value → "unmitigated" (= live behaviour, fail closed)."""
+        val = (lux_cfg or {}).get("ob_mitigation_filter", "unmitigated")
+        if val in ("unmitigated", "only_mitigated"):
+            return val
+        log.warning("[lux] unknown ob_mitigation_filter=%r -> falling back to 'unmitigated'", val)
+        return "unmitigated"
 
     def _lux_log_scan(self, symbol, htf_bias, lux, cands) -> None:
         """[lux] scan satırı — yalnız özet DEĞİŞTİĞİNDE basılır (30 sn'lik

@@ -512,15 +512,23 @@ def generate_candidates(
     require_premium_discount: bool = True,
     allowed_kinds=("CHoCH", "BOS"),
     min_confluence: int = 0,
+    ob_mitigation_filter: str = "unmitigated",
 ):
     """Kırılım → OB retest SetupCandidate'leri (state=AWAITING_PULLBACK).
 
     target_zone = kırılımın yarattığı OB (source="OB"), htf_swing_anchor =
     OB'nin uç fiyatı; swing OB'de Strong Low/High ile birleştirilir.
+
+    ob_mitigation_filter (YALNIZ araştırma; canlı = "unmitigated"):
+    "unmitigated" mitigated OB'leri eler (canlı davranış); "only_mitigated"
+    yalnız mitigated OB'li kırılımları tutar. Başka değer → ValueError.
     """
     from engine.smc_v2.setup_state import SetupCandidate
     from engine.smc_v2.zones import ZoneSpec
 
+    if ob_mitigation_filter not in ("unmitigated", "only_mitigated"):
+        raise ValueError(f"ob_mitigation_filter invalid: {ob_mitigation_filter!r}")
+    only_mitigated = ob_mitigation_filter == "only_mitigated"
     if htf_bias not in (BULL, BEAR):
         return []
     out = []
@@ -534,7 +542,7 @@ def generate_candidates(
         if not brk.internal and not use_swing:
             continue
         ob = brk.order_block
-        if ob is None or ob.mitigated:
+        if ob is None or ob.mitigated != only_mitigated:
             continue
         direction = "LONG" if brk.direction == BULL else "SHORT"
         z = lux.zones
@@ -554,6 +562,11 @@ def generate_candidates(
         except (ValueError, TypeError):
             trig_ms = 0
         scope = "internal" if brk.internal else "swing"
+        reasons = [f"LUX {scope} {brk.kind} {brk.direction} aligned with HTF {htf_bias}",
+                   f"entry from LUX {scope} OB [{ob.bot:.8g}-{ob.top:.8g}] (bar {ob.idx})",
+                   f"confluence={'+'.join(conf) if conf else 'NONE'}"]
+        if only_mitigated:
+            reasons.append("ob_mitigation_filter=only_mitigated")
         out.append(SetupCandidate(
             symbol=symbol,
             direction=direction,
@@ -565,9 +578,7 @@ def generate_candidates(
             bars_waited=0,
             state="AWAITING_PULLBACK",
             confluence_score=(10 if not brk.internal else 0) + len(conf),
-            reasons=[f"LUX {scope} {brk.kind} {brk.direction} aligned with HTF {htf_bias}",
-                     f"entry from LUX {scope} OB [{ob.bot:.8g}-{ob.top:.8g}] (bar {ob.idx})",
-                     f"confluence={'+'.join(conf) if conf else 'NONE'}"],
+            reasons=reasons,
         ))
     return out
 
