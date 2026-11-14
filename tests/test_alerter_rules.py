@@ -201,6 +201,9 @@ def test_rules_list_contains_in_scope_rules():
         "order.orphan_position",
         # T-20261108-04: informational long-hold reminder (no auto-close).
         "position.hold_age",
+        # #350 risk-ops follow-up: SL coverage unconfirmable (same SL flag).
+        "order.verify_no_read",
+        "order.algo_fetch_blind",
     }
     assert set(keys) == expected, f"got {set(keys)}"
 

@@ -22,7 +22,8 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -619,6 +620,69 @@ class SlProtectionEventRule(Rule):
         return _sl_dedup_key(self.alert_key, _sl_kind(rec) or "", rec)
 
 
+# SL-coverage blind spots (risk-ops follow-up to #350 / Ö1). When the algo-order
+# read fails, verify and reconcile both fail closed (no false close, no duplicate
+# SL) — but nobody can confirm SL/TP either. Surface it; no bot change needed.
+_RE_NO_READ = re.compile(r"^verify\.no_read_tolerated: (?P<sym>\S+) (?P<dir>LONG|SHORT)\b")
+_RECON_ALGO_FAIL = "Reconcile: algo orders fetch failed"
+
+
+@dataclass
+class VerifyNoReadRule(Rule):
+    """A new position's SL/TP could not be confirmed at all (every verify read failed)."""
+    alert_key: str = "order.verify_no_read"
+    severity: str = "WARNING"
+    dedup_window_sec: int = 60 * 60
+    ai_format: bool = False
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if not _flag_on(SL_ALERTS_ENV):
+            return None
+        m = _RE_NO_READ.match(rec.get("message", "") or "")
+        if not m:
+            return None
+        return (f"⚠️ <b>Yeni pozisyonun SL/TP'si doğrulanamadı</b>\n"
+                f"{_esc(m['sym'])} {m['dir']} · borsa emir okuması başarısız; "
+                f"reconcile okuma düzelince kontrol edecek. Borsada SL'i elle kontrol et.")
+
+    def dedup_key(self, rec: dict) -> str:
+        m = _RE_NO_READ.match(rec.get("message", "") or "")
+        return f"{self.alert_key}.{m['sym']}.{m['dir']}" if m else self.alert_key
+
+
+ALGO_STREAK_COUNT = 3
+ALGO_STREAK_WINDOW_SEC = 10 * 60
+
+
+@dataclass
+class AlgoFetchStreakRule(Rule):
+    """Reconcile's algo-order read failed >= ALGO_STREAK_COUNT times within
+    ALGO_STREAK_WINDOW_SEC (record time) → SL/TP coverage cannot be confirmed.
+    A single transient failure (≈ once a month in prod) stays silent."""
+    alert_key: str = "order.algo_fetch_blind"
+    severity: str = "CRITICAL"
+    dedup_window_sec: int = 60 * 60
+    ai_format: bool = False
+    _fails: list = field(default_factory=list)
+
+    def match_log(self, rec: dict) -> Optional[str]:
+        if not _flag_on(SL_ALERTS_ENV):
+            return None
+        if not (rec.get("message", "") or "").startswith(_RECON_ALGO_FAIL):
+            return None
+        try:
+            t = datetime.fromisoformat(str(rec.get("ts"))).timestamp()
+        except ValueError:
+            return None
+        self._fails = [x for x in self._fails if t - x < ALGO_STREAK_WINDOW_SEC] + [t]
+        if len(self._fails) < ALGO_STREAK_COUNT:
+            return None
+        return (f"🚨 <b>Borsa algo emir okuması tekrar tekrar başarısız</b>\n"
+                f"{len(self._fails)} hata / {ALGO_STREAK_WINDOW_SEC // 60} dk — bot SL/TP'nin "
+                f"borsada durduğunu doğrulayamıyor (onarım da bekliyor). Borsada açık "
+                f"pozisyonların SL'ini elle kontrol et.")
+
+
 # Orphan position (T-20261107-11). exchange.OrderManager.reconcile logs this
 # free-text WARNING on every cycle while the exchange holds a position the bot
 # does not track: "⚠️  ORPHAN POSITION DETECTED: SYM side qty=.. entry=.. upnl=.."
@@ -845,6 +909,8 @@ RULES: list[Rule] = [
     TpPlacementFailedRule(),
     SlUnprotectedRule(),
     SlProtectionEventRule(),
+    VerifyNoReadRule(),
+    AlgoFetchStreakRule(),
     OrphanPositionRule(),
     PositionHoldAgeRule(),
 ]
