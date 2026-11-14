@@ -214,6 +214,9 @@ smc_v2:
   # TP2 yön likiditesi. YALNIZ `[fvg shadow]` log satırı, emir YOK; `live` değeri kodda yok.
   # Rapor: tools/fvg_shadow_report.py. Kapatmak: off ya da satırı sil.
   fvg_entry: shadow
+  # Gölge SL varyantları: atr = A (calc_sl), ob_pct = B (operatör SL: kırılımı yapan OB fitili ∓%0.2).
+  # Satır yoksa yalnız A; bilinmeyen ad WARNING ile yok sayılır.
+  fvg_entry_sl_variants: [atr, ob_pct]
 
 # T-20261105-04: Binance kline WS (#283/#280). enabled → gölge parite sayaçları + (touch_entry
 # shadow için) intrabar fiyat; event_scan kapalı: tarama davranışı değişmez. Emir yolu yok.

@@ -16,15 +16,28 @@ LINES = [
 
 def test_summarize_counts_and_r():
     s = summarize(LINES)
-    t = s["TOTAL"]
+    t = s["TOTAL v=A"]
     assert t["events"]["setup+"] == 2 and t["events"]["filled"] == 2
     assert t["events"]["expired"] == 1
     assert t["reasons"] == {"TP1": 1, "SL": 1}
     assert t["net"] == [1.99, -1.06]
-    assert s["ETH/USDT"]["gross"] == [2.06]
+    assert s["ETH/USDT v=A"]["gross"] == [2.06]
 
 
 def test_render_waits_below_30_trades():
     out = render(summarize(LINES))
     assert "TOTAL" in out and "WAIT (n=2/30)" in out
     assert "+0.46" in out          # avg net R of the two exits ((1.99-1.06)/2)
+
+
+def test_groups_by_variant_and_legacy_lines_count_as_a():
+    lines = LINES + [
+        P + "[fvg shadow] exit ETH/USDT LONG v=B reason=SL gross_r=-1.00 net_r=-1.20 cost_r=0.20 entry=1959.6",
+        P + "[fvg shadow] exit ETH/USDT LONG v=A reason=SL gross_r=-1.00 net_r=-1.10 cost_r=0.10 entry=1959.6",
+    ]
+    s = summarize(lines)
+    assert s["ETH/USDT v=B"]["net"] == [-1.20]
+    assert s["TOTAL v=B"]["net"] == [-1.20]
+    assert s["ETH/USDT v=A"]["net"] == [1.99, -1.10]      # legacy line + explicit v=A
+    out = render(s)
+    assert "v=B" in out and "v=A" in out

@@ -710,7 +710,7 @@ NET-cost backtest harness (drives the live SafeOrchestrator)
 Paths: `backtest/`, `scripts/evaluate_backtest_gates.py`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run backtest`
-Mapped tests: 16
+Mapped tests: 17
 Note: ADR-0003 gate. Slow full-engine tests run in the CI job `backtest (slow)`.
 
 <details><summary>test files</summary>
@@ -730,6 +730,7 @@ Note: ADR-0003 gate. Slow full-engine tests run in the CI job `backtest (slow)`.
 - `tests/backtest/test_live_parity.py`
 - `tests/backtest/test_memo.py`
 - `tests/ci/test_regression_ledger.py`
+- `tests/engine/test_fvg_entry.py`
 - `tests/test_backtest_max_hold.py`
 
 </details>

@@ -1,4 +1,5 @@
-"""Summarise `[fvg shadow]` log lines (T-20261114-01).
+"""Note: exit lines without `v=` predate PR #348 and carry net_r under the old flat 0.07 % cost;
+they are counted as variant A. Summarise `[fvg shadow]` log lines (T-20261114-01).
 
 Usage on the VPS:
     docker logs --since 168h efloud-bot 2>&1 | python tools/fvg_shadow_report.py
@@ -14,20 +15,24 @@ import sys
 from collections import Counter, defaultdict
 from typing import Dict, Iterable, List
 
-_RE = re.compile(r"\[fvg shadow\] (?P<event>\S+) (?P<sym>\S+) (?P<dir>LONG|SHORT)(?P<rest>.*)$")
+_RE = re.compile(r"\[fvg shadow\] (?P<event>\S+) (?P<sym>\S+) (?P<dir>LONG|SHORT)(?: v=(?P<v>\w+))?(?P<rest>.*)$")
 _RE_R = re.compile(r"reason=(?P<reason>\S+) gross_r=(?P<g>[-+]?\d+\.\d+) net_r=(?P<n>[-+]?\d+\.\d+)")
 MIN_TRADES = 30
 
 
 def summarize(lines: Iterable[str]) -> Dict[str, dict]:
-    """Per symbol and "TOTAL": event counts, exit reasons and R lists."""
+    """Per "<symbol> v=<variant>" and "TOTAL v=<variant>": event counts, exit reasons, R lists.
+
+    Lines without a ``v=`` tag (pre-variant logs) count as variant A.
+    """
     out: Dict[str, dict] = defaultdict(lambda: {"events": Counter(), "reasons": Counter(),
                                                 "gross": [], "net": []})
     for ln in lines:
         m = _RE.search(ln)
         if not m:
             continue
-        for key in (m["sym"], "TOTAL"):
+        v = m["v"] or "A"
+        for key in (f"{m['sym']} v={v}", f"TOTAL v={v}"):
             s = out[key]
             s["events"][m["event"]] += 1
             if m["event"] == "exit":
@@ -44,20 +49,21 @@ def _avg(xs: List[float]) -> float:
 
 
 def render(summary: Dict[str, dict]) -> str:
-    rows = ["symbol        setups fills closed  win%   avgR_gross avgR_net  exits"]
-    for sym in sorted(summary, key=lambda k: (k == "TOTAL", k)):
+    rows = ["symbol             setups fills closed  win%   avgR_gross avgR_net  exits"]
+    for sym in sorted(summary, key=lambda k: (k.startswith("TOTAL"), k)):
         s = summary[sym]
         n = len(s["net"])
         win = 100.0 * sum(1 for x in s["net"] if x > 0) / n if n else 0.0
         reasons = " ".join(f"{k}:{v}" for k, v in sorted(s["reasons"].items()))
-        rows.append(f"{sym:<13} {s['events']['setup+']:>6} {s['events']['filled']:>5} {n:>6} "
+        rows.append(f"{sym:<18} {s['events']['setup+']:>6} {s['events']['filled']:>5} {n:>6} "
                     f"{win:>5.1f} {_avg(s['gross']):>+11.2f} {_avg(s['net']):>+8.2f}  {reasons}")
-    total = summary.get("TOTAL")
-    n = len(total["net"]) if total else 0
-    net = _avg(total["net"]) if total else 0.0
-    verdict = ("PASS" if n >= MIN_TRADES and net > 0 else
-               f"WAIT (n={n}/{MIN_TRADES})" if n < MIN_TRADES else "FAIL (net avg R <= 0)")
-    rows.append(f"go-live bar (vs live v2 still to compare by hand): {verdict}")
+    for key in sorted(k for k in summary if k.startswith("TOTAL")):
+        total = summary[key]
+        n = len(total["net"])
+        net = _avg(total["net"])
+        verdict = ("PASS" if n >= MIN_TRADES and net > 0 else
+                   f"WAIT (n={n}/{MIN_TRADES})" if n < MIN_TRADES else "FAIL (net avg R <= 0)")
+        rows.append(f"go-live bar {key[len('TOTAL '):]} (vs live v2 still to compare by hand): {verdict}")
     return "\n".join(rows)
 
 

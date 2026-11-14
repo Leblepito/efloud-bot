@@ -2339,6 +2339,22 @@ class SafeOrchestrator:
         raw = (self.config.get("smc_v2") or {}).get("fvg_entry", "off")
         return "shadow" if str(raw or "off").strip().lower() == "shadow" else "off"
 
+    def _fvg_sl_modes(self) -> list:
+        """`smc_v2.fvg_entry_sl_variants` -> build_plans sl_modes; absent -> ["atr"]; unknown ignored."""
+        from engine.smc_v2.fvg_entry import SL_VARIANTS
+        raw = (self.config.get("smc_v2", {}) or {}).get("fvg_entry_sl_variants")
+        if raw is None:
+            return ["atr"]
+        if isinstance(raw, str):  # YAML scalar typo (`atr` instead of `[atr]`) = one variant
+            raw = [raw.strip()]
+        modes = []
+        for m in raw:
+            if m in SL_VARIANTS:
+                modes.append(m)
+            else:
+                log.warning(f"[fvg shadow] unknown sl variant {m!r} ignored")
+        return modes
+
     def _fvg_shadow_step(self, symbol, df_entry, df_mtf, lux_ltf, lux_cfg) -> None:
         """FVG geri çekilme girişi GÖLGESİ: 4h bias, FVG limit, OB SL, OB/BB TP1, likidite TP2.
 
@@ -2363,15 +2379,22 @@ class SafeOrchestrator:
             bias = _lx.analyze(df_mtf, _lx.LuxConfig.from_dict(lux_cfg)).swing_trend
             ts = [int(t.timestamp() * 1000) for t in df_entry.index]
             atr = wilder_atr(df_entry, period=14)
-            plans = _fe.build_plans(
-                symbol, lux_ltf, bias, ts, atr, safety,
-                float(risk_cfg.get("min_rr", 1.8)),
-                wick_buffer_r=float(lux_cfg.get("tp_wick_buffer_r", 0.0)),
-            ) if atr else []
+            min_rr = float(risk_cfg.get("min_rr", 1.8))
+            wick = float(lux_cfg.get("tp_wick_buffer_r", 0.0))
+            plans = []
+            if atr:
+                for mode in self._fvg_sl_modes():
+                    extra = {} if mode == "atr" else {"sl_mode": mode}  # A: call identical to pre-#348
+                    plans += _fe.build_plans(symbol, lux_ltf, bias, ts, atr, safety, min_rr,
+                                             wick_buffer_r=wick, **extra)
             book = self.__dict__.get("_fvg_shadow_book")
             if book is None:
+                bt = self.config.get("backtest", {}) or {}
                 book = self.__dict__.setdefault("_fvg_shadow_book", _fe.FvgShadowBook(
-                    timeout_bars=int(lux_cfg.get("pullback_timeout_bars", 48))))
+                    timeout_bars=int(lux_cfg.get("pullback_timeout_bars", 48)),
+                    commission_pct=float(bt.get("commission_pct", _fe.DEFAULT_COMMISSION_PCT)),
+                    funding_pct_per_8h=float(bt.get("funding_pct_per_8h",
+                                                    _fe.DEFAULT_FUNDING_PCT_PER_8H))))
             bars = list(zip(ts, df_entry["open"].astype(float), df_entry["high"].astype(float),
                             df_entry["low"].astype(float), df_entry["close"].astype(float)))
             book.step(symbol, plans, bars[-(book.timeout_bars + 200):])
