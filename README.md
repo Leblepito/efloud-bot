@@ -114,7 +114,7 @@ npm run test --workspace efloud-frontend  # dashboard unit tests (vitest)
 Production uses `docker-compose.prod.yml` (multiple bot profiles, Caddy with automatic
 HTTPS, autoheal, alerter, overseer, scheduled routines) and the scripts in `deploy/`.
 Follow [`deploy/HETZNER_GUIDE.md`](deploy/HETZNER_GUIDE.md) and
-[`docs/OPERATOR_GUIDE.md`](docs/OPERATOR_GUIDE.md); runbooks are in [`docs/runbooks/`](docs/runbooks/).
+[`docs/runbooks/operator-runbook.md`](docs/runbooks/operator-runbook.md); other runbooks are in [`docs/runbooks/`](docs/runbooks/).
 The environment template is [`deploy/.env.production.example`](deploy/.env.production.example).
 
 ## Configuration
@@ -226,7 +226,7 @@ u2algo-site/    Marketing site (Railway service)
   Parity against the Python engine: [`docs/pine-lab/README.md`](docs/pine-lab/README.md).
   Pine v6 syntax only; indicator and strategy keep the same input names.
 - **AI collaboration:** agent instructions are in [`AGENTS.md`](AGENTS.md),
-  [`CLAUDE.md`](CLAUDE.md) and [`HERMES.md`](HERMES.md); the shared task hub is
+  [`CLAUDE.md`](CLAUDE.md) and [`collab/models/`](collab/models/) (Hermes: `hermes.md`); the shared task hub is
   [`collab/`](collab/README.md).
 - **Contributing:** use a feature branch and a pull request; keep PRs atomic, never
   weaken a safety guard, and never commit secrets (CI runs gitleaks).

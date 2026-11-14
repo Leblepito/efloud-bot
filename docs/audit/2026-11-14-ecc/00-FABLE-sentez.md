@@ -1,5 +1,7 @@
 # 00 — Fable 5.2 Sentez ve Karar Raporu (2026-11-14)
 
+> **Erratum (2026-11-14, PR-B fact-check):** 'KANITLI (göreli)' etiketleri aşırı iddiadır — elenen kategoriler baz ile aynı/daha iyi; doğru etiket: KANITSIZ (gevşetme NET negatif, koruyucu etki ölçülmedi). Teyit: TARTIŞMALI. Kanonik metin: `docs/STRATEGY_INTENT.md`.
+
 > Kök: `C:/tmp/wt-ecc-audit` @ `81c2cf7` (origin/master). SALT OKUMA; bu dosya dışında hiçbir şey yazılmadı, git state değişmedi.
 > Girdi: `01-signal-algo.md` … `07-history.md` (7 rapor, tamamı okundu) + 24 yerinde spot-check (§1).
 > Ölçüt: operatör NİYETİ çerçeve, ölçülmüş NET edge filtre. Etiketler: **KANITLI** / **KANITSIZ** / **ÇÜRÜTÜLMÜŞ**; kaynakta teyit edilemeyen = **DOĞRULANMADI**.

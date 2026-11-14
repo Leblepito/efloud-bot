@@ -20,7 +20,7 @@ giriş entry-TF engulfing kapanışında **MARKET** emirdir (`exchange/__init__.
 
 | Dosya | Ne işe yarar |
 |---|---|
-| `HERMES.md` | Operatör kılavuzu (deploy, config, incident) |
+| `docs/runbooks/operator-runbook.md` | Operatör runbook'u (deploy, config, incident); `HERMES.md` artık yönlendirme |
 | `CLAUDE.md` | Proje bellek, mimari, Pine Script kuralları |
 | `skills/social-publishing/SKILL.md` | Sosyal medya pipeline'ı (HER modele) |
 | `AGENTS.md` | Bu dosya — AI giriş noktası |

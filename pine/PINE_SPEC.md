@@ -22,6 +22,8 @@ Tüm satır referansları doğrulanmıştır (`engine/smc_v2/*.py`, `engine/smc.
 > | §15–§18 | değişiklik kayıtları (v2.1 port) | TARİHSEL |
 > | §19 | — | SUPERSEDED — canlı TP yolu `tp_mode: luxalgo` (`configs/config.phase2_1k.yaml:204`) |
 > | §20–§21 | `pine/lab/*.pine` → `pine/efloud_lab.pine`, `pine/efloud_lab_strategy.pine` | GÜNCEL — ürün kaynağı (ADR-0005); baseline parity **GATE FAIL ×3** (§20) |
+> | Ek V1 (dosya sonu) | — (CLAUDE.md'den taşınan v1 parametre referansı) | ARŞİV/referans — v1 canlıda susturulmuş; Swing Lookback satırı `tests/test_docs_param_parity.py` ile korunur |
+> | Ek K (dosya sonu) | — (CLAUDE.md'den taşınan Pine kısıtları) | GÜNCEL — çeviri kısıtları (harici API, I/O, repaint) |
 
 ---
 
@@ -712,3 +714,25 @@ Spec: `docs/superpowers/specs/2026-11-06-lab-indicator-visuals-design.md`. Bu ka
 Halka tampon indeks sözleşmesi: çekirdek her onaylı barda `bufHi/bufLo/bufOpen/bufClose/bufTime` tamponlarını kuyruktan önce besler; kuyrukta en yeni eleman kapanmış mevcut bardır ve `bufLastBar` o barı tutar.
 `f_bufAt(buf, barIdx)` mutlak `bar_index` ile okur: `j = size - 1 - (bufLastBar - barIdx)`, kapsam dışı `na`. Kapasite `bufCap=992` bardır.
 Not: breaker-kopya denetimi O(P) ve T2 kapalıyken atlanır (9dad0ca). `f_collectObs` içindeki kopya tespiti tek bir `map<int,int>` (anahtar `idx*2+(bull?1:0)` → en erken `createdIdx`) kullanır; iki paralel yerel `array<int>` biçimi TradingView'da T2 açıkken RE10045 verdi (`array.get` indeks 2 / boyut 0; verify doc "Follow-up").
+
+## Ek V1 — v1 referansı (canlıda susturulmuş)
+
+> CLAUDE.md'den taşındı (metin aynen). ARŞİV/referans: v1 girişi v2 sembollerinde susturulmuştur; `tests/test_docs_param_parity.py` bu ekteki Swing Lookback değerini motor varsayılanı ve prod config ile karşılaştırır.
+
+- **Timeframe Chain (profil bazlı — tek kaynak `data/timeframes.py` `PROFILES`, chain redesign 2026-07-06 / commit 3c96029)**: her profil bir Entry/MTF/HTF üçlüsü seçer + Daily (1d) makro filter ortaktır. Merdiven: **scalp** = 5m entry / 1h SMC-yapı (MTF) / 4h trend (HTF) · **mid** = 15m / 4h / 12h · **long** = 1h / 8h / 1d. Roller: HTF Trend/Bias, MTF swing breaks, Entry trigger + SL/TP. Aşağıdaki TF örnekleri tarihsel mid chain'ine (4h/1h/15m) göredir — mantık profil-görelidir (htf/mtf/entry).
+- **HTF Bias Fallback (HTF UNDEF)**: 4h `analyze().trend` UNDEF ise sırayla: (1) son 40 4h-bar slope; |Δ| > %2 → BULL/BEAR (signals.py:518-529). (2) slope nötr (|Δ| ≤ %2) ise **Entry-TF (15m) range** discount/premium'undan türetilir: discount→BULL, premium→BEAR (signals.py:530-535 `range_info(df_entry)`). Bu, 15m bir "range play" senaryosudur ve dokümante edilen HTF(4h)→Entry(15m) yetki zincirini bu özel durumda kasıtlı olarak tersine çevirir. (3) Ne slope ne aktif range varsa → sinyal yok (skip, signals.py:536-538). df_htf < 40 bar → skip (signals.py:539-541).
+- **Swing Lookback**: 5 (Sol ve sağda 5 daha düşük high / daha yüksek low).
+- **Order Blocks (OB)**: 5 ardışık mum (`ob_sequential: 5`). Breakout mumunun gövdesi (body) > 1.5 * SMA(high-low, 14) olmalı (true-range ATR DEĞİL; bkz. PINE_SPEC §A.3 / smc.py:195).
+- **Confluence Threshold**: Minimum 55 (kök config; CANLI prod config `configs/config.phase2_1k.yaml` = 50, operatör kararı 2026-06).
+- **Stop Loss (SL)**: Breakout öncesi son 20 mumun en düşük/en yüksek seviyesi + ATR(14, true-range) * 0.5 (veya yüksek volatilitede * 0.75) buffer (true-range; bkz. PINE_SPEC §A.4 / signals.py:749-756). Minimum 0.1% mesafe clamp'i.
+- **Take Profit (TP)**: 
+  - TP1: Yakın HTF likidite swing'leri / Equal Highs-Lows. Range deviation varsa Range EQ. Price discovery durumunda (yapı yoksa) 1.272 Fibo. Min R:R: 1.5.
+  - TP2: Karşı Range Extreme (deviation'da) veya 1.618 / 2.618 Fibo uzantısı.
+
+## Ek K — Pine Script kısıtları (Python'da olup Pine'a tam çevrilemeyecekler)
+
+> CLAUDE.md'den taşındı (metin aynen). Ayrıntılı sapma listeleri: §12 (v2) ve §A.7 (v1).
+
+- Harici API çağrıları (Gemini AI Structure Validation, sentiment, REST/websocket) → Pine'da atlanmalı, kural tabanlı statik karşılıklar veya input parametreleri eklenmeli. **Not:** `engine/agents/` Python tarafında bu çağrıları ortak bir LLM istemcisi üzerinden toplar (sağlayıcı fabrikası `engine/agents/llm.py`; `GeminiClient` adı tarihsel); Pine'a çevirirken bu katman **atlanır** (Pine LLM çağrısı yapamaz), kural tabanlı karşılıklar yazılır.
+- CCXT, DB erişimi, dosya I/O → Pine'da sadece grafikte çizim ve strateji emri olur.
+- pandas tabanlı look-ahead hesaplar → Pine'da repaint riskine dikkat (sadece kapanmış bar `[1]` veya barstate.isconfirmed kullanılmalı).

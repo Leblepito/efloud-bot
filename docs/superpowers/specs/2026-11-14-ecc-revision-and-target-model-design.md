@@ -45,6 +45,8 @@ Pipeline (etiket = ölçülmüş NET kanıt):
 | 10 Risk | Breaker, exposure tavanı, drift %1, SL < likidasyon, orphan koruması — değişmez | Guard |
 | Yedek | Mitige-OB / breaker retest + engulfing | KANITSIZ (+0.24 R, n=30) |
 
+**Erratum (2026-11-14, PR-B fact-check):** 'KANITLI (göreli)' etiketleri aşırı iddiadır — elenen kategoriler baz ile aynı/daha iyi; doğru etiket: KANITSIZ (gevşetme NET negatif, koruyucu etki ölçülmedi). Teyit: TARTIŞMALI. Kanonik metin: `docs/STRATEGY_INTENT.md`.
+
 Model bir hipotezdir; K6 kapısını geçmeden canlıya alınmaz.
 
 ## 4. PR-A — olgu düzeltmeleri (yalnız `.md`)
