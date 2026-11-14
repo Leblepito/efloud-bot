@@ -83,3 +83,19 @@ downstream tüketicileri koşar; karar çıkış kodudur. Modül tablosu değiş
 Test varlıkları ve korunması gereken kurallar (TEST-ID → kanıt): `TESTS.md`.
 Alan dili (V1/V2 bot vs SMC v1/v2, breaker OPEN=normal, orphan vs bare): `CONTEXT.md`.
 Geri dönmesi zor kararlar ve gerekçeleri: `docs/adr/README.md`.
+
+ECC kural paketi (yalnız lokal: `.claude/` `.gitignore:122` ile repo dışı — bu import'lar
+VPS'te ve başka klonlarda çözülmez). Çatışmada proje sözleşmesi (CLAUDE.md Karpathy
+ilkeleri) önceliklidir:
+
+@.claude/rules/ecc/README.md
+@.claude/rules/ecc/common/agents.md
+@.claude/rules/ecc/common/code-review.md
+@.claude/rules/ecc/common/coding-style.md
+@.claude/rules/ecc/common/development-workflow.md
+@.claude/rules/ecc/common/git-workflow.md
+@.claude/rules/ecc/common/hooks.md
+@.claude/rules/ecc/common/patterns.md
+@.claude/rules/ecc/common/performance.md
+@.claude/rules/ecc/common/security.md
+@.claude/rules/ecc/common/testing.md
