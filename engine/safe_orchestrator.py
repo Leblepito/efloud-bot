@@ -2341,63 +2341,25 @@ class SafeOrchestrator:
 
     def _fvg_sl_modes(self) -> list:
         """`smc_v2.fvg_entry_sl_variants` -> build_plans sl_modes; absent -> ["atr"]; unknown ignored."""
-        from engine.smc_v2.fvg_entry import SL_VARIANTS
-        raw = (self.config.get("smc_v2", {}) or {}).get("fvg_entry_sl_variants")
-        if raw is None:
-            return ["atr"]
-        if isinstance(raw, str):  # YAML scalar typo (`atr` instead of `[atr]`) = one variant
-            raw = [raw.strip()]
-        modes = []
-        for m in raw:
-            if m in SL_VARIANTS:
-                modes.append(m)
-            else:
-                log.warning(f"[fvg shadow] unknown sl variant {m!r} ignored")
-        return modes
+        from engine.smc_v2.fvg_entry import sl_modes_from_config
+        return sl_modes_from_config(self.config)
 
     def _fvg_shadow_step(self, symbol, df_entry, df_mtf, lux_ltf, lux_cfg) -> None:
         """FVG geri çekilme girişi GÖLGESİ: 4h bias, FVG limit, OB SL, OB/BB TP1, likidite TP2.
 
         Emir yok, canlı durum değişmez; hata canlı akışa asla sızmaz (yalnız WARNING).
+        Gövde `fvg_entry.shadow_step`'te (tools/fvg_offline_replay.py ile ortak yol).
         """
         if self.fvg_entry_mode() != "shadow":
             return
         try:
-            from types import SimpleNamespace
-
             from engine.smc_v2 import fvg_entry as _fe
-            from engine.smc_v2 import luxalgo as _lx
-            from engine.smc_v2.atr import wilder_atr
 
-            safety_cfg = self.config.get("safety", {}) or {}
-            risk_cfg = self.config.get("risk", {}) or {}
-            safety = SimpleNamespace(
-                sl_atr_buffer=safety_cfg.get("sl_atr_buffer", risk_cfg.get("sl_atr_buffer", 0.5)),
-                min_sl_atr=safety_cfg.get("min_sl_atr", 0.5),
-                max_sl_atr=safety_cfg.get("max_sl_atr", 5.0),
-            )
-            bias = _lx.analyze(df_mtf, _lx.LuxConfig.from_dict(lux_cfg)).swing_trend
-            ts = [int(t.timestamp() * 1000) for t in df_entry.index]
-            atr = wilder_atr(df_entry, period=14)
-            min_rr = float(risk_cfg.get("min_rr", 1.8))
-            wick = float(lux_cfg.get("tp_wick_buffer_r", 0.0))
-            plans = []
-            if atr:
-                for mode in self._fvg_sl_modes():
-                    extra = {} if mode == "atr" else {"sl_mode": mode}  # A: call identical to pre-#348
-                    plans += _fe.build_plans(symbol, lux_ltf, bias, ts, atr, safety, min_rr,
-                                             wick_buffer_r=wick, **extra)
             book = self.__dict__.get("_fvg_shadow_book")
             if book is None:
-                bt = self.config.get("backtest", {}) or {}
-                book = self.__dict__.setdefault("_fvg_shadow_book", _fe.FvgShadowBook(
-                    timeout_bars=int(lux_cfg.get("pullback_timeout_bars", 48)),
-                    commission_pct=float(bt.get("commission_pct", _fe.DEFAULT_COMMISSION_PCT)),
-                    funding_pct_per_8h=float(bt.get("funding_pct_per_8h",
-                                                    _fe.DEFAULT_FUNDING_PCT_PER_8H))))
-            bars = list(zip(ts, df_entry["open"].astype(float), df_entry["high"].astype(float),
-                            df_entry["low"].astype(float), df_entry["close"].astype(float)))
-            book.step(symbol, plans, bars[-(book.timeout_bars + 200):])
+                book = self.__dict__.setdefault("_fvg_shadow_book",
+                                                _fe.book_from_config(self.config, lux_cfg))
+            _fe.shadow_step(book, self.config, lux_cfg, symbol, df_entry, df_mtf, lux_ltf)
         except Exception as e:  # noqa: BLE001 — shadow must never break the live cycle
             log.warning(f"[fvg shadow] error {symbol}: {e!r}")
 

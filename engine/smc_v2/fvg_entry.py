@@ -288,3 +288,60 @@ class FvgShadowBook:
         if reached(p.tp2, favourable=True):
             return self._exit(tr, "TP2", tr.realized_r + 0.5 * r_at(p.tp2), bar[0], lines)
         return False
+
+
+# ── Shadow step shared by SafeOrchestrator._fvg_shadow_step and tools/fvg_offline_replay.py ──
+# One code path so the offline replay and the live shadow cannot drift apart.
+
+def sl_modes_from_config(config: dict) -> List[str]:
+    """`smc_v2.fvg_entry_sl_variants` -> build_plans sl_modes; absent -> ["atr"]; unknown ignored."""
+    raw = (config.get("smc_v2", {}) or {}).get("fvg_entry_sl_variants")
+    if raw is None:
+        return ["atr"]
+    if isinstance(raw, str):  # YAML scalar typo (`atr` instead of `[atr]`) = one variant
+        raw = [raw.strip()]
+    modes = []
+    for m in raw:
+        if m in SL_VARIANTS:
+            modes.append(m)
+        else:
+            log.warning(f"[fvg shadow] unknown sl variant {m!r} ignored")
+    return modes
+
+
+def book_from_config(config: dict, lux_cfg: dict) -> FvgShadowBook:
+    bt = config.get("backtest", {}) or {}
+    return FvgShadowBook(
+        timeout_bars=int(lux_cfg.get("pullback_timeout_bars", 48)),
+        commission_pct=float(bt.get("commission_pct", DEFAULT_COMMISSION_PCT)),
+        funding_pct_per_8h=float(bt.get("funding_pct_per_8h", DEFAULT_FUNDING_PCT_PER_8H)))
+
+
+def shadow_step(book: FvgShadowBook, config: dict, lux_cfg: dict, symbol: str,
+                df_entry, df_mtf, lux_ltf) -> List[str]:
+    """Build the plans for every configured SL variant on the newest closed entry bar and step ``book``."""
+    from types import SimpleNamespace
+
+    from engine.smc_v2.atr import wilder_atr
+
+    safety_cfg = config.get("safety", {}) or {}
+    risk_cfg = config.get("risk", {}) or {}
+    safety = SimpleNamespace(
+        sl_atr_buffer=safety_cfg.get("sl_atr_buffer", risk_cfg.get("sl_atr_buffer", 0.5)),
+        min_sl_atr=safety_cfg.get("min_sl_atr", 0.5),
+        max_sl_atr=safety_cfg.get("max_sl_atr", 5.0),
+    )
+    bias = lx.analyze(df_mtf, lx.LuxConfig.from_dict(lux_cfg)).swing_trend
+    ts = [int(t.timestamp() * 1000) for t in df_entry.index]
+    atr = wilder_atr(df_entry, period=14)
+    min_rr = float(risk_cfg.get("min_rr", 1.8))
+    wick = float(lux_cfg.get("tp_wick_buffer_r", 0.0))
+    plans: List[FvgPlan] = []
+    if atr:
+        for mode in sl_modes_from_config(config):
+            extra = {} if mode == "atr" else {"sl_mode": mode}
+            plans += build_plans(symbol, lux_ltf, bias, ts, atr, safety, min_rr,
+                                 wick_buffer_r=wick, **extra)
+    bars = list(zip(ts, df_entry["open"].astype(float), df_entry["high"].astype(float),
+                    df_entry["low"].astype(float), df_entry["close"].astype(float)))
+    return book.step(symbol, plans, bars[-(book.timeout_bars + 200):])
