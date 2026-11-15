@@ -41,7 +41,7 @@ etkileri ölçülmedi, `collab/outputs/claude-code/2026-11-04-lux-gate-counterfa
 | 8 TP2 | TP1'in ≥ 0.5 R ötesindeki, işlem yönündeki EQH/EQL / swing likiditesi | `TP2_MIN_GAP_R = 0.5`; içeri pay `config:206` | "pozisyona girilen yöndeki likidite noktası" (11-13 21:02) · `engine/smc_v2/fvg_entry.py:30-31,82-95` | KANITSIZ |
 | 9 Yönetim | TP1'de %50 + SL başa baş → TP2; max-hold yok, 24 saatte uyarı | `config:407,410` | 36 saat zorla kapatmayı kaldır (11-07 22:51) · `engine/lifecycle.py:409-413` | Max-hold 0 göreli KANITLI (zayıf); TP1 %50+BE KANITSIZ |
 | 10 Risk | Breaker, exposure tavanı, drift %1, SL < likidasyon, orphan koruması — değişmez | mevcut | — · `engine/safety/breaker.py`, `engine/safety/position_guard.py:271-282`, `exchange/__init__.py:1088-1107` | Guard; zayıflatılmaz |
-| Yedek | Mitige-OB / breaker retest + engulfing | — | — · `collab/outputs/claude-code/2026-11-04-lux-gate-counterfactual.md:52` | KANITSIZ (+0.24 R, n=30, tek pencere) |
+| Yedek | Mitige-OB / breaker retest + engulfing | — | — · `collab/outputs/claude-code/2026-11-04-lux-gate-counterfactual.md:52` | ÇÜRÜTÜLMÜŞ — 180 g canlı motor yolu: n=974, brüt −0.20 R, NET −0.34 R, 0/10 sembol (`docs/research/2026-11-14-fvg-offline-gate.md` §5) |
 
 İptal (dolmadan): timeout, fiyatın kaçması (`ran_away`), FVG/OB mitigasyonu. Dolduktan sonra: SL.
 

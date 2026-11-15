@@ -54,3 +54,34 @@ done; wait
 python tools/fvg_offline_replay.py merge --inputs out/*.json --out out/ALL
 # R1: aynı komutlar, --config <prod config kopyası, timeframes.profile: long>; prefetch --days 460 (1h/8h)
 ```
+
+## 5. Araştırma R2 — mitige-OB retest (canlı motor yolu, `backtest.cli`)
+
+Hipotez: T-09'un tek pozitif kategorisi ("OB motor penceresinde mitige", +0.24 R, n=30, 60 gün;
+`collab/outputs/claude-code/2026-11-04-lux-gate-counterfactual.md:52`) daha uzun pencerede gerçek mi?
+Araç: `smc_v2.luxalgo.ob_mitigation_filter` araştırma parametresi (yalnız branch `feat/lux-ob-mitigation-filter`
+@ `83cbe97`, **merge edilmedi** — kullanılmayan knob engine'e girmez, Karpathy-2); `only_mitigated` = yalnız
+mitige OB'li kırılımlar, gerisi canlı akışla aynı (engulfing teyidi, `calc_sl`, lux TP, kanonik maliyet).
+180 gün × 10 sembol, `backtest.cli single`, 2026-11-14/15.
+
+| Kol | n | WR | ort. brüt R | ort. NET R | NET PF | IS NET R | OOS NET R | OOS PF | + sembol |
+|---|---|---|---|---|---|---|---|---|---|
+| Baz (canlı LuxAlgo akışı) | 520 | %31 | −0.237 | **−0.378** | 0.58 | −0.440 | −0.271 | 0.68 | 2/10 |
+| only_mitigated | 974 | %32 | −0.196 | **−0.336** | 0.61 | −0.351 | −0.306 | 0.64 | 0/10 |
+
+Sonuç: brüt ön kapı (≥ +0.25 R) geçilmedi; T-09'un +0.24 R'si küçük örneklem gürültüsü. Not: T-09 kategorisi
+(grafik dokunuşu + motor penceresinde mitige) buradaki tanımla birebir aynı değil; aynı fikri canlı motor yoluyla
+30× örneklemde ölçer. Brüt R = (net pnl + komisyon + funding) / ilk risk; slippage dolum fiyatında.
+
+## 6. Genel sonuç
+
+| Model | ort. brüt R | ort. NET R |
+|---|---|---|
+| Canlı LuxAlgo (15m/12h) | −0.24 | −0.38 |
+| FVG hedef modeli A / B (15m/4h) | −0.03 / −0.005 | −0.26 / −0.20 |
+| FVG hedef modeli A / B (1h/8h) | −0.15 / −0.20 | −0.30 / −0.35 |
+| Mitige-OB retest (15m/12h) | −0.20 | −0.34 |
+
+Bu SMC kural ailesi bu sembollerde ve 15m/1h'te maliyetten önce de avantaj üretmiyor. Yeni bir setup ancak bu
+araçlarla (`tools/fvg_offline_replay.py`, `backtest.cli`) önce **brüt** ön kapıyı (≥ +0.25 R, n ≥ 100) geçerse
+NET aşamasına alınır.
