@@ -7,7 +7,7 @@ TradingView sayfası: _yayından sonra eklenecek_
 
 ## 1. Nedir?
 
-**u2algo Price Action**, u2algo botunun kullandığı Smart Money Concepts (SMC) fiyat hareketi bölgelerini grafiğinizde gösteren bir TradingView göstergesidir: Order Block'lar, Breaker/Mitigation blokları, Fair Value Gap'ler, likidite havuzları, OTE bölgesi ve botun sinyal mantığını yansıtan LONG/SHORT işaretleri.
+**u2algo Price Action**, u2algo botunun kullandığı Smart Money Concepts (SMC) fiyat hareketi bölgelerini grafiğinizde gösteren bir TradingView göstergesidir: Order Block'lar, Breaker/Mitigation blokları, Fair Value Gap'ler, likidite havuzları ve OTE bölgesi. Gösterge giriş, stop veya hedef üretmez.
 
 Gösterge **emir vermez**. Bölgeler yalnızca görüntüdür; karar sizindir.
 
@@ -37,7 +37,7 @@ Kısaca: önceki swing süpürüldü → **BB**; süpürülmedi, higher-low / lo
 
 ### Likidite: BSL / SSL / EQH / EQL
 
-![Sinyaller ve likidite](../assets/u2algo-price-action/04-signals-liquidity.png)
+![Likidite](../assets/u2algo-price-action/04-signals-liquidity.png)
 
 - **BSL / SSL:** swing tepelerinin üstündeki (Buy-Side) ve diplerinin altındaki (Sell-Side) likidite. Stop emirlerinin biriktiği yerler.
 - **EQH / EQL:** eşit tepeler / eşit dipler; aynı seviyede biriken likidite.
@@ -48,13 +48,8 @@ Kısaca: önceki swing süpürüldü → **BB**; süpürülmedi, higher-low / lo
 ### OTE (Optimal Trade Entry)
 Güncel swing aralığı **sabit** tutulur (aralık içindeki barlar onu değiştirmez; yalnızca yeni bir uç fitil aralığı uzatır). Gösterilenler: **0.618–0.786 bandı**, **0.705** çizgisi ve **EQ** (orta, %50). Yön, aralığın iki ucunun sırasına göre belirlenir: tepe daha sonra oluştuysa LONG (geri çekilmede alış bölgesi), dip daha sonra oluştuysa SHORT. Yalnızca güncel aralık çizilir.
 
-### Sinyaller: LONG / SHORT, Entry / SL / TP
-Bir sinyal şu zincirle üretilir:
-1. Yapı kırılımı (**CHoCH** veya **BOS**) bir aday bölge (OB tabanlı) doğurur.
-2. Fiyat bölgeye **geri çekilir (pullback)**.
-3. Bölgede **engulfing (yutan mum) teyidi** gelir ve bar kapanır.
-
-Ek kapılar: **HTF yön filtresi** (varsayılan 12 saatlik bias; yön ters ise sinyal engellenir), **Po3 kapısı** (manipülasyon durumunda sinyal verilmez), minimum R:R, SL mesafe sınırları ve premium/discount şartı. Sinyal çıkınca grafikte `LONG`/`SHORT` etiketi ile Entry (kalın), SL (kesikli kırmızı) ve TP1/TP2 (noktalı yeşil) çizgileri görünür.
+### Sinyal yok: yalnızca bölge haritası
+Yayın sürümü **LONG/SHORT sinyali, Entry/SL/TP çizgisi veya aday bölge üretmez**. Sinyal katmanı yalnızca Python↔Pine parity stratejisinde (`pine/efloud_lab_strategy.pine`, yayımlanmaz) yaşar. Gösterge yalnızca bölgeleri ve olayları (bölgeye giriş, likidite süpürme) gösterir.
 
 ## 4. Dashboard
 
@@ -63,14 +58,11 @@ Ek kapılar: **HTF yön filtresi** (varsayılan 12 saatlik bias; yön ters ise s
 | # | Satır | Anlamı |
 |---|---|---|
 | 1 | Variant | Çalışan mantık varyantı (varsayılan: botun canlı mantığı). |
-| 2 | Bias 12h | HTF yön: BULL / BEAR / UNDEF. Ters yönlü sinyaller engellenir. |
+| 2 | Bias 12h | HTF yön: BULL / BEAR / UNDEF (bağlam bilgisi). |
 | 3 | Macro | İsteğe bağlı üst zaman dilimi yönü (varsayılan kapalı, "-"). |
-| 4 | Pending W/Z/R | Bekleyen adaylar: W = pullback bekliyor, Z = bölgede, R = yeniden giriş bekliyor. |
-| 5 | Po3 | `ok` veya `MANIPULATION (blocked)`; engel varsa yeni sinyal yok. |
-| 6 | Range EQ | Güncel trend aralığının orta fiyatı. |
-| 7 | Drops (last 20) | Son 20 adayın neden elendiği (neden: adet). |
-| 8 | Zones | Çizilen bölge sayıları: swing/internal OB · BB · MB · FVG · Likidite. |
-| 9 | OTE | Güncel OTE yönü ve seviyeleri. |
+| 4 | Range EQ | Güncel trend aralığının orta fiyatı. |
+| 5 | Zones | Çizilen bölge sayıları: swing/internal OB · BB · MB · FVG · Likidite. |
+| 6 | OTE | Güncel OTE yönü ve seviyeleri. |
 
 ## 5. Ayarlar (Inputs)
 
@@ -79,10 +71,7 @@ Ek kapılar: **HTF yön filtresi** (varsayılan 12 saatlik bias; yön ters ise s
 | Ayar | Varsayılan | Anlamı |
 |---|---|---|
 | Active OB boxes | Açık | Aktif OB kutuları |
-| Pending candidate zones | Açık | Sinyal bekleyen aday bölgeler |
-| Entry/SL/TP lines | Açık | Sinyal çizgileri |
 | Dashboard | Açık | Sağ üst tablo |
-| Kept signal drawings | 60 | Grafikte tutulan sinyal çizimi sayısı (4–100) |
 
 **SMC bölgeleri (yalnız görüntü)**
 
@@ -101,12 +90,16 @@ Ek kapılar: **HTF yön filtresi** (varsayılan 12 saatlik bias; yön ters ise s
 
 **Telegram alerts**
 
+Kaldırılan ayarlar (yayın sürümünde yok): Pending candidate zones, Entry/SL/TP lines, Kept signal drawings.
+
 | Ayar | Varsayılan | Anlamı |
 |---|---|---|
+| Alert: zone entry | Açık | Fiyat aktif OB/BB/MB/FVG bölgesine girdiğinde bilgi alert'i |
+| Alert: liquidity sweep | Açık | BSL/SSL/EQH/EQL süpürüldüğünde bilgi alert'i |
 | Telegram chat id | boş | Boşsa bot JSON'u; doluysa Telegram mesajı |
 | Message footer | u2algo Price Action | Mesaj altlığı |
 
-**Baseline (canlı bot)** — botun canlı yapı/sinyal parametreleri; değiştirmek göstergeyi bottan ayırır.
+**Baseline (canlı bot)** — botun canlı yapı/sinyal parametreleri; değiştirmek göstergeyi bottan ayırır. Yayın sürümünde sinyal üretilmediği için yalnızca yapı/OB/FVG/likidite parametreleri çizilen bölgeleri etkiler; sinyal, SL/TP ve Po3 parametreleri göstergede görüntüyü değiştirmez.
 
 | Ayar | Varsayılan | Anlamı |
 |---|---|---|
@@ -151,9 +144,9 @@ Ek kapılar: **HTF yön filtresi** (varsayılan 12 saatlik bias; yön ters ise s
 
 ## 6. Alertler
 
-Gösterge, onaylanmış her sinyalde bar kapanışında tek bir `alert()` üretir. Alert oluştururken Condition olarak **u2algo Price Action → Any alert() function call** seçin.
+Gösterge iki tür **bilgi amaçlı** alert üretir; ikisi de bar kapanışında bir kez tetiklenir ve işlem sinyali değildir: (1) fiyatın aktif OB/BB/MB/FVG bölgesine girmesi, (2) bir likidite seviyesinin (BSL/SSL/EQH/EQL) süpürülmesi. Alert yalnızca canlı (realtime) kapanmış barlarda çalışır. Alert oluştururken Condition olarak **u2algo Price Action → Any alert() function call** seçin.
 
-- **Bot JSON modu** (Telegram chat id boş): sembol, yön, entry, SL, TP1, TP2 içeren JSON.
+- **Bot JSON modu** (Telegram chat id boş): sembol, zaman dilimi ve olay listesi (`events`) içeren JSON; `note` alanı "informational, not a trade signal" der.
 - **Telegram modu** (chat id dolu): mesaj doğrudan Telegram `sendMessage` biçimindedir; webhook ile Telegram'a gönderilir.
 
 Kurulum adımları ve sorun giderme: [`docs/telegram/tradingview-to-telegram.md`](../telegram/tradingview-to-telegram.md). Her sembol/zaman dilimi için ayrı alert gerekir; webhook için ücretli TradingView planı gerekir.
@@ -161,7 +154,7 @@ Kurulum adımları ve sorun giderme: [`docs/telegram/tradingview-to-telegram.md`
 ## 7. Sınırlar ve dürüstlük
 
 - Bölgeler **yalnızca görüntüdür**; tek başına işlem sinyali değildir.
-- Sinyaller botun canlı v2 (LuxAlgo tabanlı) mantığını, botun 10 canlı sembolünde yansıtır. Bot ayrıca risk kapıları ve pozisyon limitleri uygular; bu yüzden **her gösterge sinyali bir bot işlemi değildir**.
+- Gösterge **giriş, stop veya hedef üretmez**; alert'ler yalnızca bölge olaylarını bildirir ve bot işlemi anlamına gelmez.
 - Geçmiş performans veya backtest sonuçları gelecek için söz değildir.
 - Bu gösterge **yatırım tavsiyesi değildir**. Vadeli işlemler yüksek risk taşır; kaybedebileceğinizden fazlasını riske atmayın.
 - Çizimler bar kapanışında kesinleşir; açık barda değişebilir.
@@ -174,4 +167,4 @@ Yapı motoru, LuxAlgo'nun "Smart Money Concepts (SMC) [LuxAlgo]" göstergesinden
 
 ## English summary
 
-**u2algo Price Action** is an open-source TradingView indicator (CC BY-NC-SA 4.0, structure engine adapted from "Smart Money Concepts (SMC) [LuxAlgo]") that draws the SMC zones used by the u2algo bot: order blocks (OB/iOB), breaker and mitigation blocks (BB/MB), fair value gaps, volume-confirmed liquidity (BSL/SSL/EQH/EQL), a fixed-range OTE band (0.618-0.786, 0.705, EQ) and LONG/SHORT signals with Entry/SL/TP lines. Signals require a CHoCH/BOS, an order-block pullback and an engulfing confirmation, filtered by a 12h bias and a Po3 gate. Alerts come as bot JSON or Telegram-ready messages. Zones are display-only; not every signal is a bot trade because the bot applies additional risk gates. Not financial advice; past results are no guarantee. Recommended: 15m on liquid USDT perpetuals.
+**u2algo Price Action** is an open-source TradingView indicator (CC BY-NC-SA 4.0, structure engine adapted from "Smart Money Concepts (SMC) [LuxAlgo]") that draws the SMC zones used by the u2algo bot: order blocks (OB/iOB), breaker and mitigation blocks (BB/MB), fair value gaps, volume-confirmed liquidity (BSL/SSL/EQH/EQL), a fixed-range OTE band (0.618-0.786, 0.705, EQ) zones only. It does not generate entries, stops or targets. Optional informational alerts fire when price enters an active zone or sweeps a liquidity level, as bot JSON or Telegram-ready messages; they are not trade signals. Not financial advice; past results are no guarantee. Recommended: 15m on liquid USDT perpetuals.
