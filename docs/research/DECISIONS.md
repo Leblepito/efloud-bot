@@ -47,6 +47,7 @@
 | 2026-06-05 → 2026-11-14 | Kronos danışmanlığı (efloud-bot) | — | Trade'e hiç girdi olmadı; edge ölçümü yok | KAPALI | `config:352-353` |
 | 2026-11-14 | FVG hedef modeli — ADR-0011 offline kapısı (15m/4h, A ve B SL) | #348, #349 (`08b0469`) | A n=595 NET −0.26 R OOS PF 0.71; B n=588 NET −0.20 R OOS PF 0.74; brüt ≈ 0 | FAIL — canlı FVG yolu (Ö9) açılmaz | `docs/research/2026-11-14-fvg-offline-gate.md` §1 |
 | 2026-11-14 | Araştırma R1: aynı model 1h/8h (maliyet/R düşük) | #349 | A n=142 brüt −0.15 R NET −0.30 R; B n=153 brüt −0.20 R NET −0.35 R | Brüt ön kapı (≥ +0.25 R) geçilmedi | `docs/research/2026-11-14-fvg-offline-gate.md` §2 |
+| 2026-11-15 | Araştırma R2: mitige-OB retest, canlı motor yolu (180 g) | branch `feat/lux-ob-mitigation-filter` `83cbe97` (merge yok) | only_mitigated n=974 brüt −0.20 R NET −0.34 R, 0/10 sembol; baz n=520 NET −0.38 R | ÇÜRÜTÜLMÜŞ — T-09 +0.24 R gürültü | `docs/research/2026-11-14-fvg-offline-gate.md` §5 |
 
 **Okuma:** her düğüm bir öncekinin şikâyetine yanıt; BT-23 = 6.0 ve `min_sl_atr` 2.0 dışında hiçbiri NET-cost
 kapısını geçerek canlıya girmedi. Negatiflik motor değiştikçe sürdü → ortak etken maliyet/R oranı ve giriş
