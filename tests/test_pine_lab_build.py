@@ -14,7 +14,7 @@ from scripts.build_pine_lab import PARTS, build  # noqa: E402
 GEN_IND = ROOT / "pine" / "efloud_lab.pine"
 GEN_STR = ROOT / "pine" / "efloud_lab_strategy.pine"
 STRATEGY_ONLY_INPUTS = {"marginUsd", "leverage", "maxHoldHours", "tp1ClosePct", "moveSlToBe"}
-INDICATOR_ONLY_INPUTS = {"showObs", "showDash",
+INDICATOR_ONLY_INPUTS = {"showObs", "showDash", "alertZones", "alertSweep",
                          "showBreakers", "showFvg", "showLiq", "showOte", "showHistory", "obBodyOnly",
                          "liqVolumeConfirm", "maxZonesPerSide", "colBull", "colBear", "colNeutral", "zoneAlpha",
                          "tgChatId", "tgTag"}
@@ -205,7 +205,10 @@ def test_tail_alert_has_bot_json_and_telegram_branches():
     tail = TAIL.read_text(encoding="utf-8")
     assert re.search(r"^tgChatId\s*=\s*input\.string\(\"\"", tail, re.M)
     assert "tgTag" in tail and "f_jsonEsc" in tail
-    assert tail.count("alert(") <= 1
+    assert tail.count("alert(") == 1
+    for frag in ('"chat_id"', '"parse_mode":"HTML"', '"text"', "disable_web_page_preview", '"events"', '"symbol"'):
+        assert frag in tail
+    assert "tgChat == \"\"" in tail
 
 
 def test_tail_telegram_text_html_escaped_and_blank_chat_id_is_bot_mode():
@@ -215,3 +218,5 @@ def test_tail_telegram_text_html_escaped_and_blank_chat_id_is_bot_mode():
     assert re.search(r"^f_htmlEsc\(string s\) =>", tail, re.M)
     for frag in ('"&amp;"', '"&lt;"', '"&gt;"'):
         assert frag in tail
+    assert "f_jsonEsc(f_htmlEsc(tgTag))" in tail
+    assert "str.trim(tgChatId)" in tail

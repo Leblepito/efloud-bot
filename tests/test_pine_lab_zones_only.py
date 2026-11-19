@@ -30,3 +30,19 @@ def test_at_most_one_alert_call_site():
 def test_strategy_artefact_unchanged():
     data = STRAT.read_bytes().replace(b"\r\n", b"\n")
     assert hashlib.sha256(data).hexdigest() == STRAT_SHA
+
+
+def test_zone_alert_inputs_and_single_alert():
+    assert '"Alert: zone entry"' in IND and '"Alert: liquidity sweep"' in IND
+    assert len(re.findall(r"\balert\(", IND)) == 1
+    assert "alert.freq_once_per_bar_close" in IND
+
+
+def test_zone_alert_dedup_is_one_capped_map():
+    assert "map.new<string, int>()" in IND
+    assert "map.size(alertSeen) >= 500" in IND
+    assert "barstate.isrealtime" in IND
+
+
+def test_alert_text_is_informational():
+    assert "informational, not a trade signal" in IND

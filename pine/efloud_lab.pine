@@ -877,6 +877,8 @@ showDash    = input.bool(true, "Dashboard", group = grpVis)
 grpAlert = "Telegram alerts"
 tgChatId = input.string("", "Telegram chat id (@channel or -100…); empty = bot JSON", group = grpAlert)
 tgTag    = input.string("u2algo Price Action", "Message footer", group = grpAlert)
+alertZones = input.bool(true, "Alert: zone entry", group = grpAlert)
+alertSweep = input.bool(true, "Alert: liquidity sweep", group = grpAlert)
 
 grpZones = "SMC bölgeleri (yalnız görüntü)"
 showBreakers     = input.bool(true,  "Breaker / Mitigation blocks (BB/MB)", group = grpZones)
@@ -1331,3 +1333,66 @@ if barstate.islast and showDash
     f_cell(3, "Range EQ", zoneOk ? f_fmt(zEq) : "-")
     f_cell(4, "Zones s/i·BB·MB·FVG·Liq", str.tostring(dashObS) + "/" + str.tostring(dashObI) + "·" + str.tostring(dashBb) + "·" + str.tostring(dashMb) + "·" + str.tostring(dashFvg) + "·" + str.tostring(dashLiq))
     f_cell(5, "OTE", dashOte)
+
+// ─── Zone event alerts (informational; spec 2026-11-19) ───────────────────────
+// Realtime closed bars only. Dedup: one capped map (no parallel arrays, RE10045). The first realtime bar only
+// seeds the map so levels swept long ago do not fire.
+var map<string, int> alertSeen = map.new<string, int>()
+var bool alertSeeded = false
+prevHi = high[1]
+prevLo = low[1]
+
+f_zKey(string kind, int x1, float top, float bot) =>
+    kind + ":" + str.tostring(x1) + ":" + f_fmt(top) + ":" + f_fmt(bot)
+
+f_enteredNow(float top, float bot, float ph, float pl) =>
+    low <= top and high >= bot and not (pl <= top and ph >= bot)
+
+f_note(array<string> ev, string key, string txt, bool seeded) =>
+    if not map.contains(alertSeen, key)
+        if map.size(alertSeen) >= 500
+            map.clear(alertSeen)
+        map.put(alertSeen, key, 1)
+        if seeded
+            array.push(ev, txt)
+    true
+
+if barstate.isconfirmed and barstate.isrealtime
+    array<string> ev = array.new<string>()
+    if alertZones
+        for f in fvgs
+            if f.mitigatedIdx < 0 and f_enteredNow(f.top, f.bot, prevHi, prevLo)
+                f_note(ev, f_zKey("FVG", f.idx, f.top, f.bot), "ZONE FVG " + (f.bias == 1 ? "BULL" : "BEAR") + " [" + f_fmt(f.bot) + "–" + f_fmt(f.top) + "]", alertSeeded)
+        array<Zone> zo = array.new<Zone>()
+        f_collectObs(swingObs, false, zo)
+        f_collectObs(intObs, true, zo)
+        for fl in flips
+            if fl.flipBar >= 0 and not fl.dead and (fl.cls == 1 or fl.cls == 2)
+                [zt, zb] = f_obEdges(fl.ob)
+                f_pushZone(zo, zt, zb, fl.ob.idx, -fl.ob.bias, fl.cls == 1 ? "BB" : "MB", fl.cls == 1 ? 2 : 3, false)
+        for z in zo
+            if not z.faded and f_enteredNow(z.top, z.bot, prevHi, prevLo)
+                f_note(ev, f_zKey(z.txt, z.x1, z.top, z.bot), "ZONE " + z.txt + " " + (z.dir == 1 ? "BULL" : "BEAR") + " [" + f_fmt(z.bot) + "–" + f_fmt(z.top) + "]", alertSeeded)
+    if alertSweep
+        for p in shPiv
+            if p.swept
+                f_note(ev, f_zKey("BSL", p.bar, p.price, p.price), "SWEEP BSL " + f_fmt(p.price), alertSeeded)
+        for p in slPiv
+            if p.swept
+                f_note(ev, f_zKey("SSL", p.bar, p.price, p.price), "SWEEP SSL " + f_fmt(p.price), alertSeeded)
+        for e in equals
+            if e.swept
+                f_note(ev, f_zKey(e.isHigh ? "EQH" : "EQL", e.idxB, e.priceB, e.priceB), "SWEEP " + (e.isHigh ? "EQH " : "EQL ") + f_fmt(e.priceB), alertSeeded)
+    alertSeeded := true
+    if array.size(ev) > 0
+        string tgChat = str.trim(tgChatId)
+        string msg = ""
+        if tgChat == ""
+            string evJson = ""
+            for e in ev
+                evJson := evJson + (evJson == "" ? "" : ",") + '"' + f_jsonEsc(e) + '"'
+            msg := '{"symbol":"' + syminfo.ticker + '","tf":"' + timeframe.period + '","events":[' + evJson + '],"note":"informational, not a trade signal"}'
+        else
+            string tgText = "📍 <b>" + syminfo.ticker + " · " + timeframe.period + "</b>" + '\n' + f_jsonEsc(f_htmlEsc(array.join(ev, " | "))) + '\n' + "ℹ️ informational, not a trade signal" + '\n' + f_jsonEsc(f_htmlEsc(tgTag))
+            msg := '{"chat_id":"' + f_jsonEsc(tgChat) + '","text":"' + tgText + '","parse_mode":"HTML","disable_web_page_preview":true}'
+        alert(msg, alert.freq_once_per_bar_close)
