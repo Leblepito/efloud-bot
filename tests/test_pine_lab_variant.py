@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "pine_lab_variant.py"
 SRC = ROOT / "pine" / "efloud_lab.pine"
-LAYERS = ("showObs", "showZones", "showLevels", "showBreakers", "showFvg", "showLiq", "showOte")
+LAYERS = ("showObs", "showBreakers", "showFvg", "showLiq", "showOte")
 
 
 def _run(out: Path, *args: str) -> list[str]:
