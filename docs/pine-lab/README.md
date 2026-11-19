@@ -4,6 +4,7 @@ Spec: `../superpowers/specs/2026-11-05-pine-lab-design.md` · Plan: `../superpow
 
 ## SON DURUM (2026-11-14)
 
+- **Yayın sürümü yalnız bölge haritası** (2026-11-19, spec `docs/superpowers/specs/2026-11-19-indicator-zones-only-design.md`); sinyal katmanı yalnız parity stratejisinde.
 - **Ürün = `pine/lab/*`** → `pine/efloud_lab.pine` (indicator, açık kaynak yayın) +
   `pine/efloud_lab_strategy.pine` (parity artefaktı, yayımlanmaz). Eski çiftler
   (`pine/efloud_signals*.pine`, `pine/efloud_strategy*.pine`, `pine/u2algo/`) arşivdir.

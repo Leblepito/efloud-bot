@@ -691,7 +691,7 @@ TradingView Pine port + pine-lab tooling
 Paths: `pine/`, `scripts/build_pine_lab.py`, `scripts/pine_lab_*`
 Downstream consumers: none
 Regression acceptance command: `python scripts/regression_ledger.py run pine`
-Mapped tests: 6
+Mapped tests: 7
 Note: Pine compile itself is manual (TradingView MCP `pine_smart_compile`, 0 errors).
 
 <details><summary>test files</summary>
@@ -702,6 +702,7 @@ Note: Pine compile itself is manual (TradingView MCP `pine_smart_compile`, 0 err
 - `tests/test_pine_lab_parity.py`
 - `tests/test_pine_lab_variant.py`
 - `tests/test_pine_lab_visuals.py`
+- `tests/test_pine_lab_zones_only.py`
 
 </details>
 
