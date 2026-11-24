@@ -1,14 +1,13 @@
-// ─── INDICATOR TAIL: drawings, dashboard, alert ───────────────────────────────
+// ─── INDICATOR TAIL: zone drawings, dashboard, zone alerts ───────────────────
 grpVis = "Görsel"
 showObs     = input.bool(true, "Active OB boxes", group = grpVis)
-showZones   = input.bool(true, "Pending candidate zones", group = grpVis)
-showLevels  = input.bool(true, "Entry/SL/TP lines", group = grpVis)
 showDash    = input.bool(true, "Dashboard", group = grpVis)
-maxDrawings = input.int(60, "Kept signal drawings", minval = 4, maxval = 100, group = grpVis)   // 4 lines each: 100 × 4 = 400 < 500
 
 grpAlert = "Telegram alerts"
 tgChatId = input.string("", "Telegram chat id (@channel or -100…); empty = bot JSON", group = grpAlert)
 tgTag    = input.string("u2algo Price Action", "Message footer", group = grpAlert)
+alertZones = input.bool(true, "Alert: zone entry", group = grpAlert)
+alertSweep = input.bool(true, "Alert: liquidity sweep", group = grpAlert)
 
 grpZones = "SMC bölgeleri (yalnız görüntü)"
 showBreakers     = input.bool(true,  "Breaker / Mitigation blocks (BB/MB)", group = grpZones)
@@ -23,10 +22,6 @@ colBull          = input.color(color.teal,   "Bull colour",    group = grpZones)
 colBear          = input.color(color.maroon, "Bear colour",    group = grpZones)
 colNeutral       = input.color(color.orange, "Liquidity colour", group = grpZones)
 zoneAlpha        = input.int(85, "Zone fill transparency", minval = 0, maxval = 100, group = grpZones)
-
-var array<box>   zoneBoxes = array.new<box>()
-var array<line>  sigLines  = array.new<line>()
-var array<label> sigLabels = array.new<label>()
 
 f_clearBoxes(array<box> a) =>
     for b in a
@@ -347,31 +342,6 @@ if barstate.isconfirmed
 var array<line> oteLines = array.new<line>()
 var box oteBox = na
 
-if barstate.isconfirmed
-    for c in fired
-        color col = c.dir == 1 ? color.teal : color.maroon
-        if showLevels
-            int x2 = bar_index + 20
-            array.push(sigLines, line.new(bar_index, c.entry, x2, c.entry, color = col, width = 2))
-            array.push(sigLines, line.new(bar_index, c.sl, x2, c.sl, color = color.red, style = line.style_dashed))
-            array.push(sigLines, line.new(bar_index, c.tp1, x2, c.tp1, color = color.green, style = line.style_dotted))
-            if not na(c.tp2)
-                array.push(sigLines, line.new(bar_index, c.tp2, x2, c.tp2, color = color.green, style = line.style_dotted))
-            array.push(sigLabels, label.new(bar_index, c.sl, (c.dir == 1 ? "LONG " : "SHORT ") + c.src + " " + c.tags, style = c.dir == 1 ? label.style_label_up : label.style_label_down, color = col, textcolor = color.white, size = size.small))
-        string dirTxt = c.dir == 1 ? "LONG" : "SHORT"
-        string alertMsg = ""
-        string tgChat = str.trim(tgChatId)
-        if tgChat == ""
-            alertMsg := '{"symbol":"' + syminfo.ticker + '","dir":"' + dirTxt + '","entry":' + f_fmt(c.entry) + ',"sl":' + f_fmt(c.sl) + ',"tp1":' + f_fmt(c.tp1) + ',"tp2":' + (na(c.tp2) ? "null" : f_fmt(c.tp2)) + ',"variant":"' + variantLabel + '","trigger_bar":' + str.tostring(c.trigTime) + '}'
-        else
-            string tgText = (c.dir == 1 ? "🟢" : "🔴") + " <b>" + dirTxt + "</b> " + syminfo.ticker + " · " + timeframe.period + '\\n' + "Entry: " + f_fmt(c.entry) + '\\n' + "SL: " + f_fmt(c.sl) + '\\n' + "TP1: " + f_fmt(c.tp1) + '\\n' + "TP2: " + (na(c.tp2) ? "—" : f_fmt(c.tp2)) + '\\n' + "Setup: " + f_jsonEsc(f_htmlEsc(c.src + " " + c.tags)) + '\\n' + f_jsonEsc(f_htmlEsc(tgTag))
-            alertMsg := '{"chat_id":"' + f_jsonEsc(tgChat) + '","text":"' + tgText + '","parse_mode":"HTML","disable_web_page_preview":true}'
-        alert(alertMsg, alert.freq_once_per_bar_close)
-    while array.size(sigLines) > maxDrawings * 4
-        line.delete(array.shift(sigLines))
-    while array.size(sigLabels) > maxDrawings
-        label.delete(array.shift(sigLabels))
-
 if barstate.islast
     for l in oteLines
         line.delete(l)
@@ -395,7 +365,7 @@ if barstate.islast
         array.push(oteLines, line.new(x1, rngL, bar_index + 5, rngL, color = color.new(oc, 70)))
         dashOte := (rngDir == 1 ? "LONG" : "SHORT") + " H=" + f_fmt(rngH) + " L=" + f_fmt(rngL) + " 0.705=" + f_fmt(p705)
     f_clearBoxes(zoneLayerBoxes)
-    // z-order (bottom → top): OTE → FVG → OB/iOB → BB/MB → liquidity → pending zones → signal lines
+    // z-order (bottom → top): OTE → FVG → OB/iOB → BB/MB → liquidity
     dashFvg := 0
     if showFvg
         array<Zone> zf = array.new<Zone>()
@@ -424,11 +394,6 @@ if barstate.islast
                 else
                     dashMb += 1
         f_drawNearest(zb, maxZonesPerSide)
-    f_clearBoxes(zoneBoxes)
-    if showZones
-        for c in cands
-            if f_isActive(c)
-                array.push(zoneBoxes, box.new(c.trigIdx, c.zHigh, bar_index + 10, c.zLow, border_color = color.orange, bgcolor = color.new(color.orange, 80), text = c.state + (oteEntry and not na(c.limitPx) ? " @" + f_fmt(c.limitPx) : ""), text_size = size.tiny, text_color = color.orange))
     for l in liqLines
         line.delete(l)
     array.clear(liqLines)
@@ -485,42 +450,78 @@ if barstate.islast
                         f_drawLiq(e.isHigh, e.priceB, e.idxB, true, e.isHigh ? "EQH" : "EQL")
                         shownSwept += 1
 
-var table dash = table.new(position.top_right, 2, 9, border_width = 1)
+var table dash = table.new(position.top_right, 2, 6, border_width = 1)
 f_cell(int row, string k, string v) =>
     table.cell(dash, 0, row, k, text_color = color.gray, text_size = size.small)
     table.cell(dash, 1, row, v, text_color = color.white, text_size = size.small)
 
-f_dropSummary() =>
-    string out = ""
-    array<string> seen = array.new<string>()
-    for why in dropLog
-        if array.indexof(seen, why) < 0
-            array.push(seen, why)
-    for why in seen
-        int cnt = 0
-        for w in dropLog
-            if w == why
-                cnt += 1
-        out := out + (out == "" ? "" : " ") + why + ":" + str.tostring(cnt)
-    out == "" ? "-" : out
-
 if barstate.islast and showDash
-    int nWait = 0
-    int nZone = 0
-    int nRe   = 0
-    for c in cands
-        if c.state == "AWAITING_PULLBACK"
-            nWait += 1
-        else if c.state == "IN_ZONE"
-            nZone += 1
-        else if c.state == "AWAITING_REENTRY"
-            nRe += 1
     f_cell(0, "Variant", variantLabel)
     f_cell(1, "Bias " + biasTf, htfBias == 1 ? "BULL" : htfBias == -1 ? "BEAR" : "UNDEF")
     f_cell(2, "Macro " + macroTf, macroBias == 1 ? "BULL" : macroBias == -1 ? "BEAR" : "-")
-    f_cell(3, "Pending W/Z/R", str.tostring(nWait) + "/" + str.tostring(nZone) + "/" + str.tostring(nRe))
-    f_cell(4, "Po3", po3Blocked ? "MANIPULATION (blocked)" : "ok")
-    f_cell(5, "Range EQ", zoneOk ? f_fmt(zEq) : "-")
-    f_cell(6, "Drops (last 20)", f_dropSummary())
-    f_cell(7, "Zones s/i·BB·MB·FVG·Liq", str.tostring(dashObS) + "/" + str.tostring(dashObI) + "·" + str.tostring(dashBb) + "·" + str.tostring(dashMb) + "·" + str.tostring(dashFvg) + "·" + str.tostring(dashLiq))
-    f_cell(8, "OTE", dashOte)
+    f_cell(3, "Range EQ", zoneOk ? f_fmt(zEq) : "-")
+    f_cell(4, "Zones s/i·BB·MB·FVG·Liq", str.tostring(dashObS) + "/" + str.tostring(dashObI) + "·" + str.tostring(dashBb) + "·" + str.tostring(dashMb) + "·" + str.tostring(dashFvg) + "·" + str.tostring(dashLiq))
+    f_cell(5, "OTE", dashOte)
+
+// ─── Zone event alerts (informational; spec 2026-11-19) ───────────────────────
+// Realtime closed bars only. Dedup: one capped map (no parallel arrays, RE10045). The first realtime bar only
+// seeds the map so levels swept long ago do not fire.
+var map<string, int> alertSeen = map.new<string, int>()
+var bool alertSeeded = false
+prevHi = high[1]
+prevLo = low[1]
+
+f_zKey(string kind, int x1, float top, float bot) =>
+    kind + ":" + str.tostring(x1) + ":" + f_fmt(top) + ":" + f_fmt(bot)
+
+f_enteredNow(float top, float bot, float ph, float pl) =>
+    low <= top and high >= bot and not (pl <= top and ph >= bot)
+
+f_note(array<string> ev, string key, string txt, bool seeded) =>
+    if not map.contains(alertSeen, key)
+        if map.size(alertSeen) >= 500
+            map.clear(alertSeen)
+        map.put(alertSeen, key, 1)
+        if seeded
+            array.push(ev, txt)
+    true
+
+if barstate.isconfirmed and barstate.isrealtime
+    array<string> ev = array.new<string>()
+    if alertZones
+        for f in fvgs
+            if f.mitigatedIdx < 0 and f_enteredNow(f.top, f.bot, prevHi, prevLo)
+                f_note(ev, f_zKey("FVG", f.idx, f.top, f.bot), "ZONE FVG " + (f.bias == 1 ? "BULL" : "BEAR") + " [" + f_fmt(f.bot) + "–" + f_fmt(f.top) + "]", alertSeeded)
+        array<Zone> zo = array.new<Zone>()
+        f_collectObs(swingObs, false, zo)
+        f_collectObs(intObs, true, zo)
+        for fl in flips
+            if fl.flipBar >= 0 and not fl.dead and (fl.cls == 1 or fl.cls == 2)
+                [zt, zb] = f_obEdges(fl.ob)
+                f_pushZone(zo, zt, zb, fl.ob.idx, -fl.ob.bias, fl.cls == 1 ? "BB" : "MB", fl.cls == 1 ? 2 : 3, false)
+        for z in zo
+            if not z.faded and f_enteredNow(z.top, z.bot, prevHi, prevLo)
+                f_note(ev, f_zKey(z.txt, z.x1, z.top, z.bot), "ZONE " + z.txt + " " + (z.dir == 1 ? "BULL" : "BEAR") + " [" + f_fmt(z.bot) + "–" + f_fmt(z.top) + "]", alertSeeded)
+    if alertSweep
+        for p in shPiv
+            if p.swept
+                f_note(ev, f_zKey("BSL", p.bar, p.price, p.price), "SWEEP BSL " + f_fmt(p.price), alertSeeded)
+        for p in slPiv
+            if p.swept
+                f_note(ev, f_zKey("SSL", p.bar, p.price, p.price), "SWEEP SSL " + f_fmt(p.price), alertSeeded)
+        for e in equals
+            if e.swept
+                f_note(ev, f_zKey(e.isHigh ? "EQH" : "EQL", e.idxB, e.priceB, e.priceB), "SWEEP " + (e.isHigh ? "EQH " : "EQL ") + f_fmt(e.priceB), alertSeeded)
+    alertSeeded := true
+    if array.size(ev) > 0
+        string tgChat = str.trim(tgChatId)
+        string msg = ""
+        if tgChat == ""
+            string evJson = ""
+            for e in ev
+                evJson := evJson + (evJson == "" ? "" : ",") + '"' + f_jsonEsc(e) + '"'
+            msg := '{"symbol":"' + syminfo.ticker + '","tf":"' + timeframe.period + '","events":[' + evJson + '],"note":"informational, not a trade signal"}'
+        else
+            string tgText = "📍 <b>" + syminfo.ticker + " · " + timeframe.period + "</b>" + '\n' + f_jsonEsc(f_htmlEsc(array.join(ev, " | "))) + '\n' + "ℹ️ informational, not a trade signal" + '\n' + f_jsonEsc(f_htmlEsc(tgTag))
+            msg := '{"chat_id":"' + f_jsonEsc(tgChat) + '","text":"' + tgText + '","parse_mode":"HTML","disable_web_page_preview":true}'
+        alert(msg, alert.freq_once_per_bar_close)

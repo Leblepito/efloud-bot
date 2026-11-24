@@ -14,7 +14,7 @@ from scripts.build_pine_lab import PARTS, build  # noqa: E402
 GEN_IND = ROOT / "pine" / "efloud_lab.pine"
 GEN_STR = ROOT / "pine" / "efloud_lab_strategy.pine"
 STRATEGY_ONLY_INPUTS = {"marginUsd", "leverage", "maxHoldHours", "tp1ClosePct", "moveSlToBe"}
-INDICATOR_ONLY_INPUTS = {"showObs", "showZones", "showLevels", "showDash", "maxDrawings",
+INDICATOR_ONLY_INPUTS = {"showObs", "showDash", "alertZones", "alertSweep",
                          "showBreakers", "showFvg", "showLiq", "showOte", "showHistory", "obBodyOnly",
                          "liqVolumeConfirm", "maxZonesPerSide", "colBull", "colBear", "colNeutral", "zoneAlpha",
                          "tgChatId", "tgTag"}
@@ -139,19 +139,12 @@ def test_history_regex_ignores_tuple_literal_on_next_line():
     assert HISTORY_RE.search("    x = close [1]\n")
 
 
-def test_signal_line_budget_fits_line_limit():
-    """4 lines per kept signal; maxDrawings.maxval * 4 must stay under max_lines_count=500."""
-    text = TAIL.read_text(encoding="utf-8")
-    m = re.search(r"maxDrawings\s*=\s*input\.int\([^)]*maxval\s*=\s*(\d+)", text)
-    assert m and int(m.group(1)) * 4 <= 500, "maxDrawings.maxval * 4 exceeds the 500-line budget"
-
-
 def test_indicator_declares_visual_layer_inputs():
     text = TAIL.read_text(encoding="utf-8")
     for name in ("showBreakers", "showFvg", "showLiq", "showOte", "showHistory", "obBodyOnly",
                  "liqVolumeConfirm", "maxZonesPerSide", "colBull", "colBear", "colNeutral", "zoneAlpha"):
         assert re.search(rf"^{name}\s*=\s*input\.", text, re.M), name
-    assert re.search(r"table\.new\(position\.top_right,\s*2,\s*9", text), "dashboard must have 9 rows"
+    assert re.search(r"table\.new\(position\.top_right,\s*2,\s*6", text), "dashboard must have 6 rows"
 
 
 def test_tail_defines_zone_helpers_and_fvg_layer():
@@ -213,9 +206,7 @@ def test_tail_alert_has_bot_json_and_telegram_branches():
     assert re.search(r"^tgChatId\s*=\s*input\.string\(\"\"", tail, re.M)
     assert "tgTag" in tail and "f_jsonEsc" in tail
     assert tail.count("alert(") == 1
-    for key in ("symbol", "dir", "entry", "sl", "tp1", "tp2", "variant", "trigger_bar"):
-        assert f'"{key}"' in tail
-    for frag in ('"chat_id"', '"parse_mode":"HTML"', '"text"', "disable_web_page_preview"):
+    for frag in ('"chat_id"', '"parse_mode":"HTML"', '"text"', "disable_web_page_preview", '"events"', '"symbol"'):
         assert frag in tail
     assert "tgChat == \"\"" in tail
 
@@ -228,5 +219,4 @@ def test_tail_telegram_text_html_escaped_and_blank_chat_id_is_bot_mode():
     for frag in ('"&amp;"', '"&lt;"', '"&gt;"'):
         assert frag in tail
     assert "f_jsonEsc(f_htmlEsc(tgTag))" in tail
-    assert "f_htmlEsc(c.src + " in tail
     assert "str.trim(tgChatId)" in tail

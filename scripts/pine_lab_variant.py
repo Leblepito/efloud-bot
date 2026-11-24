@@ -4,7 +4,7 @@ Never touches the repo source; only rewrites `input.bool` defaults of the show* 
 flags, `showHistory`, and (optionally) the `maxZonesPerSide` default.
 
 usage: python scripts/pine_lab_variant.py OUT [--zones N] [--history] LAYER...
-  LAYER in showObs showZones showLevels showBreakers showFvg showLiq showOte
+  LAYER in showObs showBreakers showFvg showLiq showOte
   (layers not listed are set to false)
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "pine" / "efloud_lab.pine"
-LAYERS = ("showObs", "showZones", "showLevels", "showBreakers", "showFvg", "showLiq", "showOte")
+LAYERS = ("showObs", "showBreakers", "showFvg", "showLiq", "showOte")
 
 
 def make_variant(src: str, layers: list[str], zones: int | None = None, history: bool = False) -> str:
